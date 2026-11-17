@@ -231,10 +231,20 @@ async function main() {
     await openStudioPanel(editor, 'text');
     await editor.locator('#home-hero-title').fill('');
     await editor.locator('#home-hero-subtitle').fill('');
-    // The preview renders from the same form state the save sends. Wait for
-    // the cleared title to land in the preview before saving, so a slow
-    // commit can never save the previous title.
-    await editor.getByRole('heading', { name: '우리의 새로운 행사', exact: true }).waitFor({ state: 'detached', timeout: 15000 });
+    // The preview renders the same form state the save sends; the cleared title
+    // falls back to the event name there (AttendeeHomeLanding). Refill until
+    // it shows up: a fill React did not commit on a slow runner is retried
+    // instead of saving the previous title.
+    const clearedPreview = editor.getByRole('heading', { name: '디자인 검증 행사 A', exact: true });
+    let landed = false;
+    for (let attempt = 0; attempt < 6 && !landed; attempt++) {
+      if (attempt > 0) {
+        await editor.locator('#home-hero-title').fill('');
+        await editor.locator('#home-hero-subtitle').fill('');
+      }
+      landed = await clearedPreview.first().waitFor({ timeout: 5000 }).then(() => true, () => false);
+    }
+    assert.ok(landed, 'the cleared title never reached the preview');
     await commandClick(editor, save, 'attendee.page.save');
     // Split the two halves: the saved draft must already hold the cleared title before anything is published,
     // so a later mismatch is known to be a publish problem and not a save that missed the last edit.

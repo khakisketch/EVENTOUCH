@@ -27,7 +27,13 @@ import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../../
 import { useEventReceipts } from "../../../../../../lib/use-event-receipts";
 
 type ImportMap = { name: string; phone: string; email: string; company: string };
-type ValidRow = { name: string; phone: string; email: string; company: string; line: number };
+// An extra field of the event's own form (식사 선택, 요청 사항 ...) that a file
+// column can fill. Name, phone, email and company have their own columns.
+type ExtraField = { id: string; label: string; type: "text" | "email" | "select" | "checkbox"; required: boolean; options: string[] };
+type ExtraMap = Record<string, string>;
+type Answers = Record<string, string | boolean>;
+type ExtraImport = { fields: ExtraField[]; map: ExtraMap };
+type ValidRow = { name: string; phone: string; email: string; company: string; line: number; answers?: Answers };
 type ImportRow = { cells: string[]; line: number };
 type RowError = { row: number; reason: string };
 type PhoneReview = { row: number; name: string; phone: string };
@@ -36,7 +42,7 @@ type ImportPreview = { valid: ValidRow[]; errors: RowError[]; phoneReview: Phone
 type GateState =
   | { kind: "loading" }
   | { kind: "failed"; message: string }
-  | { kind: "ready"; eventName: string; eventMeta: ConsoleEventMeta; eventStage: string; role: string; userId: string; memberships: Array<{ accountId: string; eventId: string; write?: unknown }> };
+  | { kind: "ready"; eventName: string; eventMeta: ConsoleEventMeta; eventStage: string; role: string; userId: string; memberships: Array<{ accountId: string; eventId: string; write?: unknown }>; extraFields: ExtraField[] };
 
 const MAX_BYTES = 1048576;
 const MAX_ROWS = 1000;
@@ -56,6 +62,13 @@ const HEADER_WORDS: Record<keyof ImportMap, string[]> = {
   company: ["소속", "소속명", "회사", "회사명", "기관", "기관명", "단체", "부서", "소속회사", "소속기관", "company", "org", "organization", "affiliation"],
 };
 const EMPTY_MAP: ImportMap = { name: "", phone: "", email: "", company: "" };
+const NO_EXTRA_FIELDS: ExtraField[] = [];
+// Ids the standard columns (and the answers carrier) own; never an extra field.
+const OWN_FIELD_IDS = new Set(["name", "phone", "email", "company", "group", "answers"]);
+// Yes/no words people actually type into a checkbox column. Anything else is a
+// row error rather than a guess.
+const CHECKED_WORDS = ["예", "네", "y", "yes", "true", "1", "o", "v", "✓", "체크", "동의"];
+const UNCHECKED_WORDS = ["", "아니오", "아니요", "n", "no", "false", "0", "-"];
 
 function headerParts(value: string): string[] {
   return value.toLowerCase().replace(/[\s_]/g, "").split(/[/·,]/).filter(Boolean);
@@ -87,6 +100,66 @@ function detectColumns(headers: string[], rows: ImportRow[]): ImportMap {
   byShape("phone", (value) => /^[\d\s\-().+]+$/.test(value) && /^\d{9,15}$/.test(normalizePhone(value)));
   byShape("email", (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value));
   return next;
+}
+
+// The event's extra form fields, read defensively from the bootstrap draft form.
+function parseExtraFields(value: unknown): ExtraField[] {
+  if (!Array.isArray(value)) return [];
+  const fields: ExtraField[] = [];
+  for (const item of value) {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) continue;
+    const entry = item as Record<string, unknown>;
+    const id = typeof entry.id === "string" ? entry.id.trim() : "";
+    const label = typeof entry.label === "string" ? entry.label.trim() : "";
+    const type = entry.type;
+    if (!id || !label || OWN_FIELD_IDS.has(id) || fields.some((field) => field.id === id)) continue;
+    if (type !== "text" && type !== "email" && type !== "select" && type !== "checkbox") continue;
+    fields.push({
+      id, label, type,
+      required: entry.required === true,
+      options: Array.isArray(entry.options) ? entry.options.filter((option): option is string => typeof option === "string") : [],
+    });
+  }
+  return fields;
+}
+
+// Matches a file header to an extra field by its label, ignoring case, spaces and
+// "_" (a compound header such as "식사/알레르기" counts when a part matches). Only
+// columns the standard fields did not already take are offered, so this never
+// changes how the four standard columns are found.
+function detectExtraColumns(headers: string[], fields: ExtraField[], taken: Set<string>): ExtraMap {
+  const next: ExtraMap = {};
+  const used = new Set(taken);
+  for (const field of fields) {
+    const key = field.label.toLowerCase().replace(/[\s_]/g, "");
+    const at = headers.findIndex((head, index) => !used.has(String(index))
+      && (head.toLowerCase().replace(/[\s_]/g, "") === key || headerParts(head).includes(key)));
+    if (at >= 0) { next[field.id] = String(at); used.add(String(at)); }
+  }
+  return next;
+}
+
+function parseChecked(raw: string): boolean | null {
+  const word = raw.trim().toLowerCase();
+  if (CHECKED_WORDS.includes(word)) return true;
+  if (UNCHECKED_WORDS.includes(word)) return false;
+  return null;
+}
+
+// One cell of an extra-field column, held to the same rules the server applies to
+// operator registration (select choices, email shape, required, checkbox boolean).
+function readAnswer(field: ExtraField, raw: string): { value: string | boolean } | { error: string } {
+  if (field.type === "checkbox") {
+    const checked = parseChecked(raw);
+    if (checked === null) return { error: `${field.label}은(는) 예·아니오로 입력하세요(${raw.slice(0, 20)})` };
+    if (field.required && !checked) return { error: `${field.label}에 동의(체크)해야 합니다` };
+    return { value: checked };
+  }
+  if (!raw) return field.required ? { error: `${field.label}을(를) 입력하세요` } : { value: "" };
+  if (raw.length > 4000) return { error: `${field.label}이(가) 4,000자를 초과합니다` };
+  if (field.type === "select" && !field.options.includes(raw)) return { error: `${field.label}의 선택지에 없는 값입니다(${raw.slice(0, 20)})` };
+  if (field.type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return { error: `${field.label} 형식을 확인하세요` };
+  return { value: raw };
 }
 
 // Display only: the stored value stays the digits.
@@ -219,7 +292,8 @@ function normalizePhone(value: string): string {
 
 function validateRows(
   dataRows: ImportRow[],
-  map: ImportMap
+  map: ImportMap,
+  extra?: ExtraImport
 ): ImportPreview {
   const valid: ValidRow[] = [];
   const errors: RowError[] = [];
@@ -258,12 +332,28 @@ function validateRows(
       errors.push({ row: line, reason: `소속이 200자를 초과합니다(${company.length}자)` });
       return;
     }
+    // Answers for the extra form fields this file carries. A field with no
+    // column is left out entirely (never "required"), so a form field the file
+    // does not include cannot block every row.
+    const collected: Answers = {};
+    if (extra) {
+      for (const field of extra.fields) {
+        const column = extra.map[field.id];
+        if (!column) continue;
+        const result = readAnswer(field, (cols[Number(column)] ?? "").trim());
+        if ("error" in result) {
+          errors.push({ row: line, reason: result.error });
+          return;
+        }
+        if (result.value !== "") collected[field.id] = result.value;
+      }
+    }
     if (seen.has(phone)) {
       errors.push({ row: line, reason: "파일 안에서 연락처가 중복됩니다" });
       return;
     }
     seen.add(phone);
-    valid.push({ name, phone, email, company, line });
+    valid.push({ name, phone, email, company, line, ...(Object.keys(collected).length ? { answers: collected } : {}) });
     // A Korean 010 mobile number entered into a numeric spreadsheet cell
     // often loses its first zero. Do not invent a number: it may also be an
     // intentional international number and needs the operator's review.
@@ -313,6 +403,8 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
   const [dataRows, setDataRows] = useState<ImportRow[]>([]);
   const [fileKind, setFileKind] = useState<"csv" | "txt" | null>(null);
   const [map, setMap] = useState<ImportMap>({ ...EMPTY_MAP });
+  const [extraMap, setExtraMap] = useState<ExtraMap>({});
+  const extraFields = gate.kind === "ready" ? gate.extraFields : NO_EXTRA_FIELDS;
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [phoneReviewed, setPhoneReviewed] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -362,6 +454,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
     setFileKind(null);
     setFileName(null);
     setMap({ ...EMPTY_MAP });
+    setExtraMap({});
     setPreview(null);
     setPhoneReviewed(false);
     setErrorsOpen(false);
@@ -460,6 +553,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
             role,
             userId: myId,
             memberships,
+            extraFields: parseExtraFields(workspace.fields),
           });
         }
       } catch {
@@ -499,11 +593,13 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
           throw new Error("1~1,000개 데이터 행이 필요합니다.");
         }
         const next = detectColumns(parsed.headers, parsed.rows);
+        const nextExtra = detectExtraColumns(parsed.headers, extraFields, new Set(Object.values(next).filter(Boolean)));
         setHeaders(parsed.headers);
         setDataRows(parsed.rows);
         setFileKind("csv");
         setMap(next);
-        previewFor(parsed.rows, next);
+        setExtraMap(nextExtra);
+        previewFor(parsed.rows, next, nextExtra);
         setFileName(file.name);
         return;
       }
@@ -520,7 +616,8 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
         setFileKind("txt");
         const txtMap = { name: "0", phone: "1", email: "2", company: "3" };
         setMap(txtMap);
-        previewFor(parsed.rows, txtMap);
+        setExtraMap({});
+        previewFor(parsed.rows, txtMap, {});
         setFileName(file.name);
       } else {
         const rows = parseCsv(text);
@@ -529,11 +626,13 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
         }
         const head = rows.shift()?.cells ?? [];
         const next = detectColumns(head, rows);
+        const nextExtra = detectExtraColumns(head, extraFields, new Set(Object.values(next).filter(Boolean)));
         setHeaders(head);
         setDataRows(rows);
         setFileKind("csv");
         setMap(next);
-        previewFor(rows, next);
+        setExtraMap(nextExtra);
+        previewFor(rows, next, nextExtra);
         setFileName(file.name);
       }
     } catch (error) {
@@ -551,7 +650,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
     }
   }
 
-  function previewFor(rows: ImportRow[], nextMap: ImportMap) {
+  function previewFor(rows: ImportRow[], nextMap: ImportMap, nextExtra: ExtraMap) {
     setPhoneReviewed(false);
     setErrorsOpen(false);
     if (nextMap.name === nextMap.phone && nextMap.name !== "") {
@@ -560,12 +659,12 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
       return;
     }
     setFileError(null);
-    setPreview(validateRows(rows, nextMap));
+    setPreview(validateRows(rows, nextMap, extraFields.length ? { fields: extraFields, map: nextExtra } : undefined));
   }
 
-  function buildPreview(nextMap: ImportMap) {
+  function buildPreview(nextMap: ImportMap, nextExtra: ExtraMap) {
     if (importLocked || fileReadingRef.current) return;
-    previewFor(dataRows, nextMap);
+    previewFor(dataRows, nextMap, nextExtra);
   }
 
   async function commit() {
@@ -728,7 +827,9 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
     : null;
   const missingLabel = missingField === "name" ? "이름" : "연락처";
   const missingUse = missingField === "name" ? "이름으로" : "연락처로";
-  const usedColumns = new Set(Object.values(map).filter(Boolean));
+  const usedColumns = new Set([...Object.values(map), ...Object.values(extraMap)].filter(Boolean));
+  // Required form fields the file has no column for: their answer stays empty.
+  const unmappedRequired = extraFields.filter((field) => field.required && !extraMap[field.id]);
   const reviewing = Boolean(headers && preview && !missingField);
   const cleanCount = preview ? preview.valid.length - preview.phoneReview.length : 0;
   const commitDisabled = committing || checkingImport || otherImportReceipt || !preview?.valid.length || stageBlocked
@@ -737,12 +838,18 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
   function changeColumn(field: keyof ImportMap, value: string) {
     const next = { ...map, [field]: value };
     setMap(next);
-    buildPreview(next);
+    buildPreview(next, extraMap);
+  }
+
+  function changeExtraColumn(fieldId: string, value: string) {
+    const next = { ...extraMap, [fieldId]: value };
+    setExtraMap(next);
+    buildPreview(map, next);
   }
 
   const listHref = `/console/events/${encodeURIComponent(eventId)}/participants`;
   const actions = canWriteImport && headers ? (
-    <div className={styles.actions}><ConsoleFormActions note="가져온 유효 행은 승인 검토 없이 참가 확정으로 등록됩니다. 동의 기록은 가져오기만으로 생성하지 않습니다. 행사별 추가 신청 항목의 응답은 가져오지 않습니다.">
+    <div className={styles.actions}><ConsoleFormActions note="가져온 유효 행은 승인 검토 없이 참가 확정으로 등록됩니다. 동의 기록은 가져오기만으로 생성하지 않습니다. 열 제목이 행사의 신청 항목 이름과 같으면 그 응답도 함께 가져옵니다.">
       {onDismiss ? null : <ProductLink className="button button-ghost" variant="ghost" href={listHref}>참가자 목록으로</ProductLink>}
       {importUncertain ? <ProductButton type="button" variant="secondary" disabled={committing || checkingImport} onClick={() => void checkImportResult()}>{checkingImport ? "확인 중입니다" : "서버 처리 확인"}</ProductButton> : null}
       {reviewing ? <ProductButton type="button" variant="primary" disabled={commitDisabled} onClick={() => void commit()}>
@@ -824,8 +931,9 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
                     variant="ghost"
                     onClick={() =>
                       downloadCsv("EVENTOUCH_import_template.csv", [
-                        ["이름", "연락처", "이메일", "소속"],
-                        ["예시 참가자", "01000009999", "sample@example.demo", "예시 조직"],
+                        ["이름", "연락처", "이메일", "소속", ...extraFields.map((field) => field.label)],
+                        ["예시 참가자", "01000009999", "sample@example.demo", "예시 조직", ...extraFields.map((field) =>
+                          field.type === "select" ? field.options[0] ?? "" : field.type === "checkbox" ? "예" : field.type === "email" ? "sample@example.demo" : "예시")],
                       ])
                     }
                   >
@@ -960,7 +1068,28 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
                       </select>
                     </label>
                   ))}
+                  {fileKind !== "txt" ? extraFields.map((field) => (
+                    <label key={`extra-${field.id}`} className={styles.mapChip} data-empty={extraMap[field.id] ? undefined : "true"}>
+                      <span>{field.label}</span>
+                      <select
+                        aria-label={`${field.label}에 연결할 열`}
+                        value={extraMap[field.id] ?? ""}
+                        disabled={importLocked}
+                        onChange={(event) => changeExtraColumn(field.id, event.target.value)}
+                      >
+                        <option value="">사용 안 함</option>
+                        {headers.map((head, index) => (
+                          <option key={index} value={String(index)}>{head || `열 ${index + 1}`}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )) : null}
                 </div>
+                {unmappedRequired.length ? (
+                  <ConsoleFeedback kind="info">
+                    필수 신청 항목 {unmappedRequired.map((field) => field.label).join("·")}은(는) 연결된 열이 없어 가져온 참가자의 답이 비어 있습니다. 파일에 같은 제목의 열을 넣거나, 가져온 뒤 참가자 정보에서 채울 수 있습니다.
+                  </ConsoleFeedback>
+                ) : null}
               </div>
             ) : null}
             {commitError ? <ConsoleFeedback kind="error">{commitError}</ConsoleFeedback> : null}

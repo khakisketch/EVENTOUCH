@@ -44,6 +44,7 @@ const EXPECTED_GATES = [
   'npm run web:recovery:audit',
   'npm run web:import:audit',
   'npm run web:import-contact-review:audit',
+  'npm run web:import-extra-fields:audit',
   'npm run web:hanwool:audit',
   'npm run web:theme:audit',
   'npm run web:theme-freshness:audit',

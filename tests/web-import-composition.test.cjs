@@ -50,7 +50,7 @@ test('error rows unfold in place and stay reachable by keyboard', () => {
 
 test('the contact check, consent facts and commit gate keep their rules', () => {
   assert.match(wizard, /확인할 연락처를 원본과 비교했고, 표시된 번호로 등록합니다\./u);
-  assert.match(wizard, /가져온 유효 행은 승인 검토 없이 참가 확정으로 등록됩니다\. 동의 기록은 가져오기만으로 생성하지 않습니다\. 행사별 추가 신청 항목의 응답은 가져오지 않습니다\./u);
+  assert.match(wizard, /가져온 유효 행은 승인 검토 없이 참가 확정으로 등록됩니다\. 동의 기록은 가져오기만으로 생성하지 않습니다\. 열 제목이 행사의 신청 항목 이름과 같으면 그 응답도 함께 가져옵니다\./u);
   assert.match(wizard, /preview\.phoneReview\.length > 0 && !phoneReviewed && !importUncertain/u);
   assert.match(wizard, /같은 요청 다시 시도/u);
   assert.match(wizard, /서버 처리 확인/u);
@@ -124,4 +124,116 @@ test('a name column is never guessed from values and no column serves two fields
   const twice = detectColumns(['연락처', '휴대폰'], []);
   assert.equal(twice.phone, '0');
   assert.equal(twice.email, '');
+});
+
+
+// --- the event's extra form fields ------------------------------------------
+// (owner decision 2026-11-18: a column titled like an extra form field imports
+// its answer). The four standard columns keep working exactly as before.
+
+function loadExtras() {
+  const source = fs.readFileSync(wizardPath, 'utf8');
+  const tree = ts.createSourceFile('ImportWizard.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const names = ['parseExtraFields', 'detectExtraColumns', 'parseChecked', 'readAnswer', 'validateRows', 'headerParts', 'normalizePhone'];
+  const constants = ['OWN_FIELD_IDS', 'CHECKED_WORDS', 'UNCHECKED_WORDS'];
+  const found = new Map();
+  (function visit(node) {
+    if (ts.isFunctionDeclaration(node) && names.includes(node.name?.text)) found.set(node.name.text, node.getText(tree));
+    if (ts.isVariableStatement(node)) {
+      for (const decl of node.declarationList.declarations) {
+        if (ts.isIdentifier(decl.name) && constants.includes(decl.name.text)) found.set(decl.name.text, node.getText(tree));
+      }
+    }
+    ts.forEachChild(node, visit);
+  })(tree);
+  for (const name of [...constants, ...names]) assert.ok(found.has(name), `declaration ${name}`);
+  const code = ts.transpileModule([...constants, ...names].map((n) => found.get(n)).join('\n'), { compilerOptions: { target: 'ES2020' } }).outputText;
+  const sandbox = {};
+  vm.runInNewContext(`${code}\nglobalThis.api = { parseExtraFields, detectExtraColumns, parseChecked, readAnswer, validateRows };`, sandbox);
+  return sandbox.api;
+}
+const extras = loadExtras();
+const MEAL = { id: 'meal', label: '식사 선택', type: 'select', required: true, options: ['일반식', '채식'] };
+const MEMO = { id: 'memo', label: '요청 사항', type: 'text', required: false, options: [] };
+const AGREE = { id: 'agree', label: '마케팅 동의', type: 'checkbox', required: false, options: [] };
+const MAIL = { id: 'contact_mail', label: '담당자 메일', type: 'email', required: false, options: [] };
+const BASE = { name: '0', phone: '1', email: '', company: '' };
+const run = (cells, fields, map) => plain(extras.validateRows(rows(...cells), BASE, { fields, map }));
+
+test('only well-formed extra fields are offered, never the standard columns', () => {
+  const parsed = plain(extras.parseExtraFields([
+    { id: 'name', label: '이름', type: 'text', required: true },
+    { id: 'phone', label: '연락처', type: 'text' },
+    { id: 'email', label: '이메일', type: 'email' },
+    { id: 'company', label: '소속', type: 'text' },
+    { id: 'answers', label: '답', type: 'text' },
+    { id: 'meal', label: ' 식사 선택 ', type: 'select', required: true, options: ['일반식', 7, '채식'] },
+    { id: 'meal', label: '중복', type: 'text' },
+    { id: 'file', label: '첨부', type: 'file' },
+    { id: '', label: '이름 없는 id', type: 'text' },
+    { id: 'blank-label', label: '  ', type: 'text' },
+    null, 'text', [], { id: 5, label: 'x', type: 'text' },
+  ]));
+  assert.deepEqual(parsed, [{ id: 'meal', label: '식사 선택', type: 'select', required: true, options: ['일반식', '채식'] }]);
+  assert.deepEqual(plain(extras.parseExtraFields(undefined)), []);
+  assert.deepEqual(plain(extras.parseExtraFields('nope')), []);
+});
+
+test('an extra field is found by its label, in a compound header too, and never steals a taken column', () => {
+  const fields = [MEAL, MEMO];
+  assert.deepEqual(plain(extras.detectExtraColumns(['이름', '연락처', ' 식사_선택 ', '요청 사항'], fields, new Set(['0', '1']))), { meal: '2', memo: '3' });
+  assert.deepEqual(plain(extras.detectExtraColumns(['이름', '연락처', '식사 선택/알레르기'], [{ ...MEAL, label: '식사 선택' }], new Set(['0', '1']))), { meal: '2' }, 'a part of a compound header counts');
+  assert.deepEqual(plain(extras.detectExtraColumns(['이름', '연락처', '식사 선택'], fields, new Set(['0', '1', '2']))), {}, 'a column a standard field took stays with it');
+  assert.deepEqual(plain(extras.detectExtraColumns(['식사 선택', '식사 선택'], [MEAL, { ...MEMO, label: '식사 선택' }], new Set())), { meal: '0', memo: '1' }, 'one column serves one field');
+  assert.deepEqual(plain(extras.detectExtraColumns(['이름', '비고'], fields, new Set(['0']))), {}, 'no guessing from values');
+});
+
+test('a checkbox column accepts the words people type and nothing else', () => {
+  for (const yes of ['예', ' 네 ', 'Y', 'yes', 'TRUE', '1', 'O', '✓']) assert.equal(extras.parseChecked(yes), true, yes);
+  for (const no of ['', '아니오', '아니요', 'N', 'No', 'FALSE', '0', '-']) assert.equal(extras.parseChecked(no), false, no);
+  for (const odd of ['maybe', '가끔', '2']) assert.equal(extras.parseChecked(odd), null, odd);
+});
+
+test('each answer is held to the server rules for its field type', () => {
+  const ok = (field, raw) => plain(extras.readAnswer(field, raw));
+  assert.deepEqual(ok(MEAL, '채식'), { value: '채식' });
+  assert.match(ok(MEAL, '육식').error, /식사 선택의 선택지에 없는 값입니다\(육식\)/);
+  assert.match(ok(MEAL, '').error, /식사 선택을\(를\) 입력하세요/, 'a required column cannot be blank');
+  assert.deepEqual(ok(MEMO, ''), { value: '' }, 'an optional blank is fine');
+  assert.match(ok(MEMO, 'x'.repeat(4001)).error, /4,000자/);
+  assert.deepEqual(ok(MAIL, 'owner@example.test'), { value: 'owner@example.test' });
+  assert.match(ok(MAIL, 'nope').error, /형식을 확인/);
+  assert.deepEqual(ok(AGREE, '예'), { value: true });
+  assert.deepEqual(ok(AGREE, '아니오'), { value: false });
+  assert.match(ok(AGREE, '가끔').error, /예·아니오로 입력하세요/);
+  assert.match(ok({ ...AGREE, required: true }, '아니오').error, /동의\(체크\)해야/);
+  assert.deepEqual(ok({ ...MEAL, options: ['A'] }, 'A'), { value: 'A' });
+});
+
+test('rows carry answers only for the columns the file has, and the standard result does not change', () => {
+  const data = [['김하늘', '01012345678', '채식', '창가', '예'], ['이서준', '01012345679', '일반식', '', '아니오']];
+  const out = run(data, [MEAL, MEMO, AGREE], { meal: '2', memo: '3', agree: '4' });
+  assert.deepEqual(out.errors, []);
+  assert.deepEqual(out.valid, [
+    { name: '김하늘', phone: '01012345678', email: '', company: '', line: 2, answers: { meal: '채식', memo: '창가', agree: true } },
+    { name: '이서준', phone: '01012345679', email: '', company: '', line: 3, answers: { meal: '일반식', agree: false } },
+  ]);
+  // No extra columns mapped: the row is exactly the standard row, with no answers key at all.
+  const bare = run(data, [MEAL, MEMO, AGREE], {});
+  assert.deepEqual(bare.errors, [], 'a required field with no column never blocks rows');
+  assert.equal(Object.hasOwn(bare.valid[0], 'answers'), false);
+  assert.deepEqual(plain(extras.validateRows(rows(...data), BASE)).valid, bare.valid, 'omitting the extra argument behaves the same');
+});
+
+test('a bad answer is a row error with its file row, and does not poison the duplicate check', () => {
+  const out = run([
+    ['김하늘', '01012345678', '육식'],
+    ['김하늘', '01012345678', '채식'],
+    ['이서준', '01012345679', ''],
+  ], [MEAL], { meal: '2' });
+  assert.deepEqual(out.errors, [
+    { row: 2, reason: '식사 선택의 선택지에 없는 값입니다(육식)' },
+    { row: 4, reason: '식사 선택을(를) 입력하세요' },
+  ]);
+  assert.deepEqual(out.valid.map((row) => row.line), [3], 'the first row failed on its answer, so the same phone on row 3 is not a duplicate');
 });

@@ -148,9 +148,9 @@ for (const stale of ['epoch', 'cancelled']) test(`old login denial cannot overwr
 test('CSV filename preserves mapping, quoting and physical row numbers across advisory MIME values', async () => {
   const results = [];
   for (const type of ['text/csv', 'text/plain', '', 'application/vnd.ms-excel']) {
-    const world = runtime({ submittingRef: { current: false }, importLocked: false, fileReadingRef: { current: false }, fileReadIdRef: { current: 0 } });
-    stateSetters(world.sandbox, ['readingFile', 'fileError', 'fileName', 'headers', 'dataRows', 'preview', 'phoneReviewed', 'errorsOpen', 'committed', 'fileKind', 'map']);
-    world.functions(IMPORT, ['readFile', 'previewFor', 'stripBom', 'parseCsv', 'parseTxt', 'normalizePhone', 'validateRows', 'detectColumns', 'headerParts'], ['MAX_BYTES', 'MAX_ROWS', 'HEADER_WORDS', 'EMPTY_MAP']);
+    const world = runtime({ submittingRef: { current: false }, importLocked: false, fileReadingRef: { current: false }, fileReadIdRef: { current: 0 }, extraFields: [] });
+    stateSetters(world.sandbox, ['readingFile', 'fileError', 'fileName', 'headers', 'dataRows', 'preview', 'phoneReviewed', 'errorsOpen', 'committed', 'fileKind', 'map', 'extraMap']);
+    world.functions(IMPORT, ['readFile', 'previewFor', 'stripBom', 'parseCsv', 'parseTxt', 'normalizePhone', 'validateRows', 'detectColumns', 'detectExtraColumns', 'readAnswer', 'parseChecked', 'headerParts'], ['MAX_BYTES', 'MAX_ROWS', 'HEADER_WORDS', 'EMPTY_MAP', 'CHECKED_WORDS', 'UNCHECKED_WORDS']);
     const content = 'phone,name,company\r\n01000009999,"Synthetic, Name","Fixture\nCompany"\r\ninvalid,Bad,Other';
     await world.sandbox.readFile({ name: 'participants.CSV', type, size: content.length, text: async () => content });
     results.push(plain({ kind: world.sandbox.fileKind, map: world.sandbox.map, rows: world.sandbox.dataRows, preview: world.sandbox.preview, error: world.sandbox.fileError }));
