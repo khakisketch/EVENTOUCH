@@ -98,7 +98,7 @@ jobs:
           mkdir -p "$context/apps/web/lib" "$context/data"
           cp Dockerfile package.json package-lock.json "$context/"
           cp -R server "$context/server"
-          cp apps/web/lib/client-address.mts apps/web/lib/sms-text-validation.cjs "$context/apps/web/lib/"
+          cp apps/web/lib/client-address.mts apps/web/lib/sms-text-validation.cjs apps/web/lib/attendance-state.cjs "$context/apps/web/lib/"
           cp data/sample.json "$context/data/"
           chmod 600 "$context/package.json" "$context/server/messaging-solapi.js" "$context/server/commands/content-results.js" "$context/apps/web/lib/sms-text-validation.cjs"
           docker build -t eventouch-ci:api-permissions "$context"
