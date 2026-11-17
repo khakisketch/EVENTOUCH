@@ -1250,9 +1250,10 @@ async function main() {
       const task = createTask('message-scheduled', '메시지 예약 등록', 'operator', OPERATOR_STEP_CAP);
       const started = Date.now();
       const title = `사용성 예약 ${datestamp()}`;
-      const future = new Date(Date.now() + 2 * 3600 * 1000);
-      const pad = (value) => String(value).padStart(2, '0');
-      const scheduled = `${future.getFullYear()}-${pad(future.getMonth() + 1)}-${pad(future.getDate())}T${pad(future.getHours())}:${pad(future.getMinutes())}`;
+      // The product reads datetime-local as Korean time. Compute the wall
+      // clock in KST explicitly: on a UTC runner the local getters above
+      // would land 9h in the past and trip the "must be future" validation.
+      const scheduled = new Date(Date.now() + (9 + 2) * 3600 * 1000).toISOString().slice(0, 16);
       const { context, page } = await newOperatorPage();
       attachErrorListeners(page, task, baseUrl);
       try {
