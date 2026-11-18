@@ -1129,11 +1129,22 @@
 .fieldContext :global(.staff-select-field) select option { color: var(--ink); }
 .fieldContext :global(.staff-select-field) select:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
 .fieldContext :global(.staff-direction-hint) {
-  margin: 0;
+  margin: var(--s2) 0 0;
   color: color-mix(in srgb, var(--paper) 72%, transparent);
   font-size: var(--small);
   text-align: center;
 }
+/* Inside the desk field the select-field rule paints every Astryx button as
+   paper with !important; the direction check is the one thing to press here,
+   so it stays an ink button. */
+.fieldContext :global(.staff-select-field) .directionReview > :global(.astryx-button) {
+  padding-inline: var(--s4);
+  border-radius: 12px;
+  background: var(--ink) !important;
+  color: var(--paper) !important;
+  font-weight: 700;
+}
+.fieldContext :global(.staff-select-field) .directionReview > :global(.astryx-button):disabled { opacity: 0.55; }
 .fieldContext .directionReview,
 .fieldContext :global(.notice) {
   background: var(--paper);

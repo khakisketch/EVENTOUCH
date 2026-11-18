@@ -594,7 +594,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
       eventName={state.eventName}
       meta={state.eventMeta}
       headerActions={(
-        <ProductLink variant="ghost" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자로</ProductLink>
+        <ProductLink variant="ghost" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자 명단</ProductLink>
       )}
       feedback={
         <>

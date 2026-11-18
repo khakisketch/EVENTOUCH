@@ -86,7 +86,7 @@ async function main() {
     assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious', 'critical'].includes(v.impact)).map(v => v.id)), []);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
     allowLeave = false;
-    await page.getByRole('link', { name: '참가자로' }).click();
+    await page.getByRole('link', { name: '참가자 명단' }).click();
     assert.ok(dialogMessage.includes('요청 결과를 아직 확인하지 못했습니다'));
     assert.equal(await recovery.isVisible(), true);
     allowLeave = true;

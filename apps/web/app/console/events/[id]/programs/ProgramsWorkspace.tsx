@@ -1751,7 +1751,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       eventName={state.eventName}
       meta={state.eventMeta}
       headerActions={
-        <div className={styles.headerActions}>
+        <div className={`${styles.headerActions} console-header-group`}>
           <ProductLink variant="ghost" href={returnBack}>{returnLabel}</ProductLink>
           {state.canManage ? <ConsoleRefreshButton label="새로고침" disabled={busy !== null} onRefresh={() => load(true)} /> : null}
           {state.canManage ? (
