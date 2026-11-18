@@ -647,7 +647,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
     >
       {!state.rewards.length ? (
         <div className={consoleUiStyles.empty}>
-          <h3>등록된 경품이 없습니다.</h3>
+          <h2 className={consoleUiStyles.emptyTitle}>등록된 경품이 없습니다.</h2>
           <p>참가자 화면에서 참가 확정자에게 경품을 등록하세요.</p>
         </div>
       ) : (
@@ -691,7 +691,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
           ) : null}
           {!visibleRewards.length ? (
             <div className={consoleUiStyles.empty}>
-              <h3>조건에 맞는 경품이 없습니다.</h3>
+              <h2 className={consoleUiStyles.emptyTitle}>조건에 맞는 경품이 없습니다.</h2>
               <p>검색어·상태 조건을 바꾸거나 지우고 다시 찾아보세요.</p>
               <p>
                 <ProductButton type="button" variant="secondary" onClick={clearRewardFilters}>검색·필터 지우기</ProductButton>

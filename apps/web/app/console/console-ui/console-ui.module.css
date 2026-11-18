@@ -915,11 +915,17 @@
   text-align: center;
 }
 
-.empty h3 {
+.empty h3,
+.empty .emptyTitle {
   margin: 0;
   color: var(--ink);
   font-size: var(--h3);
   overflow-wrap: anywhere;
+}
+
+.empty .emptyTitle {
+  line-height: inherit;
+  letter-spacing: inherit;
 }
 
 .empty p {

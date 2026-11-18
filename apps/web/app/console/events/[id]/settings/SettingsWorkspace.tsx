@@ -1865,7 +1865,6 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       <section
         id="panel-settings-intake"
         data-settings-section="intake"
-        aria-labelledby="settings-intake"
         className={highlight === "intake" ? styles.sectionFlash : undefined}
       >
       <ConsoleSection headingId="settings-intake" title="참가 접수" width="form" surface="panel">
@@ -2029,7 +2028,6 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       <section
         id="panel-settings-features"
         data-settings-section="features"
-        aria-labelledby="settings-features"
         className={highlight === "features" ? styles.sectionFlash : undefined}
       >
       <ConsoleSection headingId="settings-features" title="운영 기능" width="form" surface="panel">

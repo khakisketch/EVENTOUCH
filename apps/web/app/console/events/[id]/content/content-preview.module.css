@@ -132,7 +132,7 @@
   object-fit: cover;
 }
 
-.hero h3 {
+.hero h2 {
   position: relative;
   margin: 0;
   padding: var(--s4);

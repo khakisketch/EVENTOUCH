@@ -227,7 +227,7 @@ export default function StaffHub() {
                 {orgChanged ? (
                   <span className={`${workStyles.hubRowLink} ${workStyles.hubRowOff}`} title="다른 탭에서 조직이 전환됐습니다. 위 안내에서 전환을 먼저 확인하세요.">{body}</span>
                 ) : (
-                  <ProductLink className={workStyles.hubRowLink} href={open(scope)} aria-label={`${scope.eventName} 업무 열기`}>{body}</ProductLink>
+                  <ProductLink className={workStyles.hubRowLink} href={open(scope)}>{body}</ProductLink>
                 )}
               </li>
             );

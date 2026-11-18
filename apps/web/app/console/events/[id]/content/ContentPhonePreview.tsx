@@ -137,7 +137,7 @@ export default function ContentPhonePreview({ eventName, screen, onScreen, desig
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={design.keyvisualUrl} alt="" />
               ) : null}
-              <h3 style={{ color: readableInk(background) }}>{eventName}</h3>
+              <h2 style={{ color: readableInk(background) }}>{eventName}</h2>
             </header>
             <p className={styles.intro}>{design.intro}</p>
             {screen === "notice" ? (

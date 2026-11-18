@@ -262,7 +262,9 @@
   background: var(--surface-muted);
 }
 
-.consoleEvidence figcaption {
+.consoleEvidence .consoleCaption {
+  margin: 0;
+  max-width: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -273,7 +275,7 @@
   font-size: var(--small);
 }
 
-.consoleEvidence figcaption strong {
+.consoleEvidence .consoleCaption strong {
   color: var(--ink);
   font-weight: 750;
 }
@@ -1087,7 +1089,7 @@
       6px 6px 0 -1px var(--line);
   }
 
-  .consoleEvidence figcaption {
+  .consoleEvidence .consoleCaption {
     padding: var(--s2) var(--s3);
   }
 
@@ -1273,7 +1275,7 @@
     width: 100%;
   }
 
-  .consoleEvidence figcaption {
+  .consoleEvidence .consoleCaption {
     align-items: flex-start;
     flex-direction: column;
     gap: var(--s1);
