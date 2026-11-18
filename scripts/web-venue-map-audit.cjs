@@ -126,9 +126,10 @@ async function main() {
     await page.getByRole('button', { name: '게시 검토', exact: true }).click();
     await page.getByRole('dialog', { name: '장소 안내 게시 검토', exact: true }).getByRole('button', { name: '게시하기', exact: true }).click();
     await page.getByRole('dialog').waitFor({ state: 'hidden' });
-    await attendee.reload({ waitUntil: 'networkidle' });
+    await attendee.reload({ waitUntil: 'domcontentloaded' });
     const image = attendee.getByRole('img', { name: finalAlt });
     await image.waitFor();
+    await attendee.waitForFunction(alt => [...document.images].some(item => item.alt === alt && item.complete && item.naturalWidth > 0), finalAlt);
     assert.equal(await image.evaluate(el => el.complete && el.naturalWidth > 0), true);
     assert.equal(await attendee.getByRole('link', { name: '안내도 크게 보기 (새 탭)' }).getAttribute('target'), '_blank');
     for (const width of [320, 390]) {
@@ -141,13 +142,13 @@ async function main() {
     await page.getByRole('button', { name: '안내도 제거' }).click();
     await page.getByRole('button', { name: '초안 저장', exact: true }).click();
     await page.getByText('장소 안내 초안을 저장했습니다. 게시 검토 후 참가자 화면에 반영할 수 있습니다.', { exact: true }).first().waitFor();
-    await attendee.reload({ waitUntil: 'networkidle' });
+    await attendee.reload({ waitUntil: 'domcontentloaded' });
     assert.equal(await attendee.getByRole('img', { name: finalAlt }).count(), 1, 'draft removal keeps the live map');
     assert.equal((await attendee.request.get(`${fixture.baseUrl}/api/public/events/${fixture.slug}/files/${rows.rows[0].id}`)).status(), 200);
     await page.getByRole('button', { name: '게시 검토', exact: true }).click();
     await page.getByRole('dialog', { name: '장소 안내 게시 검토', exact: true }).getByRole('button', { name: '게시하기', exact: true }).click();
     await page.getByRole('dialog').waitFor({ state: 'hidden' });
-    await attendee.reload({ waitUntil: 'networkidle' });
+    await attendee.reload({ waitUntil: 'domcontentloaded' });
     assert.equal(await attendee.getByRole('img', { name: finalAlt }).count(), 0);
     assert.equal((await attendee.request.get(`${fixture.baseUrl}/api/public/events/${fixture.slug}/files/${rows.rows[0].id}`)).status(), 404);
     await publicContext.close();

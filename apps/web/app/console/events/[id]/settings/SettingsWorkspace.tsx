@@ -1614,6 +1614,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         title="기본 정보"
         titleId="settings-basics-dialog"
         presentation="drawer"
+        stickyChrome
         onClose={() => { setSlugConfirm(false); setBasicsOpen(false); }}
         busy={busy || stageBusy || checkingSettings}
       >

@@ -168,7 +168,7 @@
   text-decoration: none;
   box-shadow: 0 12px 26px color-mix(in srgb, var(--brand) 34%, transparent);
   /* Switch foreground and background together to preserve contrast. */
-  transition: transform var(--enter) ease-out, box-shadow var(--enter) ease-out, background var(--enter) ease-out, border-color var(--enter) ease-out;
+  transition: transform var(--enter) ease-out, box-shadow var(--enter) ease-out;
 }
 
 .primaryAction:hover {

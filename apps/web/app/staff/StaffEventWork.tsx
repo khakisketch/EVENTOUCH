@@ -915,10 +915,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     const active = document.activeElement;
     if (scanEditRevisionRef.current !== scanEditAtSubmitRef.current) return;
     if (active && active !== document.body && (active !== scanFocusAtSubmitRef.current || !scanInputRef.current?.contains(active))) return;
-    // "nearest" can align the heading at the top while leaving the retry
-    // below a short viewport. Center the whole recovery group before focusing
-    // without a second browser scroll, so the verdict and action stay together.
+    // The result has its own scroll area. Reveal the panel first, then move
+    // only as far as needed inside it to show the focused recovery action.
     scanFailureRef.current?.scrollIntoView({ block: "center", behavior: "instant" });
+    retryFailedRef.current?.scrollIntoView({ block: "nearest", behavior: "instant" });
     retryFailedRef.current?.focus({ preventScroll: true });
   }, [result]);
 
