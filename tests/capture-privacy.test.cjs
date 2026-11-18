@@ -19,8 +19,8 @@
 //   use, no recursive mkdir, fresh-per-run stamped defaults, an env override
 //   for hardcoded paths, preserved namespace literals, and no exact-duplicate
 //   screenshot/PDF target within a single script.
-// - scripts/verify-system.cjs is owned elsewhere: this file asserts it stays
-//   free of the standalone helper (read-only check, never modified here).
+// - standalone audits and the integrated verification runner share the same
+//   canonical private capture base and keep checking every path below it.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -32,6 +32,14 @@ const path = require('node:path');
 const ROOT = path.join(__dirname, '..');
 const HELPER = path.join(ROOT, 'scripts', 'capture-dir.cjs');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
+
+function systemDefaultTemporaryDirectory() {
+  if (process.platform !== 'darwin') return '/tmp';
+  const result = spawnSync('getconf', ['DARWIN_USER_TEMP_DIR'], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(result.stdout.trim(), 'macOS must report its system temporary directory');
+  return result.stdout.trim();
+}
 
 function withUmask(mask, fn) {
   const prev = process.umask(mask);
@@ -153,6 +161,16 @@ if (process.env.CAPTURE_PRIVACY_CHILD) {
       const tmp2 = ensureRunTmpDir(root);
       out.sharedOverridden = tmp2 === tmp && process.env.TMPDIR === tmp;
       process.umask(before);
+      out.ok = true;
+    } else if (role === 'tmpdir-system-default') {
+      const { ensureRunTmpDir } = helper;
+      const root = helper.prepareCaptureDir(path.join(work, 'run'));
+      const tmp = ensureRunTmpDir(root);
+      out.tmpdirEnv = process.env.TMPDIR;
+      out.osTmpdir = require('node:os').tmpdir();
+      out.tmp = tmp;
+      out.tmpInsideRun = tmp === path.join(root, 'tmp');
+      out.tmpMode = (fs.statSync(tmp).mode & 0o777).toString(8);
       out.ok = true;
     } else if (role === 'tmpdir-explicit') {
       const { ensureRunTmpDir } = helper;
@@ -436,6 +454,24 @@ test('per-run private TMPDIR resolves before any fixture starts', () => {
   }
 });
 
+test('platform system TMPDIR is routed into the fresh private run directory', () => {
+  const systemTmp = systemDefaultTemporaryDirectory();
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'capture-system-tmp-test-'));
+  try {
+    const work = path.join(parent, 'work');
+    fs.mkdirSync(work, { mode: 0o700 });
+    const result = runChild('tmpdir-system-default', work, { env: { TMPDIR: systemTmp } });
+    assert.equal(result.status, 0, `system-default child failed: ${result.stderr}`);
+    const summary = JSON.parse(result.stdout);
+    assert.equal(summary.tmpInsideRun, true);
+    assert.equal(summary.tmpdirEnv, summary.tmp);
+    assert.equal(summary.osTmpdir, summary.tmp);
+    assert.equal(summary.tmpMode, '700');
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
+});
+
 test('TMPDIR coordination is ordered and evidence listings exclude the tmp dir', () => {
   const files = fs.readdirSync(path.join(ROOT, 'scripts')).filter((f) => f.endsWith('.cjs'));
   const coordinated = files.filter((f) => {
@@ -586,8 +622,24 @@ test('no script writes the same screenshot/PDF target twice in one run', () => {
   }
 });
 
-test('verify-system stays owned elsewhere (read-only guard)', () => {
-  const vs = read('scripts/verify-system.cjs');
-  assert.ok(!vs.includes('capture-dir'), 'verify-system must stay untouched by the standalone work');
-  assert.ok(vs.includes('eventouch-private-'), 'verify-system private base intact');
+test('verify-system shares the canonical default capture base and arbitrary temp symlinks stay rejected', () => {
+  const { defaultCaptureRoot } = require('../scripts/verify-system.cjs');
+  const { defaultPrivateBase, normalizeKnownTemporaryPath } = require(HELPER);
+  const stamp = `capture-test-${process.pid}-${Date.now()}`;
+  const expected = path.join(defaultPrivateBase(), `system-verification-${stamp}`);
+  assert.equal(defaultCaptureRoot(stamp), expected);
+
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'capture-alias-test-'));
+  try {
+    const target = path.join(parent, 'target');
+    const alias = path.join(parent, 'alias');
+    fs.mkdirSync(target, { mode: 0o700 });
+    fs.symlinkSync(target, alias);
+    const canonicalParent = normalizeKnownTemporaryPath(parent);
+    assert.equal(normalizeKnownTemporaryPath(alias), path.join(canonicalParent, 'alias'), 'only recognized system aliases are normalized');
+    assert.throws(() => require(HELPER).prepareCaptureDir(path.join(alias, 'run')), /안전하지 않은 캡처 상위 경로/);
+    assert.equal(fs.lstatSync(alias).isSymbolicLink(), true);
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
 });

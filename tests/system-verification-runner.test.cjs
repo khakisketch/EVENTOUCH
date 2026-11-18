@@ -6,6 +6,15 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { SCRIPTS, verificationEnvironment, stepEnvironment, createCaptureRoot, createReportWriter, verifyBuildId } = require('../scripts/verify-system.cjs');
+const { defaultPrivateBase } = require('../scripts/capture-dir.cjs');
+
+function systemDefaultTemporaryDirectory() {
+  if (process.platform !== 'darwin') return '/tmp';
+  const result = spawnSync('getconf', ['DARWIN_USER_TEMP_DIR'], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(result.stdout.trim(), 'macOS must report its system temporary directory');
+  return result.stdout.trim();
+}
 
 test('integrated verification builds first and preserves all serial product gates', () => {
   const build = SCRIPTS.indexOf('build');
@@ -118,6 +127,37 @@ test('capture root remains private under permissive umask and rejects unsafe par
     assert.throws(() => createCaptureRoot(path.join(__dirname, 'not-a-capture')), /저장소 밖/);
   } finally {
     process.umask(old);
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test('default verification creates a unique private root and per-run TMPDIR', () => {
+  const systemTmp = systemDefaultTemporaryDirectory();
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'eventouch-default-runner-test-'));
+  try {
+    const bin = path.join(parent, 'bin');
+    fs.mkdirSync(bin, { mode: 0o700 });
+    fs.writeFileSync(path.join(bin, 'npm'), '#!/bin/sh\nprintf "synthetic-tmpdir=%s\\n" "$TMPDIR"\nexit 1\n', { mode: 0o700 });
+    const env = {
+      ...process.env,
+      PATH: bin,
+      TMPDIR: systemTmp,
+      EVENTOUCH_TEST_DATABASE_URL: 'postgres://synthetic:synthetic@127.0.0.1/eventouch_test',
+    };
+    delete env.EVENTOUCH_CAPTURE_ROOT;
+    const script = path.join(__dirname, '..', 'scripts', 'verify-system.cjs');
+    const result = spawnSync(process.execPath, [script], { env, encoding: 'utf8' });
+    assert.equal(result.status, 1, result.stderr);
+    const log = result.stderr.match(/원본 로그: (.+\/security-audit\.log)/)?.[1];
+    assert.ok(log, result.stderr);
+    const root = path.dirname(log);
+    assert.ok(root.startsWith(`${defaultPrivateBase()}${path.sep}`));
+    assert.equal(fs.statSync(root).mode & 0o777, 0o700);
+    assert.equal(fs.statSync(path.join(root, 'runtime/tmp')).mode & 0o777, 0o700);
+    assert.match(fs.readFileSync(log, 'utf8'), new RegExp(`synthetic-tmpdir=${root}/runtime/tmp`));
+    assert.equal(fs.statSync(path.join(root, 'system-verification.json')).mode & 0o777, 0o600);
+    fs.rmSync(root, { recursive: true, force: true });
+  } finally {
     fs.rmSync(parent, { recursive: true, force: true });
   }
 });
