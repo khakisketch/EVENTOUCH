@@ -551,9 +551,11 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
       const design: PreviewDesign = {
         homeStyle: normalizeHomeStyle(publishedDesign.homeStyle),
         homeMenus: normalizeHomeMenus(publishedDesign.homeMenus),
+        accent: /^#[0-9a-f]{6}$/i.test(text(publishedDesign.accent)) ? text(publishedDesign.accent).toUpperCase() : "#E76D26",
         keyvisualUrl: keyvisual?.fileId ? `/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(keyvisual.fileId)}` : keyvisual?.data || null,
         defaultHomeBanner: workspace.defaultHomeBanner === "neutral" ? "neutral" : "legacy",
         intro: text(publishedDesign.intro) || text(branding.tagline) || "참가에 필요한 안내를 확인하세요.",
+        showSchedule: publishedDesign.showSchedule !== false,
         showAnnouncements: publishedDesign.showAnnouncements !== false,
         showPrograms: publishedDesign.showPrograms !== false,
         showVenue: publishedDesign.showVenue !== false && features.includes("venue"),
@@ -1529,11 +1531,11 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
   const previewPrograms: PreviewProgram[] = [
     ...state.program.flatMap((item): PreviewProgram[] => {
       if (programDialogOpen && programDraft.id === item.id) {
-        return [{ id: item.id, title: programDraft.title, meta: programMeta(programDraft), description: programDraft.description, editing: true, unpublished: !item.published }];
+        return [{ id: item.id, title: programDraft.title, date: programDraft.date, start: programDraft.start, end: programDraft.end, place: programDraft.place, description: programDraft.description, editing: true, unpublished: !item.published }];
       }
-      return item.published ? [{ id: item.id, title: item.title, meta: programMeta(item), description: item.description, editing: false, unpublished: false }] : [];
+      return item.published ? [{ id: item.id, title: item.title, date: item.date, start: item.start, end: item.end, place: item.place, description: item.description, editing: false, unpublished: false }] : [];
     }),
-    ...(programDialogOpen && !programDraft.id ? [{ id: "", title: programDraft.title, meta: programMeta(programDraft), description: programDraft.description, editing: true, unpublished: true }] : []),
+    ...(programDialogOpen && !programDraft.id ? [{ id: "", title: programDraft.title, date: programDraft.date, start: programDraft.start, end: programDraft.end, place: programDraft.place, description: programDraft.description, editing: true, unpublished: true }] : []),
   ];
   const venueEditing = venueDraft !== null && (venueDirty || Boolean(venueFile));
   const venueShown = venueEditing && venueDraft ? venueDraft : state.venue;
@@ -1545,6 +1547,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
   const renderPhone = (mode: "rail" | "stage") => (
     <ContentPhonePreview
       eventName={state.eventName}
+      eventDate={state.eventMeta.date ?? ""}
       screen={previewScreen}
       onScreen={setPreviewScreen}
       design={state.design}

@@ -13,6 +13,15 @@ function baseClass(className?: string): string {
   return ["action-icon", className].filter(Boolean).join(" ");
 }
 
+export function SearchIcon() {
+  return (
+    <svg className={baseClass()} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m15.4 15.4 4.6 4.6" />
+    </svg>
+  );
+}
+
 export function BarsIcon({ className }: IconProps) {
   return (
     <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">

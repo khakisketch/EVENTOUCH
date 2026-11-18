@@ -11,8 +11,12 @@ const web = path.resolve(__dirname, '../apps/web');
 const ts = require(require.resolve('typescript', { paths: [web] }));
 const jsx = require(require.resolve('react/jsx-runtime', { paths: [web] }));
 const { renderToStaticMarkup } = require(require.resolve('react-dom/server', { paths: [web] }));
+const { loadComponent } = require('./helpers/render-web-component.cjs');
+const schedule = loadComponent('../event/[slug]/PublicProgramSchedule');
+const addressCopy = loadComponent('../event/[slug]/AddressCopyButton');
+const cardTheme = require('../apps/web/app/console/event-card-theme.ts');
 
-async function renderVenue(venue, published, features = ['venue']) {
+async function renderVenue(venue, published, features = ['venue'], program = []) {
   const source = fs.readFileSync(path.join(web, 'app/event/[slug]/page.tsx'), 'utf8');
   const code = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
@@ -25,7 +29,7 @@ async function renderVenue(venue, published, features = ['venue']) {
   const exports = {};
   const response = {
     event: { id: 'fixture', slug: 'fixture', name: '합성 행사', date: '2027-01-16', stage: 'READY', features },
-    workspace: { venue, pageExperience: { published } },
+    workspace: { venue, program, pageExperience: { published } },
   };
   vm.runInNewContext(code, {
     exports,
@@ -36,6 +40,10 @@ async function renderVenue(venue, published, features = ['venue']) {
       if (id === 'next/link') return { __esModule: true, default: ({ children, ...props }) => jsx.jsx('a', { ...props, children }) };
       if (id === 'next/navigation') return { notFound: () => { throw new Error('Unexpected 404'); } };
       if (id === '../../event-stage') return { eventStageClassName: () => 'stage', eventStageLabel: () => '운영 준비' };
+      if (id === '../../console/event-card-theme') return cardTheme;
+      if (id === '../../../lib/public-event-date') return require('../apps/web/lib/public-event-date.ts');
+      if (id === './PublicProgramSchedule') return schedule;
+      if (id === './AddressCopyButton') return addressCopy;
       if (id === '../../../lib/verification-mode') return { loadVerificationMode: async () => 'real' };
       if (id === '../../../lib/public-recovery-contact') return recoveryExports;
       if (id === '../../ui/RichText') return { __esModule: true, default: ({ source }) => jsx.jsx('div', { children: source }) };
@@ -86,6 +94,16 @@ test('an empty or non-string venue description does not invent a section', async
     const html = await renderVenue({ description }, { showVenue: true });
     assert.doesNotMatch(html, /id="public-venue"/);
   }
+});
+
+test('an undated published session uses the event date only when that date is visible', async () => {
+  const session = { id: 'undated', title: '합성 세션', date: '', start: '', end: '', place: '', description: '' };
+  const shown = await renderVenue(null, { showSchedule: true }, [], [session]);
+  assert.match(shown, /행사 일정 기준/);
+  const hidden = await renderVenue(null, { showSchedule: false }, [], [session]);
+  assert.match(hidden, /합성 세션/);
+  assert.match(hidden, /날짜 미정/);
+  assert.doesNotMatch(hidden, /2027-01-16|행사 일정 기준/);
 });
 
 test('venue map has escaped descriptive alt text and an accessible full-size link', async () => {

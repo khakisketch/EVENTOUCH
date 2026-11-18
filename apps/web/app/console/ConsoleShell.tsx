@@ -10,8 +10,9 @@ import { createPortal } from "react-dom";
 import Link from "../ui/ProductLink";
 import { usePathname, useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../auth-redirect";
-import { CONSOLE_PAGES, EVENT_HUBS, consoleHubForPage, consolePageHref, resolveConsolePage, type ConsoleHub, type ConsolePageId } from "./console-navigation";
+import { CONSOLE_PAGES, EVENT_HUBS, consoleHubForPage, consolePageHref, matchesEventMenu, resolveConsolePage, type ConsolePageId } from "./console-navigation";
 import { BarsIcon } from "./console-ui/ConsoleIcons";
+import EventMenuSearch from "./console-ui/EventMenuSearch";
 import { useConsoleLeaveConfirmation } from "./console-draft-guard";
 import { consoleFetch, invalidateConsoleReads, subscribeConsoleFreshness } from "../../lib/console-api";
 import freshnessStyles from "./console-ui/freshness.module.css";
@@ -150,6 +151,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const [operatorMenuOpen, setOperatorMenuOpen] = useState(false);
   const [operatorMenuPosition, setOperatorMenuPosition] = useState<CSSProperties | null>(null);
   const [globalMenuOpen, setGlobalMenuOpen] = useState(false);
+  const [eventMenuQuery, setEventMenuQuery] = useState("");
   const [portalReady, setPortalReady] = useState(false);
   const [logoutPending, setLogoutPending] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -595,7 +597,8 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     // the link state stay exactly as they were.
     globalFocusPendingRef.current = false;
     setGlobalMenuOpen(false);
-  }, [pathname]);
+    setEventMenuQuery("");
+  }, [pathname, organization.context?.organizationId]);
 
   useEffect(() => {
     if (!globalMenuOpen) return;
@@ -625,6 +628,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing) return;
       if (event.key === "Escape") {
         event.preventDefault();
         closeGlobalMenu(true);
@@ -632,6 +636,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       }
       if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
       if (!globalMenuRef.current?.contains(document.activeElement)) return;
+      if (document.activeElement?.matches("input")) return;
       const items = Array.from(
         globalMenuRef.current?.querySelectorAll<HTMLElement>(
           "a[href]"
@@ -722,6 +727,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     if (globalMenuOpen) {
       closeGlobalMenu();
     } else {
+      setEventMenuQuery("");
       // The two popups are mutually exclusive.
       menuFocusPendingRef.current = false;
       setOperatorMenuOpen(false);
@@ -830,9 +836,11 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     return true;
   }
 
-  function visiblePagesForHub(hub: ConsoleHub): ConsolePageId[] {
-    return hub.pageIds.filter(isPageVisible);
-  }
+  const matchingHubs = EVENT_HUBS.map((hub) => ({
+    hub,
+    pages: hub.pageIds.filter((id) => isPageVisible(id) && matchesEventMenu(id, hub.label, eventMenuQuery)),
+  })).filter(({ pages }) => pages.length > 0);
+  const menuResultCount = matchingHubs.reduce((count, { pages }) => count + pages.length, 0);
 
 
   function renderPageBadges(pageId: ConsolePageId) {
@@ -854,9 +862,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   }
 
   function renderEventHubs() {
-    return EVENT_HUBS.map((hub) => {
-      const pages = visiblePagesForHub(hub);
-      if (!pages.length) return null;
+    return matchingHubs.map(({ hub, pages }) => {
       return (
         <div key={hub.id} className="console-nav-group" role="group" aria-label={hub.label}>
           <p className="nav-section-label">{hub.label}</p>
@@ -887,10 +893,9 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         <p className="console-menu-section-label">현재 행사</p>
         <p className="console-menu-event-name">{shellData?.currentEventName}</p>
         <p className="console-menu-event-meta">{meta}</p>
-        <div className="console-menu-hubs">
-          {EVENT_HUBS.map((hub) => {
-            const pages = visiblePagesForHub(hub);
-            if (!pages.length) return null;
+        <EventMenuSearch query={eventMenuQuery} onChange={setEventMenuQuery} resultCount={menuResultCount} resultsId="mobile-event-menu-results" />
+        <div id="mobile-event-menu-results" className="console-menu-hubs">
+          {matchingHubs.map(({ hub, pages }) => {
             return (
               <div key={hub.id} className="console-menu-hub-group">
                 <p
@@ -949,7 +954,8 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
               <strong title={shellData?.currentEventName ?? undefined}>{shellData?.currentEventName}</strong>
             </div>
           )}
-          <div className="console-hub-list">{renderEventHubs()}</div>
+          <EventMenuSearch query={eventMenuQuery} onChange={setEventMenuQuery} resultCount={menuResultCount} resultsId="rail-event-menu-results" />
+          <div id="rail-event-menu-results" className="console-hub-list">{renderEventHubs()}</div>
         </div>
         {shellData && shellData.triage.length ? (
           <div className="nav-triage" role="group" aria-label="손봐야 할 행사">

@@ -1,13 +1,11 @@
+/* Shared page primitives also power the console's phone preview. Keep their
+   base rules neutral; live-page composition belongs under .page below. */
 .introLine {
   margin: var(--s2) 0 var(--s5);
   max-width: var(--web-reading-max, 68ch);
   color: var(--muted);
 }
 
-/* Hero title: the global .event-intro h1 floors at --display (40px), which
-   overwhelms a 390px phone and wraps the event name mid-syllable. The title
-   leads at h1 scale on mobile and grows only with room. Balance keeps the
-   event code (e.g. trailing "30b1ba") from stranding alone on its own line. */
 .eventTitle {
   margin: 0 0 var(--s3);
   font-size: clamp(var(--h1), 8vw, var(--display));
@@ -18,8 +16,6 @@
   text-wrap: balance;
 }
 
-/* Published keyvisual: the first thing an invited attendee sees. It scales
-   to the reading width and never shifts the facts below it. */
 .keyvisual {
   display: block;
   width: 100%;
@@ -29,7 +25,6 @@
   border-radius: var(--radius);
 }
 
-/* Facts read as plain lines under the title, not as boxes. */
 .facts {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -49,33 +44,20 @@
 }
 
 .cta {
-  display: flex;
-  align-items: stretch;
-  flex-wrap: wrap;
+  display: grid;
   gap: var(--s2);
-  margin-top: var(--s4);
+  margin: 0;
 }
 
-/* One primary per screen: the signup fills the row, the way-back links share
-   the next row at the same 44px target without competing for it. */
-.cta > a:first-child,
-.cta > p:first-child {
-  flex: 1 1 100%;
+.actionGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
 }
 
-.recoveryLink {
-  max-width: 100%;
-  flex: 1 1 auto;
-}
-
-.homeLink {
-  max-width: 100%;
-  flex: 1 1 auto;
-}
-
-/* Closed intake is information with a way forward, not a dead end: the
-   find-my-ticket link below becomes the one primary action. */
 .registrationClosed {
+  flex: 1 1 100%;
   margin: 0;
   padding: var(--s4);
   border-radius: 16px;
@@ -85,28 +67,49 @@
 }
 
 .cta :global(.button) {
-  min-height: 56px;
-  border-radius: 16px;
-  font-size: var(--body);
+  min-height: 52px;
+  border-radius: var(--radius-medium);
 }
 
-.cta .recoveryLink:not(:global(.button-primary)),
-.cta .homeLink {
-  border-color: transparent;
-  background: transparent;
-  color: var(--muted);
+.primaryAction:global(.button-primary) {
+  flex: 1 1 220px;
+  border-color: var(--event-accent);
+  background: var(--event-accent);
+  color: var(--event-accent-ink);
+  text-decoration: none;
+}
+
+.primaryAction:global(.button-primary):hover {
+  border-color: var(--event-accent);
+  background: var(--event-accent);
+  color: var(--event-accent-ink);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.recoveryLink,
+.homeLink {
+  max-width: 100%;
+  flex: 0 1 auto;
   min-height: 48px;
-  font-size: var(--small);
+  border-color: transparent !important;
+  background: transparent !important;
+  color: var(--ink) !important;
+  font-size: var(--small) !important;
+  text-decoration-color: var(--event-accent);
 }
 
-/* Recovery guidance that shares the CTA row: the same device-binding rule is
-   repeated on the register and ticket screens, so here it reads as one info
-   strip (the register outcome-note voice) instead of a quiet paragraph that
-   splits the primary from the way-back links. */
+/* Closed intake leaves ticket lookup as the single primary action. */
+.recoveryLink:global(.button-primary) {
+  border-color: var(--event-accent) !important;
+  background: var(--event-accent) !important;
+  color: var(--event-accent-ink) !important;
+}
+
 .recoveryNote {
-  margin: 0;
-  padding: var(--s4);
-  border-radius: 16px;
+  margin: var(--s2) 0 0;
+  padding: var(--s3);
+  border-radius: var(--radius-small);
   background: var(--surface-muted);
   color: var(--ink);
   font-size: var(--small);
@@ -114,9 +117,19 @@
   line-height: 1.6;
   overflow-wrap: anywhere;
   word-break: keep-all;
-  flex: 1 1 100%;
 }
 
+.recoveryDetails summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* The editor frames each draft notice. Published notices use the flat list below. */
 .section {
   max-width: var(--web-content-max, 1120px);
   margin: var(--s6) auto 0;
@@ -129,8 +142,7 @@
   letter-spacing: -0.02em;
 }
 
-.noticeList,
-.programList {
+.noticeList {
   display: grid;
   gap: var(--s3);
   margin: 0;
@@ -138,35 +150,31 @@
   list-style: none;
 }
 
-.noticeList li,
-.programList li {
+.noticeList li {
   padding: var(--s4);
   border: 1px solid var(--line);
   border-radius: var(--radius-medium);
   background: var(--paper);
 }
 
-.noticeList h3,
-.programList h3 {
+.noticeList h3 {
   margin: 0 0 var(--s2);
   font-size: var(--h3);
   letter-spacing: -0.01em;
 }
 
-.noticeList p,
-.programList p {
+.noticeList p {
   margin: 0;
 }
 
-.noticeList p + p,
-.programList p + p {
+.noticeList p + p {
   margin-top: var(--s2);
 }
 
 .pin {
   display: inline-flex;
-  align-items: center;
   min-height: 28px;
+  align-items: center;
   margin-right: var(--s2);
   padding-inline: var(--s2);
   border: 1px solid var(--line-strong);
@@ -178,62 +186,10 @@
   vertical-align: baseline;
 }
 
-.programMeta {
-  color: var(--muted);
-  font-size: var(--small);
-  font-variant-numeric: tabular-nums;
-}
-
-.programSpeaker {
-  color: var(--brand-text);
-  font-size: var(--small);
-}
-
 .venueText {
   white-space: pre-wrap;
 }
 
-/* The global .event-facts grid holds two columns at every width; on a phone
-   each fact squeezes to ~165px and the date wraps mid-phrase. One column on
-   narrow screens keeps 일정·장소 readable. Globals stay untouched. */
-@media (max-width: 768px) {
-  :global(.event-facts) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .cta > a:first-child,
-  .cta > p:first-child {
-    flex: 1 1 100%;
-  }
-}
-
-@media (max-width: 768px) {
-  .section {
-    margin-top: var(--s5);
-    padding: 0 var(--s4);
-  }
-
-  .noticeList li,
-  .programList li {
-    padding: var(--s3);
-  }
-}
-
-/* 390px-class phones: the CTA keeps primary-first rhythm (full-width primary,
-   one shared row for the way-back links) with a tighter gap so the recovery
-   strip, the primary, and the links read as one decision group. */
-@media (max-width: 480px) {
-  .eventTitle {
-    font-size: clamp(var(--h1), 7vw, 30px);
-  }
-
-  .cta {
-    gap: var(--s2);
-  }
-}
-
-/* Published booth map: the image scales, markers ride percentage positions
-   normalized by the editor, so any board size stays aligned. */
 .mapWrap {
   position: relative;
   display: inline-block;
@@ -261,6 +217,395 @@
   white-space: nowrap;
   pointer-events: none;
 }
-.venueMap { margin: var(--s4) 0 0; }
-.venueMap img { display: block; width: auto; max-width: 100%; height: auto; }
-.venueMap figcaption { margin-top: var(--s2); }
+
+.venueMap {
+  margin: var(--s4) 0 0;
+}
+
+.venueMap img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-medium);
+}
+
+.venueMap figcaption {
+  margin-top: var(--s2);
+}
+
+.addressRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+  align-items: center;
+}
+
+.address {
+  overflow-wrap: anywhere;
+}
+
+.addressCopy {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+}
+
+.addressValue {
+  min-width: 0;
+  flex: 1 1 20ch;
+  min-height: 42px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--small);
+}
+
+.addressButton {
+  min-height: 44px;
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.addressButton:hover {
+  background: var(--surface-muted);
+}
+
+.addressStatus {
+  flex: 1 1 100%;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.addressButton:focus-visible,
+.addressValue:focus-visible {
+  outline: 3px solid var(--focus, #2453a6);
+  outline-offset: 3px;
+}
+
+.page:global(.site-page):global(.public-event-page) {
+  width: min(calc(100% - 40px), 1280px);
+  max-width: 1280px;
+  padding: 0 0 var(--s7);
+  background: var(--paper);
+}
+
+.masthead:global(.public-page-header) {
+  padding: var(--s4) clamp(var(--s5), 5vw, var(--s7));
+  border-bottom: 1px solid var(--line);
+}
+
+.masthead a {
+  text-decoration: none;
+}
+
+.hero:global(.event-intro) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(var(--s5), 4vw, var(--s7));
+  align-items: center;
+  margin: 0;
+  padding: clamp(var(--s5), 5vw, var(--s7));
+}
+
+.heroWithImage:global(.event-intro) {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+}
+
+.heroNoImage:global(.event-intro) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: var(--s4);
+  border: 1px solid color-mix(in srgb, var(--event-accent) 18%, var(--line));
+  border-radius: 24px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--event-accent) 8%, var(--paper)),
+    color-mix(in srgb, var(--event-accent) 2%, var(--paper))
+  );
+}
+
+.artwork {
+  display: flex;
+  min-width: 0;
+  min-height: 280px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 20px;
+  background: var(--surface-muted);
+}
+
+.hero .keyvisual {
+  max-width: none;
+  max-height: min(62svh, 560px);
+  height: auto;
+  margin: 0;
+  border-radius: 0;
+  object-fit: contain;
+}
+
+.heroCopy,
+.heroInfo {
+  min-width: 0;
+}
+
+.heroNoImage .heroCopy {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.heroNoImage .heroInfo {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  padding-left: clamp(var(--s4), 4vw, var(--s7));
+  border-left: 1px solid color-mix(in srgb, var(--event-accent) 22%, var(--line));
+}
+
+.heroWithImage .artwork {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.heroWithImage .heroCopy {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.heroWithImage .heroInfo {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.hero .eventTitle {
+  max-width: 16ch;
+  margin-bottom: var(--s4);
+  font-size: clamp(32px, 4vw, 54px);
+  line-height: 1.12;
+}
+
+.hero .introLine {
+  max-width: 38ch;
+  margin: 0 0 var(--s5);
+  color: var(--muted);
+  font-size: var(--h3);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.facts:global(.event-facts) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--s4);
+  margin: 0 0 var(--s5);
+}
+
+.fact {
+  min-width: 0;
+  padding: var(--s3) 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.fact:first-child {
+  grid-column: 1 / -1;
+}
+
+.fact dt {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.fact dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--s2);
+  align-items: baseline;
+  font-size: var(--body);
+  overflow-wrap: anywhere;
+}
+
+.clock {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.page .section {
+  max-width: 1024px;
+  margin-top: var(--s5);
+}
+
+.page .section h2 {
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+.page .section[id],
+.page .section h2 {
+  scroll-margin-top: var(--s5);
+}
+
+.page .noticeList {
+  gap: 0;
+}
+
+.page .noticeList li {
+  padding: var(--s4) 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.page .noticeList h3 {
+  line-height: 1.4;
+}
+
+.page .noticeList :global(.rich-text) {
+  max-width: 72ch;
+}
+
+.sectionNav {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s5);
+  align-items: center;
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.sectionNav a {
+  display: inline-flex;
+  min-height: 44px;
+  gap: var(--s2);
+  align-items: center;
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration-color: var(--event-accent);
+  text-underline-offset: 5px;
+}
+
+@media (max-width: 760px) {
+  .page:global(.site-page):global(.public-event-page) {
+    width: calc(100% - var(--s4));
+  }
+
+  .masthead:global(.public-page-header) {
+    padding: var(--s3) var(--s4);
+  }
+
+  .hero:global(.event-intro),
+  .heroWithImage:global(.event-intro),
+  .heroNoImage:global(.event-intro) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s4);
+    padding: var(--s4);
+  }
+
+  .heroNoImage:global(.event-intro) {
+    margin: var(--s3);
+    border-radius: var(--radius-medium);
+  }
+
+  .heroNoImage .heroCopy,
+  .heroNoImage .heroInfo,
+  .heroWithImage .artwork,
+  .heroWithImage .heroCopy,
+  .heroWithImage .heroInfo {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .heroNoImage .heroInfo {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .artwork {
+    min-height: 0;
+    max-height: 36svh;
+    border-radius: var(--radius-medium);
+  }
+
+  .hero .keyvisual {
+    width: 100%;
+    max-height: 36svh;
+    height: 280px;
+  }
+
+  .hero .eventTitle {
+    font-size: clamp(30px, 8.5vw, 42px);
+  }
+
+  .hero .introLine {
+    margin-bottom: var(--s4);
+    font-size: var(--body);
+  }
+
+  .facts:global(.event-facts) {
+    grid-template-columns: minmax(0, 1fr);
+    margin-bottom: var(--s4);
+  }
+
+  .fact:first-child {
+    grid-column: auto;
+  }
+
+  .actionGroup {
+    align-items: stretch;
+  }
+
+  .actionGroup :global(.button) {
+    flex: 1 1 100%;
+  }
+
+  .page .section {
+    margin-top: var(--s4);
+    padding-inline: var(--s4);
+  }
+
+  .sectionNav {
+    flex-wrap: nowrap;
+    gap: var(--s4);
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .sectionNav a {
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 380px) {
+  .page:global(.site-page):global(.public-event-page) {
+    width: calc(100% - var(--s3));
+  }
+
+  .hero:global(.event-intro),
+  .heroWithImage:global(.event-intro),
+  .heroNoImage:global(.event-intro) {
+    padding: var(--s3);
+  }
+
+  .cta :global(.button),
+  .addressButton {
+    width: 100%;
+  }
+}

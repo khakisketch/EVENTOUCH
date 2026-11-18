@@ -100,7 +100,7 @@ test('menu closes on arrival, never on click, so a guard cancel keeps state', ()
   const source = shell();
   assert.match(
     source,
-    /globalFocusPendingRef\.current = false;\s*setGlobalMenuOpen\(false\);\s*\}, \[pathname\]/su
+    /globalFocusPendingRef\.current = false;\s*setGlobalMenuOpen\(false\);\s*setEventMenuQuery\(""\);\s*\}, \[pathname, organization\.context\?\.organizationId\]/su
   );
   // Links stay plain client-side Links: no onClick closer that could run
   // before the draft guard answers.
@@ -114,6 +114,17 @@ test('menu closes on arrival, never on click, so a guard cancel keeps state', ()
   );
   assert.doesNotMatch(eventsRenderer, /onClick/u);
   assert.doesNotMatch(clientsRenderer, /onClick/u);
+});
+
+test('event menu searches operator terms inside the existing visible page list', () => {
+  const { EVENT_HUBS, matchesEventMenu } = require('../apps/web/app/console/console-navigation.ts');
+  const matches = (query) => EVENT_HUBS.flatMap(hub =>
+    hub.pageIds.filter(id => matchesEventMenu(id, hub.label, query)));
+  assert.deepEqual(matches('문자'), ['messages']);
+  assert.deepEqual(matches('체크인'), ['operations']);
+  assert.deepEqual(matches('안내 qr'), ['attendeePage']);
+  assert.deepEqual(matches('없는 메뉴 예시'), []);
+  assert.match(shell(), /isPageVisible\(id\) && matchesEventMenu\(id,/u);
 });
 
 test('current-destination link closes the menu; guarded leaves stay open', () => {

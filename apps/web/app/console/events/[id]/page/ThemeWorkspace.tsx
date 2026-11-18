@@ -31,6 +31,7 @@ import ConsoleDialog from "../../../console-ui/ConsoleDialog";
 import { Switch } from "@astryxdesign/core/Switch";
 import ColorField from "./ColorField";
 import LayoutPicker from "./LayoutPicker";
+import AttendeeGuideQr from "./AttendeeGuideQr";
 import { ChoiceCards, Seg } from "./StudioControls";
 import studio from "./studio.module.css";
 import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
@@ -1437,6 +1438,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
       eventId={eventId}
       eventName={state.eventName}
       meta={state.eventMeta}
+      headerActions={publicAvailable ? <AttendeeGuideQr eventName={state.eventName} slug={state.slug} /> : undefined}
       feedback={
         <>
           {failure ? <div id="theme-error" tabIndex={-1}><ConsoleFeedback kind="error">{failure.message}</ConsoleFeedback></div> : null}
