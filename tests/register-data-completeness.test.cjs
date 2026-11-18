@@ -13,24 +13,22 @@ const ts = require(require.resolve('typescript', { paths: [web] }));
 const { publicEvent, publicWorkspace } = require('../server/public-events');
 const { normalizeWorkspace } = require('../server/state');
 
-function loadParser() {
-  const compile = file => ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+function loadModule(file) {
+  const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS },
   }).outputText;
-  const contact = {};
-  vm.runInNewContext(compile(path.join(web, 'lib/public-recovery-contact.ts')), { exports: contact });
-  const parser = {};
-  vm.runInNewContext(compile(path.join(web, 'app/event/[slug]/register/register-data.ts')), {
-    exports: parser,
+  const exports = {};
+  vm.runInNewContext(code, {
+    exports,
     require(id) {
-      if (id === '../../../../lib/public-recovery-contact') return contact;
+      if (id.startsWith('.')) return loadModule(path.resolve(path.dirname(file), `${id}.ts`));
       throw new Error(`Unexpected import ${id}`);
     },
   });
-  return parser.parseRegisterData;
+  return exports;
 }
 
-const parse = loadParser();
+const { parseRegisterData: parse } = loadModule(path.join(web, 'app/event/[slug]/register/register-data.ts'));
 const event = publicEvent({ id: 'fixture', slug: 'fixture', payload: {
   name: '합성 행사', stage: 'READY', features: [],
 } });

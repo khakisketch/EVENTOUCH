@@ -1,4 +1,6 @@
 import { publicRecoveryContact } from "../../../../lib/public-recovery-contact";
+import { readPublicEventContext } from "../../../../lib/public-event-context";
+import type { PublicEventContext } from "../../../../lib/public-event-context";
 
 export type PublishedField = {
   id: string;
@@ -10,6 +12,7 @@ export type PublishedField = {
 
 export type RegisterData = {
   name: string;
+  eventContext: PublicEventContext;
   stage: string;
   consentText: string;
   consentVersion: number;
@@ -87,6 +90,7 @@ export function parseRegisterData(value: unknown): RegisterData | null {
   }
   return {
     name: event.name,
+    eventContext: readPublicEventContext(event, workspace),
     stage: event.stage.toUpperCase(),
     consentText: workspace.consentText,
     consentVersion: Number(workspace.consentVersion),

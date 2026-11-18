@@ -23,6 +23,17 @@ export function isTicketRejected(slug: string): boolean {
   try { return window.sessionStorage.getItem(REJECTED_PREFIX + slug) === '1'; } catch { return false; }
 }
 
+// Only a navigation hint. The ticket page verifies the bearer after the click.
+export function hasTicketInThisTab(slug: string): boolean {
+  if (!slug || isTicketRejected(slug)) return false;
+  if (getAllowedTicketForTab(slug)) return true;
+  try {
+    return Boolean(window.sessionStorage.getItem('eventouch.ticket.' + slug)) && ticketStorageAvailable(slug);
+  } catch {
+    return false;
+  }
+}
+
 export function clearTicketRejected(slug: string): void {
   try { window.sessionStorage.removeItem(REJECTED_PREFIX + slug); } catch { /* restricted storage */ }
 }

@@ -6,6 +6,8 @@ import { loadVerificationMode } from "../../../../lib/verification-mode";
 import type { VerificationMode } from "../../../../lib/verification-mode";
 import { BUILT_IN_FIELDS, parseRegisterData } from "./register-data";
 import type { RegisterData } from "./register-data";
+import PublicEventContext from "../PublicEventContext";
+import TabTicketChoice from "../TabTicketChoice";
 export type { PublishedField } from "./register-data";
 
 function apiBase(): string {
@@ -54,16 +56,28 @@ export default async function RegisterPage({
           <p className={styles.pageContext}>참가 신청</p>
         </header>
         <h1>{data.name}</h1>
+        <PublicEventContext slug={slug} context={data.eventContext} align="start" />
         <p>현재 신청을 받지 않습니다.</p>
-        {recoveryUnavailable ? (
-          <p role="note">이 행사는 문자로 티켓을 다시 연결할 수 없습니다. 신청을 완료한 브라우저 탭을 확인하세요. {data.recoveryContact ? `문의: ${data.recoveryContact}` : "탭을 찾을 수 없다면 행사 초대 안내를 확인하거나 행사 주최 측에 문의하세요."}</p>
-        ) : (
-          <p>
-            <ProductLink className="button button-primary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>
-              이미 신청했다면 내 티켓 찾기
-            </ProductLink>
-          </p>
-        )}
+        <TabTicketChoice
+          slug={slug}
+          whenPresent={(
+            <p>
+              <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket`} prefetch={false}>
+                내 티켓 열기
+              </ProductLink>
+            </p>
+          )}
+        >
+          {recoveryUnavailable ? (
+            <p role="note">이 행사는 문자로 티켓을 다시 연결할 수 없습니다. 신청을 완료한 브라우저 탭을 확인하세요. {data.recoveryContact ? `문의: ${data.recoveryContact}` : "탭을 찾을 수 없다면 행사 초대 안내를 확인하거나 행사 주최 측에 문의하세요."}</p>
+          ) : (
+            <p>
+              <ProductLink className="button button-primary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>
+                이미 신청했다면 내 티켓 찾기
+              </ProductLink>
+            </p>
+          )}
+        </TabTicketChoice>
         <p>
           <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>
             행사 안내로
@@ -80,7 +94,19 @@ export default async function RegisterPage({
           <p className={styles.pageContext}>참가 신청</p>
         </header>
         <h1 className={`registration-title ${styles.pageTitle}`}>{data.name}</h1>
-        <VerificationUnavailable slug={slug} mode={verificationMode} contact={data.recoveryContact} />
+        <PublicEventContext slug={slug} context={data.eventContext} align="start" />
+        <TabTicketChoice
+          slug={slug}
+          whenPresent={(
+            <p>
+              <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket`} prefetch={false}>
+                내 티켓 열기
+              </ProductLink>
+            </p>
+          )}
+        >
+          <VerificationUnavailable slug={slug} mode={verificationMode} contact={data.recoveryContact} />
+        </TabTicketChoice>
       </main>
     );
   }
@@ -92,6 +118,17 @@ export default async function RegisterPage({
       </header>
       <p className={styles.backLink}><ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>← 행사 안내로</ProductLink></p>
       <h1 className={`registration-title ${styles.pageTitle}`}>{data.name}</h1>
+      <PublicEventContext slug={slug} context={data.eventContext} align="start" />
+      <TabTicketChoice
+        slug={slug}
+        whenPresent={(
+          <p className={styles.backLink}>
+            <ProductLink variant="ghost" href={`/event/${encodeURIComponent(slug)}/ticket`} prefetch={false}>
+              내 티켓 열기
+            </ProductLink>
+          </p>
+        )}
+      />
       <RegisterForm
         slug={slug}
         fields={[...BUILT_IN_FIELDS, ...data.fields]}

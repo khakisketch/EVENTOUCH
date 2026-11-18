@@ -46,8 +46,13 @@
 }
 
 .form:global(.registration-form) {
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s5);
   padding: 0;
+}
+
+.form :global(.form-validation) button {
+  max-width: 100%;
 }
 
 .form :global(.registration-fields) {
@@ -162,6 +167,47 @@
   padding: var(--s3) 0 max(var(--s4), env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
   background: var(--paper);
+}
+
+.progressLine {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.progressMessage {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.progressJump {
+  min-width: 0;
+  max-width: 55%;
+  min-height: 44px;
+  padding-inline: var(--s2);
+  white-space: nowrap;
+}
+
+.progressJumpText {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25em;
+}
+
+.progressJumpLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .submitBlock button[type="submit"] {

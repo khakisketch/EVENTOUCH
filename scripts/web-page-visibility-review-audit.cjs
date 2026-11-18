@@ -38,12 +38,17 @@ async function main() {
     const page = await operator.newPage();
     const publicContext = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'ko-KR' });
     const attendee = await publicContext.newPage();
+    const registration = await publicContext.newPage();
     const ticketPage = await publicContext.newPage();
     const screen = await publicContext.newPage();
     const errors = [];
-    for (const target of [page, attendee, ticketPage, screen]) target.on('pageerror', error => errors.push(error.message));
+    for (const target of [page, attendee, registration, ticketPage, screen]) target.on('pageerror', error => errors.push(error.message));
     page.setDefaultTimeout(12000);
     const eventUrl = `${fixture.baseUrl}/event/${fixture.slug}`;
+    const venueLink = target => target.getByRole('link', { name: '오시는 길', exact: true });
+    await registration.goto(`${eventUrl}/register`, { waitUntil: 'networkidle' });
+    await registration.locator('time[datetime="2027-01-16"]').waitFor();
+    assert.equal(await venueLink(registration).getAttribute('href'), `/event/${fixture.slug}#public-venue`);
     await attendee.goto(eventUrl, { waitUntil: 'networkidle' });
     await attendee.locator('dt').filter({ hasText: /^일시$/ }).waitFor();
     await attendee.getByRole('heading', { name: '합성 프로그램 일정', exact: true }).waitFor();
@@ -163,6 +168,10 @@ async function main() {
     await ticketPage.goto(`${eventUrl}/ticket?ticket=${encodeURIComponent(ticket)}`, { waitUntil: 'networkidle' });
     await ticketPage.getByRole('heading', { name: '내 티켓' }).waitFor();
     await ticketPage.getByText('2027-01-16', { exact: true }).first().waitFor();
+    await venueLink(ticketPage).waitFor();
+    await registration.reload({ waitUntil: 'networkidle' });
+    assert.equal(await registration.locator('time').count(), 0, 'the published setting hides the registration date');
+    await venueLink(registration).waitFor();
     await screen.reload({ waitUntil: 'networkidle' });
     await screen.getByText('2027-01-16', { exact: true }).first().waitFor();
     await attendee.screenshot({ path: path.join(out, 'attendee-schedule-hidden.png'), fullPage: true });
@@ -203,6 +212,11 @@ async function main() {
     assert.equal(await attendee.getByRole('button', { name: /^공지사항/u }).count(), 0);
     await ticketPage.reload({ waitUntil: 'networkidle' });
     await ticketPage.getByText('2027-01-16', { exact: true }).first().waitFor();
+    await registration.reload({ waitUntil: 'networkidle' });
+    for (const target of [registration, ticketPage]) {
+      assert.equal(await venueLink(target).count(), 0);
+      assert.equal(await target.getByText('합성 행사장', { exact: true }).count(), 0);
+    }
     await screen.reload({ waitUntil: 'networkidle' });
     await screen.getByText('합성 공지', { exact: true }).waitFor();
 

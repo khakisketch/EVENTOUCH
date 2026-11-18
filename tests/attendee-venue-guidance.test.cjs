@@ -14,6 +14,7 @@ const { renderToStaticMarkup } = require(require.resolve('react-dom/server', { p
 const { loadComponent } = require('./helpers/render-web-component.cjs');
 const schedule = loadComponent('../event/[slug]/PublicProgramSchedule');
 const addressCopy = loadComponent('../event/[slug]/AddressCopyButton');
+const tabTicketChoice = loadComponent('../event/[slug]/TabTicketChoice');
 const cardTheme = require('../apps/web/app/console/event-card-theme.ts');
 
 async function renderVenue(venue, published, features = ['venue'], program = []) {
@@ -44,6 +45,7 @@ async function renderVenue(venue, published, features = ['venue'], program = [])
       if (id === '../../../lib/public-event-date') return require('../apps/web/lib/public-event-date.ts');
       if (id === './PublicProgramSchedule') return schedule;
       if (id === './AddressCopyButton') return addressCopy;
+      if (id === './TabTicketChoice') return tabTicketChoice;
       if (id === '../../../lib/verification-mode') return { loadVerificationMode: async () => 'real' };
       if (id === '../../../lib/public-recovery-contact') return recoveryExports;
       if (id === '../../ui/RichText') return { __esModule: true, default: ({ source }) => jsx.jsx('div', { children: source }) };

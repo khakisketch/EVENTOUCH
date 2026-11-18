@@ -56,6 +56,29 @@
   gap: var(--s2) var(--s3);
 }
 
+.returnLinks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--s5);
+}
+
+.returnLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  min-height: 44px;
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 650;
+  text-underline-offset: 3px;
+}
+
+.returnLink span {
+  color: var(--muted);
+  font-weight: 500;
+}
+
 .registrationClosed {
   flex: 1 1 100%;
   margin: 0;

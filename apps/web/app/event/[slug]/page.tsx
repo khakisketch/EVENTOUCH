@@ -9,6 +9,7 @@ import { publicRecoveryContact } from "../../../lib/public-recovery-contact";
 import RichText from "../../ui/RichText";
 import PublicProgramSchedule, { type PublicProgramScheduleItem } from "./PublicProgramSchedule";
 import AddressCopyButton from "./AddressCopyButton";
+import TabTicketChoice from "./TabTicketChoice";
 import styles from "./public-event.module.css";
 
 type PublicEvent = {
@@ -243,23 +244,40 @@ export default async function EventPage({
             </div>
           </dl>
           <div className={styles.cta}>
-            <div className={styles.actionGroup}>
-              {acceptingSignup ? (
-                <Link className={`button button-primary ${styles.primaryAction}`} href={`/event/${encodeURIComponent(slug)}/register`}>참가 신청하기</Link>
-              ) : (
-                <p className={styles.registrationClosed} role="status">현재 신청을 받지 않습니다.</p>
-              )}
-              {!recoveryBlocked ? (
-                <Link className={`button ${acceptingSignup ? "button-secondary" : "button-primary"} ${!acceptingSignup ? styles.primaryAction : ""} ${styles.recoveryLink}`} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>이미 신청했다면 내 티켓 찾기</Link>
+            <TabTicketChoice slug={slug} whenPresent={
+              <>
+                {acceptingSignup ? null : <p className={styles.registrationClosed} role="status">현재 신청을 받지 않습니다.</p>}
+                <div className={styles.actionGroup}>
+                  <Link className={`button button-primary ${styles.primaryAction}`} href={`/event/${encodeURIComponent(slug)}/ticket`} prefetch={false}>내 티켓 열기</Link>
+                </div>
+                <div className={styles.returnLinks}>
+                  <Link className={styles.returnLink} href={`/event/${encodeURIComponent(slug)}/home`}>참가자 홈</Link>
+                  {acceptingSignup ? (
+                    <a className={styles.returnLink} href={`/event/${encodeURIComponent(slug)}/register`} target="_blank" rel="noopener noreferrer">
+                      다른 참가자 신청 <span>(새 탭)</span>
+                    </a>
+                  ) : null}
+                </div>
+              </>
+            }>
+              <div className={styles.actionGroup}>
+                {acceptingSignup ? (
+                  <Link className={`button button-primary ${styles.primaryAction}`} href={`/event/${encodeURIComponent(slug)}/register`}>참가 신청하기</Link>
+                ) : (
+                  <p className={styles.registrationClosed} role="status">현재 신청을 받지 않습니다.</p>
+                )}
+                {!recoveryBlocked ? (
+                  <Link className={`button ${acceptingSignup ? "button-secondary" : "button-primary"} ${!acceptingSignup ? styles.primaryAction : ""} ${styles.recoveryLink}`} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>이미 신청했다면 내 티켓 찾기</Link>
+                ) : null}
+                <Link className={`button button-secondary ${styles.homeLink}`} href={`/event/${encodeURIComponent(slug)}/home`}>참가자 홈</Link>
+              </div>
+              {recoveryBlocked ? (
+                <details className={styles.recoveryDetails}>
+                  <summary data-disclosure-indicator>이미 신청하셨나요?</summary>
+                  <p className={styles.recoveryNote} role="note">이미 신청했다면 신청을 완료한 브라우저 탭에서 티켓을 여세요. 이 행사는 문자로 다시 연결할 수 없습니다. {recoveryContact ? `문의: ${recoveryContact}` : "탭을 찾을 수 없다면 행사 초대 안내를 확인하거나 행사 주최 측에 문의하세요."}</p>
+                </details>
               ) : null}
-              <Link className={`button button-secondary ${styles.homeLink}`} href={`/event/${encodeURIComponent(slug)}/home`}>참가자 홈</Link>
-            </div>
-            {recoveryBlocked ? (
-              <details className={styles.recoveryDetails}>
-                <summary data-disclosure-indicator>이미 신청하셨나요?</summary>
-                <p className={styles.recoveryNote} role="note">이미 신청했다면 신청을 완료한 브라우저 탭에서 티켓을 여세요. 이 행사는 문자로 다시 연결할 수 없습니다. {recoveryContact ? `문의: ${recoveryContact}` : "탭을 찾을 수 없다면 행사 초대 안내를 확인하거나 행사 주최 측에 문의하세요."}</p>
-              </details>
-            ) : null}
+            </TabTicketChoice>
           </div>
         </div>
         {publicSections.length ? (

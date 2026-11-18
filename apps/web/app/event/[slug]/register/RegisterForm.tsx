@@ -59,6 +59,7 @@ export default function RegisterForm(initial: Props) {
   const pendingFieldFocusRef = useRef<{ field: string; origin: Element | null } | null>(null);
   const [values, setValues] = useState<Record<string, string | boolean>>({});
   const [consent, setConsent] = useState(false);
+  const [emailErrors, setEmailErrors] = useState<Set<string>>(() => new Set());
   const [failure, setFailure] = useState<Failure | null>(null);
   const [formUpdated, setFormUpdated] = useState(false);
   const [formRefreshRequested, setFormRefreshRequested] = useState(false);
@@ -191,8 +192,17 @@ export default function RegisterForm(initial: Props) {
     setRetryNoticeVersion((version) => version + 1);
   }
 
-  function setValue(id: string, value: string | boolean) {
+  function setValue(id: string, value: string | boolean, emailMismatch?: boolean) {
     setValues((prev) => ({ ...prev, [id]: value }));
+    if (emailMismatch !== undefined) {
+      setEmailErrors((current) => {
+        if (current.has(id) === emailMismatch) return current;
+        const next = new Set(current);
+        if (emailMismatch) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+    }
     setFailure((current) => current?.field === id ? null : current);
     if (id === "phone" && typeof value === "string") {
       setAlreadyRegistered(false);
@@ -441,6 +451,66 @@ export default function RegisterForm(initial: Props) {
     )
   ) : null;
 
+  const pendingSteps = fields.flatMap((field) => {
+    const value = values[field.id];
+    const missing = field.type === "checkbox"
+      ? value !== true
+      : typeof value !== "string" || !value.trim() ||
+        (field.type === "select" && !field.options.includes(value));
+    const invalidPhoneFormat = field.id === "phone" && typeof value === "string" && value.trim() !== "" &&
+      !/^\d{9,15}$/.test(value.replace(/\D/g, ""));
+    const invalidEmail = field.type === "email" && !missing && emailErrors.has(field.id);
+    const invalid = invalidEmail || failure?.field === field.id || invalidPhoneFormat;
+    if (!invalid && !(field.required && missing)) return [];
+    return [{
+      id: `field-${field.id}`,
+      label: field.label,
+      problem: invalid && !missing,
+      required: field.required,
+    }];
+  });
+  if (verificationRequired && !grant && !recoveryBlocked) {
+    pendingSteps.push({ id: "verification-panel", label: "연락처 인증", problem: false, required: true });
+  }
+  if (consentText && !consent) {
+    pendingSteps.push({ id: "consent", label: "개인정보 동의", problem: failure?.field === "consent", required: true });
+  }
+
+  function focusRegistrationStep(id: string) {
+    const target = document.getElementById(id);
+    if (!(target instanceof HTMLElement)) return;
+    target.scrollIntoView({ block: "center", inline: "nearest" });
+    target.focus({ preventScroll: true });
+  }
+
+  const versionNeedsRefresh = failure?.field === "formVersion";
+  let progressMessage: string;
+  let nextProgressStep: (typeof pendingSteps)[number] | undefined;
+  if (formClosed) progressMessage = "현재 참가 신청이 마감되었습니다.";
+  else if (signupSuperseded) progressMessage = "이전 신청 상태를 확인해 주세요.";
+  else if (submitting) progressMessage = retryPending ? "신청 결과 재확인 중입니다." : "신청 중입니다.";
+  else if (retryPending) progressMessage = "신청 결과가 아직 확인되지 않았습니다.";
+  else if (formRefreshRequested) progressMessage = "최신 신청 양식을 확인하고 있습니다.";
+  else if (versionNeedsRefresh) {
+    progressMessage = "최신 신청 양식을 확인한 뒤 계속하세요.";
+    nextProgressStep = { id: "signup-form-changed", label: "양식 변경 확인", problem: false, required: true };
+  }
+  else if (verificationRequired && recoveryBlocked) progressMessage = "현재 연락처 인증을 사용할 수 없습니다.";
+  else if (alreadyRegistered) progressMessage = "이미 신청된 연락처입니다.";
+  else {
+    nextProgressStep = pendingSteps[0];
+    if (pendingSteps.length === 0) progressMessage = "필수 항목을 모두 작성했습니다.";
+    else if (pendingSteps.some((step) => step.problem)) {
+      const count = pendingSteps.filter((step) => step.problem).length;
+      const requiredCount = pendingSteps.filter((step) => step.required).length;
+      progressMessage = requiredCount
+        ? `필수 항목 ${requiredCount}개 남음 · 입력 확인 ${count}개`
+        : `선택 항목 ${count}개 확인`;
+    } else {
+      progressMessage = `필수 항목 ${pendingSteps.length}개 남음`;
+    }
+  }
+
   // A single section in the organizer's published field order: the array
   // already carries the customer-defined sequence (field.move included),
   // so every field renders exactly once, in place, with no ID-based split.
@@ -511,7 +581,7 @@ export default function RegisterForm(initial: Props) {
           }
           inputMode={field.id === "phone" ? "tel" : undefined}
           value={typeof values[field.id] === "string" ? (values[field.id] as string) : ""}
-          onChange={(event) => setValue(field.id, event.target.value)}
+          onChange={(event) => setValue(field.id, event.target.value, field.type === "email" ? event.target.validity.typeMismatch : undefined)}
           aria-invalid={invalid || undefined}
           aria-describedby={[
             field.id === "phone" ? `field-${field.id}-hint` : "",
@@ -529,7 +599,10 @@ export default function RegisterForm(initial: Props) {
   }
 
   return (
-    <ValidatedForm className={`registration-form ${styles.form}`} onSubmit={onSubmit}>
+    <ValidatedForm
+      className={`registration-form ${styles.form}`}
+      onSubmit={onSubmit}
+    >
       <fieldset className="registration-fields" disabled={submitting || retryPending || signupSuperseded}>
       <legend className="sr-only">참가 신청 정보</legend>
       <section className={styles.stepSection} aria-label="신청 결과 안내">
@@ -662,6 +735,22 @@ export default function RegisterForm(initial: Props) {
         </section>
       ) : null}
       <div className={styles.submitBlock}>
+        <div className={styles.progressLine}>
+          <p className={styles.progressMessage} role="status" aria-atomic="true">{progressMessage}</p>
+          {nextProgressStep ? (
+            <ProductButton
+              className={styles.progressJump}
+              variant="ghost"
+              type="button"
+              onClick={() => focusRegistrationStep(nextProgressStep?.id ?? "")}
+            >
+              <span className={styles.progressJumpText}>
+                <span className={styles.progressJumpLabel}>{nextProgressStep.label}</span>
+                {versionNeedsRefresh ? null : " 바로가기"}
+              </span>
+            </ProductButton>
+          ) : null}
+        </div>
         <ProductButton ref={submitButtonRef} variant="primary" type="submit" disabled={submitting || signupSuperseded || formClosed || (verificationRequired && recoveryBlocked) || failure?.field === "formVersion"}>
           {submitting ? (retryPending ? "신청 결과 확인 중입니다" : "신청 중입니다") : (retryPending ? "신청 결과 다시 확인" : "신청하기")}
         </ProductButton>

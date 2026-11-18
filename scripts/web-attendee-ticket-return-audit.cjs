@@ -22,10 +22,12 @@ async function main() {
     const commandUrl = `${fixture.baseUrl}/api/events/${fixture.eventId}/commands`;
     const ticketRead = `${fixture.baseUrl}/api/public/events/${fixture.slug}/ticket`;
     const ticketUrl = `${fixture.baseUrl}/event/${fixture.slug}/ticket`;
+    const eventUrl = `${fixture.baseUrl}/event/${fixture.slug}`;
 
     browser = await launchBrowser();
     const mobile = { viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' };
-    const guest = await browser.newPage(mobile);
+    const guestContext = await browser.newContext(mobile);
+    const guest = await guestContext.newPage();
     const qr = guest.getByRole('img', { name: /행사 입장 및 퇴장용 QR/ });
     const showTicket = async token => {
       await guest.goto(`${ticketUrl}?ticket=${encodeURIComponent(token)}`);
@@ -41,10 +43,73 @@ async function main() {
     const qrShot = name => guest.screenshot({ path: path.join(out, name), mask: [qr], maskColor: '#e4e6ea', fullPage: true });
     let reads = 0;
     let guestWrites = 0;
-    guest.on('request', request => {
+    const observeTicketReads = context => context.on('request', request => {
       if (request.url() === ticketRead) reads += 1;
+    });
+    observeTicketReads(guest.context());
+    guest.on('request', request => {
       if (request.method() === 'POST') guestWrites += 1;
     });
+
+    // The public event view may offer the current attendee a direct ticket
+    // link from this tab's existing per-event storage. Loading public details
+    // alone must never fetch private ticket status.
+    await guest.goto(eventUrl);
+    const sameTabTicket = guest.getByRole('link', { name: '내 티켓 열기', exact: true });
+    await sameTabTicket.waitFor();
+    const eventAddress = new URL(guest.url());
+    assert.ok(
+      eventAddress.username === '' && eventAddress.password === '' && !eventAddress.search && !eventAddress.hash,
+      'the public event address has no credential, query, or fragment'
+    );
+    const sameTabTarget = new URL(await sameTabTicket.getAttribute('href'), fixture.baseUrl);
+    assert.equal(sameTabTarget.origin, new URL(ticketUrl).origin);
+    assert.equal(sameTabTarget.pathname, new URL(ticketUrl).pathname);
+    assert.ok(
+      sameTabTarget.username === '' && sameTabTarget.password === '' && !sameTabTarget.search && !sameTabTarget.hash,
+      'the public ticket link carries no credentials or personal data'
+    );
+    assert.equal(reads, 0, 'viewing the public event does not read private ticket status');
+    await sameTabTicket.click();
+    await qr.waitFor();
+    await guest.waitForFunction(url => window.location.pathname === new URL(url).pathname && !window.location.search.includes('ticket='), ticketUrl);
+    await guest.waitForFunction(() => document.querySelector('[aria-label$="행사 입장 및 퇴장용 QR"]') !== null);
+    assert.equal(reads, 1, 'opening the ticket link verifies its bearer with the existing status endpoint');
+
+    // Cookies are shared by tabs in one browser context. sessionStorage is
+    // isolated to each tab, so another tab must not inherit this ticket.
+    const otherTab = await guestContext.newPage();
+    await otherTab.goto(eventUrl, { waitUntil: 'networkidle' });
+    assert.equal(await otherTab.getByRole('link', { name: '내 티켓 열기', exact: true }).count(), 0);
+    assert.equal(reads, 1, 'the other tab does not restore or check a ticket');
+    await otherTab.close();
+
+    // A stale key for another event never exposes an entry point for this one.
+    const wrongEventContext = await browser.newContext(mobile);
+    observeTicketReads(wrongEventContext);
+    const wrongEventTab = await wrongEventContext.newPage();
+    await wrongEventTab.goto(eventUrl);
+    await wrongEventTab.evaluate(key => window.sessionStorage.setItem(key, 'fixture-only-ticket'), 'eventouch.ticket.other-fixture-event');
+    await wrongEventTab.reload({ waitUntil: 'networkidle' });
+    assert.equal(await wrongEventTab.getByRole('link', { name: '내 티켓 열기', exact: true }).count(), 0);
+    assert.equal(reads, 1, 'a ticket key for a different event is ignored');
+    await wrongEventContext.close();
+
+    // Remove the current event key and start a clean document to clear the
+    // ticket component's tab-memory fallback as well as persistent storage.
+    const clearedContext = await browser.newContext(mobile);
+    observeTicketReads(clearedContext);
+    const clearedTab = await clearedContext.newPage();
+    await clearedTab.goto(eventUrl);
+    await clearedTab.evaluate(({ currentKey, ticket }) => window.sessionStorage.setItem(currentKey, ticket), { currentKey: storageKey, ticket: attendee.ticket });
+    await clearedTab.reload({ waitUntil: 'networkidle' });
+    await clearedTab.getByRole('link', { name: '내 티켓 열기', exact: true }).waitFor();
+    await clearedTab.evaluate(key => window.sessionStorage.removeItem(key), storageKey);
+    await clearedTab.reload({ waitUntil: 'networkidle' });
+    assert.equal(await clearedTab.getByRole('link', { name: '내 티켓 열기', exact: true }).count(), 0);
+    await clearedContext.close();
+    reads = 0;
+
     await visibility('hidden');
     const operatorContext = await browser.newContext(mobile);
     await operatorContext.addCookies([{ ...cookieForContext(fixture, 'manager'), url: fixture.baseUrl }]);

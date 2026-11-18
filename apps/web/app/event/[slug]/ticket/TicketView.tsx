@@ -8,6 +8,9 @@ import { useScreenWakeLock } from "../../../../lib/use-screen-wake-lock";
 import styles from "./ticket.module.css";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
 import { forgetRecoveredTicket, readRecoveredTicket } from "./recovered-ticket";
+import PublicEventContext from "../PublicEventContext";
+import { readPublicEventContext } from "../../../../lib/public-event-context";
+import type { PublicEventContext as EventContext } from "../../../../lib/public-event-context";
 import { allowSessionForTab, clearSessionForTab, clearTicketRejected, getAllowedTicketForTab, isTicketRejected, markTicketRejected, REJECTED_TICKET_BEARER, ticketStorageAvailable } from "../../../../lib/attendee-ticket-identity";
 
 type TicketState =
@@ -25,6 +28,7 @@ type TicketState =
       everIn: boolean;
       eventName: string;
       eventDate: string;
+      eventContext: EventContext;
       application: Array<{ label: string; value: string }>;
       // True only on the navigation that follows a fresh registration: the
       // bearer and this flag arrive together and are cleaned together, so a
@@ -62,7 +66,7 @@ const TICKET_READ_TIMEOUT_MS = 8000;
 
 type TicketResponse = {
   error?: unknown;
-  event?: { name?: unknown; date?: unknown } | null;
+  event?: { name?: unknown; date?: unknown; start?: unknown; end?: unknown; features?: unknown } | null;
   participant?: Record<string, unknown> | null;
   workspace?: unknown;
 };
@@ -317,6 +321,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
             everIn: participant.everIn === true,
             eventName: text(data.event?.name),
             eventDate: text(data.event?.date),
+            eventContext: readPublicEventContext(data.event, data.workspace),
             application: applicationRows(participant, data.workspace),
             fresh: justRegistered,
             recovered: preferSession || hasRecovery,
@@ -410,6 +415,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
         everIn: participant.everIn === true,
         eventName: text(data.event?.name),
         eventDate: text(data.event?.date),
+        eventContext: readPublicEventContext(data.event, data.workspace),
         application: applicationRows(participant, data.workspace),
         fresh: false,
         recovered: false,
@@ -545,6 +551,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
         <header className={styles.ticketHeading}>
           <h1>내 신청 정보</h1>
           <p className={styles.ticketEventName}>{state.eventName}</p>
+          <PublicEventContext slug={slug} context={state.eventContext} showDate={false} />
           <p className={styles.ticketEntryState} aria-live="polite" data-tone={usable ? "good" : state.status === "CANCELLED" ? "bad" : "wait"}>{entryLabel(state)}</p>
         </header>
         <p>신청한 정보를 확인할 수 있습니다. 변경이 필요하면 행사 운영자에게 문의하세요.</p>
@@ -600,6 +607,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
           <div className={styles.ticketEvent}>
             <p className={styles.ticketEventName}>{state.eventName}</p>
             <p>{state.eventDate}</p>
+            <PublicEventContext slug={slug} context={state.eventContext} showDate={false} />
           </div>
           <div className={styles.ticketActions}>
             {/* Secondary on purpose: the QR above is what the attendee
@@ -613,6 +621,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
           <div className={styles.ticketEvent}>
             <p className={styles.ticketEventName}>{state.eventName}</p>
             <p>{state.eventDate}</p>
+            <PublicEventContext slug={slug} context={state.eventContext} showDate={false} />
           </div>
           <p className={styles.ticketUnusable}>{unusableCopy(state).text}</p>
           <p className={styles.ticketMessageActions}>{recheckButton}</p>
