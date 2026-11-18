@@ -64,6 +64,9 @@ export default function PeriodAnalysisWorkspace({ eventId }: { eventId: string }
   const router = useRouter();
   const [state, setState] = useState<State>({ kind: "loading" });
   const [reload, setReload] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [preset, setPreset] = useState<PeriodPreset>("last7");
+  const [customRange, setCustomRange] = useState<{ from: string; to: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -126,6 +129,7 @@ export default function PeriodAnalysisWorkspace({ eventId }: { eventId: string }
         if (!cancelled) setState({ kind: "failed", message: "기간 분석을 불러오지 못했습니다." });
       } finally {
         window.clearTimeout(timeout);
+        if (!cancelled) setRefreshing(false);
       }
     })();
     return () => {
@@ -135,7 +139,10 @@ export default function PeriodAnalysisWorkspace({ eventId }: { eventId: string }
     };
   }, [eventId, reload, router]);
 
-  const refresh = useCallback(() => setReload((current) => current + 1), []);
+  const refresh = useCallback(() => {
+    setRefreshing(true);
+    setReload((current) => current + 1);
+  }, []);
 
   if (state.kind === "loading") {
     return (
@@ -153,12 +160,21 @@ export default function PeriodAnalysisWorkspace({ eventId }: { eventId: string }
   }
 
   const { data } = state;
+  const now = new Date();
+  const selectedRange = preset === "custom"
+    ? customRange ?? presetRange("last7", now, data)
+    : presetRange(preset, now, data);
+  function choosePreset(next: PeriodPreset) {
+    if (next === "custom" && preset !== "custom") setCustomRange(selectedRange);
+    setPreset(next);
+  }
+
   return (
     <ConsolePage pageId="analysis" eventId={eventId} eventName={data.eventName} meta={data.meta}
       headerActions={data.canManage ? (
         <span className={`${styles.updated} console-header-inline`}>
           <time dateTime={data.updatedAt}><span className={styles.updatedLabel}>조회 </span>{UPDATED_FORMAT.format(new Date(data.updatedAt))}</time>
-          <ConsoleRefreshButton label="새로고침" onRefresh={refresh} />
+          <ConsoleRefreshButton label="새로고침" busy={refreshing} onRefresh={refresh} />
         </span>
       ) : undefined}>
       {!data.canManage ? (
@@ -166,23 +182,33 @@ export default function PeriodAnalysisWorkspace({ eventId }: { eventId: string }
       ) : !data.available ? (
         <p className={styles.note}>참가자 또는 출입 기록을 확인할 수 없어 기간 분석을 표시할 수 없습니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요.</p>
       ) : (
-        <PeriodView data={data} />
+        <PeriodView
+          data={data}
+          preset={preset}
+          range={selectedRange}
+          onPresetChange={choosePreset}
+          onRangeChange={setCustomRange}
+        />
       )}
     </ConsolePage>
   );
 }
 
-function PeriodView({ data }: { data: AnalysisData }) {
-  const [preset, setPreset] = useState<PeriodPreset>("last7");
-  const [range, setRange] = useState(() => presetRange("last7", new Date(), data));
+function PeriodView({
+  data,
+  preset,
+  range,
+  onPresetChange,
+  onRangeChange,
+}: {
+  data: AnalysisData;
+  preset: PeriodPreset;
+  range: { from: string; to: string };
+  onPresetChange: (preset: PeriodPreset) => void;
+  onRangeChange: (range: { from: string; to: string }) => void;
+}) {
   const [showZeroDays, setShowZeroDays] = useState(false);
   const [showBasis, setShowBasis] = useState(false);
-
-  function choose(next: PeriodPreset) {
-    setPreset(next);
-    if (next !== "custom") setRange(presetRange(next, new Date(), data));
-    setShowZeroDays(false);
-  }
 
   const result = analyzePeriod(data.applications, data.entries, range.from, range.to);
   const { points, periodApplications, dailyEntriesSum, periodUnique } = result;
@@ -210,7 +236,10 @@ function PeriodView({ data }: { data: AnalysisData }) {
         {PRESETS.map((item, index) => (
           <label key={item.value} className={styles.preset} htmlFor={`period-preset-${index}`}>
             <input id={`period-preset-${index}`} type="radio" name="period-preset" value={item.value}
-              checked={preset === item.value} onChange={() => choose(item.value)} />
+              checked={preset === item.value} onChange={() => {
+                onPresetChange(item.value);
+                setShowZeroDays(false);
+              }} />
             <span>{item.label}</span>
           </label>
         ))}
@@ -221,12 +250,12 @@ function PeriodView({ data }: { data: AnalysisData }) {
           <div>
             <label htmlFor="range-from">시작일</label>
             <input id="range-from" type="date" value={range.from} max={range.to}
-              onChange={(event) => setRange((current) => ({ ...current, from: event.target.value }))} />
+              onChange={(event) => onRangeChange({ ...range, from: event.target.value })} />
           </div>
           <div>
             <label htmlFor="range-to">종료일</label>
             <input id="range-to" type="date" value={range.to} min={range.from}
-              onChange={(event) => setRange((current) => ({ ...current, to: event.target.value }))} />
+              onChange={(event) => onRangeChange({ ...range, to: event.target.value })} />
           </div>
         </div>
       ) : null}

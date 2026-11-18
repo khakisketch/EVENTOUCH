@@ -16,6 +16,7 @@ const FULL = Array.from({ length: 19 }, (_, index) => {
   const key = `2026-11-${String(index + 1).padStart(2, '0')}`;
   return LAST7.find(row => row[0] === key) || [key, index === 0 || index === 18 ? 1 : 0, 0];
 });
+const EXPANDED_FULL = [['2026-10-31', 1, 0], ...FULL];
 const FIXED_NOW = new Date('2026-11-18T03:00:00Z');
 const FAILURE = '기간 분석을 불러오지 못했습니다.';
 
@@ -132,6 +133,51 @@ async function main() {
       }
       await page.setViewportSize({ width: 1440, height: 900 });
     });
+    await step('새 자료와 현재 날짜에 맞춰 저장된 프리셋 범위 갱신', async () => {
+      await page.getByRole('radio', { name: '행사 전체', exact: true }).check();
+      const earlier = structuredClone(seeded);
+      earlier.participants[7].createdAt = '2026-10-31T12:00:00+09:00';
+      await write(earlier);
+
+      const hold = Promise.withResolvers();
+      let requests = 0;
+      await page.route(bootstrap, async route => {
+        requests += 1;
+        if (requests === 1) await hold.promise;
+        return route.continue();
+      });
+      const refreshButton = page.getByRole('button', { name: '새로고침', exact: true });
+      try {
+        const requested = page.waitForRequest(bootstrap);
+        await refreshButton.click();
+        await requested;
+        assert.equal(await refreshButton.getAttribute('aria-disabled'), 'true');
+        await refreshButton.click({ force: true });
+      } finally {
+        hold.resolve();
+      }
+      await assertNumbers(page, [7, 6, 5], EXPANDED_FULL);
+      assert.equal(requests, 1, '진행 중에 강제로 다시 눌러도 추가 자료 요청은 보내지 않는다');
+      await page.unroute(bootstrap);
+      assert.equal(await refreshButton.getAttribute('aria-disabled'), null, '자료 요청이 끝나면 새로고침을 다시 사용할 수 있다');
+      assert.equal(await page.getByRole('radio', { name: '행사 전체', exact: true }).isChecked(), true);
+
+      await page.getByRole('radio', { name: '어제', exact: true }).check();
+      await assertNumbers(page, [1, 1, 1], [LAST7[5]]);
+      await page.clock.setFixedTime(new Date('2026-11-19T03:00:00Z'));
+      await page.getByRole('button', { name: '새로고침', exact: true }).click();
+      await assertNumbers(page, [1, 4, 4], [LAST7[6]]);
+      assert.equal(await page.getByRole('radio', { name: '어제', exact: true }).isChecked(), true);
+      await page.getByRole('radio', { name: '오늘', exact: true }).check();
+      await assertNumbers(page, [1, 0, 0], [['2026-11-19', 1, 0]]);
+
+      await page.clock.setFixedTime(FIXED_NOW);
+      await page.getByRole('button', { name: '새로고침', exact: true }).click();
+      await assertNumbers(page, [1, 4, 4], [LAST7[6]]);
+      await page.getByRole('radio', { name: '최근 7일', exact: true }).check();
+      await assertNumbers(page, [4, 6, 5], LAST7);
+      await write(seeded);
+    });
     await step('최초 실패와 재조회 실패·시간 초과 후 복구', async () => {
       await page.route(bootstrap, route => route.abort('failed'));
       await page.reload();
@@ -139,11 +185,21 @@ async function main() {
       await page.unroute(bootstrap);
       await page.getByRole('button', { name: '다시 불러오기', exact: true }).click();
       await assertNumbers(page, [4, 6, 5], LAST7);
+
+      await page.getByRole('radio', { name: '직접 선택', exact: true }).check();
+      await page.getByLabel('시작일', { exact: true }).fill('2026-11-16');
+      await page.getByLabel('종료일', { exact: true }).fill('2026-11-18');
+      await assertNumbers(page, [3, 6, 5], LAST7.slice(4));
       await page.route(bootstrap, route => route.abort('failed'));
       await page.getByRole('button', { name: '새로고침', exact: true }).click();
       await page.getByRole('alert').filter({ hasText: FAILURE }).waitFor();
       await page.unroute(bootstrap);
       await page.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+      assert.equal(await page.getByRole('radio', { name: '직접 선택', exact: true }).isChecked(), true);
+      assert.equal(await page.getByLabel('시작일', { exact: true }).inputValue(), '2026-11-16');
+      assert.equal(await page.getByLabel('종료일', { exact: true }).inputValue(), '2026-11-18');
+      await assertNumbers(page, [3, 6, 5], LAST7.slice(4));
+      await page.getByRole('radio', { name: '최근 7일', exact: true }).check();
       await assertNumbers(page, [4, 6, 5], LAST7);
       const held = [];
       await page.route(bootstrap, route => { held.push(route); });
