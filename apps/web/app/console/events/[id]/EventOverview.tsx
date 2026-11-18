@@ -15,7 +15,7 @@ import ConsoleRefreshButton from "../../console-ui/ConsoleRefreshButton";
 import ConsoleTaskQueue, { type ConsoleTask } from "../../console-ui/ConsoleTaskQueue";
 import { participationSnapshot, type ParticipationSnapshot } from "../../../../lib/participation-work";
 import ConsoleStatePanel from "../../console-ui/ConsoleStatePanel";
-import { ArrowRightIcon, CopyIcon, CheckIcon, PlusIcon, RefreshIcon } from "../../console-ui/ConsoleIcons";
+import { ArrowRightIcon, CopyIcon, CheckIcon, ExternalLinkIcon, PlusIcon, RefreshIcon } from "../../console-ui/ConsoleIcons";
 import { eventCloseHref, readCloseSnapshot } from "../../console-event-close";
 import styles from "./event-overview.module.css";
 import { consoleFetch, subscribeConsoleFreshness } from "../../../../lib/console-api";
@@ -1109,10 +1109,10 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   );
   const headerActions = overview.canManageEvent && participantPageHref ? (
         <>
-          <span className={styles.overviewUpdated}>
+          <span className={`${styles.overviewUpdated} console-header-updated`}>
             <time dateTime={overview.updatedAt}>
-              {monitoring ? `${refreshError ? "마지막 확인" : "자동 확인"} ${LIVE_CHECK_TIME_FORMAT.format(new Date(overview.updatedAt))}`
-                : `갱신 ${UPDATED_TIME_FORMAT.format(new Date(overview.updatedAt))}`}
+              <span className={styles.updatedLabel}>{monitoring ? (refreshError ? "마지막 확인" : "자동 확인") : "갱신"} </span>
+              {(monitoring ? LIVE_CHECK_TIME_FORMAT : UPDATED_TIME_FORMAT).format(new Date(overview.updatedAt))}
             </time>
             <ConsoleRefreshButton label="새로고침" busy={refreshing && !reloadRequest.automatic} onRefresh={reloadOverview} />
           </span>
@@ -1120,8 +1120,8 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           {/* DRAFT는 비공개(공개 화면 404)이므로 여는 링크를 두지 않는다. READY부터 기본 디자인으로 열린다. */}
           {stageKnown && currentStage !== "DRAFT" ? (
             <span className="console-header-group">
-              <Link variant="ghost" href={participantPageHref} target="_blank" rel="noreferrer" aria-label="참가자 페이지 열기">
-                <span className={styles.pageLinkFull}>참가자 페이지 열기</span><span className={styles.pageLinkShort}>참가자 페이지</span>
+              <Link variant="ghost" className={styles.pageLink} href={participantPageHref} target="_blank" rel="noreferrer" aria-label="참가자 페이지 열기">
+                <span className={styles.pageLinkFull}>참가자 페이지 열기</span><ExternalLinkIcon className={styles.pageLinkIcon} />
               </Link>
               <ProductButton
                 type="button"

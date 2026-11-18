@@ -213,6 +213,7 @@ Every `ProductButton` states its role with `variant`; the `button-*` legacy clas
 The owner approved this composition on 2026-11-13 (`apps/web/app/console/events/[id]/EventOverview.tsx`). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-event-overview-priority.test.cjs` ("approved overview design stays locked") guards it.
 
 - Header: one stage pill. Intake state and D-day read as plain text, not chips.
+- Phone header (owner decision 2026-11-18): the open-page link and copy are icons on the title row, and the check time (prefix dropped) sits at the right end of the stage row, so the header stays three rows tall instead of adding an action row under it.
 - Entry progress: the bar and the rate are ink, not orange. Below the bar sit one legend (입장 / 확정자 중 미입장) and one "명단 보기" link. The live and finished summaries share this block. The default basis lives in the bar's accessible name; visible basis copy appears only during cancellation review. Archived events link to the confirmed roster.
 - One primary per page. During live, "현장 운영 열기" owns it and the task queue adds none. Archived pages have none.
 - Utilities are ghost links: the stage band's "진행 단계 설정" and the four readiness links. The stage band and readiness rows are not white boxes.

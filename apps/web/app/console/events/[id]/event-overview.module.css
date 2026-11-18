@@ -1209,10 +1209,13 @@
 .deskName { overflow-wrap: anywhere; }
 .runbookCopy span { overflow: visible; white-space: normal; }
 .rail { position: static; }
-.pageLinkShort { display: none; }
+.pageLinkIcon { display: none; }
+/* Phone: the open link is an icon beside the title (see console-ui header),
+   and the check time drops its prefix so it fits the stage-badge row. */
 @media (max-width: 768px) {
-  .pageLinkFull { display: none; }
-  .pageLinkShort { display: inline; }
+  .pageLinkFull, .updatedLabel { display: none; }
+  .pageLink { width: var(--control-min-size); min-height: var(--control-min-size); padding: 0; justify-content: center; }
+  .pageLinkIcon { display: inline-block; }
 }
 .regionMetrics .analysisDetails { margin-top: var(--s3); }
 .runbookCue.done .runbookDot { background: var(--surface-muted); border-color: var(--line-strong); }

@@ -992,6 +992,14 @@
   justify-content: flex-start;
   margin-top: var(--s3);
  }
+ /* Overview: open/copy stay beside the title; the check time rides the badge row. */
+ .pageHeader:has(.pageActions > :global(.console-header-updated)) {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "back back" "context context" "title actions" "meta meta" "badges updated";
+ }
+ .pageHeader:has(.pageActions > :global(.console-header-updated)) .pageActions { display: contents; }
+ .pageHeader:has(.pageActions > :global(.console-header-updated)) .pageActions > :global(.console-header-group) { grid-area: actions; justify-self: end; }
+ .pageHeader:has(.pageActions > :global(.console-header-updated)) .pageActions > :global(.console-header-updated) { grid-area: updated; justify-self: end; margin-top: var(--s3); }
  .sectionPanel { padding: var(--s4); }
 }
 
