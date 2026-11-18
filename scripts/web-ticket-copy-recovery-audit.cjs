@@ -17,6 +17,7 @@ async function main() {
   try {
     const initial = await read(), person = initial.payload.participants.find(p => p.status === 'APPROVED');
     assert.ok(person);
+    const maskedPhone = `010-****-${person.phone.slice(-4)}`;
     const initialTicketRevision = Number.isSafeInteger(person.ticketRevision) ? person.ticketRevision : 0;
     browser = await launchBrowser();
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'ko-KR', reducedMotion: 'reduce' });
@@ -39,8 +40,15 @@ async function main() {
       const panel = page.getByRole('region', { name: '처리 결과 확인' });
       await panel.getByRole('button', { name: '서버 처리 확인', exact: true }).click();
       await panel.getByText(person.name, { exact: false }).waitFor();
+      const targetCard = panel.getByText(person.name, { exact: false }).locator('xpath=..');
+      const targetText = await targetCard.innerText();
+      assert.ok(targetText.includes(person.company), 'verified receipt recovery keeps the company in its target card');
+      assert.ok(targetText.includes(maskedPhone), 'verified receipt recovery keeps the masked contact in its target card');
       await panel.getByRole('button', { name: '발급된 링크 확인', exact: true }).click();
       const dialog = page.getByRole('dialog', { name: '티켓 재발급' });
+      const recoveryText = await dialog.innerText();
+      assert.equal(recoveryText.includes(person.company), false, 'receipt recovery does not add company details to its dialog by default');
+      assert.equal(recoveryText.includes(maskedPhone), false, 'receipt recovery does not add contact details to its dialog by default');
       await dialog.getByRole('button', { name: '같은 요청으로 링크 받기', exact: true }).click();
       await dialog.getByRole('button', { name: '새 티켓 링크 복사', exact: true }).waitFor();
       return dialog;
@@ -53,6 +61,16 @@ async function main() {
     await page.getByRole('button', { name: `${person.name} 참가자 상세`, exact: true }).first().click();
     await page.getByRole('button', { name: '티켓 재발급', exact: true }).click();
     let dialog = page.getByRole('dialog', { name: '티켓 재발급' });
+    const review = await dialog.innerText();
+    assert.ok(review.includes('감사 검증 행사'), 'the review identifies the event');
+    assert.ok(review.includes(person.name), 'the review identifies the participant');
+    assert.ok(review.includes(person.company), 'the review distinguishes the participant by company');
+    assert.ok(review.includes(maskedPhone), 'the review distinguishes the participant by masked contact');
+    assert.equal(review.includes(person.phone), false, 'the review never shows the full contact number');
+    const reviewTarget = dialog.getByRole('group', { name: '재발급 대상', exact: true });
+    await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '재발급 대상');
+    await reviewTarget.press('Enter');
+    assert.equal(attempts.length, 0, 'activating the focused identity never reissues a ticket');
     await dialog.getByRole('button', { name: '기존 티켓 무효화 및 재발급' }).click();
     if (mode === 'lost') {
       await dialog.getByText(/재발급 결과를 확인하지 못했습니다/).waitFor();

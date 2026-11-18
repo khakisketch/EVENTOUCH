@@ -114,12 +114,29 @@ const EVENT_MENU_TERMS: Partial<Record<ConsolePageId, string>> = {
   analysis: "통계 기간별 일별 신청 입장",
 };
 
-export function matchesEventMenu(pageId: ConsolePageId, hubLabel: string, query: string): boolean {
+function matchesMenuWords(label: string, query: string): boolean {
   const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-  const page = CONSOLE_PAGES[pageId];
-  const searchable = [page.label, page.title, hubLabel, EVENT_MENU_TERMS[pageId] ?? ""]
-    .join(" ").toLowerCase().replace(/[\s·]/g, "");
+  const searchable = label.toLowerCase().replace(/[\s·]/g, "");
   return terms.every((term) => searchable.includes(term.replace(/·/g, "")));
+}
+
+export function matchesEventMenu(pageId: ConsolePageId, hubLabel: string, query: string): boolean {
+  const page = CONSOLE_PAGES[pageId];
+  return matchesMenuWords([page.label, page.title, hubLabel, EVENT_MENU_TERMS[pageId] ?? ""].join(" "), query);
+}
+
+const SETTINGS_MENU_SHORTCUTS = [
+  { label: "참가 접수", terms: "양식 게시 접수 열기 접수 닫기 접수 마감", target: "#settings-intake" },
+  { label: "신청 항목", terms: "신청 항목 편집 필수 항목 등록 질문 필드", target: "/fields" },
+];
+
+/** Search can lead to a section of a visible page without adding more rail items. */
+export function eventMenuShortcuts(pageId: ConsolePageId, eventId: string | undefined, query: string) {
+  if (pageId !== "settings" || !query.trim()) return [];
+  const href = consolePageHref(pageId, eventId);
+  if (!href) return [];
+  return SETTINGS_MENU_SHORTCUTS.filter(({ label, terms }) => matchesMenuWords(`${label} ${terms}`, query))
+    .map(({ label, target }) => ({ label, href: `${href}${target}` }));
 }
 
 /** Finds the hub that owns a page. Organization pages return undefined. */

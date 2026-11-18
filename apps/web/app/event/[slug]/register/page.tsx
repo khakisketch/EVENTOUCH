@@ -4,7 +4,7 @@ import ProductLink from "../../../ui/ProductLink";
 import VerificationUnavailable from "../VerificationUnavailable";
 import { loadVerificationMode } from "../../../../lib/verification-mode";
 import type { VerificationMode } from "../../../../lib/verification-mode";
-import { BUILT_IN_FIELDS, parseRegisterData } from "./register-data";
+import { parseRegisterData } from "./register-data";
 import type { RegisterData } from "./register-data";
 import PublicEventContext from "../PublicEventContext";
 import TabTicketChoice from "../TabTicketChoice";
@@ -131,7 +131,7 @@ export default async function RegisterPage({
       />
       <RegisterForm
         slug={slug}
-        fields={[...BUILT_IN_FIELDS, ...data.fields]}
+        fields={data.fields}
         consentText={data.consentText}
         consentVersion={data.consentVersion}
         formVersion={data.publishedVersion}

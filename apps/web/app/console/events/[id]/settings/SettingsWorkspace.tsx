@@ -30,6 +30,7 @@ import { readCloseReturn, readCloseSnapshot, type CloseSnapshot } from "../../..
 import { useEventCloseHandoff } from "../../../use-event-close-handoff";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../../lib/use-verification-mode";
 import { publicRecoveryContact } from "../../../../../lib/public-recovery-contact";
+import { parsePublishedRegisterFields, type PublishedField } from "../../../../event/[slug]/register/register-data";
 
 // Mirrors server/commands/preparation.js FEATURES. A toggle that the server
 // does not accept would fail on save, so the list is deliberate.
@@ -103,6 +104,7 @@ type Ready = {
   // 신청 항목 미리보기용. 같은 bootstrap 응답의 workspace.fields에서 읽으며,
   // 새 API를 쓰지 않는다. 편집은 신청 항목 페이지가 맡는다.
   fields: Array<{ label: string; required: boolean; type: string }>;
+  publishedFields: PublishedField[] | null;
   pageDraftVersion: number;
   pagePublishedVersion: number;
   pagePublishedAt: string;
@@ -115,6 +117,7 @@ type LatestIntake = {
   consentText: string;
   registrationOpen: boolean;
   fields: Array<{ label: string; required: boolean; type: string; options: string[] }>;
+  publishedFields: PublishedField[] | null;
 };
 type IntakeConflict = { latest: LatestIntake | null; loading: boolean; error: string | null };
 type BasicsConflict = { latest: Basics | null; loading: boolean; error: string | null };
@@ -541,6 +544,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               consentVersion?: unknown;
               // 신청 항목 미리보기용. 편집은 신청 항목 페이지가 맡는다.
               fields?: unknown;
+              publishedFields?: unknown;
               pageExperience?: unknown;
               desks?: unknown;
               assignments?: unknown;
@@ -680,6 +684,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           consentText: preserveIntake && previous ? previous.consentText : newConsentText,
           consentVersion: preserveIntake && previous ? previous.consentVersion : Number(workspace.consentVersion) || 1,
           fields: preserveIntake && previous ? previous.fields : loadedFields,
+          publishedFields: parsePublishedRegisterFields(workspace.publishedFields, "workspace"),
           pageDraftVersion,
           pagePublishedVersion,
           pagePublishedAt: text(pageExperience.publishedAt),
@@ -1125,6 +1130,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           (field.options !== undefined && (!Array.isArray(field.options) || field.options.some((value) => typeof value !== "string"))))) throw new Error("invalid fields");
       if (controller.signal.aborted || activeSettingsEventRef.current !== eventId || intakeReadRef.current !== controller) return;
       const latest: LatestIntake = { formVersion, publishedVersion, consentVersion, consentText: text(workspace.consentText),
+        publishedFields: parsePublishedRegisterFields(workspace.publishedFields, "workspace"),
         registrationOpen: workspace.registrationOpen === true, fields: fields.map((field) => ({ label: text(field?.label),
           required: field?.required === true, type: text(field?.type),
           options: Array.isArray(field?.options) ? field.options.filter((value): value is string => typeof value === "string") : [] })) };
@@ -1147,6 +1153,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     if (!latest || activeSettingsEventRef.current !== eventId) return;
     setState((previous) => previous.kind === "ready" ? { ...previous, formVersion: latest.formVersion,
       publishedVersion: latest.publishedVersion, consentVersion: latest.consentVersion,
+      fields: latest.fields, publishedFields: latest.publishedFields,
       consentText: latest.consentText, registrationOpen: latest.registrationOpen } : previous);
     if (useLatest) setConsentText(latest.consentText);
     intakeConflictRef.current = null;
@@ -1279,6 +1286,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     failure?.field === field ? "settings-error" : undefined;
 
   const currentStage = state.stage.toUpperCase();
+  const hasPublishedForm = state.publishedVersion > 0;
+  const formPreviewFields = hasPublishedForm ? state.publishedFields : state.fields;
+  const formPreviewTitle = hasPublishedForm ? "현재 게시된 신청서" : "신청서 초안";
   const stageKnown = STAGE_ORDER.includes(currentStage);
   const stageIndex = STAGE_ORDER.indexOf(currentStage);
   const nextStage = stageIndex >= 0 && stageIndex < STAGE_ORDER.length - 1
@@ -1927,21 +1937,21 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             공개 접수: 닫힘 — 종료된 행사에서는 신청을 받을 수 없습니다. 공개 신청 화면은 닫혀 있습니다. 보관하려면 접수를 닫으세요.
           </p>
         ) : null}
-        <div className={styles.formPreview}>
+        <section className={styles.formPreview} aria-label={formPreviewTitle}>
           <div className={styles.previewHead}>
-            <b>참가 신청서</b>
+            <b>{formPreviewTitle}</b>
             <ProductLink className={`button button-quiet ${styles.intakeFieldsLink}`} href={`/console/events/${encodeURIComponent(eventId)}/settings/fields`}>신청 항목 편집</ProductLink>
           </div>
-          {state.fields.length ? (
+          {formPreviewFields?.length ? (
             <ul className={styles.previewFields}>
-              {state.fields.map((field) => (
-                <li key={field.label}>{field.label}{field.required ? " *" : ""}</li>
+              {formPreviewFields.map((field, index) => (
+                <li key={`${field.label}-${index}`}>{field.label}{field.required ? " *" : ""}</li>
               ))}
             </ul>
           ) : (
-            <p className={styles.help}>등록된 신청 항목이 없습니다. 항목 편집에서 추가하세요.</p>
+            <p className={styles.help}>{formPreviewFields ? "등록된 신청 항목이 없습니다. 항목 편집에서 추가하세요." : "게시된 항목을 확인하지 못했습니다. 신청 항목 편집에서 최신 게시본을 확인하세요."}</p>
           )}
-        </div>
+        </section>
         {intakeConflict ? <section className={styles.conflict} aria-labelledby="intake-conflict-heading">
           <h3 id="intake-conflict-heading" tabIndex={-1}>다른 작업에서 참가 접수 설정이 변경됐습니다</h3>
           <p>이번 게시 요청은 반영되지 않았습니다. 작성 중인 안내는 그대로 있습니다. 최신 설정을 확인하고 사용할 안내를 선택해 주세요.</p>

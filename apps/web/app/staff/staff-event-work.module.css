@@ -300,6 +300,63 @@
 .manualResults li .manualPresence[data-state="review"] { color: var(--warning); font-weight: 700; }
 .manualResults button { flex: none; min-height: 44px; }
 
+.manualHandoff {
+  display: grid;
+  gap: var(--s2);
+  margin: var(--s2) 0;
+  padding: var(--s3) 0;
+  border-block: 1px solid var(--line);
+}
+
+.manualHandoff h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--h3);
+  font-weight: 750;
+}
+
+.manualHandoffCandidate {
+  display: grid;
+  justify-items: start;
+  gap: var(--s2);
+  padding: var(--s2) 0;
+  border-top: 1px solid var(--line);
+}
+
+.manualHandoffCandidate p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.manualHandoffCandidate p strong { color: var(--ink); }
+.manualHandoffCandidate button,
+.manualHandoffReturn { min-height: 44px; }
+
+.manualHandoffFallback {
+  display: grid;
+  width: 100%;
+  gap: var(--s1);
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.manualHandoffFallback textarea {
+  width: 100%;
+  min-height: 11rem;
+  padding: var(--s2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
 .manualConfirm {
   display: grid;
   flex: 0 0 100%;

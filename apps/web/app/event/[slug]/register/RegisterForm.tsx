@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import ProductLink from "../../../ui/ProductLink";
 import ProductButton from "../../../ui/ProductButton";
 import { useRouter } from "next/navigation";
-import { BUILT_IN_FIELDS, parseRegisterData } from "./register-data";
+import { parseRegisterData } from "./register-data";
 import type { PublishedField } from "./register-data";
 import styles from "./register.module.css";
 import { useUnsavedNavigationGuard } from "../../../../lib/use-unsaved-navigation-guard";
@@ -118,7 +118,7 @@ export default function RegisterForm(initial: Props) {
         setFormRefreshError("최신 변경 사항을 아직 확인하지 못했습니다. 잠시 후 다시 시도하세요.");
         return;
       }
-      const nextFields = [...BUILT_IN_FIELDS, ...next.fields];
+      const nextFields = next.fields;
       const oldTypes = new Map(fields.map((field) => [field.id, field.type]));
       setValues((previous) => Object.fromEntries(nextFields.flatMap((field) => {
         const value = previous[field.id];

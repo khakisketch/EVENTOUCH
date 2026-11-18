@@ -52,7 +52,8 @@ function existingParticipant(workspace, id) {
   return list(workspace.participants).find((person) => person && person.id === id) || null;
 }
 
-function validateParticipant(inputValue, workspace, { fields, existing, excludeId } = {}) {
+function validateParticipant(inputValue, workspace, { fields, existing, excludeId, enforcePublishedCompanyRequired = false,
+  grandfatherMissingPublishedRequired = false } = {}) {
   const input = object(inputValue);
   const name = clean(input.name === undefined && existing ? existing.name : input.name, 60);
   if (!name) throw failure(400, '이름을 입력하세요', 'name');
@@ -65,6 +66,12 @@ function validateParticipant(inputValue, workspace, { fields, existing, excludeI
     throw failure(400, '이메일 형식을 확인하세요', 'email');
   }
   const company = clean(input.company === undefined && existing ? existing.company : input.company, 200);
+  const companyField = list(fields).find((field) => field && typeof field === 'object' && field.id === 'company');
+  const companyWasSubmitted = Object.hasOwn(input, 'company');
+  if (enforcePublishedCompanyRequired && companyField?.required === true &&
+      (!existing || companyWasSubmitted) && !company) {
+    throw failure(400, `${clean(companyField.label, 160) || '소속'} 항목을 입력하세요`, 'company');
+  }
   const group = clean(input.group === undefined && existing ? existing.group : input.group, 80) || '일반';
 
   const duplicate = list(workspace.participants).some((person) =>
@@ -81,6 +88,7 @@ function validateParticipant(inputValue, workspace, { fields, existing, excludeI
     if (!id || ['name', 'phone', 'company'].includes(id)) continue;
     const hasDirectValue = Object.hasOwn(input, id);
     const hasAnswerValue = Object.hasOwn(suppliedAnswers, id);
+    const explicitlySupplied = hasDirectValue || hasAnswerValue;
     const value = hasDirectValue
       ? input[id]
       : hasAnswerValue
@@ -93,7 +101,7 @@ function validateParticipant(inputValue, workspace, { fields, existing, excludeI
     if (!['text', 'email', 'select', 'checkbox'].includes(type)) {
       throw failure(400, `${clean(field.label, 160) || '항목'} 형식을 확인하세요`, id);
     }
-    if (field.required === true && empty) {
+    if (field.required === true && empty && !(grandfatherMissingPublishedRequired && existing && !explicitlySupplied)) {
       throw failure(400, `${clean(field.label, 160) || '필수 항목'}을(를) 입력하세요`, id);
     }
     if (!empty && type !== 'checkbox' && typeof value !== 'string') {
@@ -155,7 +163,7 @@ function importFieldsFor(workspace, carried) {
 
 function createParticipant(event, workspace, input, { registrationType, publicSignup = false, fields, now }) {
   const form = fields || list(publicSignup ? workspace.publishedFields : workspace.fields);
-  const values = validateParticipant(input, workspace, { fields: form });
+  const values = validateParticipant(input, workspace, { fields: form, enforcePublishedCompanyRequired: publicSignup });
   const visibleConsent = clean(workspace.consentText, 3000).length > 0;
   if (publicSignup && visibleConsent && object(input).consent !== true) {
     throw failure(400, '필수 정보 수집 안내에 동의해주세요', 'consent');
@@ -384,11 +392,14 @@ function findPerson(workspace, id) {
   return person;
 }
 
-function updateParticipant(workspace, person, input, fields) {
+function updateParticipant(workspace, person, input, fields, { enforcePublishedCompanyRequired = false,
+  grandfatherMissingPublishedRequired = false } = {}) {
   const changes = validateParticipant(input, workspace, {
     fields,
     existing: person,
     excludeId: person.id,
+    enforcePublishedCompanyRequired,
+    grandfatherMissingPublishedRequired,
   });
   changes.answers = { ...object(person.answers), ...object(changes.answers) };
   Object.assign(person, changes);
@@ -718,7 +729,8 @@ function createParticipantCommands(database) {
               workspace,
               participant,
               publishedFormInput(input, workspace.publishedFields),
-              workspace.publishedFields
+              workspace.publishedFields,
+              { enforcePublishedCompanyRequired: true, grandfatherMissingPublishedRequired: true }
             );
             // A changed number breaks the recovery binding: the browser must
             // re-verify the new number before it reads as this participant.

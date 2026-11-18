@@ -29,12 +29,17 @@ test('one orange at a time: add while idle, save while editing', () => {
   assert.match(css, /\.phoneCta\s*\{[^}]*var\(--line\)/su, 'the preview button is not a second orange');
 });
 
-test('the preview follows the draft and is decorative', () => {
+test('published and draft previews stay separate and use the attendee field controls', () => {
   assert.match(work, /<FieldsPhonePreview eventName=\{state\.name\}/u);
-  assert.match(work, /draft\.existing \? state\.fields\.map/u, 'an edited field shows as typed');
+  assert.match(work, /const publishedFields = parsePublishedRegisterFields\(workspace\.publishedFields, "workspace"\)/u, 'the live form uses the attendee parser for the published projection');
+  assert.match(work, /publishedFields=\{state\.publishedFields\} draftFields=\{draftPreviewFields\}/u, 'changing a draft cannot mutate the published preview input');
+  assert.match(work, /draft\.existing\s*\?\s*state\.fields\.map/u, 'an edited field shows as typed');
   assert.match(work, /\[\.\.\.state\.fields, edited\]/u, 'a new field shows at the end');
+  assert.match(work, /id: "company", label: "소속", type: "text", required: false/u, 'the canonical company field can be restored after exclusion');
   assert.match(preview, /aria-hidden="true" inert/u, 'it is not a second form');
-  assert.match(preview, /입력칸은 동작하지 않는 미리보기입니다/u);
+  assert.match(preview, /ProductInput/u);
+  assert.match(preview, /ProductSelect/u);
+  assert.match(preview, /disabled required=\{field\.required\}/u, 'preview controls preserve required state while remaining inert');
 });
 
 test('the draft state is one pill and the exclusion confirm sits by its editor', () => {

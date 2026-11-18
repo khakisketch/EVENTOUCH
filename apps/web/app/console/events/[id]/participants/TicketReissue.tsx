@@ -12,8 +12,9 @@ import ConsoleDialog from "../../../console-ui/ConsoleDialog";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import styles from "./participants.module.css";
 
-export default function TicketReissue({ eventId, slug, person, resumeCommandId, onRefresh, onIssued, onClose }: {
-  eventId: string; slug: string; person: { id: string; name: string; ticketRevision: number };
+export default function TicketReissue({ eventId, slug, eventName, person, resumeCommandId, onRefresh, onIssued, onClose }: {
+  eventId: string; slug: string; eventName?: string;
+  person: { id: string; name: string; ticketRevision: number; company?: string; maskedPhone?: string };
   resumeCommandId?: string;
   onRefresh: () => Promise<boolean>; onIssued: (ticketRevision: number) => void; onClose: () => void;
 }) {
@@ -28,12 +29,14 @@ export default function TicketReissue({ eventId, slug, person, resumeCommandId, 
   const [confirmFinish, setConfirmFinish] = useState(false);
   const attempt = useRef<string | null>(resumeCommandId ?? null);
   const request = useRef<AbortController | null>(null);
+  const reviewTarget = useRef<HTMLDivElement>(null);
   const copyButton = useRef<HTMLButtonElement>(null);
   const recoveryAction = useRef<HTMLButtonElement>(null);
   const manualCopy = useRef<HTMLDetailsElement>(null);
   const linkInput = useRef<HTMLInputElement>(null);
   const unresolved = phase === "pending" || phase === "applied";
   const reviewRequired = phase === "changed" || phase === "superseded";
+  const reviewContext = !resumeCommandId && phase === "confirm";
   useConsoleDraftGuard((busy && !reviewRequired) || unresolved || (phase === "issued" && !recoverable && !copied),
     phase === "issued" ? "티켓 링크를 아직 보관하지 못했습니다." : "티켓 재발급 결과를 아직 확인하지 못했습니다.");
   useEffect(() => () => request.current?.abort(), []);
@@ -174,7 +177,11 @@ export default function TicketReissue({ eventId, slug, person, resumeCommandId, 
   }
 
   return (
-    <ConsoleDialog title="티켓 재발급" description={person.name} busy={busy} onClose={onClose} canClose={canClose}
+    <ConsoleDialog title="티켓 재발급" initialFocusRef={reviewContext ? reviewTarget : undefined} description={reviewContext ?
+      <div ref={reviewTarget} className={styles.ticketReissueTarget} tabIndex={-1} role="group" aria-label="재발급 대상">
+        <strong>{person.name || "이름 확인 필요"}</strong> · {person.company?.trim() || "소속 없음"} · {person.maskedPhone || "연락처 확인 필요"}
+        {eventName?.trim() ? <><br />행사: <span>{eventName}</span></> : null}
+      </div> : person.name} busy={busy} onClose={onClose} canClose={canClose}
       footer={phase !== "confirm" ? <>
         <ProductButton type="button" className="button button-secondary" disabled={busy} onClick={() => { if (canClose()) onClose(); }}>{phase === "issued" && recoverable ? "나중에 확인" : "닫기"}</ProductButton>
         {phase === "issued" && recoverable ? <ProductButton type="button" className="button button-secondary" disabled={operator.changed} onClick={finish}>링크 확인 완료</ProductButton> : null}
@@ -184,7 +191,7 @@ export default function TicketReissue({ eventId, slug, person, resumeCommandId, 
       </> : null}>
       {error ? <ConsoleFeedback kind="error">{error}</ConsoleFeedback> : null}
       {phase === "confirm" ? <ConsoleConfirm summary={<span className={styles.ticketReissueCopy}>새 티켓을 발급하면 기존 링크와 QR은 사용할 수 없게 됩니다. 발급 후 새 링크를 복사해 참가자에게 전달하세요.</span>}
-        confirmLabel="기존 티켓 무효화 및 재발급" busy={busy || operator.changed} onConfirm={() => void run()} onCancel={onClose} /> : null}
+        confirmLabel="기존 티켓 무효화 및 재발급" initialFocus="cancel" busy={busy || operator.changed} onConfirm={() => void run()} onCancel={onClose} /> : null}
       {unresolved ? <div className={styles.editRecovery}>
         {phase === "applied" ? <ConsoleFeedback kind="success">재발급이 확인됐습니다. 같은 요청으로 발급된 링크를 가져오세요.</ConsoleFeedback> : null}
         <div className={styles.editActions}>

@@ -127,6 +127,16 @@ test('event menu searches operator terms inside the existing visible page list',
   assert.match(shell(), /isPageVisible\(id\) && matchesEventMenu\(id,/u);
 });
 
+test('event menu finds intake and application-field destinations by the names operators see', () => {
+  const { eventMenuShortcuts } = require('../apps/web/app/console/console-navigation.ts');
+  const search = query => eventMenuShortcuts('settings', 'demo event', query).map(({ label, href }) => [label, href]);
+  assert.deepEqual(search('신청 항목 편집'), [['신청 항목', '/console/events/demo%20event/settings/fields']]);
+  assert.deepEqual(search('참가 접수'), [['참가 접수', '/console/events/demo%20event/settings#settings-intake']]);
+  assert.deepEqual(search(''), []);
+  assert.deepEqual(eventMenuShortcuts('settings', undefined, '참가 접수'), []);
+  assert.deepEqual(eventMenuShortcuts('participants', 'demo event', '신청 항목'), []);
+});
+
 test('current-destination link closes the menu; guarded leaves stay open', () => {
   const source = shell();
    // Capture precedes Link's bubble handler. Safety must not depend on
@@ -169,14 +179,16 @@ test('Escape restores trigger focus; leaving never steals focus', () => {
   assert.doesNotMatch(source, /["']Tab["']/u);
 });
 
-test('opening focuses the first permitted link; desktop width closes silently', () => {
+test('opening focuses the first permitted link unless a menu control already has focus', () => {
   const source = shell();
-  // Menu rows are hub labels and page subitems now, not rail items: the
-  // first-link focus still lands on the first permitted href.
   assert.match(
     source,
-    /globalMenuRef\.current\s*\?\.querySelector<HTMLElement>\("a\[href\]"\)\s*\?\.focus\(\)/su
+    /const menu = globalMenuRef\.current;\s*if \(!menu \|\| menu\.hidden \|\| menu\.contains\(document\.activeElement\)\) return;\s*menu\.querySelector<HTMLElement>\("a\[href\]"\)\?\.focus\(\)/su
   );
+});
+
+test('desktop width closes the phone menu silently', () => {
+  const source = shell();
   assert.match(source, /min-width:\s*769px/u);
 });
 

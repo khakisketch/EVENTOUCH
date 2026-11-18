@@ -3,7 +3,7 @@
 .split { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--s5); align-items: start; }
 .listColumn { display: grid; gap: var(--s4); min-width: 0; }
 .listHead { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
-.count { color: var(--muted); font-size: var(--small); font-weight: 650; }
+.count { margin: 0; color: var(--muted); font-size: var(--small); font-weight: 650; }
 .list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
 .row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--s3); min-height: 68px; padding: 0 var(--s1) 0 var(--s2); border-bottom: 1px solid var(--line); }
 .rowSelected { background: var(--surface-muted); box-shadow: inset 3px 0 0 var(--ink); }
@@ -15,8 +15,8 @@
 .rowOpen:focus-visible::after { outline: 3px solid var(--focus); outline-offset: -3px; }
 .rowOpen:disabled { color: var(--muted); cursor: default; }
 .rowInfo { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
-.rowMeta, .help { color: var(--muted); font-size: var(--small); line-height: 1.5; font-weight: 500; }
-.reqOn, .reqOff { display: inline-flex; align-items: center; gap: var(--s1); font-size: var(--small); font-weight: 700; white-space: nowrap; }
+.rowMeta, .help { margin: 0; color: var(--muted); font-size: var(--small); line-height: 1.5; font-weight: 500; }
+.reqOn, .reqOff { display: inline-flex; align-items: center; gap: var(--s1); margin: 0; font-size: var(--small); font-weight: 700; white-space: nowrap; }
 .reqOn { color: var(--ink); }
 .reqOff { color: var(--muted); font-weight: 600; }
 .reqOn::before, .reqOff::before { width: 8px; height: 8px; border-radius: 50%; background: var(--brand); content: ""; }
@@ -32,32 +32,37 @@
 .editor { display: grid; gap: var(--s3); padding: var(--s4); border: 1px solid var(--line); border-radius: 18px; background: var(--paper); box-shadow: var(--shadow-raised); }
 .editor h3, .editor p, .recovery h3, .recovery p { margin: 0; }
 .editorActions { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--line); }
-.field { display: grid; gap: var(--s1); }
-.field label { font-weight: 700; font-size: var(--small); }
+.actionSpacer { width: 0; margin: 0; }
+.field { display: grid; gap: var(--s1); min-width: 0; margin: 0; padding: 0; border: 0; }
+.field > label, .field legend { font-weight: 700; font-size: var(--small); }
 .field input, .field select, .field textarea { width: 100%; }
 .check { display: flex; gap: var(--s2); align-items: center; min-height: 44px; }
 .check input { width: 20px; height: 20px; }
 .recovery { display: grid; gap: var(--s2); margin-bottom: var(--s4); padding: var(--s3); border: 1px solid var(--warning-line); border-radius: var(--radius-small); background: var(--warning-soft); }
 
-/* Redraw of the attendee form at phone width. Decorative: it loads nothing and
-   follows the draft list. */
+/* Phone preview for the public form and the editable draft. */
 .previewRail { position: sticky; top: var(--s4); display: grid; gap: var(--s2); margin: 0; }
 .previewCaption { color: var(--muted); font-size: var(--small); font-weight: 650; }
-.previewNote { margin: 0; color: var(--muted); font-size: 12.5px; }
-.phone { overflow: hidden; border: 1px solid var(--line); border-radius: 30px; background: var(--paper); }
+.previewModes { display: flex; flex-wrap: wrap; gap: var(--s1); }
+.previewModes :global(.product-action) { min-height: 40px; }
+.previewNote { margin: 0; color: var(--muted); font-size: var(--small); }
+.phone { min-width: 0; margin: 0; padding: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 30px; background: var(--paper); }
+.phone legend { padding: 0; }
 .phoneBar { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 0 var(--s4); font-size: 13px; }
-.phoneBar span { color: var(--muted); }
-.phoneBody { display: grid; gap: 14px; padding: 0 var(--s4) var(--s4); }
+.phoneStatus { color: var(--muted); }
+.phoneBody { display: grid; gap: var(--s3); padding: 0 var(--s4) var(--s4); }
 .phoneTitle { margin: var(--s1) 0 0; font-size: 22px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.2; overflow-wrap: anywhere; }
-.phoneField { display: grid; gap: 5px; padding: 0; }
-.phoneLabel, .phoneCheck { font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
-.phoneLabel em, .phoneCheck em { color: var(--muted); font-style: normal; font-weight: 600; }
-.phoneInput { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s3); border: 1px solid var(--line-strong); border-radius: 14px; color: var(--muted); font-size: 14px; }
+.phoneEmpty { margin: 0; color: var(--muted); font-size: var(--small); }
+.phoneField { display: grid; gap: var(--s1); min-width: 0; padding: 0; }
+.phoneLabel, .phoneCheck { color: var(--ink); font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+.phoneRequirement { margin-inline-start: var(--s1); color: var(--muted); font-weight: 600; }
+.phoneInput { width: 100%; min-height: 44px; padding: 0 var(--s3); border: 1px solid var(--line-strong); border-radius: 14px; color: var(--muted); font-size: 14px; }
 .phoneCheck { display: flex; align-items: center; gap: var(--s2); min-height: 44px; }
-.phoneCheck i { width: 20px; height: 20px; border: 2px solid var(--line-strong); border-radius: 6px; flex: none; }
+.phoneCheck input { width: 20px; height: 20px; flex: none; }
 .phoneFieldActive .phoneInput { border: 2px solid var(--ink); }
-.phoneFieldActive .phoneCheck i { border-color: var(--ink); }
-.phoneCta { display: grid; place-items: center; min-height: 48px; margin: 0 var(--s4) var(--s4); border-radius: 14px; background: var(--line); color: var(--muted); font-weight: 750; }
+.phoneFieldActive .phoneCheck input { outline: 2px solid var(--ink); outline-offset: 2px; }
+.phoneFooter { padding: 0 var(--s4) var(--s4); }
+.phoneCta { display: grid; width: 100%; place-items: center; min-height: 48px; border-radius: 14px; background: var(--line); color: var(--muted); font-weight: 750; }
 
 @media (max-width: 1000px) {
   .split { grid-template-columns: minmax(0, 1fr); }

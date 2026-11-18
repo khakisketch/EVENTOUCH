@@ -121,6 +121,7 @@
 .detailActions select { flex: 1 1 220px; min-height: 44px; }
 .rowConfirm { grid-column: 1 / -1; }
 .ticketReissueCopy { word-break: keep-all; overflow-wrap: break-word; }
+.ticketReissueTarget:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: var(--radius-small); }
 
 @media (max-width: 768px) {
   .workbenchControls .searchField[data-toolbar-span="full"] { flex: 1 1 150px; }

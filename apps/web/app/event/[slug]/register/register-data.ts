@@ -42,17 +42,45 @@ function asField(value: unknown): PublishedField | null {
       typeof field.required !== "boolean" || !Array.isArray(field.options) ||
       !field.options.every((option) => typeof option === "string")) return null;
   const type = field.type.trim().toLowerCase();
+  const id = field.id.trim();
+  if (["name", "phone", "company"].includes(id)) {
+    return { id, label: field.label, type: "text", required: id !== "company" || field.required, options: [] };
+  }
   if (!["text", "email", "select", "checkbox"].includes(type)) return null;
   if (type === "select" && field.required &&
       (!field.options.length || field.options.some((option) => !option.trim()))) return null;
   return {
     // The signup validator also trims field IDs before looking up answers.
-    id: field.id.trim(),
+    id,
     label: field.label,
     type,
     required: field.required,
     options: field.options as string[],
   };
+}
+
+/** Read the same field sequence for the public form and the operator's published previews. */
+export function parsePublishedRegisterFields(value: unknown, source: "public" | "workspace" = "public"): PublishedField[] | null {
+  if (!Array.isArray(value)) return null;
+  const fields: PublishedField[] = [];
+  const ids = new Set<string>();
+  for (const item of value) {
+    const raw = asRecord(item);
+    if (!raw) return null;
+    // Older workspace rows can omit optional metadata that the public
+    // projection supplies. Keep the public response's validation strict.
+    const field = source === "workspace"
+      ? { ...raw, required: raw.required === true, options: Array.isArray(raw.options) ? raw.options.filter((option) => typeof option === "string") : [] }
+      : raw;
+    const parsed = asField(field);
+    if (!parsed || ids.has(parsed.id)) return null;
+    ids.add(parsed.id);
+    fields.push(parsed);
+  }
+  // Empty legacy projections retain the original optional company field.
+  // An omitted company in a non-empty projection is an intentional exclusion.
+  if (fields.length === 0) return [...BUILT_IN_FIELDS];
+  return [...fields, ...BUILT_IN_FIELDS.slice(0, 2).filter((field) => !ids.has(field.id))];
 }
 
 // The server render and in-place conflict recovery consume exactly the same
@@ -72,22 +100,8 @@ export function parseRegisterData(value: unknown): RegisterData | null {
       workspace.consentText.length > 3000 || !Number.isSafeInteger(workspace.consentVersion) ||
       Number(workspace.consentVersion) < 1 || typeof workspace.price !== "number" ||
       !Number.isFinite(workspace.price) || workspace.price < 0) return null;
-  const fields: PublishedField[] = [];
-  const ids = new Set<string>();
-  for (const value of workspace.publishedFields) {
-    const field = asRecord(value);
-    if (!field || typeof field.id !== "string" || !field.id.trim() ||
-        typeof field.label !== "string" || !field.label.trim() || typeof field.type !== "string" ||
-        typeof field.required !== "boolean" || !Array.isArray(field.options) ||
-        !field.options.every((option) => typeof option === "string")) return null;
-    // These server-projected fields are rendered by the fixed built-in
-    // controls. Their legacy type values never change signup validation.
-    if (["name", "phone", "company"].includes(field.id.trim())) continue;
-    const parsed = asField(field);
-    if (!parsed || ids.has(parsed.id)) return null;
-    ids.add(parsed.id);
-    fields.push(parsed);
-  }
+  const fields = parsePublishedRegisterFields(workspace.publishedFields);
+  if (!fields) return null;
   return {
     name: event.name,
     eventContext: readPublicEventContext(event, workspace),

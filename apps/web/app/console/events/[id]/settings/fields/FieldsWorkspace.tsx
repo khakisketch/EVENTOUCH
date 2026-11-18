@@ -4,6 +4,7 @@ import ProductButton from "../../../../../ui/ProductButton";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../../auth-redirect";
+import { parsePublishedRegisterFields } from "../../../../../event/[slug]/register/register-data";
 import ValidatedForm from "../../../../../ui/ValidatedForm";
 import ConsolePage from "../../../../console-ui/ConsolePage";
 import ConsoleSection from "../../../../console-ui/ConsoleSection";
@@ -24,7 +25,7 @@ import styles from "./fields.module.css";
 
 type Field = { id: string; label: string; type: string; required: boolean; options: string[] };
 type Draft = { id: string; label: string; type: string; required: boolean; optionsText: string; existing: boolean };
-type Ready = { kind: "ready"; name: string; fields: Field[]; formVersion: number; publishedVersion: number; archived: boolean; canWrite: boolean };
+type Ready = { kind: "ready"; name: string; fields: Field[]; publishedFields: Field[] | null; formVersion: number; publishedVersion: number; archived: boolean; canWrite: boolean };
 type State = { kind: "loading" } | { kind: "failed"; message: string } | Ready;
 type Attempt = { eventId: string; command: "field.save" | "field.move" | "field.delete"; commandId: string; payload: Record<string, unknown> };
 const COMMANDS = new Set(["field.save", "field.move", "field.delete", "form.publish"]);
@@ -32,6 +33,14 @@ const LABELS: Record<Attempt["command"], string> = { "field.save": "신청 항�
 const TYPE_LABELS: Record<string, string> = { text: "짧은 답변", email: "이메일", select: "하나 선택", checkbox: "체크" };
 function record(value: unknown): Record<string, unknown> | null { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null; }
 function str(value: unknown): string { return typeof value === "string" ? value : ""; }
+function fieldsFrom(value: unknown): Field[] {
+  return Array.isArray(value) ? value.flatMap((item) => {
+    const field = record(item);
+    if (!field || typeof field.id !== "string" || !field.id) return [];
+    return [{ id: field.id, label: str(field.label), type: str(field.type), required: field.required === true,
+      options: Array.isArray(field.options) ? field.options.filter((option): option is string => typeof option === "string") : [] }];
+  }) : [];
+}
 function newId(): string { return `field-${typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.floor(Math.random() * 1e9)}`}`; }
 function commandId(): string { return typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `web-${Date.now()}-${Math.floor(Math.random() * 1e9)}`; }
 function toDraft(field: Field): Draft { return { ...field, optionsText: field.options.join("\n"), existing: true }; }
@@ -96,16 +105,13 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
         else setState({ kind: "failed", message: "신청 항목을 불러오지 못했습니다." });
         return false;
       }
-      const fields: Field[] = Array.isArray(workspace.fields) ? workspace.fields.flatMap((item) => {
-        const field = record(item); if (!field || typeof field.id !== "string" || !field.id) return [];
-        return [{ id: field.id, label: str(field.label), type: str(field.type), required: field.required === true,
-          options: Array.isArray(field.options) ? field.options.filter((value): value is string => typeof value === "string") : [] }];
-      }) : [];
+      const fields = fieldsFrom(workspace.fields);
+      const publishedFields = parsePublishedRegisterFields(workspace.publishedFields, "workspace");
       const memberships = Array.isArray(bootstrap.memberships) ? bootstrap.memberships.flatMap((value) => {
         const row = record(value); return row && typeof row.accountId === "string" && typeof row.eventId === "string" ? [{ accountId: row.accountId, eventId: row.eventId, write: row.write }] : [];
       }) : [];
       loadedIdRef.current = selectedEvent;
-      setState({ kind: "ready", name: str(event.name) || eventId, fields, formVersion: Number(workspace.formVersion) || 0,
+      setState({ kind: "ready", name: str(event.name) || eventId, fields, publishedFields, formVersion: Number(workspace.formVersion) || 0,
         publishedVersion: Number(workspace.publishedVersion) || 0, archived: str(event.stage).toUpperCase() === "ARCHIVED",
         canWrite: canWriteEvent({ role: me.role, userId: me.id, memberships, eventId }, "field.save") });
       return true;
@@ -207,6 +213,14 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
   if (state.kind === "failed") return <ConsolePage pageId="settings" title="신청 항목" eventId={eventId}><ConsoleStatePanel kind="failed" message={state.message} onRetry={() => void load()} /></ConsolePage>;
   const writable = state.canWrite && !state.archived;
   const latestField = draft?.existing ? state.fields.find((field) => field.id === draft.id) : null;
+  const draftPreviewFields = !draft ? state.fields : (() => {
+    const edited = { id: draft.id, label: draft.label, type: draft.type,
+      required: ["name", "phone"].includes(draft.id) || draft.required,
+      options: draft.optionsText.split(/\r?\n/).map((item) => item.trim()).filter(Boolean) };
+    return draft.existing
+      ? state.fields.map((field) => field.id === draft.id ? edited : field)
+      : [...state.fields, edited];
+  })();
   return <ConsolePage pageId="settings" title="신청 항목" parentContext={{ href: `/console/events/${encodeURIComponent(eventId)}/settings#settings-intake`, label: "행사 설정 · 참가 접수" }} eventId={eventId} eventName={state.name} headerActions={<a className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings#settings-intake`}>참가 접수로</a>} feedback={<>
     {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
     {error && !pending ? <ConsoleFeedback kind="error">{error}</ConsoleFeedback> : null}
@@ -222,17 +236,17 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
         <h3 id="field-conflict-heading">신청 항목이 변경됐습니다</h3>
         <p>다른 작업에서 양식이 바뀌었습니다. 입력한 내용은 유지했습니다. 최신 목록을 확인한 뒤 다시 저장하세요.</p>
         {draft?.existing ? <p>{latestField ? `현재 서버 항목: ${latestField.label} · ${TYPE_LABELS[latestField.type] || latestField.type} · ${latestField.required ? "필수" : "선택"}${latestField.type === "select" ? ` · ${latestField.options.join(", ")}` : ""}` : "이 항목이 최신 양식에서 제외됐습니다. 입력을 확인한 뒤 취소하고 새 항목으로 추가하세요."}</p> : null}
-        <div className={styles.actions}><ProductButton type="button" className="button button-secondary" disabled={locked} onClick={() => { setConflict(false); setError(null); }}>최신 변경 확인</ProductButton></div>
+        <nav className={styles.actions} aria-label="최신 변경 작업"><ProductButton type="button" className="button button-secondary" disabled={locked} onClick={() => { setConflict(false); setError(null); }}>최신 변경 확인</ProductButton></nav>
       </section> : null}
       {pending ? <section className={styles.recovery} aria-labelledby="field-recovery-heading">
         <h3 id="field-recovery-heading" tabIndex={-1}>신청 항목 처리 확인 필요</h3>
         <p>{LABELS[pending.command]} 요청이 반영됐을 수 있습니다. 서버 확인은 요청을 다시 보내지 않습니다.</p>
         {error ? <p role="alert">{error}</p> : null}
-        <div className={styles.actions}>
+        <nav className={styles.actions} aria-label="처리 결과 작업">
           <ProductButton type="button" className="button button-secondary" disabled={busy || operator.changed || abandon} onClick={() => void check()}>서버 처리 확인</ProductButton>
           <ProductButton type="button" className="button button-secondary" disabled={busy || operator.changed || abandon || !writable} onClick={() => void execute(pending, true)}>같은 요청 다시 시도</ProductButton>
           <ProductButton type="button" className="button button-secondary" disabled={busy || abandon} onClick={() => setAbandon(true)}>확인 전 그만두기</ProductButton>
-        </div>
+        </nav>
         {abandon ? <ConsoleConfirm summary="이미 반영된 항목 변경은 취소되지 않습니다. 확인을 그만두고 최신 항목을 확인할까요?" confirmLabel="확인 그만두기" onConfirm={() => {
           const attempt = pendingRef.current; if (!attempt) return;
           abandonOperatorAttempt(attempt.commandId); forgetOperatorReceipt(attempt.commandId); pendingRef.current = null; sentIdRef.current = null; setPending(null); setAbandon(false);
@@ -241,49 +255,53 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
         }} onCancel={() => setAbandon(false)} /> : null}
       </section> : null}
       <p className={state.formVersion > state.publishedVersion ? styles.statePending : styles.statePublished} role="status">{state.formVersion > state.publishedVersion ? (state.publishedVersion ? "게시 안 된 변경 있음" : "아직 게시 전") : "게시된 양식과 같음"}</p>
-      <div className={styles.split}>
-        <div className={styles.listColumn}>
-          <div className={styles.listHead}>
-            <span className={styles.count}>항목 {state.fields.length}개</span>
-            <ProductButton type="button" variant="primary" icon={<PlusIcon />} disabled={!writable || writeLocked || Boolean(draft)} onClick={() => start({ id: newId(), label: "", type: "text", required: false, optionsText: "", existing: false })}>항목 추가</ProductButton>
-          </div>
+      <section className={styles.split} aria-label="신청 항목 편집">
+        <section className={styles.listColumn} aria-label="신청 항목 초안">
+          <header className={styles.listHead}>
+            <p className={styles.count}>항목 {state.fields.length}개</p>
+            <nav className={styles.actions} aria-label="신청 항목 추가">
+              {!state.fields.some((field) => field.id === "company") ? <ProductButton type="button" variant="ghost" disabled={!writable || writeLocked || Boolean(draft)} onClick={() => start({ id: "company", label: "소속", type: "text", required: false, optionsText: "", existing: false })}>소속 항목 다시 추가</ProductButton> : null}
+              <ProductButton type="button" variant="primary" icon={<PlusIcon />} disabled={!writable || writeLocked || Boolean(draft)} onClick={() => start({ id: newId(), label: "", type: "text", required: false, optionsText: "", existing: false })}>항목 추가</ProductButton>
+            </nav>
+          </header>
           <ul className={styles.list}>
             {state.fields.map((field, index) => <li className={`${styles.row} ${draft?.existing && draft.id === field.id ? styles.rowSelected : ""}`} key={field.id}>
               {/* The button holds only the name so its accessible name contains its visible text; the row's other text rides beside it and its hit area covers the whole row. */}
-              <span className={styles.rowInfo}>
+              <header className={styles.rowInfo}>
                 <button type="button" className={styles.rowOpen} aria-label={`${field.label} 수정`} disabled={!writable || writeLocked || Boolean(draft) || !Object.hasOwn(TYPE_LABELS, field.type)} onClick={() => start(toDraft(field))}>{field.label || "이름 없는 항목"}</button>
-                <span className={styles.rowMeta}>{TYPE_LABELS[field.type] || "지원하지 않는 형식"}{["name", "phone"].includes(field.id) ? " · 고정 항목" : ""}{field.type === "select" ? ` · 선택지 ${field.options.length}개` : ""}</span>
-              </span>
-              <span className={field.required ? styles.reqOn : styles.reqOff}>{field.required ? "필수" : "선택"}</span>
-              <span className={styles.move}>
+                <p className={styles.rowMeta}>{TYPE_LABELS[field.type] || "지원하지 않는 형식"}{["name", "phone"].includes(field.id) ? " · 고정 항목" : ""}{field.type === "select" ? ` · 선택지 ${field.options.length}개` : ""}</p>
+              </header>
+              <p className={field.required ? styles.reqOn : styles.reqOff}>{field.required ? "필수" : "선택"}</p>
+              <nav className={styles.move} aria-label={`${field.label} 순서 변경`}>
                 <ProductButton type="button" variant="ghost" size="sm" aria-label={`${field.label} 위로 이동`} disabled={!writable || writeLocked || Boolean(draft) || index === 0} onClick={() => reorder(field.id, -1)}><ArrowUpIcon /></ProductButton>
                 <ProductButton type="button" variant="ghost" size="sm" aria-label={`${field.label} 아래로 이동`} disabled={!writable || writeLocked || Boolean(draft) || index === state.fields.length - 1} onClick={() => reorder(field.id, 1)}><ArrowDownIcon /></ProductButton>
-              </span>
+              </nav>
             </li>)}
           </ul>
           {draft ? <ValidatedForm className={styles.editor} onSubmit={submit}>
             <h3>{draft.existing ? "항목 수정" : "새 항목"}</h3>
-            <div className={styles.field}><label htmlFor="field-label">항목 이름</label><input id="field-label" maxLength={60} required value={draft.label} disabled={locked || !writable} onChange={(event) => setDraft({ ...draft, label: event.target.value })} /></div>
+            <label className={styles.field}>항목 이름<input id="field-label" maxLength={60} required value={draft.label} disabled={locked || !writable} onChange={(event) => setDraft({ ...draft, label: event.target.value })} /></label>
             <ConsoleChoiceGroup id="field-type" label="입력 방식" value={draft.type} disabled={locked || !writable || ["name", "phone", "company"].includes(draft.id)} onChange={(type) => setDraft({ ...draft, type })}
               options={[{ value: "text", label: "짧은 답변" }, { value: "email", label: "이메일" }, { value: "select", label: "하나 선택" }, { value: "checkbox", label: "체크" }]} hint={draft.existing ? "기존 답변이 있는 항목의 입력 방식은 바꿀 수 없습니다." : undefined} />
-            {draft.type === "select" ? <div className={styles.field}><label htmlFor="field-options">선택지 · 한 줄에 하나씩</label><textarea id="field-options" rows={4} value={draft.optionsText} disabled={locked || !writable} onChange={(event) => setDraft({ ...draft, optionsText: event.target.value })} /><p className={styles.help}>기존 답변에 사용된 선택지는 삭제할 수 없습니다.</p></div> : null}
+            {draft.type === "select" ? <div className={styles.field}>
+              <label htmlFor="field-options">선택지 · 한 줄에 하나씩</label>
+              <textarea id="field-options" aria-describedby="field-options-help" rows={4} value={draft.optionsText} disabled={locked || !writable} onChange={(event) => setDraft({ ...draft, optionsText: event.target.value })} />
+              <p id="field-options-help" className={styles.help}>기존 답변에 사용된 선택지는 삭제할 수 없습니다.</p>
+            </div> : null}
             <label className={styles.check}><input type="checkbox" checked={["name", "phone"].includes(draft.id) || draft.required} disabled={locked || !writable || ["name", "phone"].includes(draft.id)} onChange={(event) => setDraft({ ...draft, required: event.target.checked })} />필수 입력</label>
             <p className={styles.help}>필수로 바꾸면 이전 참가자의 정보 수정에도 영향을 줄 수 있습니다.</p>
-            <div className={styles.editorActions}>
-              {draft.existing && !["name", "phone"].includes(draft.id) ? <ProductButton type="button" variant="destructive" disabled={writeLocked || !writable} onClick={() => setDeleteId(draft.id)}>이 항목 제외</ProductButton> : <span />}
-              <span className={styles.actions}><ProductButton type="button" variant="ghost" disabled={locked} onClick={() => { if (dirty) setCancelDraft(true); else { setDraft(null); setConflict(false); } }}>취소</ProductButton><ProductButton type="submit" variant="primary" disabled={writeLocked || !writable}>항목 저장</ProductButton></span>
-            </div>
+            <footer className={styles.editorActions}>
+              {draft.existing && !["name", "phone"].includes(draft.id) ? <ProductButton type="button" variant="destructive" disabled={writeLocked || !writable} onClick={() => setDeleteId(draft.id)}>이 항목 제외</ProductButton> : <p className={styles.actionSpacer} aria-hidden="true" />}
+              <nav className={styles.actions} aria-label="항목 편집 작업"><ProductButton type="button" variant="ghost" disabled={locked} onClick={() => { if (dirty) setCancelDraft(true); else { setDraft(null); setConflict(false); } }}>취소</ProductButton><ProductButton type="submit" variant="primary" disabled={writeLocked || !writable}>항목 저장</ProductButton></nav>
+            </footer>
             {cancelDraft ? <ConsoleConfirm summary="작성 중인 항목 내용이 사라집니다. 취소할까요?" confirmLabel="작성 취소" onConfirm={() => { setDraft(null); setCancelDraft(false); setError(null); setConflict(false); }} onCancel={() => setCancelDraft(false)} /> : null}
           </ValidatedForm> : null}
           {deleteId ? <ConsoleConfirm summary={`“${state.fields.find((field) => field.id === deleteId)?.label || "선택 항목"}”을 초안에서 제외할까요? 기존 답변은 바로 삭제되지 않으며 게시 후 신청 화면과 내보내기에서 빠질 수 있습니다.`} confirmLabel="항목 제외" busy={busy} onConfirm={() => remove(deleteId)} onCancel={() => setDeleteId(null)} /> : null}
-        </div>
-        <FieldsPhonePreview eventName={state.name} activeId={draft?.id ?? null} fields={(() => {
-          // The draft shows as typed, so a new or renamed field is visible beside the list before it is saved.
-          if (!draft) return state.fields;
-          const edited = { id: draft.id, label: draft.label, type: draft.type, required: ["name", "phone"].includes(draft.id) || draft.required, options: draft.optionsText.split(/\r?\n/).map((item) => item.trim()).filter(Boolean) };
-          return draft.existing ? state.fields.map((field) => field.id === draft.id ? edited : field) : [...state.fields, edited];
-        })()} />
-      </div>
+        </section>
+        <FieldsPhonePreview eventName={state.name} activeId={draft?.id ?? null}
+          publishedFields={state.publishedFields} draftFields={draftPreviewFields}
+          publishedVersion={state.publishedVersion} draftVersion={state.formVersion} />
+      </section>
     </ConsoleSection>
   </ConsolePage>;
 }

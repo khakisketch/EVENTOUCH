@@ -23,7 +23,7 @@ const test = databaseUrl
 const suffix = crypto.randomUUID().replace(/-/g, '');
 const ids = Object.fromEntries([
   'signup', 'stale', 'duplicate', 'capacity', 'parallel', 'replay', 'operators', 'expired', 'payment',
-  'importOverflow', 'duplicateImport', 'importAnswers',
+  'importOverflow', 'duplicateImport', 'importAnswers', 'requiredCompany', 'excludedCompany',
 ].map((name) => [name, `registration-${name}-${suffix}`]));
 const slugs = Object.fromEntries(Object.entries(ids).map(([name, id]) => [name, id]));
 const accountIds = {
@@ -179,6 +179,19 @@ before(async () => {
         { id: 'line', label: '번호', type: 'text', required: false, options: [] },
       );
     }
+    if (name === 'requiredCompany') {
+      eventWorkspace.fields = [
+        eventWorkspace.fields.find((field) => field.id === 'name'),
+        { ...eventWorkspace.fields.find((field) => field.id === 'company'), label: '소속 기관', required: true },
+        eventWorkspace.fields.find((field) => field.id === 'phone'),
+        eventWorkspace.fields.find((field) => field.id === 'meal'),
+      ];
+      eventWorkspace.publishedFields = eventWorkspace.fields;
+    }
+    if (name === 'excludedCompany') {
+      eventWorkspace.fields = eventWorkspace.fields.filter((field) => field.id !== 'company');
+      eventWorkspace.publishedFields = eventWorkspace.fields;
+    }
     await insertEvent(harness.database, {orgId: LEGACY_ORG,
       id: ids[name],
       slug: slugs[name],
@@ -280,6 +293,56 @@ test('public-signup-rejects-stale-published-forms-and-missing-required-consent',
   const invalidOption = await publicSignup(slugs.stale, signupBody('민서 참가자', '01012345679', { meal: '무제한 선택' }));
   assert.equal(invalidOption.status, 400);
   assert.equal(invalidOption.json.field, 'meal');
+});
+
+test('public signup enforces the published company requirement and permits an excluded company field', async () => {
+  const missing = await publicSignup(slugs.requiredCompany, signupBody('필수 소속 참가자', '01000000111'));
+  assert.equal(missing.status, 400);
+  assert.equal(missing.json.field, 'company');
+  assert.match(missing.json.error, /소속 기관/);
+
+  const submitted = await publicSignup(slugs.requiredCompany, signupBody('필수 소속 참가자', '01000000112', {
+    company: '한빛 연구소',
+  }));
+  assert.equal(submitted.status, 201);
+  assert.equal(submitted.json.participant.company, '한빛 연구소');
+  assert.equal(Object.hasOwn(submitted.json.participant.answers, 'company'), false,
+    'the built-in company remains in its canonical participant column');
+
+  const excluded = await publicSignup(slugs.excludedCompany, signupBody('소속 없는 참가자', '01000000113'));
+  assert.equal(excluded.status, 201);
+  assert.equal(excluded.json.participant.company, '');
+
+  // A later publication can require company without preventing an existing
+  // participant who has no company from making an unrelated correction.
+  const stored = await harness.database.query('SELECT payload FROM event_workspaces WHERE event_id = $1', [ids.excludedCompany]);
+  const nextWorkspace = structuredClone(stored.rows[0].payload);
+  const companyField = workspace().publishedFields.find((field) => field.id === 'company');
+  nextWorkspace.publishedFields.splice(2, 0, { ...companyField, label: '소속 기관', required: true });
+  nextWorkspace.publishedFields.push({ id: 'diet', label: '식사 유형', type: 'select', required: true,
+    options: ['일반식', '채식'] });
+  await harness.database.query('UPDATE event_workspaces SET payload = $2::jsonb WHERE event_id = $1', [
+    ids.excludedCompany,
+    JSON.stringify(nextWorkspace),
+  ]);
+
+  const unrelatedEdit = await attendeeCommand(ids.excludedCompany, 'participant.self-update', {
+    name: '소속 없는 참가자 이름 변경',
+  }, excluded.json.participant.ticket);
+  assert.equal(unrelatedEdit.status, 200);
+  assert.equal(unrelatedEdit.json.participant.company, '');
+
+  const explicitClear = await attendeeCommand(ids.excludedCompany, 'participant.self-update', {
+    company: '',
+  }, excluded.json.participant.ticket);
+  assert.equal(explicitClear.status, 400);
+  assert.equal(explicitClear.json.field, 'company');
+
+  const explicitExtraClear = await attendeeCommand(ids.excludedCompany, 'participant.self-update', {
+    answers: { diet: '' },
+  }, excluded.json.participant.ticket);
+  assert.equal(explicitExtraClear.status, 400);
+  assert.equal(explicitExtraClear.json.field, 'diet');
 });
 
 test('public-signup-reports-an-ended-visible-event-as-closed', async () => {
