@@ -1170,23 +1170,22 @@ test('web-overview-shows-calendar-period-registration-and-entry-counts', () => {
   assert.match(overview, /check\.corrected !== true/u);
   assert.match(overview, /new Set\(/u);
   assert.match(overview, /participantId \|\| check\.id/u);
-  assert.match(overview, /<summary>집계 기준<\/summary>/u);
-  assert.match(overview, /신청은 신청 상태가 취소인 기록을 제외합니다\./u);
-  assert.match(overview, /입장은 정정된 기록을 제외하며 같은 기간의 재입장은 중복 집계하지 않습니다\./u);
-  assert.match(overview, /aria-label="기간별 신청·입장"/u);
-  for (const label of ['오늘', '어제', '최근 7일']) {
-    assert.match(overview, new RegExp(label));
+  // The definitions text and the table/chart live on the dedicated 기간 분석
+  // screen; the overview keeps only today's counts and a link to it.
+  const analysis = read('app/console/events/[id]/analysis/PeriodAnalysisWorkspace.tsx');
+  assert.match(analysis, /신청은 신청 상태가 취소인 기록을 제외합니다\./u);
+  assert.match(analysis, /입장은 정정된 기록을 제외하며 같은 날의 재입장은 중복 집계하지 않습니다\./u);
+  assert.match(analysis, /aria-label="선택 기간 일별 신청·입장"/u);
+  for (const label of ['오늘', '어제', '최근 7일', '행사 전체', '직접 선택']) {
+    assert.match(analysis, new RegExp(label));
   }
-  // Module-level helper keeps the real aggregation and the full definitions
-  // in one place; the period table/chart is a disclosure inside the metrics
-  // section, and the empty preparing recent stays a compact row.
-  assert.match(overview, /function PeriodDetails\(\{ rows, applications, entries, cancellationReview \}: \{/u);
-  assert.match(overview, /<PeriodDetails rows=\{periodRows\} applications=\{overview\.trendApplications\} entries=\{overview\.trendEntries\} cancellationReview=\{overview\.cancellationReview\} \/>/u);
-  assert.match(overview, /analysisDetails/u);
+  assert.match(overview, /overview\.periods\.today\.applications/u);
+  assert.match(overview, /overview\.periods\.last7\.applications/u);
+  assert.match(overview, /href=\{`\$\{base\}\/analysis`\}/u);
+  assert.doesNotMatch(overview, /PeriodDetails|analysisDetails/u);
   assert.match(overview, /recentCompact/u);
   assert.match(overview, /recentCompactEmpty/u);
   const css = read('app/console/events/[id]/event-overview.module.css');
-  assert.match(css, /\.periodTable\s*\{/);
-  assert.match(css, /\.analysisDetails\s*\{/u);
+  assert.match(css, /\.periodLine\s*\{/u);
   assert.match(css, /\.recentCompact\s*\{/u);
 });

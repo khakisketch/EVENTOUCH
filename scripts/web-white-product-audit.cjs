@@ -51,6 +51,7 @@ const CONSOLE = [
   ['settings', '/console/events/:id/settings', '#set-name'],
   ['application-fields', '/console/events/:id/settings/fields', '#application-fields-heading'],
   ['reports', '/console/events/:id/reports', '#reports-list'],
+  ['analysis', '/console/events/:id/analysis', '#period-preset-2'],
 ];
 
 async function main() {

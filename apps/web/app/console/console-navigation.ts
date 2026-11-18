@@ -26,7 +26,8 @@ export type ConsolePageId =
   | "attendeePage"
   | "rewards"
   | "settings"
-  | "reports";
+  | "reports"
+  | "analysis";
 
 export type ConsolePageScope = "organization" | "event";
 
@@ -78,6 +79,7 @@ export const CONSOLE_PAGES: Record<ConsolePageId, ConsolePageMeta> = {
   rewards: { label: "경품 지급 현황", title: "경품 지급 현황", scope: "event", layout: "workspace" },
   settings: { label: "행사 설정", title: "행사 설정", scope: "event", layout: "workspace" },
   reports: { label: "결과 보고서", title: "결과 보고서", scope: "event", layout: "workspace" },
+  analysis: { label: "기간 분석", title: "기간 분석", scope: "event", layout: "workspace" },
 };
 
 /**
@@ -90,7 +92,7 @@ export const EVENT_HUBS: readonly ConsoleHub[] = [
   { id: "today", label: "운영", pageIds: ["overview", "participants", "messages"], defaultPageId: "overview" },
   { id: "onsite", label: "현장·참여", pageIds: ["operations", "draws", "rewards", "photos"], defaultPageId: "operations" },
   { id: "prepare", label: "행사 준비", pageIds: ["attendeePage", "content", "programs", "settings"], defaultPageId: "attendeePage" },
-  { id: "results", label: "결과", pageIds: ["reports"], defaultPageId: "reports" },
+  { id: "results", label: "결과", pageIds: ["reports", "analysis"], defaultPageId: "reports" },
 ];
 
 /** Flattened order for callers that only need a page list. */
@@ -129,7 +131,8 @@ export function consolePageHref(pageId: ConsolePageId, eventId?: string): string
     case "attendeePage":
     case "rewards":
     case "settings":
-    case "reports": {
+    case "reports":
+    case "analysis": {
       const id = eventId?.trim();
       if (!id) return undefined;
       const base = `/console/events/${encodeURIComponent(id)}`;
@@ -160,6 +163,8 @@ export function consolePageHref(pageId: ConsolePageId, eventId?: string): string
           return `${base}/settings`;
         case "reports":
           return `${base}/reports`;
+        case "analysis":
+          return `${base}/analysis`;
       }
     }
   }
@@ -224,6 +229,8 @@ export function resolveConsolePage(pathname: string): ConsolePageResolution | nu
         return { pageId: "settings", eventId };
       case "reports":
         return { pageId: "reports", eventId };
+      case "analysis":
+        return { pageId: "analysis", eventId };
       default:
         return null;
     }

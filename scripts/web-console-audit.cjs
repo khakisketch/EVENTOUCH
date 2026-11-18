@@ -69,6 +69,7 @@ const SCREENS = [
   { key: 'rewards', path: '/console/events/:id/rewards', title: '경품 지급 현황', scope: 'event', marker: { role: 'region', name: '경품 지급 목록' } },
   { key: 'settings', path: '/console/events/:id/settings', title: '행사 설정', scope: 'event', marker: { css: '#settings-basics' } },
   { key: 'reports', path: '/console/events/:id/reports', title: '결과 보고서', scope: 'event', marker: { role: 'tab', name: '보고서' } },
+  { key: 'analysis', path: '/console/events/:id/analysis', title: '기간 분석', scope: 'event', marker: { css: '#period-preset-2' } },
 ];
 
 const ERROR_TEXT = ['Application error', 'Something went wrong', 'Minified React'];
@@ -603,7 +604,7 @@ async function main() {
       return context;
     };
 
-    // Phase A — all 16 menus, both viewports: one H1, context, loaded
+    // Phase A — all 17 menus, both viewports: one H1, context, loaded
     // marker, common header geometry, no overflow, axe.
     const geometries = [];
     for (const viewport of VIEWPORTS) {
@@ -2412,7 +2413,7 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  process.stdout.write('[console-audit] console unification outcomes hold across 16 menus\n');
+  process.stdout.write('[console-audit] console unification outcomes hold across 17 menus\n');
 }
 
 if (require.main === module) {

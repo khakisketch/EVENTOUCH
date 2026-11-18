@@ -1,79 +1,119 @@
 'use strict';
 
-// Arbitrary-range period analysis: the same cancelled/corrected/dedupe
-// definitions as the fixed today/yesterday/7-day buckets, applied to
-// browser-local from/to dates, with a native SVG plus the same values in an
-// accessible table and summary. No external chart dependency, no frozen
-// report or KPI redefinition. Source-only assertions; rendered verification
-// happens against live builds outside the suite.
+// 기간 분석(전용 화면): 운영 현황의 고정 집계(오늘·어제·최근 7일)와 같은
+// 취소 제외·정정 제외·고유 입장 정의를 브라우저 로컬 날짜 범위에 그대로
+// 적용한다. 계산은 apps/web/lib/period-analysis.ts가 하고(이 파일이 실제
+// 모듈을 실행한다), 화면은 같은 값을 SVG·표·요약으로 보여 준다. 외부 차트
+// 의존성 없음. 렌더 검증은 실제 빌드에서 감사 스크립트가 한다.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
+const ts = require('../apps/web/node_modules/typescript');
 
 const ROOT = path.join(__dirname, '..');
-const overview = fs.readFileSync(
-  path.join(ROOT, 'apps/web/app/console/events/[id]/EventOverview.tsx'),
-  'utf8'
-);
-const css = fs.readFileSync(
-  path.join(ROOT, 'apps/web/app/console/events/[id]/event-overview.module.css'),
-  'utf8'
-);
+const read = (file) => fs.readFileSync(path.join(ROOT, file), 'utf8');
+const workspace = read('apps/web/app/console/events/[id]/analysis/PeriodAnalysisWorkspace.tsx');
+const css = read('apps/web/app/console/events/[id]/analysis/analysis.module.css');
+const overview = read('apps/web/app/console/events/[id]/EventOverview.tsx');
+const libSource = read('apps/web/lib/period-analysis.ts');
 
-function between(source, start, end) {
-  const from = source.indexOf(start);
-  assert.notEqual(from, -1, `missing section start: ${start}`);
-  const to = end ? source.indexOf(end, from + start.length) : source.length;
-  assert.notEqual(to, -1, `missing section end: ${end}`);
-  return source.slice(from, to);
+function loadLib() {
+  const js = ts.transpileModule(libSource, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
+  const sandbox = { exports: {}, module: { exports: {} } };
+  vm.runInNewContext(js, { ...sandbox, require }, { filename: 'period-analysis.ts' });
+  return sandbox.exports;
 }
+const lib = loadLib();
 
-test('range analysis reuses the fixed-bucket definitions, never redefines them', () => {
-  const custom = between(overview, 'const RANGE_DAYS_CAP', 'export default function EventOverview');
-  // Same cancelled-excluded applications (createdAt) as the fixed buckets.
-  assert.match(custom, /toLocalKey\(createdAt\)/, 'applications key off the same createdAt days');
-  assert.match(overview, /String\(person\.status \|\| ""\)\.toUpperCase\(\) !== "CANCELLED"/, 'fixed-bucket cancelled exclusion stays the authority');
-  // Same uncorrected-IN dedupe per participant: no cancelled filter on
-  // checks, corrected excluded upstream, unique keys per day.
-  assert.match(custom, /entriesByDay\.get\(key\)\?\.size/, 'daily entries stay per-day unique');
-  assert.match(overview, /check\.corrected !== true/, 'corrected exclusion stays upstream');
-  assert.doesNotMatch(custom, /status ===|CANCELLED/, 'the range never invents a status filter on checks');
-  // Distinct whole-period unique versus daily sums.
-  assert.match(custom, /periodUnique/, 'whole-period unique is tracked separately');
-  assert.match(custom, /dailyEntriesSum/, 'daily sums stay visible next to the unique count');
-  assert.match(custom, /일별 합의 합과 다를 수 있습니다|일별 합의 합과 다를|중복 제거/, 'the difference is named, not hidden');
+// 로컬 시각 문자열(타임존 영향 없이 같은 달력 날짜가 되도록 정오로 둔다).
+const at = (day, hour = 12) => new Date(`${day}T${String(hour).padStart(2, '0')}:00:00`).toISOString();
+
+test('analysis counts per local day with the same dedupe rules as the fixed buckets', () => {
+  const result = lib.analyzePeriod(
+    [at('2026-11-16'), at('2026-11-17'), at('2026-11-17', 15), 'not-a-date'],
+    [
+      { at: at('2026-11-17', 9), key: 'p1' },
+      { at: at('2026-11-17', 14), key: 'p1' }, // 같은 날 재입장은 한 명
+      { at: at('2026-11-17', 10), key: 'p2' },
+      { at: at('2026-11-18', 10), key: 'p1' }, // 다음 날 재입장: 일별 합에는 들어가고 기간 고유에는 한 번
+    ],
+    '2026-11-16',
+    '2026-11-18',
+  );
+  assert.equal(result.error, null);
+  assert.deepEqual(Array.from(result.points, (point) => [point.key, point.applications, point.entries]), [
+    ['2026-11-16', 1, 0],
+    ['2026-11-17', 2, 2],
+    ['2026-11-18', 0, 1],
+  ]);
+  assert.equal(result.periodApplications, 3);
+  assert.equal(result.dailyEntriesSum, 3);
+  assert.equal(result.periodUnique, 2, '기간 고유 입장은 전체 기간의 중복 제거 수다');
 });
 
-test('range analysis recovers from bad input and caps extreme ranges', () => {
-  const custom = between(overview, 'const RANGE_DAYS_CAP', 'export default function EventOverview');
-  assert.match(custom, /RANGE_DAYS_CAP = 62/, 'extreme ranges cap instead of exploding');
-  assert.match(custom, /시작 날짜가 끝 날짜보다 늦습니다/, 'start-after-end names the fix');
-  assert.match(custom, /YYYY-MM-DD 형식으로 입력하세요/, 'invalid input names the format');
-  assert.match(custom, /최대 \{RANGE_DAYS_CAP\}일까지만 봅니다/, 'clamping is announced, not silent');
-  assert.match(custom, /parseLocalDay/, 'calendar dates validate round-trip, never UTC-shifted');
-  // Browser-local days everywhere: inputs are date fields, keys come from
-  // the local calendar, never toISOString slicing.
-  assert.match(custom, /type="date"/, 'native date inputs');
-  assert.match(custom, /localDateKey/, 'browser-local day keys');
-  assert.doesNotMatch(custom, /toISOString\(\)\.slice\(0, 10\)/, 'no UTC slicing for day keys');
+test('analysis recovers from bad input and caps extreme ranges', () => {
+  assert.match(lib.analyzePeriod([], [], '2026-11-25', '2026-11-20').error, /시작 날짜가 끝 날짜보다 늦습니다/);
+  assert.match(lib.analyzePeriod([], [], '2026-13-01', '2026-11-20').error, /YYYY-MM-DD 형식으로 입력하세요/);
+  assert.match(lib.analyzePeriod([], [], '2026-02-30', '2026-03-02').error, /YYYY-MM-DD 형식/, '존재하지 않는 날짜는 거부한다');
+  const wide = lib.analyzePeriod([], [], '2026-01-01', '2027-12-31');
+  assert.equal(wide.clamped, true);
+  assert.equal(wide.points.length, lib.RANGE_DAYS_CAP);
+  assert.equal(lib.RANGE_DAYS_CAP, 62);
+  assert.equal(wide.effectiveTo, wide.points[wide.points.length - 1].key);
 });
 
-test('range chart is native SVG with the same values in table and summary', () => {
-  const custom = between(overview, 'const RANGE_DAYS_CAP', 'export default function EventOverview');
-  assert.match(custom, /<svg/, 'one native SVG, no chart library');
-  assert.doesNotMatch(overview, /from "recharts"|from "chart\.js"|from "victory"|nivo|echarts/, 'no external chart dependency');
-  assert.match(custom, /aria-label=\{`선택 기간 일별 신청·입장 막대그래프/, 'the chart carries a text equivalent');
-  assert.match(custom, /<title>\{`/, 'each bar names its value');
-  assert.match(custom, /aria-label="선택 기간 일별 신청·입장"/, 'the table repeats the same values accessibly');
-  assert.match(custom, /기간 신청 .*일별 입장 합 .*기간 고유 입장/, 'summary states all three numbers');
-  assert.match(custom, /role="status"/, 'summary updates are announced');
-  // Legend and touch targets.
-  assert.match(custom, /막대그래프 범례/, 'legend is labeled');
+test('preset buttons resolve to the browser-local calendar days', () => {
+  const now = new Date(2026, 10, 18, 13, 5); // 2026-11-18 (로컬)
+  const context = { eventDate: '2026-11-10', applications: [at('2026-11-12')], entries: [{ at: at('2026-11-15'), key: 'p' }] };
+  assert.deepEqual({ ...lib.presetRange('today', now, context) }, { from: '2026-11-18', to: '2026-11-18' });
+  assert.deepEqual({ ...lib.presetRange('yesterday', now, context) }, { from: '2026-11-17', to: '2026-11-17' });
+  assert.deepEqual({ ...lib.presetRange('last7', now, context) }, { from: '2026-11-12', to: '2026-11-18' });
+  assert.deepEqual({ ...lib.presetRange('all', now, context) }, { from: '2026-11-10', to: '2026-11-18' }, '행사 전체는 가장 이른 기록·행사 날짜부터 오늘까지');
+  // 행사 전에 기록이 없으면 행사 날짜 하루만 보여 준다.
+  const early = new Date(2026, 10, 1, 9, 0);
+  assert.deepEqual({ ...lib.presetRange('all', early, { eventDate: '2026-11-10', applications: [], entries: [] }) }, { from: '2026-11-10', to: '2026-11-10' });
+});
+
+test('analysis reuses the fixed-bucket definitions, never redefines them', () => {
+  assert.match(libSource, /toLocalKey\(createdAt\)/, 'applications key off the same createdAt days');
+  assert.match(workspace, /String\(person\.status \|\| ""\)\.toUpperCase\(\) !== "CANCELLED"/, 'cancelled applications stay out of the base');
+  assert.match(workspace, /check\.corrected !== true/, 'corrected records stay out of entries');
+  assert.match(workspace, /text\(check\.participantId\) \|\| String\(check\.id\)/, 'entries dedupe by participant');
+  assert.doesNotMatch(libSource, /status ===|CANCELLED/, 'the range never invents a status filter on checks');
+  assert.match(libSource, /periodUnique/, 'whole-period unique is tracked separately');
+  assert.match(workspace, /기간 고유 입장/, 'the unique count is named next to the daily sum');
+  assert.match(workspace, /일별 입장 합/, 'daily sums stay visible');
+  assert.match(workspace, /중복 제거/, 'the difference is named, not hidden');
+  assert.doesNotMatch(libSource + workspace, /toISOString\(\)\.slice\(0, 10\)/, 'no UTC slicing for day keys');
+});
+
+test('analysis screen is native SVG with the same values in table and summary', () => {
+  assert.match(workspace, /<svg/, 'one native SVG, no chart library');
+  assert.doesNotMatch(workspace, /from "recharts"|from "chart\.js"|from "victory"|nivo|echarts/, 'no external chart dependency');
+  assert.match(workspace, /aria-label=\{`선택 기간 일별 신청·입장 막대그래프/, 'the chart carries a text equivalent');
+  assert.match(workspace, /<title>\{`/, 'each bar names its value');
+  assert.match(workspace, /aria-label="선택 기간 일별 신청·입장"/, 'the table repeats the same values accessibly');
+  assert.match(workspace, /기간 신청 .*일별 입장 합 .*기간 고유 입장/, 'summary states all three numbers');
+  assert.match(workspace, /role="status"/, 'summary updates are announced');
+  assert.match(workspace, /막대그래프 범례/, 'legend is labeled');
+  assert.match(workspace, /type="date"/, 'native date inputs for 직접 선택');
+  assert.match(workspace, /id="range-from"/);
+  assert.match(workspace, /id="range-to"/);
+  assert.match(workspace, /최대 \{RANGE_DAYS_CAP\}일까지만 봅니다/, 'clamping is announced, not silent');
   assert.match(css, /\.rangeFields input\s*\{\s*min-height: 44px/, 'date inputs keep touch targets');
-  assert.match(css, /\.rangeLegend li\s*\{[^}]*min-height: 44px/, 'legend rows keep touch targets');
-  // Mobile: the table scrolls inside the existing period block, nothing
-  // overflows the viewport by construction.
-  assert.match(css, /\.periodBlock\s*\{[^}]*overflow-x: auto/, 'wide tables scroll in place');
+  assert.match(css, /\.preset\s*\{[^}]*min-height: 44px/s, 'period buttons keep touch targets');
+  assert.match(css, /\.legend li\s*\{[^}]*min-height: 44px/s, 'legend rows keep touch targets');
+  assert.match(css, /\.tableWrap\s*\{[^}]*overflow-x: auto/s, 'wide tables scroll in place');
+});
+
+test('overview keeps one summary line and the screen is reachable from the results group', () => {
+  assert.doesNotMatch(overview, /function CustomRangeAnalysis|function PeriodDetails|RANGE_DAYS_CAP/, '운영 현황은 분석 본문을 갖지 않는다');
+  assert.match(overview, /href=\{`\$\{base\}\/analysis`\}/);
+  const nav = read('apps/web/app/console/console-navigation.ts');
+  assert.match(nav, /pageIds: \["reports", "analysis"\], defaultPageId: "reports"/);
+  assert.match(nav, /analysis: \{ label: "기간 분석", title: "기간 분석", scope: "event", layout: "workspace" \}/);
+  assert.match(read('apps/web/app/console/events/[id]/analysis/page.tsx'), /PeriodAnalysisWorkspace eventId=\{id\}/);
 });

@@ -79,8 +79,6 @@ type Overview = {
   // excluded applications (by createdAt) and uncorrected IN entries deduped
   // per participant (no cancelled filter on checks). Raw values only; the
   // range UI buckets them locally without refetching.
-  trendApplications: string[];
-  trendEntries: Array<{ at: string; key: string }>;
   recent: CheckRow[];
   registrationOpen: boolean;
   deskCount: number;
@@ -333,263 +331,6 @@ function metricsForStage(overview: Overview, stage: string, base: string): Metri
     default:
       return [];
   }
-}
-
-// 기간별 통계의 실제 집계와 정의를 한 곳에 둔다. DRAFT/READY에서는 준비
-// 섹션과 나란한 독립 섹션에, LIVE/ENDED/ARCHIVED에서는 지표 섹션 안에 둔다.
-function PeriodDetails({ rows, applications, entries, cancellationReview }: {
-  rows: Array<[string, PeriodCounts["today"]]>;
-  applications: string[];
-  cancellationReview: number;
-  entries: Array<{ at: string; key: string }>;
-}) {
-  return (
-    <>
-      <table className={styles.periodTable} aria-label="기간별 신청·입장">
-        <thead>
-          <tr>
-            <th scope="col">기간</th>
-            <th scope="col">신청</th>
-            <th scope="col">입장</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(([label, period]) => (
-            <tr key={label}>
-              <th scope="row">{label}</th>
-              <td>{period.applications}명</td>
-              <td>{period.entries}명</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <details className={styles.periodDefinitions}>
-        <summary>집계 기준</summary>
-        <p>신청은 신청 상태가 취소인 기록을 제외합니다.{cancellationReview ? " 취소 기록과 신청 상태가 다른 인원은 확인 전까지 포함합니다." : ""} 입장은 정정된 기록을 제외하며 같은 기간의 재입장은 중복 집계하지 않습니다.</p>
-      </details>
-      <CustomRangeAnalysis applications={applications} entries={entries} cancellationReview={cancellationReview} />
-    </>
-  );
-}
-
-// 임의 기간 분석: 위 고정 집계와 같은 정의를 브라우저 로컬 날짜의
-// from/to에 그대로 적용한다. 일별 막대는 네이티브 SVG 하나이며, 같은 값을
-// 담은 접근용 표와 요약 문장을 함께 둔다. 외부 차트 의존성 없음.
-const RANGE_DAYS_CAP = 62;
-
-function parseLocalDay(value: string): { key: string; start: Date } | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
-  if (!match) return null;
-  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  if (
-    date.getFullYear() !== Number(match[1]) ||
-    date.getMonth() !== Number(match[2]) - 1 ||
-    date.getDate() !== Number(match[3])
-  ) return null;
-  return { key: localDateKey(date), start: date };
-}
-
-function toLocalKey(value: string): string | null {
-  const time = Date.parse(value);
-  if (!Number.isFinite(time)) return null;
-  return localDateKey(new Date(time));
-}
-
-function CustomRangeAnalysis({ applications, entries, cancellationReview }: { applications: string[]; entries: Array<{ at: string; key: string }>; cancellationReview: number }) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const weekAgo = new Date(today);
-  weekAgo.setDate(today.getDate() - 6);
-  const [fromInput, setFromInput] = useState(localDateKey(weekAgo));
-  const [toInput, setToInput] = useState(localDateKey(today));
-
-  const parsedFrom = parseLocalDay(fromInput);
-  const parsedTo = parseLocalDay(toInput);
-  let rangeError: string | null = null;
-  let days: string[] = [];
-  let effectiveTo = parsedTo;
-  let clamped = false;
-  if (!parsedFrom || !parsedTo) {
-    rangeError = "날짜를 YYYY-MM-DD 형식으로 입력하세요.";
-  } else if (parsedFrom.start.getTime() > parsedTo.start.getTime()) {
-    rangeError = "시작 날짜가 끝 날짜보다 늦습니다. 순서를 바꾸세요.";
-  } else {
-    const span = Math.round((parsedTo.start.getTime() - parsedFrom.start.getTime()) / 86_400_000) + 1;
-    if (span > RANGE_DAYS_CAP) {
-      clamped = true;
-      const capped = new Date(parsedFrom.start);
-      capped.setDate(parsedFrom.start.getDate() + RANGE_DAYS_CAP - 1);
-      effectiveTo = { key: localDateKey(capped), start: capped };
-    }
-    const cursor = new Date(parsedFrom.start);
-    const endKey = (effectiveTo ?? parsedTo).key;
-    for (;;) {
-      const key = localDateKey(cursor);
-      days.push(key);
-      if (key === endKey || days.length > RANGE_DAYS_CAP) break;
-      cursor.setDate(cursor.getDate() + 1);
-    }
-  }
-
-  const appByDay = new Map<string, number>();
-  for (const createdAt of applications) {
-    const key = toLocalKey(createdAt);
-    if (key !== null) appByDay.set(key, (appByDay.get(key) ?? 0) + 1);
-  }
-  const entriesByDay = new Map<string, Set<string>>();
-  for (const entry of entries) {
-    const key = toLocalKey(entry.at);
-    if (key === null) continue;
-    const set = entriesByDay.get(key) ?? new Set<string>();
-    set.add(entry.key);
-    entriesByDay.set(key, set);
-  }
-  const points = days.map((key) => ({
-    key,
-    label: key.slice(5).replace("-", "/"),
-    applications: appByDay.get(key) ?? 0,
-    entries: entriesByDay.get(key)?.size ?? 0,
-  }));
-  // Zero-only days dominate short ranges (e.g. 6 zero rows + 1 spike).
-  // Fold them behind one toggle: the chart keeps the full range so the
-  // spike stays in context, while the table shows only days with activity.
-  const [showZeroDays, setShowZeroDays] = useState(false);
-  const zeroPoints = points.filter((point) => point.applications === 0 && point.entries === 0);
-  const activePoints = points.filter((point) => point.applications > 0 || point.entries > 0);
-  const tablePoints = showZeroDays || zeroPoints.length === 0 ? points : activePoints;
-  const periodApplications = points.reduce((sum, point) => sum + point.applications, 0);
-  const dailyEntriesSum = points.reduce((sum, point) => sum + point.entries, 0);
-  const periodUnique = new Set<string>();
-  for (const key of days) {
-    for (const id of entriesByDay.get(key) ?? []) periodUnique.add(id);
-  }
-
-  const maxValue = Math.max(1, ...points.map((point) => Math.max(point.applications, point.entries)));
-  const chartWidth = 640;
-  const chartHeight = 200;
-  const axisPad = 8;
-  const plotTop = 12;
-  const plotBottom = chartHeight - 28;
-  const pairGap = Math.max(2, Math.min(10, Math.floor((chartWidth - axisPad * 2) / Math.max(1, points.length) / 4)));
-  const slot = points.length ? (chartWidth - axisPad * 2) / points.length : 0;
-  const barWidth = Math.max(2, Math.min(26, (slot - pairGap) / 2));
-  const bar = (value: number) => Math.round((value / maxValue) * (plotBottom - plotTop));
-  const tickPoints = points.length > 2 ? [0, Math.floor((points.length - 1) / 2), points.length - 1] : points.map((_, index) => index);
-
-  return (
-    <div className={styles.rangeBlock}>
-      <h3 className={styles.rangeTitle}>임의 기간 분석</h3>
-      <p className={styles.rangeNote}>위 고정 집계와 같은 기준을 입력한 기간에 적용합니다. 날짜는 이 브라우저의 달력 날짜입니다.</p>
-      <div className={styles.rangeFields}>
-        <div>
-          <label htmlFor="range-from">시작일</label>
-          <input
-            id="range-from"
-            type="date"
-            value={fromInput}
-            max={toInput}
-            onChange={(event) => setFromInput(event.target.value)}
-          />
-        </div>
-        <div>
-          <label htmlFor="range-to">종료일</label>
-          <input
-            id="range-to"
-            type="date"
-            value={toInput}
-            min={fromInput}
-            onChange={(event) => setToInput(event.target.value)}
-          />
-        </div>
-      </div>
-      {rangeError ? <p className={styles.rangeError} role="alert">{rangeError}</p> : null}
-      {clamped && !rangeError ? <p className={styles.rangeNote} role="status">최대 {RANGE_DAYS_CAP}일까지만 봅니다. 종료일을 {effectiveTo?.key}로 맞췄습니다.</p> : null}
-      {!rangeError && points.length > 0 ? (
-        <>
-          <p className={styles.rangeSummary} role="status">
-            기간 신청 {periodApplications}명 · 일별 입장 합 {dailyEntriesSum}명 · 기간 고유 입장 {periodUnique.size}명(중복 제거)
-          </p>
-          <svg className={styles.rangeChart} viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label={`선택 기간 일별 신청·입장 막대그래프. 기간 신청 ${periodApplications}명, 일별 입장 합 ${dailyEntriesSum}명, 기간 고유 입장 ${periodUnique.size}명.`}>
-            {[0, 0.5, 1].map((fraction) => {
-              const y = plotBottom - (plotBottom - plotTop) * fraction;
-              const value = Math.round(maxValue * fraction);
-              return (
-                <g key={fraction}>
-                  <line x1={axisPad} x2={chartWidth - axisPad} y1={y} y2={y} className={styles.rangeGrid} />
-                  <text x={axisPad} y={Math.max(10, y - 3)} className={styles.rangeAxis}>{value}</text>
-                </g>
-              );
-            })}
-            {points.map((point, index) => {
-              const x = axisPad + index * slot + (slot - barWidth * 2 - pairGap) / 2;
-              const appHeight = bar(point.applications);
-              const entryHeight = bar(point.entries);
-              return (
-                <g key={point.key}>
-                  <rect x={x} y={plotBottom - appHeight} width={barWidth} height={appHeight} className={styles.rangeBarApplications}>
-                    <title>{`${point.key} 신청 ${point.applications}명`}</title>
-                  </rect>
-                  <rect x={x + barWidth + pairGap} y={plotBottom - entryHeight} width={barWidth} height={entryHeight} className={styles.rangeBarEntries}>
-                    <title>{`${point.key} 입장 ${point.entries}명(일별 고유)`}</title>
-                  </rect>
-                </g>
-              );
-            })}
-            {tickPoints.map((index) => {
-              const point = points[index];
-              if (!point) return null;
-              return (
-                <text
-                  key={`tick-${point.key}`}
-                  x={axisPad + index * slot + slot / 2}
-                  y={chartHeight - 8}
-                  textAnchor="middle"
-                  className={styles.rangeAxis}
-                >
-                  {point.label}
-                </text>
-              );
-            })}
-          </svg>
-          <ul className={styles.rangeLegend} aria-label="막대그래프 범례">
-            <li><span className={`${styles.rangeSwatch} ${styles.rangeBarApplications}`} aria-hidden="true" />신청</li>
-            <li><span className={`${styles.rangeSwatch} ${styles.rangeBarEntries}`} aria-hidden="true" />입장(일별 고유)</li>
-          </ul>
-          <table className={styles.periodTable} aria-label="선택 기간 일별 신청·입장">
-            <thead>
-              <tr>
-                <th scope="col">날짜</th>
-                <th scope="col">신청</th>
-                <th scope="col">입장(일별 고유)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tablePoints.map((point) => (
-                <tr key={point.key}>
-                  <th scope="row">{point.key}</th>
-                  <td>{point.applications}명</td>
-                  <td>{point.entries}명</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {zeroPoints.length > 0 ? (
-            <p>
-              <ProductButton
-                type="button"
-                className="button button-quiet"
-                aria-expanded={showZeroDays}
-                onClick={() => setShowZeroDays((current) => !current)}
-              >
-                {showZeroDays ? `0명 ${zeroPoints.length}일 접기` : `0명 ${zeroPoints.length}일 보기`}
-              </ProductButton>
-            </p>
-          ) : null}
-          <p className={styles.rangeNote}>일별 입장은 그 날의 고유 입장자 수이며, 기간 고유 입장은 선택한 전체 기간의 중복 제거 수라서 일별 합의 합과 다를 수 있습니다. {cancellationReview ? "신청 상태·정정 제외 기준은 위 고정 집계와 같습니다." : "취소 제외·정정 제외 기준은 위 고정 집계와 같습니다."}</p>
-        </>
-      ) : null}
-    </div>
-  );
 }
 
 export default function EventOverview({ eventId }: { eventId: string }) {
@@ -895,10 +636,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             modulesAvailable,
             entryRate: registered ? Math.round((everIn / registered) * 100) : 0,
             periods,
-            trendApplications: participantRows.map((person) => text(person.createdAt)).filter((value) => value !== ""),
-            trendEntries: checkRecords
-              .filter((check) => check.action === "IN")
-              .map((check) => ({ at: check.at, key: check.participantId || check.id })),
             recent: checks,
             registrationOpen: workspace.registrationOpen === true,
             deskCount,
@@ -1042,11 +779,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
       </Link>
     </div>
   );
-  const periodRows: Array<[string, PeriodCounts["today"]]> = [
-    ["오늘", overview.periods.today],
-    ["어제", overview.periods.yesterday],
-    ["최근 7일", overview.periods.last7],
-  ];
   const now = new Date();
   const runbookDate = /^\d{4}-\d{2}-\d{2}$/.test(overview.date)
     ? overview.date
@@ -1587,10 +1319,23 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         )}
       </ConsoleSection>
       )}
-      {overview.canManageEvent ? <details className={`${styles.analysisDetails} ${styles.regionAnalysis}`}>
-        <summary>기간 분석</summary>
-        <div className={styles.periodBlock}>{overview.participantsAvailable && overview.checksAvailable ? <PeriodDetails rows={periodRows} applications={overview.trendApplications} entries={overview.trendEntries} cancellationReview={overview.cancellationReview} /> : <p>참가자 또는 출입 기록을 확인할 수 없어 기간 분석을 표시할 수 없습니다.</p>}</div>
-      </details> : null}
+      {overview.canManageEvent ? (
+        <div className={styles.regionAnalysis}>
+          <div className={styles.periodLine}>
+            {overview.participantsAvailable && overview.checksAvailable ? (
+              <>
+                <span className={styles.periodMuted}>오늘</span>
+                <span>신청 <strong>{overview.periods.today.applications}명</strong></span>
+                <span>입장 <strong>{overview.periods.today.entries}명</strong></span>
+                <span className={styles.periodMuted}>최근 7일 신청 <strong>{overview.periods.last7.applications}명</strong></span>
+              </>
+            ) : <span className={styles.periodMuted}>참가자 또는 출입 기록을 확인할 수 없어 기간 집계를 표시할 수 없습니다.</span>}
+            <Link className={styles.periodLink} href={`${base}/analysis`}>
+              <span className={styles.rosterGo}>기간 분석 보기 <ArrowRightIcon /></span>
+            </Link>
+          </div>
+        </div>
+      ) : null}
       </div>
     </ConsolePage>
   );

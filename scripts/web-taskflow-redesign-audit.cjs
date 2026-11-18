@@ -34,9 +34,10 @@ let stage = 'setup';
     await page.locator('#event-metrics-heading').waitFor();
     assert.equal(await page.getByRole('navigation',{name:'주요 메뉴'}).getByRole('link',{name:'명단 가져오기',exact:true}).count(),0);
     const analysisOrder = await page.evaluate(()=> {
-      const recent=document.querySelector('#event-recent-heading'); const analysis=document.querySelector('details:has(summary)');
-      const sections=[...document.querySelectorAll('summary')].find(n=>n.textContent==='기간 분석')?.closest('details');
-      return !!recent && !!sections && Boolean(recent.compareDocumentPosition(sections)&Node.DOCUMENT_POSITION_FOLLOWING);
+      // 기간 분석은 전용 화면이 맡고, 운영 현황에는 최근 입퇴장 뒤에 링크 한 줄만 둔다.
+      const recent=document.querySelector('#event-recent-heading');
+      const link=[...document.querySelectorAll('a')].find(n=>n.textContent.includes('기간 분석 보기'));
+      return !!recent && !!link && Boolean(recent.compareDocumentPosition(link)&Node.DOCUMENT_POSITION_FOLLOWING);
     });
     assert.equal(analysisOrder,true);
     await shot('overview-1280.png'); await a11y();

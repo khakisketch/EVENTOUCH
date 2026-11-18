@@ -992,6 +992,12 @@
   justify-content: flex-start;
   margin-top: var(--s3);
  }
+ /* A small status+refresh pair stays beside the title instead of dropping under it. */
+ .pageHeader:has(.pageActions > :global(.console-header-inline)) {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "back back" "context context" "title actions" "meta meta" "badges badges";
+ }
+ .pageHeader:has(.pageActions > :global(.console-header-inline)) .pageActions { justify-content: flex-end; margin-top: 0; }
  /* Overview: open/copy stay beside the title; the check time rides the badge row. */
  .pageHeader:has(.pageActions > :global(.console-header-updated)) {
   grid-template-columns: minmax(0, 1fr) auto;
