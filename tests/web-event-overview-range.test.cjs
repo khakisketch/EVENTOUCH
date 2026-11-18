@@ -77,6 +77,39 @@ test('preset buttons resolve to the browser-local calendar days', () => {
   assert.deepEqual({ ...lib.presetRange('all', early, { eventDate: '2026-11-10', applications: [], entries: [] }) }, { from: '2026-11-10', to: '2026-11-10' });
 });
 
+test('calendar ranges cross months, leap days and daylight-saving changes without gaps', () => {
+  for (const [from, to, keys] of [
+    ['2026-12-31', '2027-01-02', ['2026-12-31', '2027-01-01', '2027-01-02']],
+    ['2028-02-28', '2028-03-01', ['2028-02-28', '2028-02-29', '2028-03-01']],
+    ['2026-03-07', '2026-03-09', ['2026-03-07', '2026-03-08', '2026-03-09']],
+    ['2026-10-31', '2026-11-02', ['2026-10-31', '2026-11-01', '2026-11-02']],
+  ]) {
+    const result = lib.analyzePeriod([at(from, 0), at(to, 23)], [], from, to);
+    assert.equal(result.error, null);
+    assert.deepEqual(Array.from(result.points, point => point.key), keys);
+    assert.equal(result.periodApplications, 2);
+  }
+  const exact = lib.analyzePeriod([], [], '2026-01-01', '2026-03-03');
+  assert.equal(exact.clamped, false);
+  assert.equal(exact.points.length, 62);
+  const capped = lib.analyzePeriod([at('2026-03-04')], [{ at: at('2026-03-04'), key: 'outside' }], '2026-01-01', '2026-03-04');
+  assert.equal(capped.clamped, true);
+  assert.equal(capped.points.length, 62);
+  assert.equal(capped.effectiveTo, '2026-03-03');
+  assert.equal(capped.periodApplications, 0);
+  assert.equal(capped.periodUnique, 0);
+});
+
+test('local midnight and end-of-day records stay on the browser calendar day', () => {
+  const context = { eventDate: '', applications: [], entries: [] };
+  for (const hour of [0, 23]) {
+    const now = new Date(2027, 0, 1, hour, 15);
+    assert.equal(lib.toLocalKey(now.toISOString()), '2027-01-01');
+    assert.deepEqual({ ...lib.presetRange('yesterday', now, context) }, { from: '2026-12-31', to: '2026-12-31' });
+    assert.deepEqual({ ...lib.presetRange('last7', now, context) }, { from: '2026-12-26', to: '2027-01-01' });
+  }
+});
+
 test('analysis reuses the fixed-bucket definitions, never redefines them', () => {
   assert.match(libSource, /toLocalKey\(createdAt\)/, 'applications key off the same createdAt days');
   assert.match(workspace, /String\(person\.status \|\| ""\)\.toUpperCase\(\) !== "CANCELLED"/, 'cancelled applications stay out of the base');

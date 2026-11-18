@@ -30,7 +30,8 @@ test('boundaries helper exports the exact parent call API', () => {
 
 test('real boundary entrypoint reserves one fresh namespace without replacing caller evidence', async () => {
   const originalUmask = process.umask();
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'eventouch-boundaries-test-'));
+  // macOS의 /var 링크는 캡처 보안 검사 대상이므로 실제 임시 경로를 사용한다.
+  const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'eventouch-boundaries-test-'));
   try {
     const { auditLongListBoundaries, PHASES } = require(HELPER);
     const previous = path.join(root, 'long-photos.png');
