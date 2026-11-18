@@ -26,6 +26,7 @@ const EXPECTED_GATES = [
   'npm run db:migrate',
   'npm run web:audit',
   'npm run web:console:audit',
+  'npm run web:period-analysis:audit',
   'npm run web:report-data-availability:audit',
   'npm run web:report-live-availability:audit',
   'npm run web:report-cancellation-review:audit',
