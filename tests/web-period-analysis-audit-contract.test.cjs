@@ -29,3 +29,7 @@ test('period analysis audit owns an isolated real fixture and does not mock succ
   assert.match(audit, /assertNumbers\(page, \[4, 6, 5\], LAST7\)/);
   assert.doesNotMatch(audit, /analyzePeriod|require\([^\n]*period-analysis|\.skip\(|\/Users\//);
 });
+
+test('workbench navigation also expects the approved dedicated analysis destination', () => {
+  assert.ok(read('scripts/web-workbench-audit.cjs').includes("['기간 분석','analysis']"));
+});
