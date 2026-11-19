@@ -325,6 +325,13 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 - The page owns one assignment entry in the header. It is the only primary while some place has no one on duty and a ghost otherwise; gap rows name the place with a ghost "배정".
 - Text budget: a row says its name, one line of facts and its state in words. No panel subtitles, no repeated links, no standing explanations.
 
+Reopened 2026-11-19 (owner: the real screen looked plain; `tests/web-operations-composition.test.cjs` now asserts this composition):
+- The page opens on a three-card summary strip: 데스크 가동 N / M, 부스 운영 N / M (only with 부스 인증 on) and 담당 배정 N / M곳. These are the bordered units; the desk list is a plain ledger, no panel. The coverage card turns amber when a place has no one on duty.
+- A location row leads with a tinted kind tile (desk, tablet, booth; green running, grey stopped, blue waiting, amber needs checking), then name (17px) and the same one quiet line, who is on duty as faces plus the first name ("담당 필요" in amber for an empty place), a chevron and the run control. Row copy and the switch/dot rule are unchanged.
+- 스태프 배정 gaps are an amber block: a count head and one row per place with an outlined "배정" pill with a plus icon (ghost role).
+- 전광판 출력 is a dark stage (state dot beside the current output, light apply button, outlined "행사장 화면 열기"); the page still has one orange action.
+- 부스 인증 방식 and 부스 지도 sit side by side as two folded setting cards; summaries keep their text and anchors.
+
 ### 화면 구성 규칙 (every screen)
 - One bordered card per page, the figure that matters most; other regions take the form of their role (soft surface, plain list, flat line).
 - A state is shown by its control or one word, not by a chip beside a button that says the same thing.

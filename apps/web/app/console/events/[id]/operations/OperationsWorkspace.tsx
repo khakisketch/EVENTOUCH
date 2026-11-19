@@ -26,6 +26,8 @@ import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import uiStyles from "../../../console-ui/console-ui.module.css";
 import styles from "./operations.module.css";
 import { LocationRow, RunSwitch, StaffFaces, StatusDot, type Staffer } from "./LocationParts";
+import { ArrowRightIcon, ExternalLinkIcon, PlusIcon } from "../../../console-ui/ConsoleIcons";
+import { CrewIcon, ScreenIcon } from "./OpsIcons";
 import { consoleFetch } from "../../../../../lib/console-api";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
 import { abandonOperatorAttempt, acknowledgeOperatorReceipt, confirmsOperationsCommand, isOrganizationContextBlock } from "../../../../../lib/operator-context";
@@ -1409,12 +1411,33 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       {pendingOperation && !((deskOpen && pendingOperation.command === "desk.save") || (boothOpen && pendingOperation.command === "booth.save") || (assignOpen && pendingOperation.command === "staff.assign")) ? operationRecovery() : null}
       {otherOperationReceipt ? <ConsoleFeedback kind="warning">이전 현장 운영 요청의 처리 결과를 화면 위에서 먼저 확인하세요. 서버 확인은 요청을 다시 보내지 않습니다.</ConsoleFeedback> : null}
 
+      {assignableTargets > 0 ? (
+        <div className={styles.kpiStrip} role="group" aria-label="현장 운영 요약">
+          <div className={styles.kpiCard}>
+            <span className={styles.kpiLabel}>데스크</span>
+            <div className={styles.heroFigure}><b>{deskOpenCount}</b><span>/ {desks.length} 가동</span></div>
+            <div className={styles.heroBar} role="presentation"><i style={{ width: `${desks.length ? Math.round((deskOpenCount / desks.length) * 100) : 0}%` }} /></div>
+          </div>
+          {stampEnabled ? (
+            <div className={styles.kpiCard}>
+              <span className={styles.kpiLabel}>부스</span>
+              <div className={styles.heroFigure}><b>{boothOpenCount}</b><span>/ {booths.length} 운영</span></div>
+              <div className={styles.heroBar} role="presentation"><i style={{ width: `${booths.length ? Math.round((boothOpenCount / booths.length) * 100) : 0}%` }} /></div>
+            </div>
+          ) : null}
+          <div className={styles.kpiCard} data-alert={gapTargets.length ? "true" : undefined}>
+            <span className={styles.kpiLabel}>담당 배정</span>
+            <div className={styles.heroFigure}><b>{assignableTargets - gapTargets.length}</b><span>/ {assignableTargets}곳</span></div>
+            <div className={styles.heroBar} role="presentation"><i style={{ width: `${Math.round(((assignableTargets - gapTargets.length) / assignableTargets) * 100)}%` }} /></div>
+          </div>
+        </div>
+      ) : null}
+
       <div className={styles.opsGrid}>
         <div className={styles.opsMain}>
           <ConsoleSection
             headingId="ops-desks"
             title="데스크"
-            surface="panel"
             className={styles.anchorSection}
             action={(
               <ProductButton
@@ -1428,10 +1451,6 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               </ProductButton>
             )}
           >
-            <div className={styles.deskHero}>
-              <div className={styles.heroFigure}><b>{deskOpenCount}</b><span>/ {desks.length} 가동</span></div>
-              <div className={styles.heroBar} role="presentation"><i style={{ width: `${desks.length ? Math.round((deskOpenCount / desks.length) * 100) : 0}%` }} /></div>
-            </div>
             {deskConflict?.kind === "toggle" ? <section className={styles.deskConflict} aria-labelledby="desk-conflict-heading">
           <h3 id="desk-conflict-heading" tabIndex={-1}>{deskConflict.incomplete ? "데스크 정보를 확인해야 합니다" : "다른 작업에서 데스크 상태가 변경됐습니다"}</h3>
           <p>{deskConflict.incomplete ? "가동 요청은 반영되지 않았습니다. 최신 데스크를 확인하고 편집에서 이름·작업 방향·화면 방식을 확인해 주세요." : "이번 요청은 반영되지 않았습니다. 최신 상태를 확인한 뒤 직접 가동하거나 중지해 주세요."}</p>
@@ -1457,6 +1476,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                       staffSummary={staffLabel(deskStaff)}
                       warning={deskIncomplete ? "정보 확인 필요" : null}
                       dim={!desk.open}
+                      kind={desk.mode === "tablet" ? "tablet" : "desk"}
+                      tone={deskIncomplete ? "warn" : desk.open ? "on" : "off"}
                       openLabel="상세"
                       onOpen={() => setDetail({ type: "DESK", id: desk.id })}
                       control={(
@@ -1546,6 +1567,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                       staff={boothStaff}
                       staffSummary={staffLabel(boothStaff)}
                       warning={boothScheduleNeedsReview(booth.startsAt, booth.endsAt) ? "운영 시간 확인 필요 · 확인 전에는 부스 인증을 받을 수 없습니다." : null}
+                      kind="booth"
+                      tone={booth.status === "OPEN" ? "on" : booth.status === "WAITING" ? "wait" : "off"}
                       openLabel="상세"
                       onOpen={() => setDetail({ type: "BOOTH", id: booth.id })}
                       control={(
@@ -1569,12 +1592,14 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               <p className="notice" role="status">배정하려면 먼저 데스크나 부스를 만드세요.</p>
             ) : gapTargets.length ? (
               <div className={styles.gapSurface}>
+                <p className={styles.gapHead}><span className={styles.gapMark} aria-hidden="true" />담당이 없는 곳 <b>{gapTargets.length}</b>곳</p>
                 {gapTargets.map((target) => (
                   <div key={`${target.type}-${target.id}`} className={styles.gapRow}>
-                    <strong>{target.name}</strong>
+                    <span className={styles.gapName}><strong>{target.name}</strong><em>{target.type === "DESK" ? "데스크" : "부스"}</em></span>
                     <ProductButton
                       type="button"
                       variant="ghost"
+                      icon={<PlusIcon />}
                       disabled={busy || onsiteBlocked}
                       title={onsiteBlocked ? onsiteNoWriteReason : undefined}
                       aria-label={`${target.name}에 스태프 배정`}
@@ -1592,7 +1617,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               </div>
             ) : (
               <div className={styles.gapSurface}>
-                <p className={styles.gapOk}>모든 위치에 담당이 있습니다 · 배정 {assignments.length}건</p>
+                <p className={styles.gapOk}><span className={styles.gapOkMark} aria-hidden="true"><CrewIcon /></span>모든 위치에 담당이 있습니다 · 배정 {assignments.length}건</p>
               </div>
             )}
             {assignableTargets > 0 && !assignments.length ? (
@@ -1603,7 +1628,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           </ConsoleSection>
 
           {screenEnabled ? (
-            <ConsoleSection headingId="ops-display" title="전광판 출력" description={displaySummary} className={styles.anchorSection}>
+            <ConsoleSection headingId="ops-display" title="전광판 출력" description={displaySummary} className={`${styles.anchorSection} ${styles.displayBoard}`}>
               <div className={styles.buttonRow}>
             <label className="sr-only" htmlFor="ops-display-pick">전광판 출력 선택</label>
             <select
@@ -1644,12 +1669,12 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           {state.eventSlug ? (
                 <p className={styles.hint}>
                   <ProductLink
-                    className="button button-secondary"
+                    className={`button button-secondary ${styles.screenLink}`}
                     href={`/screen/${encodeURIComponent(state.eventSlug)}`}
                     target="_blank"
                     rel="noreferrer"
                   >
-                    행사장 화면 열기
+                    <ScreenIcon />행사장 화면 열기<ExternalLinkIcon />
                   </ProductLink>
                 </p>
               ) : null}
@@ -1671,7 +1696,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                       <ProductLink href={`/console/events/${encodeURIComponent(eventId)}/programs?module=${encodeURIComponent(module.id)}&from=operations`}>진행 관리<span className="sr-only"> · {module.title}</span></ProductLink>
                     </li>)}
                   </ul> : <p className={styles.help}>진행 중인 참여 콘텐츠가 없습니다.</p>}
-                  <ProductLink className="button button-ghost" href={`/console/events/${encodeURIComponent(eventId)}/programs${state.participation.open.length ? "?status=OPEN" : ""}`}>{state.participation.open.length > 6 ? "진행 중 콘텐츠 모두 보기" : "참여 콘텐츠 보기"}</ProductLink>
+                  <ProductLink className={`button button-ghost ${styles.moreLink}`} href={`/console/events/${encodeURIComponent(eventId)}/programs${state.participation.open.length ? "?status=OPEN" : ""}`}>{state.participation.open.length > 6 ? "진행 중 콘텐츠 모두 보기" : "참여 콘텐츠 보기"}<ArrowRightIcon /></ProductLink>
                 </div>
               </div>
             </ConsoleSection>
@@ -1679,6 +1704,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         </div>
       </div>
 
+      <div className={styles.presetGrid}>
       {stampEnabled ? (
         <ConsoleSection headingId="ops-booth-mode" title="부스 인증 방식" className={styles.anchorSection}>
           {/* Before-the-day preset: starts folded with the current value
@@ -1896,6 +1922,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           </details>
         </ConsoleSection>
       ) : null}
+      </div>
 
       {deskOpen ? (
         <DeskDialog
