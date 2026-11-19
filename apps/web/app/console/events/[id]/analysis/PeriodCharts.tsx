@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { niceMax, type HourBucket, type PeriodPoint } from "../../../../../lib/period-analysis";
+import ConsoleEmptyState from "../../../console-ui/ConsoleEmptyState";
 import styles from "./analysis.module.css";
 
 // 기간 분석의 도형 셋: 일별 막대(SVG), 시간대별 입장(HTML 막대), 소속별 신청(가로 막대).
@@ -128,7 +129,7 @@ export function DailyChart({
 
 export function HourlyBars({ buckets }: { buckets: HourBucket[] }) {
   const total = buckets.reduce((sum, bucket) => sum + bucket.entries, 0);
-  if (total === 0) return <p className={styles.blank}>이 기간에는 입장 기록이 없습니다.</p>;
+  if (total === 0) return <ConsoleEmptyState kind="filtered" title="이 기간에는 입장 기록이 없습니다." />;
   const used = buckets.filter((bucket) => bucket.entries > 0).map((bucket) => bucket.hour);
   let first = Math.max(0, Math.min(...used) - 1);
   let last = Math.min(23, Math.max(...used) + 1);
@@ -177,8 +178,8 @@ export function CompanyBars({
   blank: number;
   total: number;
 }) {
-  if (total === 0) return <p className={styles.blank}>이 기간에는 신청이 없습니다.</p>;
-  if (top.length === 0) return <p className={styles.blank}>이 기간 신청에는 소속이 입력되지 않았습니다.</p>;
+  if (total === 0) return <ConsoleEmptyState kind="filtered" title="이 기간에는 신청이 없습니다." />;
+  if (top.length === 0) return <ConsoleEmptyState kind="filtered" title="이 기간 신청에는 소속이 입력되지 않았습니다." />;
   const rows = [
     ...top.map((item) => ({ name: item.name, count: item.count, quiet: false })),
     ...(otherCount > 0 ? [{ name: `그 외 ${otherNames}곳`, count: otherCount, quiet: true }] : []),

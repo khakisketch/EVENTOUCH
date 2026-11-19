@@ -22,12 +22,13 @@ const FAILURE = '기간 분석을 불러오지 못했습니다.';
 
 async function assertNumbers(page, expected, days, showZero = false) {
   await page.waitForFunction(values => {
-    // Reopened 2026-11-20: 요약 카드의 숫자 dd는 data-metric으로 고르고, 비교·설명 dd는 건너뛴다.
-    const list = [...document.querySelectorAll('main dl')].find(dl => [...dl.querySelectorAll('dt')].some(dt => dt.textContent === '기간 고유 입장'));
-    if (!list) return false;
-    const pick = name => Number.parseInt(list.querySelector(`dd[data-metric="${name}"]`)?.textContent, 10);
+    // Reopened 2026-11-20: 요약 숫자는 data-metric으로 고른다(고유 입장은 StatCard, 신청·일별 입장 합은 옆 보조 숫자).
+    const pick = name => Number.parseInt(document.querySelector(`main [data-metric="${name}"]`)?.textContent, 10);
     return JSON.stringify([pick('applications'), pick('entriesSum'), pick('unique')]) === JSON.stringify(values);
   }, expected);
+  // 일별 기록 표는 세부 보기의 세 번째 탭에 있다.
+  const recordsTab = page.getByRole('tab', { name: '일별 기록', exact: true });
+  if ((await recordsTab.getAttribute('aria-selected')) !== 'true') await recordsTab.click();
   const table = page.getByRole('table', { name: '선택 기간 일별 신청·입장', exact: true });
   const actual = await table.locator('tbody tr').evaluateAll(rows => rows.map(row => [...row.querySelectorAll('th,td')].map(cell => cell.textContent.trim())));
   assert.deepEqual(actual, days.filter(row => showZero || row[1] || row[2]).map(([day, apps, entries]) => [day, `${apps}명`, `${entries}명`]));
