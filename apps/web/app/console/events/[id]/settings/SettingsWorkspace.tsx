@@ -1548,10 +1548,12 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             {STAGE_ORDER.map((stage) => {
               const isCurrent = stage === currentStage;
               const isNext = stage === nextStage;
+              const isDone = stageIndex > STAGE_ORDER.indexOf(stage);
               return (
                 <li
                   key={stage}
                   aria-current={isCurrent ? "step" : undefined}
+                  data-done={isDone ? "true" : undefined}
                   className={`${styles.stageStep} ${isCurrent ? styles.stageStepCurrent : ""} ${isNext && !isCurrent ? styles.stageStepNext : ""}`}
                 >
                   <span>{eventStageLabel(stage)}</span>

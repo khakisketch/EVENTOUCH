@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../auth-redirect";
 import ConsoleConfirm from "../console-ui/ConsoleConfirm";
 import ConsolePage from "../console-ui/ConsolePage";
+import { PlusIcon, SearchIcon } from "../console-ui/ConsoleIcons";
 import ConsoleToolbar from "../console-ui/ConsoleToolbar";
 import ConsoleFeedback from "../console-ui/ConsoleFeedback";
 import ConsoleDialog from "../console-ui/ConsoleDialog";
@@ -539,8 +540,9 @@ export default function ClientsList() {
       toolbar={
         <ConsoleToolbar
           filters={
-            <label>
+            <label className={styles.searchField}>
               <span className="sr-only" id="client-search-label">고객사 검색</span>
+              <span className={styles.searchGlyph} aria-hidden="true"><SearchIcon /></span>
               <input
                 aria-labelledby="client-search-label"
                 type="search"
@@ -552,7 +554,7 @@ export default function ClientsList() {
           }
           actions={
             state.canManage ? (
-              <ProductButton type="button" className="button button-primary" disabled={writeLocked} onClick={() => openDraft({ ...EMPTY_DRAFT })}>
+              <ProductButton type="button" className="button button-primary" disabled={writeLocked} onClick={() => openDraft({ ...EMPTY_DRAFT })} icon={<PlusIcon />}>
                 고객사 등록
               </ProductButton>
             ) : undefined
@@ -593,6 +595,21 @@ export default function ClientsList() {
       }
     >
       <ConsoleSection headingId="client-list-heading" title="고객사 목록" surface="plain" width="full" className={styles.listSection}>
+        {state.clients.length ? (
+          <dl className={styles.stats} aria-label="고객사 자료 현황">
+            {([
+              ["all", "전체 고객사", state.clients.length],
+              ["logo", "로고 등록", state.clients.filter((client) => client.logoFileId).length],
+              ["doc", "사업자등록증 등록", state.clients.filter((client) => client.docFileId).length],
+            ] as const).map(([key, label, count]) => (
+              <div key={key} className={styles.stat} data-key={key}>
+                <dt>{label}</dt>
+                <dd>{count}<small>개</small></dd>
+                <span className={styles.statBar} aria-hidden="true"><i style={{ width: `${Math.round((count / state.clients.length) * 100)}%` }} /></span>
+              </div>
+            ))}
+          </dl>
+        ) : null}
         <p className={`participant-count ${styles.count}`} role="status">
           {clientSearch
             ? `검색 결과 ${visibleClients.length}개 / 전체 ${state.clients.length}개`
@@ -612,7 +629,7 @@ export default function ClientsList() {
           <ul className={styles.clientList} aria-label="고객사 목록">
             {visibleClients.map((client) => (
               <li className={styles.clientRow} key={client.id}>
-                <span className={styles.clientAvatar} aria-hidden="true">
+                <span className={styles.clientAvatar} data-tone={(client.name.trim().codePointAt(0) ?? 0) % 5} aria-hidden="true">
                   {client.logoFileId ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img

@@ -86,7 +86,7 @@ test("team identity splits name from role with tokens only", () => {
   assert.match(css, /\.personRole small\s*\{[^}]*color:\s*var\(--muted\)/s);
   const workspace = read("console/team/TeamWorkspace.tsx");
   assert.match(workspace, /<h3 className=\{teamStyles\.personName\}>/);
-  assert.match(workspace, /\{roleLabel\(invitation\.role\)\}\s*<small>/);
+  assert.match(workspace, /\{roleLabel\(invitation\.role\)\}<\/span>\s*<small>/);
   assert.match(workspace, />\{account\.name\}<\/button>/);
 });
 

@@ -314,6 +314,11 @@ The owner approved this composition on 2026-11-15 (`apps/web/app/console/events/
 - A published event (READY and beyond) that saves with a changed address code confirms first: 이전/새 주소를 나란히 보여 주고 확인은 검정 ("주소 바꾸고 저장"), never orange. Draft-stage saves skip the confirm. Existing duplicate-address and change-conflict handling is unchanged.
 - Save, publish review, close confirm, conflict recovery, receipt recovery, permission locks and the draft guard (naming its dirty sections) are unchanged; recovery banners close the drawer so they are never behind the scrim, and the basics drawer reopens read-frozen while a request is unconfirmed.
 
+Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behaviour and the one-orange-action rule):
+
+- The event card's head carries a soft brand tint and a larger name; the stage block is a connected five-step stepper (finished steps green with a check, the current step an ink circle with a 현재 chip, the next step an outlined circle with a 다음 chip). Orange stays on the primary actions only.
+- Each 운영 기능 tile shows a switch (ink track when on). The real checkbox stays inside the tile, transparent over it, so keyboard and screen readers are unchanged.
+
 ## 메시지 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/messages/MessagingWorkspace.tsx`, option B with a widened writing column). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-messages-composer-contract.test.cjs` guards it.
@@ -390,6 +395,11 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/console/clients
 - Files wait for a saved form: while fields differ from their opening values the file rows are disabled with a one-line note. Starting an upload or confirming a removal closes the drawer first so that the recovery panel and result messages are on the page, never behind the scrim.
 - Save, upload, link, removal, receipt recovery, same-request retry, the write locks and the draft guard are unchanged.
 
+Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behaviour and the one-orange-action rule):
+
+- Three read-only cards top the list: 전체 고객사, 로고 등록, 사업자등록증 등록 (32px counts with a share-of-all bar, computed from the loaded clients). Search is a round field with a magnifier; 고객사 등록 carries a plus.
+- A row is still flat with hairlines and no controls, but the initial sits in a 48px tinted tile (five soft tones picked from the name) and each file state is a pill: green-tinted with a green dot when registered, a hollow dot on a soft pill when not. The word and the screen-reader state are unchanged.
+
 ## 팀·권한 확정 구성
 
 The owner approved this composition on 2026-11-16 (`apps/web/app/console/team/TeamWorkspace.tsx`, mockup `team-options-b4.html` option A: the three-bar gauge). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-team-composition.test.cjs` guards it.
@@ -400,6 +410,11 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/console/team/Te
 - 행사별 권한 shows one gauge row per 조직 구성원 for the chosen event: a name for the level plus one plain sentence, with three bars repeating it. Levels: 전체 (3 bars, stored as `["all"]`), 설정 제외 (2, every scope but `settings`), 직접 설정 (1, "N개 범위만 바꿀 수 있어요") and 읽기 전용 (0, `[]`). A person not yet on the event reads 배정 전.
 - Tapping a row opens a drawer with the levels as cards (each with an eight-segment preview), 설정 제외 marked 추천 as guidance only, and 직접 선택 which unfolds the eight scopes in three groups. One orange 권한 저장. Pending saves freeze the event picker, the levels and the scopes, keep the drawer open and replay the same request; unsaved edits ask before closing.
 - Server permission model, command ids, receipts, retry replay, last-owner rules and the draft guard are unchanged; only the presentation moved.
+
+Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behaviour and the one-orange-action rule):
+
+- The three tabs are a segmented pill control (ink-filled choice). 구성원 opens with a status strip from the loaded accounts: 전체 구성원 with a role-share bar and legend (조직 소유자 ink, 조직 구성원 blue, 현장 스태프 green), 대기 중인 초대 (owners only, the single amber card when above zero) and 사용 중지.
+- Rows stay flat hairline rows with one control, but the initial is a role-tinted circle (owner ink, member blue, staff green, invitation dashed), the role is a pill and 대기 중 / 사용 중지 are tinted pills. 구성원 초대 carries a plus. The gauge bars are rounder and thicker; the drawer, role flow and write contracts are unchanged.
 
 ## 명단 가져오기 확정 구성
 
