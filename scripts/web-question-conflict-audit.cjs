@@ -33,6 +33,8 @@ async function main() {
     const moduleResult = await call('module.save', { type: 'qa', title: '합성 Q&A 동시 검토' });
     assert.equal(moduleResult.status, 201); const module = moduleResult.json.module;
     assert.equal((await call('module.status', { id: module.id, status: 'OPEN' })).status, 200);
+    // The search box appears once the event list is long (more than 8 events), so seed enough polls to show it.
+    for (let i = 1; i <= 8; i++) assert.equal((await call('module.save', { type: 'poll', title: `합성 투표 ${i}`, options: ['가', '나'] })).status, 201);
     const questions = [];
     for (let i = 1; i <= 2; i++) {
       const response = await call('question.submit', { moduleId: module.id, text: `합성 질문 ${i}` }, person.ticket);
@@ -45,7 +47,7 @@ async function main() {
     const errors = []; for (const page of [a, b]) page.on('pageerror', (error) => errors.push(error.message));
     await Promise.all([a, b].map(async (page) => {
       await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/programs`, { waitUntil: 'networkidle' });
-      await page.getByText('진행·응답 관리', { exact: true }).click();
+      await page.getByRole('heading', { name: '합성 Q&A 동시 검토' }).click();
     }));
     const row = (page, question) => page.locator(`#moderation-question-${question.id}`);
     const requests = [];
@@ -84,13 +86,13 @@ async function main() {
     await a.waitForFunction((id) => document.activeElement?.id === `question-conflict-${id}`, questions[0].id);
     await a.screenshot({ path: path.join(out, 'conflict-1280.png'), fullPage: true });
     phase = 'return to conflict from hidden search and status filters';
-    await a.getByRole('searchbox', { name: '콘텐츠 검색' }).fill('찾을 수 없는 콘텐츠');
-    await a.getByLabel('진행 상태별 보기').selectOption('CLOSED');
+    await a.getByRole('searchbox', { name: '이벤트 검색' }).fill('찾을 수 없는 콘텐츠');
+    await a.getByRole('group', { name: '진행 상태별 보기' }).getByRole('button', { name: /^종료/ }).click();
     assert.equal(await row(a, questions[0]).count(), 0);
     await a.getByRole('region', { name: '질문 변경 확인' }).getByRole('button', { name: '변경 내용 확인' }).click();
     await conflict.waitFor();
     await a.waitForFunction((id) => document.activeElement?.id === `question-conflict-${id}`, questions[0].id);
-    assert.equal(await a.getByRole('searchbox', { name: '콘텐츠 검색' }).inputValue(), '');
+    assert.equal(await a.getByRole('searchbox', { name: '이벤트 검색' }).inputValue(), '');
 
     phase = 'failed and partial latest reads preserve the draft';
     for (const fault of ['503', 'missing-answer']) {

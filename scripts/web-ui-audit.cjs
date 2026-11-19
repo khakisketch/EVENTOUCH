@@ -274,7 +274,7 @@ const check = (name, condition) => { assert.ok(condition, name); checks.push(nam
     for (const width of [390,320]) {
       await list.setViewportSize({width,height:844});
       await list.goto(`${base}/programs`,{waitUntil:'networkidle'});
-      const createButton=list.getByRole('button',{name:'콘텐츠 만들기',exact:true});
+      const createButton=list.getByRole('button',{name:'이벤트 만들기',exact:true});
       const refreshButton=list.getByRole('button',{name:'새로고침',exact:true});
       const pair=await Promise.all([createButton.boundingBox(),refreshButton.boundingBox()]);
       check(`program actions share a touch-sized row at ${width}`, pair.every(b=>b && b.height>=44) && Math.abs(pair[0].y-pair[1].y)<1);

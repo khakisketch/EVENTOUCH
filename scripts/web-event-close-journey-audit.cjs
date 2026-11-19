@@ -524,12 +524,12 @@ async function main() {
       await measure('program-close', '진행 프로그램 종료 (참여 콘텐츠 → 종료 → 종료한다)', async (act, task, { touchOk }) => {
         task.screens = [eventPath('/programs')];
         task.fields = ['module 종료 button', 'ConsoleConfirm 종료한다'];
-        if (before) await menuTo('/programs', 'text=콘텐츠 만들기', act);
+        if (before) await menuTo('/programs', 'button:has-text("이벤트 만들기")', act);
         else {
           await page.getByText('승인 대기 없음', { exact: true }).waitFor();
           await page.waitForFunction(() => document.activeElement?.hasAttribute('data-close-linear-next'));
           await shotBoth('linear-approved-next');
-          await followLinear(act, 'text=콘텐츠 만들기', /진행 중 프로그램 닫기/);
+          await followLinear(act, 'button:has-text("이벤트 만들기")', /진행 중 프로그램 닫기/);
         }
         const card = moduleCard();
         await card.getByRole('heading', { name: MODULE_TITLE }).waitFor({ timeout: 10000 });

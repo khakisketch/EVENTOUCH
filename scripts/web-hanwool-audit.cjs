@@ -428,7 +428,8 @@ async function main() {
     phase = 'UI stage modules and individual draw';
     async function createModule(title) {
       await operator.goto(`${gateway.baseUrl}/console/events/${eventId}/programs`, { waitUntil: 'networkidle' });
-      await operator.getByRole('button', { name: '콘텐츠 만들기', exact: true }).click();
+      await operator.getByRole('button', { name: '이벤트 만들기', exact: true }).click();
+      await operator.getByRole('button', { name: /^간단 추첨/ }).click();
       const dialog = operator.getByRole('dialog');
       await dialog.locator('#program-title').fill(title); await dialog.locator('#program-type').selectOption('draw');
       await clickCommand(operator, dialog.getByRole('button', { name: /저장|만들기/, exact: false }).last(), 'module.save');
