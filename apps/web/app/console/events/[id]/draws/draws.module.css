@@ -729,3 +729,112 @@
   .pickCount { white-space: nowrap; }
   .stageBars li { grid-template-columns: minmax(56px, 96px) minmax(0, 1fr) 56px; gap: var(--s3); }
 }
+
+/* ------------------------------------------------------------------
+   Reopened 2026-11-19: the picker leads as cards (what you are looking at),
+   the stage card puts the audience preview beside what to do now on wide
+   screens, run limits read as amber notes, winners get a rank mark.
+   ------------------------------------------------------------------ */
+.pickerTitle { margin: 0 0 var(--s2); color: var(--ink); font-size: var(--small); font-weight: 800; letter-spacing: 0; }
+.picker { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: var(--s3); margin: 0 0 var(--s4); }
+.pickRow {
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  grid-template-areas: "icon name name" "meter meter count";
+  align-items: center;
+  gap: var(--s3) var(--s3);
+  width: 100%;
+  height: 100%;
+  min-height: 112px;
+  margin: 0;
+  padding: var(--s4);
+  border-radius: var(--radius-large);
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--line);
+  transition: box-shadow 0.12s;
+}
+.pickRow > :nth-child(1) { grid-area: icon; }
+.pickRow > :nth-child(2) { grid-area: name; }
+.pickRow > :nth-child(3) { grid-area: meter; }
+.pickRow > :nth-child(4) { grid-area: count; }
+.pickRow:hover { background: var(--paper); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.pickRow[aria-pressed="true"] { background: var(--paper); box-shadow: inset 0 0 0 2px var(--ink); }
+.pickName b { font-size: var(--body-work); }
+.pickMeter { height: 8px; border-radius: 4px; }
+.pickCount { font-size: var(--small); white-space: nowrap; }
+.pickCount b { font-size: 24px; line-height: 1; letter-spacing: -0.02em; }
+
+@media (min-width: 1200px) {
+  .stageCard { grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr); column-gap: var(--s6); align-items: start; }
+  .stagePreview { grid-column: 1; grid-row: 1 / span 3; position: sticky; top: var(--s4); }
+  .stageCard > :not(.stagePreview) { grid-column: 2; }
+  .stageInfo { grid-template-columns: minmax(0, 1fr); }
+}
+
+.stageCard { border-radius: var(--radius-large); box-shadow: var(--shadow-soft); }
+.stageTitle { font-size: var(--h1); font-weight: 800; }
+.stageBig b { font-size: 64px; }
+.stageGauge { height: 10px; border-radius: 5px; }
+.stageAct {
+  padding: var(--s4);
+  border-radius: var(--radius-large);
+  background: var(--surface-muted);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.stepper { background: var(--paper); }
+
+.runBlocker {
+  border: 0;
+  border-left: 4px solid var(--warning);
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.stagePrerequisite { border: 0; border-left: 4px solid var(--info); border-radius: var(--radius); }
+.stagePrerequisite a {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.winnerList { counter-reset: winner; border-top: 0; gap: var(--s2); }
+.winnerItem {
+  counter-increment: winner;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--s3);
+  padding: var(--s3);
+  border: 0;
+  border-radius: var(--radius-medium);
+  background: var(--surface-muted);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.winnerItem::before {
+  content: counter(winner);
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.winnerItem > * { grid-column: 2; }
+.winnerSummary strong { font-size: var(--h3); }
+
+@media (max-width: 768px) {
+  .picker { display: flex; gap: var(--s3); overflow-x: auto; scroll-snap-type: x proximity; scroll-padding-inline: var(--s4); padding-bottom: var(--s2); margin-inline: calc(var(--s4) * -1); padding-inline: var(--s4); scrollbar-width: none; }
+  .picker > li { flex: 0 0 236px; scroll-snap-align: start; }
+  .pickRow { min-height: 104px; padding: var(--s3); }
+  .pickMeter { display: flex; }
+  .pickSpacer { display: block; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pickRow { transition: none; }
+}

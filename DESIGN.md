@@ -265,6 +265,11 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 - Under the preview: facts (state kicker, name, one meta line, big number and gauge) on the left, actions on the right. The single orange action is the run button ("N명 추첨 실행") beside a large stepper; 무대 터치 실행 is secondary; 결과 공개 is a switch; 설정 수정, 운영 시작·종료·다시 열기 are ghost.
 - Program create/edit settings open in a dialog (`추첨 프로그램 만들기` in the page header); vote, roulette and lucky settings stay as their existing forms folded under the card. Every blocker line, confirmation, recovery notice and permission lock is unchanged.
 
+Reopened 2026-11-19 (owner: 같은 흰 버튼·얇은 선, 무대 선택이 화면 맨 아래). 이 항목이 위 설명과 다르면 이 항목이 우선한다.
+- "무대 선택"이 카드 위로 올라왔다: 잡 하나가 아이콘·이름·진행 막대·큰 숫자를 가진 카드이고 선택된 카드는 잉크 2px 외곽선이다. 폰에서는 옆으로 스크롤한다. 카드를 누르면 아래 무대 카드가 바뀌는 동작과 앵커(`#draws-vote` 등)는 그대로.
+- 1200px 이상에서는 무대 카드가 왼쪽 청중 화면 미리보기(스크롤 시 고정)와 오른쪽 "지금 할 일"로 나뉜다. 실행 영역은 옅은 회색 패널 안에 있고 실행 버튼이 유일한 오렌지다.
+- 실행 전제·무대 터치 전제는 흰 버튼 모양이 아니라 앰버 왼쪽 띠 알림이고, 연결 링크는 밑줄 텍스트다. 당첨자는 잉크 원 순번과 함께 카드 행으로 보인다.
+
 ## 참여 콘텐츠 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/programs/`, review drawer with the merged answer card). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-programs-composition.test.cjs` guards it.
