@@ -1243,6 +1243,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
       eventId={eventId}
       eventName={state.eventName}
       meta={state.eventMeta}
+      headerActions={<ProductLink variant="ghost" id="reports-open-analysis" href={`/console/events/${encodeURIComponent(eventId)}/analysis`}>기간 분석</ProductLink>}
       sectionNav={
         <div className={styles.navIndex}>
           <p className={styles.navIndexLabel} aria-hidden="true">보고서 작업</p>

@@ -238,3 +238,4 @@
 @media (prefers-reduced-motion: reduce) {
   .onair[data-state="live"] > i { animation: none; }
 }
+.cueEvent[aria-pressed="true"] > em, .pickItem[aria-pressed="true"] > em { color: var(--room-ink); }

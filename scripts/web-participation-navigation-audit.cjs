@@ -285,7 +285,7 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
       // Reopened 2026-11-20: the review queue and open events live in the 현장 모드 side and schedule panes.
       check('the live room carries the review queue', await opsPanel().getByRole('heading', { name: '검토 대기', exact: true }).isVisible());
       check('live mode queue agrees with home', /Q&A 확인/.test(await opsPanel().innerText()) && /질문 1개/.test(await opsPanel().innerText()));
-      check('live mode lists exactly two published open modules', await page.locator('[data-live-pane="stage"] [data-status="OPEN"]').count() === 2);
+      check('live mode lists exactly two published open modules', await page.locator('[data-live-pane="stage"] button[aria-pressed][data-status="OPEN"]').count() === 2);
       await assess('live desktop'); await capture('07-participation-live-1280');
       const priorWrites = writes.length;
       await programs('?module=' + qa.id);

@@ -30,6 +30,8 @@ test('period analysis audit owns an isolated real fixture and does not mock succ
   assert.doesNotMatch(audit, /analyzePeriod|require\([^\n]*period-analysis|\.skip\(|\/Users\//);
 });
 
-test('workbench navigation also expects the approved dedicated analysis destination', () => {
-  assert.ok(read('scripts/web-workbench-audit.cjs').includes("['기간 분석','analysis']"));
+// Reopened 2026-11-20: 기간 분석 has no rail item; the report page links to it and the rail keeps 결과 보고서 active.
+test('workbench navigation keeps the analysis destination reachable from the report page', () => {
+  assert.ok(read('scripts/web-workbench-audit.cjs').includes("['결과 보고서','reports']"));
+  assert.match(read('apps/web/app/console/events/[id]/reports/ReportsWorkspace.tsx'), /id="reports-open-analysis"/);
 });

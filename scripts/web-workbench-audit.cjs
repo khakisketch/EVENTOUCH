@@ -700,12 +700,12 @@ async function main() {
     check('desktop presets start folded', await page.locator('main details').evaluateAll(nodes => nodes.length === 2 && nodes.every(e => !e.open)));
     // Every permitted destination is available without opening another group.
     const hubLabels = await page.locator('.desktop-side-nav .console-nav-group > .nav-section-label').allTextContents();
-    check('event rail keeps four work groups', hubLabels.join('|') === '운영|현장·참여|행사 준비|결과', hubLabels);
+    check('event rail keeps four work groups (운영·행사 준비·당일·결과)', hubLabels.join('|') === '운영|행사 준비|당일|결과', hubLabels);
     const hubDestinations = await page.locator('.desktop-side-nav .console-workspace-link').evaluateAll(nodes => nodes.map(e => ({ label: e.querySelector(':scope > span')?.textContent?.trim(), href: e.getAttribute('href') })));
     const eventBasePath = `/console/events/${f.eventId}`;
     const approvedDestinations = [
       {label:'운영 현황',href:eventBasePath},
-      ...[['참가자 명단','participants'],['메시지','messages'],['현장 운영','operations'],['추첨·투표','draws'],['경품 지급 현황','rewards'],['현장 사진','photos'],['참가자 페이지','page'],['공지·안내','content'],['참여 콘텐츠','programs'],['행사 설정','settings'],['결과 보고서','reports'],['기간 분석','analysis']].map(([label,route])=>({label,href:`${eventBasePath}/${route}`})),
+      ...[['참가자 명단','participants'],['메시지','messages'],['참가자 페이지','page'],['공지·안내','content'],['참여 이벤트','programs'],['입장·스태프','operations'],['행사 설정','settings'],['현장 모드','live'],['결과 보고서','reports'],['경품 지급','rewards'],['현장 사진','photos']].map(([label,route])=>({label,href:`${eventBasePath}/${route}`})),
     ];
 
     check(

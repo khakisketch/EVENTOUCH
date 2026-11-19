@@ -90,7 +90,9 @@ async function main() {
       await page.getByRole('heading', { level: 1, name: '기간 분석', exact: true }).waitFor();
       assert.equal(await page.getByRole('radio', { name: '최근 7일', exact: true }).isChecked(), true);
       await assertNumbers(page, [4, 6, 5], LAST7);
-      assert.equal(await page.locator(`.console-sidebar a[href="/console/events/${f.eventId}/analysis"]:visible`).count(), 1);
+      // Reopened 2026-11-20: 기간 분석 has no rail item; the 결과 보고서 item stays active and the report page links to it.
+      assert.equal(await page.locator(`.console-sidebar a[href="/console/events/${f.eventId}/analysis"]:visible`).count(), 0);
+      assert.equal(await page.locator(`.console-sidebar a[href="/console/events/${f.eventId}/reports"][aria-current="page"]:visible`).count(), 1);
     });
     await step('기간 선택·요약·막대·표 값 일치', async () => {
       await page.getByRole('radio', { name: '오늘', exact: true }).focus();
