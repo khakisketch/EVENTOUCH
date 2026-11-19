@@ -65,8 +65,8 @@ test('approved overview design stays locked', () => {
   assert.match(css, /\.entryRate \{\s*color: var\(--ink\)/u);
   // Header: one stage pill; intake and D-day are text.
   assert.match(css, /\.intakeBadge,\s*\.dDay \{[^}]*border: 0;[^}]*background: none/su);
-  // Recent activity: time, rail dot, details timeline.
-  for (const marker of ['styles.checkTime', 'styles.checkRail', 'styles.checkDot', 'styles.checkDetails']) assert.ok(source.includes(marker), marker);
+  // Recent activity: Reopened 2026-11-20 (디자인 시스템 적용) — shared ListRow rows: avatar, name + action pill, desk, clock.
+  for (const marker of ['styles.checkTime', 'styles.checkLine', '<ConsoleAvatar', '<StatusPill', '<ListRow']) assert.ok(source.includes(marker), marker);
   // Exactly one primary on live: the hero owns it, so the queue never adds another.
   // Reopened 2026-11-20: while live, the one orange action opens 현장 모드; before that it opens 입장·스태프.
   assert.match(source, /<Link variant=\{live \? "primary" : "ghost"\} href=\{live \? `\$\{base\}\/live` : `\$\{base\}\/operations`\}>/u);

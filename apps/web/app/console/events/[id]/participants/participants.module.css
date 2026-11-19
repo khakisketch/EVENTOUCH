@@ -18,7 +18,7 @@
 /* View tabs live with the records they filter, not in the query toolbar:
    one tab bar directly above the table joins counts, position and selection. */
 .rosterTabs { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s2) var(--s4); min-width: 0; border-bottom: 1px solid var(--line); }
-.filterToggleSummary { min-width: 0; color: var(--muted); font-weight: 450; }
+.filterToggleSummary { min-width: 0; color: var(--muted); font-weight: var(--fw-regular); }
 .advancedFilters { display: contents; }
 .advancedFilters[data-open="false"] { display: none; }
 .advancedFilters[data-open="true"] { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: var(--s2); min-width: 0; }
@@ -27,7 +27,7 @@
 .filterReset { min-height: 44px; }
 .utilityPair { display: flex; min-width: 0; }
 .selectionButton { min-height: 44px; min-width: 44px; }
-.selectionHeadline { display: block; font-weight: 700; }
+.selectionHeadline { display: block; font-weight: var(--fw-strong); }
 .selectionScope { display: block; margin-top: var(--s1); font-size: var(--small); color: var(--muted); word-break: keep-all; overflow-wrap: break-word; }
 
 .rosterSection { gap: 0; padding: 0; background: transparent; border: 0; box-shadow: none; }
@@ -35,7 +35,7 @@
    between the query and data. All record actions are in the workbench. */
 .rosterSection [data-console-section-head] { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
 .rosterMeta { display: flex; align-items: center; gap: var(--s2) var(--s3); min-width: 0; min-height: 52px; flex: 1 1 100%; margin: 0; padding: var(--s2) 0; background: transparent; flex-wrap: wrap; }
-.rosterMeta p { margin: 0; color: var(--muted); font-size: var(--small); font-weight: 500; font-variant-numeric: tabular-nums; }
+.rosterMeta p { margin: 0; color: var(--muted); font-size: var(--small); font-weight: var(--fw-regular); font-variant-numeric: tabular-nums; }
 .rosterMeta :global(.astryx-button) { min-height: 44px; font-size: var(--small); }
 .rosterWorkbench, .rosterMain { min-width: 0; }
 /* Internal scroll container: a cropped next row at the bottom edge is the
@@ -44,7 +44,7 @@
 .tableScroll { max-height: min(65svh, 720px); overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line-strong) var(--paper); background: transparent; }
 .rosterTable { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--small); font-variant-numeric: tabular-nums; }
 .rosterTable th, .rosterTable td { padding: var(--s3) var(--s2); text-align: left; vertical-align: middle; border-bottom: 1px solid var(--line); padding-block: var(--s1); }
-.rosterHead th { position: sticky; top: 0; z-index: 1; height: 44px; background: var(--paper); color: var(--muted); font-weight: 550; font-size: var(--label); letter-spacing: .06em; white-space: nowrap; }
+.rosterHead th { position: sticky; top: 0; z-index: 1; height: 44px; background: var(--paper); color: var(--muted); font-weight: var(--fw-strong); font-size: var(--label); letter-spacing: .06em; white-space: nowrap; }
 .rosterTable tbody tr:last-child td { border-bottom: 0; }
 .rosterTable tbody tr:hover { background: var(--surface-muted); }
 .rosterRow { cursor: pointer; }
@@ -54,11 +54,11 @@
 .rosterGroup { min-width: 76px; word-break: keep-all; overflow-wrap: anywhere; }
 .rosterTable .actionColumn { width: 132px; text-align: right; }
 .tableIdentity { display: grid; gap: var(--s1); min-width: 140px; }
-.tableIdentity strong { font-weight: 650; font-size: var(--body-work); overflow-wrap: anywhere; }
-.tableIdentity small { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; line-height: 1.5; }
-.rosterContact { font-size: var(--small); color: var(--muted); font-weight: 450; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tableIdentity strong { font-weight: var(--fw-strong); font-size: var(--body-work); overflow-wrap: anywhere; }
+.tableIdentity small { color: var(--muted); font-size: var(--text-sm); overflow-wrap: anywhere; line-height: 1.5; }
+.rosterContact { font-size: var(--small); color: var(--muted); font-weight: var(--fw-regular); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .participantStatus { display: inline-flex; width: max-content; white-space: nowrap; }
-.ticketReviewLabel { color: var(--warning); font-size: var(--label); font-weight: 650; overflow-wrap: anywhere; word-break: keep-all; }
+.ticketReviewLabel { color: var(--warning); font-size: var(--label); font-weight: var(--fw-strong); overflow-wrap: anywhere; word-break: keep-all; }
 .presence, .presenceInside { white-space: nowrap; font-size: var(--small); }
 .reviewedExitFact { white-space: nowrap; }
 .reviewBody p, .reviewBody textarea { word-break: keep-all; overflow-wrap: anywhere; }
@@ -68,10 +68,10 @@
 .reconciliationFacts dd { min-width: 0; margin: 0; word-break: keep-all; overflow-wrap: anywhere; }
 :global(.dialog) .reviewConfirmation { display: flex; align-items: center; min-height: 44px; gap: var(--s2); }
 .reviewConfirmationText { min-width: 0; word-break: keep-all; overflow-wrap: anywhere; }
-.presence::before, .presenceInside::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: var(--s2); border-radius: 999px; vertical-align: baseline; }
+.presence::before, .presenceInside::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: var(--s2); border-radius: var(--r-pill); vertical-align: baseline; }
 .presence { color: var(--muted); }
 .presence::before { border: 1.5px solid var(--line-strong); background: transparent; }
-.presenceInside { color: var(--success); font-weight: 700; }
+.presenceInside { color: var(--success); font-weight: var(--fw-strong); }
 .presenceInside::before { border: 1.5px solid var(--success); background: var(--success); }
 .sortButton { display: flex; align-items: center; gap: var(--s2); min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
 .participantActions { display: flex; align-items: center; justify-content: flex-end; gap: var(--s1); }
@@ -87,11 +87,6 @@
 .paginationBar :global(.astryx-button) { min-height: 44px; min-width: 44px; font-size: var(--small); }
 .paginationPosition { color: var(--muted); font-size: var(--small); font-variant-numeric: tabular-nums; }
 .paginationActions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); margin-left: auto; }
-.emptyState { display: grid; justify-items: center; gap: var(--s2); padding: var(--s7) var(--s4); background: transparent; border: 0; color: var(--muted); text-align: center; }
-.emptyState h3 { margin: 0; font-size: var(--h3); color: var(--ink); }
-.emptyState p { max-width: 65ch; margin: 0; }
-.reviewComplete { border: 0; border-top: 1px solid var(--line); padding-block: var(--s6); }
-.reviewCompleteIcon { width: 24px; height: 24px; color: var(--success); }
 
 /* One participant, requested explicitly. The existing console dialog owns
    focus/dismissal, while all permissions, confirmations and receipts stay
@@ -136,7 +131,7 @@
   /* Narrow meta reads in two deterministic rows — count + refresh share
      the first, the scope pair owns the second — so the count never
      collapses into a syllable-wide column beside nowrap controls. */
-  .rosterMeta p { min-width: 0; font-size: 13px; flex: 1 1 auto; grid-column: auto; }
+  .rosterMeta p { min-width: 0; font-size: var(--text-sm); flex: 1 1 auto; grid-column: auto; }
   .rosterMeta :global(.astryx-button) { flex: none; }
   .tableScroll { display: none; }
   .participantList { display: block; margin: 0; padding: 0; list-style: none; background: transparent; border-top: 1px solid var(--line); }
@@ -146,8 +141,8 @@
   .participantRow[data-inspected="true"] { box-shadow: inset 3px 0 var(--line-strong); }
   .participantSummary { display: grid; grid-column: 2; grid-row: 1; gap: 2px; min-width: 0; }
   .participantRow > .participantSelectTarget { grid-row: 1; }
-  .participantName { font-size: 16px; font-weight: 650; overflow-wrap: anywhere; line-height: 1.4; }
-  .participantIdentity, .mobilePresence { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; line-height: 1.5; }
+  .participantName { font-size: var(--body); font-weight: var(--fw-strong); overflow-wrap: anywhere; line-height: 1.4; }
+  .participantIdentity, .mobilePresence { color: var(--muted); font-size: var(--text-sm); overflow-wrap: anywhere; line-height: 1.5; }
   .participantRow > .rosterContact { display: none; }
   .participantStatus { grid-column: 3; grid-row: 1; align-self: center; font-size: var(--label); }
   .participantActions { grid-column: 4; grid-row: 1; justify-content: flex-end; }
@@ -172,7 +167,7 @@
   align-items: center;
   min-height: 44px;
   color: var(--brand-text);
-  font-weight: 650;
+  font-weight: var(--fw-strong);
   cursor: pointer;
 }
 .selectionWorkbench:not(:empty) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); padding: var(--s2) var(--s3); background: var(--ink); border: 1px solid transparent; border-radius: var(--radius-medium); }
@@ -195,7 +190,7 @@
 }
 .utilityPair { align-items: flex-start; gap: var(--s2); }
 .rosterUtilities { position: relative; }
-.rosterUtilities summary { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s3); border: 1px solid transparent; border-radius: var(--radius-medium); cursor: pointer; list-style: none; font-weight: 650; }
+.rosterUtilities summary { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s3); border: 1px solid transparent; border-radius: var(--radius-medium); cursor: pointer; list-style: none; font-weight: var(--fw-strong); }
 .rosterUtilities summary:hover, .rosterUtilities[open] > summary { background: var(--surface-muted); }
 .rosterUtilities summary::-webkit-details-marker { display: none; }
 .rosterUtilities summary::after { content: ""; margin-left: var(--s2); display: inline-block; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(45deg); flex: none; }
@@ -214,7 +209,7 @@
 .addFields { margin: 0; padding: 0; border: 0; min-width: 0; }
 .selectionActions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); }
 .selectionMore { position: relative; }
-.selectionMore > summary { display: flex; align-items: center; justify-content: center; gap: var(--s2); min-height: 44px; padding: var(--s2) var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); background: var(--paper); font-weight: 650; cursor: pointer; list-style: none; }
+.selectionMore > summary { display: flex; align-items: center; justify-content: center; gap: var(--s2); min-height: 44px; padding: var(--s2) var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); background: var(--paper); font-weight: var(--fw-strong); cursor: pointer; list-style: none; }
 .selectionMore > summary::-webkit-details-marker { display: none; }
 .selectionMore > summary::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: var(--s2); border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(45deg); flex: none; }
 .selectionMore > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
@@ -226,7 +221,7 @@
 @media (max-width: 768px) {
   .mobileScope { display: block; justify-self: start; position: relative; }
   .mobileScopeSingle { display: inline-flex; justify-self: start; }
-  .mobileScope summary { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s3); color: var(--brand-text); font-size: var(--small); font-weight: 700; cursor: pointer; list-style: none; }
+  .mobileScope summary { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s3); color: var(--brand-text); font-size: var(--small); font-weight: var(--fw-strong); cursor: pointer; list-style: none; }
   .mobileScope summary::-webkit-details-marker { display: none; }
   .mobileScope summary::after { content: ""; margin-left: var(--s2); display: inline-block; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(45deg); }
   .mobileScopeOptions { position: absolute; z-index: 3; top: 100%; left: 0; display: grid; gap: var(--s2); width: min(270px, calc(100vw - 32px)); padding: var(--s3); background: var(--paper); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); }
@@ -275,31 +270,26 @@
 .workbenchControls .searchField { position: relative; display: block; }
 .searchGlyph { position: absolute; inset-block: 0; left: var(--s3); z-index: 1; display: inline-flex; align-items: center; color: var(--muted); pointer-events: none; }
 .searchGlyph svg { width: 18px; height: 18px; }
-.workbenchControls .searchField :global(input) { width: 100%; min-height: 44px; padding-left: calc(var(--s3) + 18px + var(--s2)); border-radius: 999px; }
-.filterToggle { display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; padding-inline: var(--s3) var(--s4); border-radius: 999px; background: var(--paper); color: var(--ink); border-color: var(--line-strong); font-weight: 600; }
+.workbenchControls .searchField :global(input) { width: 100%; min-height: 44px; padding-left: calc(var(--s3) + 18px + var(--s2)); border-radius: var(--r-pill); }
+.filterToggle { display: inline-flex; align-items: center; gap: var(--s2); min-height: 44px; padding-inline: var(--s3) var(--s4); border-radius: var(--r-pill); background: var(--paper); color: var(--ink); border-color: var(--line-strong); font-weight: var(--fw-strong); }
 .filterToggle[data-active="true"] { border-color: var(--ink); background: var(--ink); color: var(--paper); }
 .filterToggle[data-active="true"] .filterToggleSummary { color: var(--side-muted); }
-.workbenchControls .rosterUtilities summary { gap: var(--s2); border-color: var(--line-strong); border-radius: 999px; background: var(--paper); }
+.workbenchControls .rosterUtilities summary { gap: var(--s2); border-color: var(--line-strong); border-radius: var(--r-pill); background: var(--paper); }
 .workbenchControls .rosterUtilities summary:hover, .workbenchControls .rosterUtilities[open] > summary { background: var(--surface-muted); }
 
 /* Rows: an initial avatar and an entry dot make a row readable at a glance. */
 .nameCell { display: flex; align-items: center; gap: var(--s3); min-width: 0; }
-.avatar { display: inline-grid; flex: none; place-items: center; width: 34px; height: 34px; border-radius: 999px; background: var(--surface-muted); color: var(--ink); font-size: var(--small); font-weight: 700; }
-.avatar[data-status="APPROVED"] { background: var(--success-soft); color: var(--success); }
-.avatar[data-status="PENDING"], .avatar[data-status="WAITLIST"] { background: var(--warning-soft); color: var(--warning); }
-.avatar[data-status="CANCELLED"] { background: var(--surface-muted); color: var(--muted); }
-.avatarLarge { width: 48px; height: 48px; font-size: var(--h3); }
 .rosterHead th { text-transform: none; }
 .rosterTable tbody tr { transition: background-color .12s; }
 .rosterTable tbody tr[data-inspected="true"]:not([data-selected="true"]) { background: var(--surface-muted); }
-.participantActions > :global([data-variant="secondary"]) { border-radius: 999px; }
+.participantActions > :global([data-variant="secondary"]) { border-radius: var(--r-pill); }
 
 /* Bulk bar: the one forward action stays solid, the rest sit as quiet outlines
    on the dark bar, and cancel is marked as destructive without turning red-on-ink. */
 .selectionWorkbench { border-radius: var(--radius-large); }
 .selectionWorkbench .selectionActions > :global([data-variant="secondary"]) { background: transparent; color: var(--paper); border: 1px solid var(--side-muted); }
 .selectionWorkbench .selectionActions > :global([data-variant="secondary"]:hover:not(:disabled)) { background: color-mix(in srgb, var(--paper) 14%, transparent); border-color: var(--paper); }
-.selectionWorkbench .selectionActions > :global([data-bulk="primary"]) { background: var(--paper); color: var(--ink); border-color: var(--paper); font-weight: 700; }
+.selectionWorkbench .selectionActions > :global([data-bulk="primary"]) { background: var(--paper); color: var(--ink); border-color: var(--paper); font-weight: var(--fw-strong); }
 .selectionWorkbench .selectionActions > :global([data-bulk="primary"]:hover:not(:disabled)) { background: var(--surface-muted); border-color: var(--surface-muted); }
 .selectionWorkbench .selectionActions > :global([data-bulk="danger"]) { border-color: transparent; color: var(--side-muted); }
 .selectionWorkbench .selectionActions > :global([data-bulk="danger"]:hover:not(:disabled)) { color: var(--paper); }
@@ -310,19 +300,28 @@
 
 /* Inspector: identity first, then a quiet list of actions instead of a pile of pills. */
 .detailActions { display: grid; gap: 0; align-items: stretch; border-top: 1px solid var(--line); }
-.detailActions > :global(.astryx-button), .detailActions > :global(button) { justify-content: flex-start; width: 100%; min-height: 48px; padding-inline: var(--s1); border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; color: var(--ink); font-weight: 600; text-align: left; }
+.detailActions > :global(.astryx-button), .detailActions > :global(button) { justify-content: flex-start; width: 100%; min-height: 48px; padding-inline: var(--s1); border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; color: var(--ink); font-weight: var(--fw-strong); text-align: left; }
 .detailActions > :global(.astryx-button:hover:not(:disabled)) { background: var(--surface-muted); }
 .detailActions select { flex: none; width: 100%; margin-top: var(--s3); }
 
+/* Reopened 2026-11-20: 승인 대기 rows are pinned to the top (see orderedPeople) and carry an
+   amber edge, so the queue reads before the rest of the roster. */
+.rosterTable tbody tr[data-pending="true"] > :first-child { box-shadow: inset 3px 0 var(--warning); }
+.rosterTable tbody tr[data-pending="true"]:not([data-selected="true"]) { background: color-mix(in srgb, var(--warning-soft) 45%, var(--paper)); }
+.rosterTable tbody tr[data-pending="true"]:not([data-selected="true"]):hover { background: var(--warning-soft); }
+.participantRow[data-pending="true"] { box-shadow: inset 3px 0 var(--warning); }
+.participantRow[data-pending="true"]:not([data-selected="true"]) { background: color-mix(in srgb, var(--warning-soft) 45%, var(--paper)); }
+.nameCell :global([data-console-avatar]) { flex: none; }
+
 @media (prefers-reduced-motion: reduce) { .rosterTable tbody tr { transition: none; } }
 .selectionWorkbench .selectionActions > :global([data-bulk="primary"]:disabled) { background: transparent; color: var(--side-muted); border-color: var(--side-muted); opacity: 1; }
-.workbenchControls .utilityPair > :global([data-variant="ghost"]) { border: 1px solid var(--line-strong); border-radius: 999px; background: var(--paper); }
+.workbenchControls .utilityPair > :global([data-variant="ghost"]) { border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: var(--paper); }
 
 /* 소속 suggestion under the field: quiet text with a one-tap fix. */
 .companyHint { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s2); margin-top: var(--s1); color: var(--muted); font-size: var(--small); word-break: keep-all; }
 .companyHint:empty { display: none; }
 .companyHint b { color: var(--ink); }
-.companyHint :global(.astryx-button) { min-height: 44px; padding-inline: var(--s2); color: var(--brand-text); font-weight: 700; }
+.companyHint :global(.astryx-button) { min-height: 44px; padding-inline: var(--s2); color: var(--brand-text); font-weight: var(--fw-strong); }
 
 /* Details sheet: an overlay over the page (the shared drawer: scrim, focus
    trap, right edge on desktop, bottom sheet on phones). The table behind it
@@ -346,7 +345,7 @@
   align-self: end;
   padding: var(--s3) 0 0;
   font-size: var(--h3);
-  font-weight: 800;
+  font-weight: var(--fw-heavy);
   line-height: 1.25;
   word-break: keep-all;
   overflow-wrap: anywhere;
@@ -390,7 +389,7 @@
   background: var(--paper);
   border-bottom: 1px solid var(--line);
 }
-.sheetStep { min-height: 44px; min-width: 44px; padding-inline: var(--s2); color: var(--ink); font-weight: 600; }
+.sheetStep { min-height: 44px; min-width: 44px; padding-inline: var(--s2); color: var(--ink); font-weight: var(--fw-strong); }
 .chevronBack { transform: scaleX(-1); }
 .sheetPosition { color: var(--muted); font-size: var(--small); font-variant-numeric: tabular-nums; }
 .rosterSheet > .sheetAvatar { grid-area: 2 / 1 / 4 / 2; width: 56px; height: 56px; align-self: center; margin-top: var(--s3); font-size: var(--h3); }
@@ -399,13 +398,13 @@
 .rosterSheet > .participantDetails { gap: 0; }
 .sheetSection, .consentRecord { display: grid; gap: var(--s2); padding: var(--s3) 0; border-top: 1px solid var(--line); min-width: 0; }
 .sheetSection h3, .sheetSection h4, .sheetSection p { margin: 0; }
-.sheetSection h3, .sheetSection h4, .consentRecord h4 { color: var(--muted); font-size: var(--small); font-weight: 650; }
+.sheetSection h3, .sheetSection h4, .consentRecord h4 { color: var(--muted); font-size: var(--small); font-weight: var(--fw-strong); }
 .sheetSection h3:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: var(--radius-small); }
 .sheetFacts { display: grid; gap: var(--s2); margin: 0; }
 .sheetFacts > div { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: var(--s2); align-items: baseline; }
 .sheetFacts dt { color: var(--muted); font-size: var(--small); }
 .sheetFacts dd { margin: 0; color: var(--ink); font-size: var(--body); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.sheetFlag { display: inline-block; margin-left: var(--s2); padding: 0 var(--s2); border-radius: 999px; background: var(--warning-soft); color: var(--warning); font-size: var(--small); font-weight: 650; white-space: nowrap; }
+.sheetFlag { display: inline-block; margin-left: var(--s2); padding: 0 var(--s2); border-radius: var(--r-pill); background: var(--warning-soft); color: var(--warning); font-size: var(--small); font-weight: var(--fw-strong); white-space: nowrap; }
 .sheetPresence { color: var(--ink); font-size: var(--body); }
 .participantDetails > p[role="note"] { margin: 0; padding: var(--s3) 0; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--small); word-break: keep-all; overflow-wrap: break-word; }
 .participantDetails > .detailActions { margin-top: var(--s2); }

@@ -10,6 +10,7 @@ import ConsolePage from "../../../../console-ui/ConsolePage";
 import ConsoleFeedback from "../../../../console-ui/ConsoleFeedback";
 import ConsoleFormActions from "../../../../console-ui/ConsoleFormActions";
 import ConsoleConfirm from "../../../../console-ui/ConsoleConfirm";
+import ConsoleAvatar from "../../../../console-ui/ConsoleAvatar";
 import { CheckIcon, DocumentIcon, UploadIcon } from "../../../../console-ui/ConsoleIcons";
 import {
   formatConsoleEventMeta,
@@ -904,6 +905,18 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
     >
       {canWriteImport ? (
         <>
+        <ol className={styles.steps} aria-label="가져오기 단계">
+          {["파일 선택", "열 연결·확인", "등록 완료"].map((label, index) => {
+            const stepNow = committed !== null && !headers ? 3 : headers ? 2 : 1;
+            const state = index + 1 < stepNow ? "done" : index + 1 === stepNow ? "current" : "todo";
+            return (
+              <li key={label} data-step={state} aria-current={state === "current" ? "step" : undefined}>
+                <span className={styles.stepMark} aria-hidden="true">{state === "done" ? <CheckIcon /> : index + 1}</span>
+                <span>{label}</span>
+              </li>
+            );
+          })}
+        </ol>
         {fileError ? <ConsoleFeedback kind="error">{fileError}</ConsoleFeedback> : null}
         {readingFile ? <ConsoleFeedback kind="info">{fileName} 파일을 읽고 있습니다. 읽기가 끝나면 내용을 확인할 수 있습니다.</ConsoleFeedback> : null}
 
@@ -1014,7 +1027,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
                     <ul className={styles.sampleList} aria-label="적용될 값 미리보기">
                       {preview.valid.slice(0, 3).map((row, index) => (
                         <li key={`${row.phone}-${index}`}>
-                          <span className={styles.initial} aria-hidden="true">{Array.from(row.name)[0]}</span>
+                          <ConsoleAvatar name={row.name} tone="ok" />
                           <span className={styles.sampleWho}>
                             <b>{row.name}</b>
                             {row.company || row.email ? <small>{[row.company, row.email].filter(Boolean).join(" · ")}</small> : null}
@@ -1028,21 +1041,24 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
                 ) : null}
 
                 {preview.phoneReview.length ? (
-                  <div className={styles.notice} data-tone="info">
-                    <h4>연락처 {preview.phoneReview.length}건은 앞자리 0을 붙여 등록해요</h4>
-                    <p>엑셀이 숫자 칸의 첫 0을 지운 번호입니다. 하이픈(-)이나 +82가 있어도 그대로 받아들입니다.</p>
-                    <ul className={styles.chips} aria-label="앞자리 0을 붙인 연락처 목록">
-                      {preview.phoneReview.slice(0, 5).map((item) => <li key={item.row}>파일 {item.row}행 · {item.name} <small>{item.raw} → {formatPhone(item.phone)}</small></li>)}
-                    </ul>
-                    {preview.phoneReview.length > 5 ? (
-                      <details className={styles.more}>
-                        <summary>나머지 {preview.phoneReview.length - 5}건 보기</summary>
-                        <ul className={styles.chips} aria-label="앞자리 0을 붙인 연락처 나머지 목록">
-                          {preview.phoneReview.slice(5).map((item) => <li key={item.row}>파일 {item.row}행 · {item.name} <small>{item.raw} → {formatPhone(item.phone)}</small></li>)}
+                  <details className={styles.autoFix}>
+                    <summary>자동으로 맞춘 항목 {preview.phoneReview.length}건<small>연락처 앞자리 0 복원</small></summary>
+                      <div className={styles.notice} data-tone="info">
+                        <h4>연락처 {preview.phoneReview.length}건은 앞자리 0을 붙여 등록해요</h4>
+                        <p>엑셀이 숫자 칸의 첫 0을 지운 번호입니다. 하이픈(-)이나 +82가 있어도 그대로 받아들입니다.</p>
+                        <ul className={styles.chips} aria-label="앞자리 0을 붙인 연락처 목록">
+                          {preview.phoneReview.slice(0, 5).map((item) => <li key={item.row}>파일 {item.row}행 · {item.name} <small>{item.raw} → {formatPhone(item.phone)}</small></li>)}
                         </ul>
-                      </details>
-                    ) : null}
-                  </div>
+                        {preview.phoneReview.length > 5 ? (
+                          <details className={styles.more}>
+                            <summary>나머지 {preview.phoneReview.length - 5}건 보기</summary>
+                            <ul className={styles.chips} aria-label="앞자리 0을 붙인 연락처 나머지 목록">
+                              {preview.phoneReview.slice(5).map((item) => <li key={item.row}>파일 {item.row}행 · {item.name} <small>{item.raw} → {formatPhone(item.phone)}</small></li>)}
+                            </ul>
+                          </details>
+                        ) : null}
+                      </div>
+                  </details>
                 ) : null}
 
                 {preview.emailReview.length ? (

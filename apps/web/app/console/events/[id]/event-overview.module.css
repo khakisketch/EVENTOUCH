@@ -76,7 +76,7 @@
 .contextColumn { grid-area: context; min-width: 0; }
 .refreshAlert { grid-area: alert; margin: 0 0 var(--s4); word-break: keep-all; overflow-wrap: break-word; }
 .overviewSingle > .refreshAlert { grid-area: auto; }
-.runbookCopy strong, .runbookCopy span, .programInfo strong, .deskName {
+.runbookCopy strong, .runbookCopy span, .programInfo strong {
   overflow-wrap: anywhere;
 }
 .runbookCopy span { overflow: visible; white-space: normal; }
@@ -100,14 +100,6 @@
 
 
 /* One filled pill carries the stage; intake and countdown read as plain status text. */
-.stagePill {
-  display: inline-flex;
-  min-height: 32px;
-  align-items: center;
-  padding: 0 var(--s3);
-  border-radius: 999px;
-  white-space: nowrap;
-}
 
 .intakeBadge,
 .dDay {
@@ -119,7 +111,7 @@
   border: 0;
   background: none;
   font-size: var(--small);
-  font-weight: 700;
+  font-weight: var(--fw-strong);
   white-space: nowrap;
 }
 
@@ -148,71 +140,14 @@
 }
 
 /* 연속 수치 띠: 카드 간격·바깥 여백 없이 한 면에 3열을 잇는다. 긴 값도 한 줄에 둔다. */
-.metricGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  min-width: 0;
-}
-
-.metricCard {
-  display: grid;
-  gap: var(--s2);
-  min-width: 0;
-  padding: var(--s3) var(--s2);
-  color: var(--ink);
-  text-decoration: none;
-}
-
-.metricCard + .metricCard {
-  border-left: 1px solid var(--line);
-}
-
-.metricCard:hover {
-  background: var(--surface-muted);
-}
-
-.metricCard:hover .metricValue {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
 
 .metricLabel {
   margin: 0;
   font-size: var(--label);
-  font-weight: 700;
+  font-weight: var(--fw-strong);
   letter-spacing: 0.06em;
   word-break: keep-all;
   color: var(--muted);
-}
-
-.metricValue {
-  margin: 0;
-  min-width: 0;
-  color: var(--ink);
-  font-family: var(--display-font);
-  font-size: var(--h1);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.metricDetail {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--small);
-  font-variant-numeric: tabular-nums;
-}
-
-@media (max-width: 420px) {
-  .metricCard {
-    padding: var(--s2);
-  }
-
-  .metricValue {
-    font-size: var(--h2);
-  }
 }
 
 .entryProgress {
@@ -246,7 +181,7 @@
 .entryCount {
   color: var(--ink);
   font-size: var(--h1);
-  font-weight: 800;
+  font-weight: var(--fw-heavy);
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -255,13 +190,13 @@
 .entryCount span {
   color: var(--muted);
   font-size: var(--body);
-  font-weight: 650;
+  font-weight: var(--fw-strong);
 }
 
 .entryRate {
   color: var(--ink);
   font-size: var(--h3);
-  font-weight: 750;
+  font-weight: var(--fw-heavy);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -276,7 +211,7 @@
   height: 10px;
   overflow: hidden;
   border-radius: var(--s6);
-  background: #EDEFF1;
+  background: var(--surface-sunken);
 }
 
 .entryFill {
@@ -316,7 +251,7 @@
 }
 
 .summaryFact strong {
-  font-weight: 700;
+  font-weight: var(--fw-strong);
 }
 
 .summaryFact:hover strong {
@@ -364,23 +299,12 @@
 }
 
 .programInfo strong {
-  font-weight: 700;
+  font-weight: var(--fw-strong);
 }
 
 .programInfo > span {
   color: var(--muted);
   font-size: var(--small);
-}
-
-.scheduledBadge {
-  justify-self: end;
-  padding: 2px var(--s2);
-  border: 1px solid var(--info-line);
-  border-radius: 999px;
-  background: var(--info-soft);
-  color: var(--info);
-  font-size: var(--small);
-  font-weight: 700;
 }
 
 .recentActions {
@@ -447,92 +371,6 @@
   list-style: none;
 }
 
-.activityList li {
-  display: grid;
-  grid-template-columns: 64px 16px minmax(0, 1fr);
-  min-width: 0;
-  align-items: start;
-  column-gap: var(--s3);
-  min-block-size: 64px;
-}
-
-.checkTime {
-  display: grid;
-  justify-items: end;
-  padding-block-start: 1px;
-  color: var(--ink);
-  font-size: var(--small);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.4;
-  white-space: nowrap;
-}
-
-.checkTime small {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.checkRail {
-  position: relative;
-  display: flex;
-  align-self: stretch;
-  justify-content: center;
-}
-
-.activityList li:not(:last-child) .checkRail::before {
-  position: absolute;
-  inset-block: 12px -12px;
-  inline-size: 2px;
-  background: var(--line);
-  content: "";
-}
-
-.checkDot {
-  position: relative;
-  z-index: 1;
-  inline-size: 12px;
-  block-size: 12px;
-  margin-block-start: 5px;
-  border-radius: 50%;
-}
-
-.checkDotIn { background: var(--success); box-shadow: 0 0 0 4px var(--success-soft); }
-.checkDotOut { border: 2px solid var(--ink); background: var(--paper); box-shadow: 0 0 0 4px var(--surface-muted); }
-.checkDotOther { background: var(--muted); box-shadow: 0 0 0 4px var(--surface-muted); }
-
-.checkDetails {
-  display: grid;
-  min-width: 0;
-  gap: 0;
-  padding-block-end: var(--s3);
-}
-
-.checkLine { margin: 0; }
-
-.checkDetails strong {
-  font-weight: 700;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.checkAction {
-  margin-inline-start: var(--s2);
-  font-size: var(--small);
-  font-weight: 600;
-}
-
-.checkIn { color: var(--success); }
-.checkOut { color: var(--ink); }
-.checkOther { color: var(--muted); }
-
-.deskName {
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.4;
-}
-
 @media (max-width: 680px) {
   .entrySummary {
     grid-template-columns: minmax(0, 1fr);
@@ -544,11 +382,6 @@
   .programList li {
     grid-template-columns: minmax(86px, 0.65fr) minmax(0, 1.4fr);
     gap: var(--s2);
-  }
-
-  .scheduledBadge {
-    grid-column: 2;
-    justify-self: start;
   }
 
   .recentActions {
@@ -568,10 +401,6 @@
   }
 
   .programInfo {
-    grid-column: 1 / -1;
-  }
-
-  .scheduledBadge {
     grid-column: 1 / -1;
   }
 
@@ -605,7 +434,7 @@
 .readinessLabel {
   grid-area: label;
   color: var(--ink);
-  font-weight: 650;
+  font-weight: var(--fw-strong);
 }
 
 .readinessStatus {
@@ -632,16 +461,16 @@
 
 .stageBand > span {
   color: var(--ink);
-  font-weight: 700;
+  font-weight: var(--fw-strong);
 }
 
 .stageBand > span strong {
-  font-weight: 800;
+  font-weight: var(--fw-heavy);
 }
 
 .stageNext {
   color: var(--ink);
-  font-weight: 700;
+  font-weight: var(--fw-strong);
 }
 
 
@@ -740,7 +569,7 @@
   margin: 0;
   color: var(--ink);
   font-size: var(--body);
-  font-weight: 750;
+  font-weight: var(--fw-heavy);
 }
 
 .recentCompactMeta {
@@ -774,12 +603,6 @@
 
 .rail .programList li {
   border-bottom-color: var(--line);
-}
-
-.rail .scheduledBadge {
-  border-color: var(--line);
-  background: var(--surface-muted);
-  color: var(--muted);
 }
 
 .rail .sectionAction :global(.button-secondary) {
@@ -873,7 +696,7 @@
 .runbookCopy strong {
   color: var(--ink);
   font-size: var(--body);
-  font-weight: 700;
+  font-weight: var(--fw-strong);
   letter-spacing: -0.01em;
 }
 
@@ -884,26 +707,6 @@
   font-size: var(--label);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.runbookStatus {
-  justify-self: end;
-  color: var(--muted);
-  font-family: var(--body-font);
-  font-size: var(--label);
-  font-weight: 650;
-  white-space: nowrap;
-}
-
-.runbookCue.done .runbookStatus {
-  color: var(--success);
-}
-
-.runbookCue.current .runbookStatus {
-  padding: 3px 6px;
-  background: var(--brand);
-  color: var(--on-brand);
-  font-weight: 800;
 }
 
 .runbookEmpty {
@@ -964,7 +767,7 @@
   align-items: center;
   gap: var(--s2);
   color: var(--nav-text);
-  font-weight: 800;
+  font-weight: var(--fw-heavy);
   letter-spacing: 0;
 }
 
@@ -999,16 +802,10 @@
   font-size: var(--small);
 }
 
-.rail .scheduledBadge {
-  justify-self: start;
-  margin-top: var(--s1);
-}
-
 /* Long program names and places remain readable rather than being clipped. */
 .runbookCopy strong,
 .runbookCopy span,
-.programInfo strong,
-.deskName { overflow-wrap: anywhere; }
+.programInfo strong { overflow-wrap: anywhere; }
 .runbookCopy span { overflow: visible; white-space: normal; }
 .rail { position: static; }
 .pageLinkIcon { display: none; }
@@ -1020,18 +817,6 @@
   .pageLinkIcon { display: inline-block; }
 }
 .runbookCue.done .runbookDot { background: var(--surface-muted); border-color: var(--line-strong); }
-.runbookCue.done .runbookStatus { color: var(--muted); }
-@media (max-width: 560px) {
-  .regionMetrics .metricValue { font-size: 28px; }
-}
-@media (max-width: 360px) {
-  .regionMetrics .metricGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .regionMetrics .metricCard:nth-child(3) {
-    grid-column: 1 / -1;
-    border-left: 0;
-    border-top: 1px solid var(--line);
-  }
-}
 
 /* 승인 대기 진입은 사이드 내비 뱃지와 지금 할 일에 둔다. 개요 뱃지행 링크는 렌더하지 않는다. */
 .mobilePriority { display: none; }
@@ -1039,7 +824,7 @@
 .regionAnalysis { grid-area: analysis; min-width: 0; border-top: 1px solid var(--line); }
 /* 기간 분석은 전용 화면이 맡고, 여기엔 오늘 숫자와 링크 한 줄만 둔다. */
 .periodLine { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s5); margin: 0; padding-block: var(--s2); font-size: var(--small); font-variant-numeric: tabular-nums; }
-.periodLine strong { font-weight: 800; }
+.periodLine strong { font-weight: var(--fw-heavy); }
 .periodMuted { color: var(--muted); }
 .periodMuted strong { color: var(--ink); }
 .periodLink { margin-left: auto; min-height: 44px; display: inline-flex; align-items: center; }
@@ -1062,7 +847,7 @@
   background: var(--paper);
   color: var(--ink);
   font-size: var(--small);
-  font-weight: 650;
+  font-weight: var(--fw-strong);
   text-decoration: none;
 }
 
@@ -1071,7 +856,7 @@
 .queueCount {
   color: var(--ink);
   font-size: var(--small);
-  font-weight: 750;
+  font-weight: var(--fw-heavy);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1113,29 +898,29 @@
 
 .liveEntryCount {
   font-size: var(--display-xl);
-  font-weight: 800;
+  font-weight: var(--fw-heavy);
   line-height: 1;
   letter-spacing: -0.04em;
   overflow-wrap: anywhere;
 }
-.liveEntryCount span { margin-inline-start: 2px; font-size: 20px; font-weight: 700; letter-spacing: normal; }
-.liveEntryTotal { color: var(--muted); font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.liveEntryCount span { margin-inline-start: 2px; font-size: var(--text-lg); font-weight: var(--fw-strong); letter-spacing: normal; }
+.liveEntryTotal { color: var(--muted); font-size: var(--text-lg); font-weight: var(--fw-strong); overflow-wrap: anywhere; }
 .liveEntryRate {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: flex-end;
   gap: 0 var(--s2);
-  font-size: 20px;
+  font-size: var(--text-lg);
   line-height: 1.35;
   font-variant-numeric: tabular-nums;
 }
 .liveEntryRate strong {
   color: var(--ink);
-  font-weight: 800;
+  font-weight: var(--fw-heavy);
   letter-spacing: -0.03em;
 }
-.liveEntryLabel { font-weight: 600; }
+.liveEntryLabel { font-weight: var(--fw-strong); }
 
 /* The entry card anchors the live screen: raised, roomier, hairline-free surroundings. */
 @media (min-width: 1101px) {
@@ -1171,7 +956,7 @@
 }
 
 .liveLegend > span { display: inline-flex; align-items: center; gap: var(--s2); }
-.liveLegend strong { color: var(--ink); font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.liveLegend strong { color: var(--ink); font-size: var(--text-md); font-weight: var(--fw-heavy); font-variant-numeric: tabular-nums; }
 
 .legendDot {
   inline-size: 10px;
@@ -1179,7 +964,7 @@
   border-radius: 50%;
   background: var(--ink);
 }
-.legendDotOpen { border: 1px solid #C9CDD2; background: #EDEFF1; }
+.legendDotOpen { border: 1px solid var(--line-strong); background: var(--surface-sunken); }
 
 .liveRosterLinks > a {
   display: inline-flex;
@@ -1222,7 +1007,7 @@
 }
 .liveOverview .queueIdle > :global(.astryx-section) { display: flex; align-items: center; gap: var(--s3); }
 .liveOverview .queueIdle > :global(.astryx-section) > :first-child { min-height: 0; flex: none; }
-.liveOverview .queueIdle [data-console-section-head] h2 { font-size: var(--small); font-weight: 700; color: var(--success); }
+.liveOverview .queueIdle [data-console-section-head] h2 { font-size: var(--small); font-weight: var(--fw-strong); color: var(--success); }
 .liveOverview .queueIdle > :global(.astryx-section) > :last-child { min-width: 0; }
 
 .liveOverview .runbookIdle {
@@ -1273,9 +1058,9 @@
   align-items: center;
   gap: 2px;
   color: var(--brand-text);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-style: normal;
-  font-weight: 700;
+  font-weight: var(--fw-strong);
   white-space: nowrap;
 }
 .rosterGo svg { width: 14px; height: 14px; color: currentColor; }
@@ -1291,9 +1076,9 @@
 }
 .liveOverview .regionRecent .recentCount {
   padding: 2px var(--s3);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--surface-muted);
-  font-weight: 600;
+  font-weight: var(--fw-strong);
 }
 .liveOverview .regionRecent .activityList { margin-top: var(--s3); }
 @media (max-width: 1100px) {
@@ -1354,46 +1139,25 @@
 }
 .cardDeck .runbookCue:last-child { border-bottom: 1px solid var(--line); }
 .cardDeck .runbookDot { display: none; }
-.cardDeck .runbookCue time { color: var(--ink); font-family: inherit; font-size: var(--h3); font-weight: 750; letter-spacing: -0.02em; text-align: left; }
+.cardDeck .runbookCue time { color: var(--ink); font-family: inherit; font-size: var(--h3); font-weight: var(--fw-heavy); letter-spacing: -0.02em; text-align: left; }
 .cardDeck .runbookCopy strong { font-size: var(--body); word-break: keep-all; }
 .cardDeck .runbookCopy span { font-size: var(--small); white-space: normal; }
-.cardDeck .runbookStatus { padding: var(--s1) var(--s3); border-radius: 999px; background: var(--surface-muted); color: var(--muted); font-size: var(--label); }
 .cardDeck .runbookCue.done { background: var(--surface-muted); }
 .cardDeck .runbookCue.done time, .cardDeck .runbookCue.done .runbookCopy strong { color: var(--muted); }
-.cardDeck .runbookCue.done .runbookStatus { background: var(--paper); color: var(--success); }
 .cardDeck .runbookCue.current { margin: 0; padding-inline: var(--s4); border-color: var(--ink); background: var(--ink); }
 .cardDeck .runbookCue.current time, .cardDeck .runbookCue.current .runbookCopy strong { color: var(--paper); }
 .cardDeck .runbookCue.current .runbookCopy span { color: var(--side-muted); }
-.cardDeck .runbookCue.current .runbookStatus { background: var(--brand); color: var(--paper); }
 
 /* Entry feed: avatar, name and an action pill, desk and time ago, clock on the right. */
-.cardDeck .activityList li {
-  grid-template-columns: 36px minmax(0, 1fr) auto;
-  grid-template-areas: "avatar details time";
-  align-items: center;
-  gap: var(--s3);
-  padding-block: var(--s3);
-  border-bottom: 1px solid var(--line);
-}
-.cardDeck .activityList li:last-child { border-bottom: 0; }
-.cardDeck .checkRail { display: none; }
-.cardDeck .checkTime { grid-area: time; color: var(--muted); font-size: var(--small); font-weight: 650; text-align: right; }
-.cardDeck .checkDetails { grid-area: details; }
-.checkAvatar { display: none; }
-.cardDeck .checkAvatar { grid-area: avatar; display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; background: var(--surface-muted); color: var(--ink); font-size: var(--small); font-weight: 700; }
-.cardDeck .checkAvatar[data-tone="In"] { background: var(--success-soft); color: var(--success); }
-.cardDeck .checkLine { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
-.cardDeck .checkAction { padding: 2px var(--s2); border-radius: 999px; background: var(--surface-muted); font-size: var(--label); font-weight: 700; }
-.cardDeck .checkIn { background: var(--success-soft); }
 
 /* Signup / entry flow: three number tiles and the analysis link. */
 .cardDeck .regionAnalysis .periodLine { display: grid; gap: var(--s3); padding: 0; }
-.periodTitle { margin: 0; color: var(--ink); font-size: var(--h3); font-weight: 750; }
+.periodTitle { margin: 0; color: var(--ink); font-size: var(--h3); font-weight: var(--fw-heavy); }
 .periodStats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2); }
 .periodStat { display: grid; gap: var(--s1); padding: var(--s3); border-radius: var(--radius-medium); background: var(--surface-muted); }
-.periodStat small { color: var(--muted); font-size: var(--label); font-weight: 600; word-break: keep-all; }
-.periodStat strong { display: inline-flex; align-items: baseline; gap: 2px; font-size: 26px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
-.periodStat em { color: var(--muted); font-size: var(--small); font-style: normal; font-weight: 600; }
+.periodStat small { color: var(--muted); font-size: var(--label); font-weight: var(--fw-strong); word-break: keep-all; }
+.periodStat strong { display: inline-flex; align-items: baseline; gap: 2px; font-size: var(--text-xl); font-weight: var(--fw-heavy); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.periodStat em { color: var(--muted); font-size: var(--small); font-style: normal; font-weight: var(--fw-strong); }
 .cardDeck .regionAnalysis .periodLink { margin-left: 0; justify-self: start; }
 
 /* After the event: the final summary opens with the result ring. */
@@ -1407,12 +1171,23 @@
 @media (max-width: 640px) {
   .cardDeck .regionRunbook, .cardDeck .regionRecent, .cardDeck .regionAnalysis, .cardDeck .rail { padding: var(--s4); }
   .cardDeck .runbookCue { grid-template-columns: 52px minmax(0, 1fr); }
-  .cardDeck .runbookStatus { grid-column: 2; justify-self: start; }
-  .periodStat strong { font-size: 22px; }
+  .periodStat strong { font-size: var(--text-xl); }
   .endTop { flex-direction: column; align-items: flex-start; }
 }
 
 /* Close status after the event: one card with the facts and its single entry. */
 .cardDeck .regionStatus { padding: var(--s4) var(--s5); border: 1px solid var(--line); border-radius: var(--radius-large); background: var(--surface-muted); }
 .cardDeck .closeStatus { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s3); }
-.cardDeck .closeStatus p { margin: 0; font-weight: 600; word-break: keep-all; }
+.cardDeck .closeStatus p { margin: 0; font-weight: var(--fw-strong); word-break: keep-all; }
+
+/* 최근 입퇴장: 공용 목록 행(아바타·이름·알약·시각). 줄 사이 헤어라인은 행이 그린다. */
+.cardDeck .activityList { gap: 0; }
+.cardDeck .activityList > li { border-bottom: 0; }
+.checkLine { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
+.checkLine strong { font-weight: var(--fw-strong); overflow-wrap: anywhere; }
+.checkTime { display: grid; justify-items: end; color: var(--muted); font-size: var(--text-sm); font-weight: var(--fw-strong); font-variant-numeric: tabular-nums; line-height: var(--lh-tight); white-space: nowrap; }
+.checkTime small { font-size: var(--text-xs); font-weight: var(--fw-regular); }
+
+/* 일정 상태는 공용 알약이 색을 맡는다. 현재 일정(잉크 면)에서는 알약이 흰 바탕을 유지한다. */
+.cardDeck .runbookStatus { justify-self: end; }
+.cardDeck .runbookCue.current .runbookStatus { background: var(--surface-work); color: var(--brand-text); }

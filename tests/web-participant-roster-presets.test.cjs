@@ -41,7 +41,8 @@ test('approved roster design stays locked', () => {
   // Search, filter and tools carry icons; rows carry an initial avatar; the bulk bar actions carry icons.
   assert.match(list, /<span className=\{styles\.searchGlyph\} aria-hidden="true"><SearchIcon \/><\/span>/u, 'search has a magnifier');
   assert.match(list, /<FilterIcon \/>\s*<span>필터/u, 'filter control has a filter icon');
-  assert.match(list, /className=\{styles\.avatar\} data-status=\{person\.status\}/u, 'rows carry an initial avatar');
+  // Reopened 2026-11-20 (디자인 시스템 적용): the initial avatar is the shared ConsoleAvatar, tinted by status.
+  assert.match(list, /<ConsoleAvatar name=\{person\.name\} tone=\{avatarTone\(person\.status\)\} \/>/u, 'rows carry an initial avatar');
   assert.match(list, /icon=\{<UsersIcon \/>\}/u);
   assert.match(list, /<MessageIcon \/> 메시지 작성/u);
   assert.match(list, /data-bulk="danger"/u, 'bulk cancel is marked destructive');

@@ -1,9 +1,9 @@
 {
   "note": "Ratchet baseline for tests/web-design-tokens-guard.test.cjs. Counts may only go down. Refresh with: node tests/web-design-tokens-guard.test.cjs --update",
   "totals": {
-    "fontSizePx": 175,
-    "radius": 122,
-    "hex": 182
+    "fontSizePx": 155,
+    "radius": 115,
+    "hex": 177
   },
   "files": {
     "console/clients/clients.module.css": {
@@ -107,14 +107,14 @@
       "hex": 0
     },
     "console/events/[id]/event-overview-board.module.css": {
-      "fontSizePx": 6,
-      "radius": 6,
-      "hex": 2
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
     },
     "console/events/[id]/event-overview.module.css": {
-      "fontSizePx": 10,
+      "fontSizePx": 0,
       "radius": 0,
-      "hex": 3
+      "hex": 0
     },
     "console/events/[id]/live/live.module.css": {
       "fontSizePx": 3,
@@ -163,11 +163,11 @@
     },
     "console/events/[id]/participants/import/import.module.css": {
       "fontSizePx": 0,
-      "radius": 1,
+      "radius": 0,
       "hex": 0
     },
     "console/events/[id]/participants/participants.module.css": {
-      "fontSizePx": 4,
+      "fontSizePx": 0,
       "radius": 0,
       "hex": 0
     },

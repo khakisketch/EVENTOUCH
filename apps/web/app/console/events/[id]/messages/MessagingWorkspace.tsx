@@ -16,6 +16,9 @@ import { readRecipientStatusHandoff } from "../../../console-handoff";
 import { useConsoleDraftGuard, useConsoleLeaveConfirmation, UNCONFIRMED_WRITE_CLOSE_MESSAGE } from "../../../console-draft-guard";
 import StageTransitionConfirmation from "../../../console-ui/StageTransitionConfirmation";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
+import ConsoleAvatar from "../../../console-ui/ConsoleAvatar";
+import ConsoleEmptyState from "../../../console-ui/ConsoleEmptyState";
+import StatusPill, { type StatusPillTone } from "../../../console-ui/StatusPill";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import ConsoleChoiceGroup from "../../../console-ui/ConsoleChoiceGroup";
 import ConsoleFormActions from "../../../console-ui/ConsoleFormActions";
@@ -552,11 +555,11 @@ function deliveryStatusLabel(status: string): string {
   }
 }
 
-function statusTone(status: string): string {
-  if (status === "SENT") return styles.statusGood;
-  if (["FAILED", "PARTIAL"].includes(status)) return styles.statusBad;
-  if (["NEEDS_CONNECTION", "UNCONNECTED", "SIMULATED", "ACCEPTED"].includes(status)) return styles.statusWarning;
-  return styles.statusNeutral;
+function statusTone(status: string): StatusPillTone {
+  if (status === "SENT") return "ok";
+  if (["FAILED", "PARTIAL"].includes(status)) return "danger";
+  if (["NEEDS_CONNECTION", "UNCONNECTED", "SIMULATED", "ACCEPTED"].includes(status)) return "wait";
+  return "neutral";
 }
 
 function hasExplicitTimeZone(value: string): boolean {
@@ -3173,7 +3176,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                                 checked={selectedSet.has(person.id)}
                                 onChange={() => toggleRecipient(person.id)}
                               />
-                              <span className={styles.recipientName}>{person.name}</span><i className={styles.recipientAvatar} data-status={person.status} aria-hidden="true">{[...person.name.trim()][0] ?? "?"}</i>
+                              <span className={styles.recipientName}>{person.name}</span><ConsoleAvatar className={styles.recipientAvatar} name={person.name} tone={person.status === "APPROVED" ? "ok" : person.status === "PENDING" ? "wait" : person.status === "WAITLIST" ? "info" : "neutral"} />
                               <span className={styles.recipientMeta} data-recipient-meta>
                                 {person.company ? `${person.company} · ` : ""}{person.group} · {maskPhone(person.phone)} · {participantStatusLabel(person.status)}
                               </span>
@@ -3182,11 +3185,11 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                         ))}
                       </ul>
                     ) : showSelectedOnly ? (
-                      <p className={styles.empty}>선택한 대상이 없습니다.</p>
+                      <ConsoleEmptyState kind="filtered" title="선택한 대상이 없습니다." />
                     ) : activeParticipants.length ? (
-                      <p className={styles.empty}>조건에 맞는 수신자가 없습니다.</p>
+                      <ConsoleEmptyState kind="filtered" title="조건에 맞는 수신자가 없습니다." />
                     ) : (
-                      <p className={styles.empty}>등록된 참가자가 없습니다.</p>
+                      <ConsoleEmptyState title="등록된 참가자가 없습니다." />
                     )}
                     </details>
                     {campaignFieldError?.field === "ids" && !recipientReviewRequired ? <p className={styles.fieldError} id="campaign-recipients-error" role="alert">{campaignFieldError.message}</p> : null}
@@ -3440,39 +3443,56 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 <section className={styles.reviewCard} hidden={composeStep !== 3} aria-labelledby="campaign-review-heading">
                   <div className={styles.reviewHeading}>
                     <h3 id="campaign-review-heading" tabIndex={-1}>발송 전 검토</h3>
-                    <p className={styles.finalBody}>{campaignDraft.body}</p>
                     <p>대상과 내용을 확인한 뒤 발송 확인을 진행합니다.</p>
                   </div>
-                  <ul className={styles.draftSummary} aria-label="작성 요약">
-                    <li>
-                      {selectedCount > 0
-                        ? `수신자 ${selectedCount}명 선택${pendingRiskCount > 0 ? ` · 승인 대기·대기 ${pendingRiskCount}명 포함` : ""}${outsideVisibleCount > 0 ? ` · 화면 밖 ${outsideVisibleCount}명 유지` : ""}`
-                        : "수신자를 선택하세요 · 아직 0명입니다"}
-                    </li>
-                    <li>
-                      {campaignDraft.title.trim() && campaignDraft.body.trim()
-                        ? `${channelLabel(campaignDraft.channel)} · 제목·본문 입력됨`
-                        : !campaignDraft.title.trim() && !campaignDraft.body.trim()
-                          ? "제목·본문을 입력하세요"
-                          : !campaignDraft.title.trim()
-                            ? "발송 제목을 입력하세요"
-                            : "메시지 내용을 입력하세요"}
-                    </li>
-                    <li>
-                      {scheduleBadInput ? "예약 날짜와 시간을 확인하세요" : scheduledDraft
-                        ? simulateDraft
-                          ? `모의 예약 · ${formatScheduledInput(campaignDraft.scheduled)} · 수동 실행 · 전달 없음`
-                          : `예약 ${formatScheduledInput(campaignDraft.scheduled)} · ${campaignDraft.scheduleMode === "AUTO" ? "자동 실행" : "수동 실행"}`
-                        : simulateDraft
-                          ? "모의 발송 · 실제 전달 없음"
-                          : "즉시 발송 시도"}
-                    </li>
-                    <li>
-                      {campaignDraft.imageFileId
-                        ? `첨부 사진: ${campaignDraft.imageName || "사진 1장"} · MMS로 발송`
-                        : "첨부 사진 없음"}
-                    </li>
-                  </ul>
+                  {/* Reopened 2026-11-20: who gets it, how, what it costs and the exact wording sit in one summary card. */}
+                  <div className={styles.summaryCard}>
+                    <div className={styles.summaryHead}>
+                      <p className={styles.summaryCount}><strong>{selectedCount}</strong><span>명에게 {channelLabel(campaignDraft.channel)} · {submitModeLabel}</span></p>
+                      <StatusPill tone={simulateDraft ? "info" : "wait"} dot>{simulateDraft ? "모의 발송 · 실제 전달 없음" : "실제 발송 · 되돌릴 수 없음"}</StatusPill>
+                    </div>
+                    <ul className={styles.draftSummary} aria-label="작성 요약">
+                      <li>
+                        {selectedCount > 0
+                          ? `수신자 ${selectedCount}명 선택${pendingRiskCount > 0 ? ` · 승인 대기·대기 ${pendingRiskCount}명 포함` : ""}${outsideVisibleCount > 0 ? ` · 화면 밖 ${outsideVisibleCount}명 유지` : ""}`
+                          : "수신자를 선택하세요 · 아직 0명입니다"}
+                      </li>
+                      <li>
+                        {campaignDraft.title.trim() && campaignDraft.body.trim()
+                          ? `${channelLabel(campaignDraft.channel)} · 제목·본문 입력됨`
+                          : !campaignDraft.title.trim() && !campaignDraft.body.trim()
+                            ? "제목·본문을 입력하세요"
+                            : !campaignDraft.title.trim()
+                              ? "발송 제목을 입력하세요"
+                              : "메시지 내용을 입력하세요"}
+                      </li>
+                      <li>
+                        {scheduleBadInput ? "예약 날짜와 시간을 확인하세요" : scheduledDraft
+                          ? simulateDraft
+                            ? `모의 예약 · ${formatScheduledInput(campaignDraft.scheduled)} · 수동 실행 · 전달 없음`
+                            : `예약 ${formatScheduledInput(campaignDraft.scheduled)} · ${campaignDraft.scheduleMode === "AUTO" ? "자동 실행" : "수동 실행"}`
+                          : simulateDraft
+                            ? "모의 발송 · 실제 전달 없음"
+                            : "즉시 발송 시도"}
+                      </li>
+                      <li>
+                        {campaignDraft.imageFileId
+                          ? `첨부 사진: ${campaignDraft.imageName || "사진 1장"} · MMS로 발송`
+                          : "첨부 사진 없음"}
+                      </li>
+                      <li>
+                        {simulateDraft
+                          ? "비용 · 모의 발송은 요금이 발생하지 않습니다"
+                          : campaignDraft.channel === "MMS"
+                            ? "비용 · 사진 문자는 별도 요금이 발생합니다"
+                            : "비용 · 발송 요금은 공급사 요금제를 따릅니다"}
+                      </li>
+                    </ul>
+                    <div className={styles.summaryBody}>
+                      <p className={styles.summaryBodyLabel}>보낼 문구</p>
+                      <p className={styles.finalBody}>{campaignDraft.body}</p>
+                    </div>
+                  </div>
                   {ticketLinkInvalidCount > 0 ? <p className={styles.help} role="note">
                     티켓을 사용할 수 없거나 상태를 확인할 수 없는 수신자 {ticketLinkInvalidCount}명 · {simulateDraft ? "모의 기록은 가능하지만 실제 발송 전 확인이 필요합니다." : "실제 발송 전에 티켓을 확인해 주세요."}{" "}
                     <ProductLink variant="ghost" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</ProductLink>
@@ -3767,22 +3787,22 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                             {campaign.scheduled || campaign.status === "SCHEDULED" ? <small>예약 {formatSavedSchedule(campaign.scheduled)}</small> : null}
                           </td>
                           <td className={styles.historyStatus} data-history-status>
-                            <span className={`${styles.status} ${resultMatchUnconfirmed ? styles.statusWarning : statusTone(campaign.status)}`}>
+                            <StatusPill tone={resultMatchUnconfirmed ? "wait" : statusTone(campaign.status)}>
                               {campaign.submissionUnconfirmed ? "공급사 접수 미확인" : resultMatchUnconfirmed ? "수신자 결과 확인 필요" : campaign.status === "SENT" && campaign.providerKind !== "solapi" ? "발송 기록 · 전달 근거 미확인" : messageStatusLabel(campaign.status)}
-                            </span>
+                            </StatusPill>
                             {overdue ? (
-                              <span className={`${styles.status} ${styles.statusWarning}`}>{campaign.simulate ? "실행 시점 지남·수동 실행 필요" : "실행 시점 지남·상태 확인"}</span>
+                              <StatusPill tone="wait">{campaign.simulate ? "실행 시점 지남·수동 실행 필요" : "실행 시점 지남·상태 확인"}</StatusPill>
                             ) : null}
                             {campaign.status === "SCHEDULED" && campaign.simulate ? (
-                              <span className={`${styles.status} ${styles.statusNeutral}`}>모의 예약·전달 없음</span>
+                              <StatusPill tone="neutral">모의 예약·전달 없음</StatusPill>
                             ) : null}
                             {["SCHEDULED", "NEEDS_CONNECTION"].includes(campaign.status) && invalidSchedule ? (
-                              <span className={`${styles.status} ${styles.statusWarning}`}>예약 시각 확인 필요</span>
+                              <StatusPill tone="wait">예약 시각 확인 필요</StatusPill>
                             ) : null}
-                            {blocked ? <span id={`campaign-blocked-${campaign.id}`} className={`${styles.status} ${styles.statusWarning}`}>{recipientChanged ? "수신자 변경 · 발송 보류" : "실행 전 확인 필요"}</span> : null}
-                            {!campaign.simulate && ["SCHEDULED", "NEEDS_CONNECTION"].includes(campaign.status) && !campaign.recipientRoutingReviewed && !blocked ? <span className={`${styles.status} ${styles.statusWarning}`}>참가 상태·그룹 직접 확인</span> : null}
-                            {campaign.status === "SENDING" && campaign.recipientChangeCount > 0 ? <span className={`${styles.status} ${styles.statusWarning}`}>수신자 변경 · 재제출 중단</span> : null}
-                            {retryAmbiguous || syncAmbiguous || cancelAmbiguous ? <span className={`${styles.status} ${styles.statusWarning}`}>이전 작업 처리 확인 필요</span> : null}
+                            {blocked ? <span id={`campaign-blocked-${campaign.id}`}><StatusPill tone="wait">{recipientChanged ? "수신자 변경 · 발송 보류" : "실행 전 확인 필요"}</StatusPill></span> : null}
+                            {!campaign.simulate && ["SCHEDULED", "NEEDS_CONNECTION"].includes(campaign.status) && !campaign.recipientRoutingReviewed && !blocked ? <StatusPill tone="wait">참가 상태·그룹 직접 확인</StatusPill> : null}
+                            {campaign.status === "SENDING" && campaign.recipientChangeCount > 0 ? <StatusPill tone="wait">수신자 변경 · 재제출 중단</StatusPill> : null}
+                            {retryAmbiguous || syncAmbiguous || cancelAmbiguous ? <StatusPill tone="wait">이전 작업 처리 확인 필요</StatusPill> : null}
                           </td>
                           <td className={styles.historyActionCell}><div className={styles.campaignActions}>
                             {canExecute ? (
@@ -3941,7 +3961,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                               {campaign.deliveries.map((delivery, index) => (
                                 <li key={`${delivery.participantId}-${index}`}>
                                   <span className={styles.deliveryName}>{delivery.name || "이름 미등록"}</span>
-                                  <span className={`${styles.status} ${statusTone(delivery.status)}`}>{delivery.manualProviderReview ? `운영자 기록 · ${delivery.manualProviderReview === "ACCEPTED" ? "공급사 접수" : "공급사 미접수"}` : delivery.status === "SENT" && campaign.providerKind !== "solapi" ? "전달 근거 미확인" : delivery.resultMatchUnconfirmed ? "결과 연결 미확인" : deliveryStatusLabel(delivery.status)}</span>
+                                  <StatusPill tone={statusTone(delivery.status)}>{delivery.manualProviderReview ? `운영자 기록 · ${delivery.manualProviderReview === "ACCEPTED" ? "공급사 접수" : "공급사 미접수"}` : delivery.status === "SENT" && campaign.providerKind !== "solapi" ? "전달 근거 미확인" : delivery.resultMatchUnconfirmed ? "결과 연결 미확인" : deliveryStatusLabel(delivery.status)}</StatusPill>
                                   <time dateTime={delivery.at || undefined}>{formatDate(delivery.at)}</time>
                                   {campaign.genericTransport && campaign.genericSubmissionUnconfirmed && campaign.genericAttemptActive !== false && delivery.status === "SENDING" ? <LockedProviderReference name={delivery.name} phone={delivery.snapshotPhone} reference={delivery.reference} /> : null}
                                   {campaign.genericTransport && campaign.genericAttemptActive === false && delivery.status === "SENDING" && !delivery.manualProviderReview && !messagesLocked && !(providerCheck?.payload.id === campaign.id && providerCheck.payload.participantId === delivery.participantId) ? <ProductButton id={`provider-check-trigger-${campaign.id}-${delivery.participantId}`} type="button" variant="secondary" disabled={Boolean(providerCheck) || otherHistoryReceipt || busyAction !== null} onClick={() => {
@@ -3953,7 +3973,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                               ))}
                             </ul>
                           ) : (
-                            <p className={styles.empty}>표시할 수신 처리 내역이 없습니다.</p>
+                            <ConsoleEmptyState kind="filtered" title="표시할 수신 처리 내역이 없습니다." />
                           )}
                         </details>
                         {providerCheck?.payload.id === campaign.id ? <section aria-label="공급사 확인 결과 기록" className={styles.providerCheck}>
@@ -4000,11 +4020,11 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
               ) : null}
               </>
             ) : (
-              <p className={styles.empty}>
-                {historyQuery || historyStatus !== "ALL" ? "조건에 맞는 발송이 없습니다." : attentionOnly
-                  ? "확인이 필요한 발송이 없습니다. 전체 발송 기록에서 최근 상태를 확인할 수 있습니다."
-                  : "아직 발송 기록이 없습니다. 메시지 작성에서 첫 안내를 준비하세요."}
-              </p>
+              <ConsoleEmptyState
+                kind={historyQuery || historyStatus !== "ALL" || attentionOnly ? "filtered" : "empty"}
+                title={historyQuery || historyStatus !== "ALL" ? "조건에 맞는 발송이 없습니다." : attentionOnly ? "확인이 필요한 발송이 없습니다." : "아직 발송 기록이 없습니다."}
+                description={historyQuery || historyStatus !== "ALL" ? undefined : attentionOnly ? "전체 발송 기록에서 최근 상태를 확인할 수 있습니다." : "메시지 작성에서 첫 안내를 준비하세요."}
+              />
             )}
             {historyQuery || historyStatus !== "ALL" ? <ProductButton type="button" variant="ghost" onClick={() => { setHistoryQuery(""); setHistoryStatus("ALL"); setHistoryLimit(10); }}>기록 검색·필터 초기화</ProductButton> : null}
             </details>
