@@ -1,5 +1,8 @@
 'use strict';
 
+// Reopened 2026-11-19: a four-card status strip (진행 중·준비 중·종료·받은 응답, big counts) tops the
+// list, the review doorway is an amber card, group titles carry counts and the status tabs are a segmented
+// control. The ledger itself and the single orange action are unchanged.
 // Approved programs composition (2026-11-14): a flat ledger grouped by run
 // state with type tiles, one amber doorway to a modal review drawer, and the
 // merged answer card. Change it only on a new owner decision.
@@ -27,6 +30,15 @@ test('approved programs design stays locked: ledger rows grouped by run state, o
   assert.match(workspace, /className=\{styles\.rowAction\}/u, '시작 / 다시 열기 sit at the row end, 종료 inside the expanded row');
   assert.match(workspace, /onClick=\{\(\) => props\.onRequestStatus\("CLOSED"\)\}>종료</u);
   assert.doesNotMatch(css, /\.moduleCard\s*\{[^}]*border-bottom/su, 'rows are divided by space, not hairlines');
+});
+
+test('reopened 2026-11-19: a status strip of counts tops the ledger and groups show their size', () => {
+  assert.match(workspace, /className=\{styles\.statStrip\} aria-label="콘텐츠 현황"/u);
+  for (const label of ['진행 중', '준비 중', '종료', '받은 응답']) assert.ok(workspace.includes(`"${label}"`), `${label} card`);
+  assert.match(workspace, /styles\.groupCount/u);
+  assert.match(css, /\.statCard dd\s*\{[^}]*font-size:\s*32px[^}]*tabular-nums/su);
+  assert.match(css, /\.reviewLine\s*\{[^}]*border:\s*1px solid var\(--warning-line\)/su, 'the review doorway is the amber card');
+  assert.match(css, /\.statusTabs button\[aria-pressed="true"\]\s*\{[^}]*background:\s*var\(--ink\)/su);
 });
 
 test('review drawer: one doorway, modal presentation, same handlers as the lists', () => {

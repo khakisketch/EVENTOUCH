@@ -1,8 +1,10 @@
 "use strict";
 
 // Event list (행사), approved 2026-11-14 (design-review events-options.html,
-// B2). Source-only; rendering rides the real browser check. Change it only on
-// a new owner decision.
+// B2). Reopened 2026-11-19: the stage tabs became filter cards (big count plus
+// share bar), the running event a dark board, rows gained a date tile and a
+// stage pill, and the search/toggle/view switch became pills. Source-only;
+// rendering rides the real browser check.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -21,11 +23,14 @@ test("approved event list design stays locked", () => {
   assert.match(home, /className=\{styles\.liveCard\}/u);
   assert.match(home, /운영 현황 열기/u);
 
-  // Stage is ink-underline tabs with counts; the toggle keeps its queue count.
+  // Reopened 2026-11-19: stage is four filter cards (ink outline when chosen, big count,
+  // share bar); the toggle keeps its queue count.
   assert.match(home, /role="group" aria-label="진행 단계"/u);
   assert.match(home, /aria-pressed=\{filter === item\.id\}/u);
-  assert.match(home, /\{item\.label\}<small>\{counts\[item\.id\]\}<\/small>/u);
-  assert.match(css, /\.stageTabActive\s*\{[^}]*border-bottom-color:\s*var\(--ink\)/su);
+  assert.match(home, /<span className=\{styles\.stageLabel\}>\{item\.label\}<\/span>\s*<small className=\{styles\.stageCount\}>\{counts\[item\.id\]\}<\/small>/u);
+  assert.match(home, /styles\.stageBar/u, "each card carries its share of the whole");
+  assert.match(css, /\.stageTabActive[^{]*\{[^}]*border-color:\s*var\(--ink\)/su, "the chosen card is an ink outline, not orange");
+  assert.match(css, /\.stageCount\s*\{[^}]*font-size:\s*32px[^}]*tabular-nums/su);
   assert.match(home, /aria-label=\{`승인 대기 있는 행사만 보기 \(\$\{pendingQueueCount\}건\)`\}/u);
   const order = ["styles.homeSearch", "styles.homeWork"].map((token) => home.indexOf(token));
   assert.ok(order.every((p) => p >= 0) && order[0] < order[1], "search first, then the approval toggle");
@@ -38,7 +43,10 @@ test("approved event list design stays locked", () => {
 });
 
 test("a row is name, one date line, countdown, arrow; the next action is a sibling link", () => {
-  assert.match(row, /styles\.stageDot/u, "the stage is a dot, not a pill");
+  // Reopened 2026-11-19: a date tile leads and the stage is a tinted pill with a dot.
+  assert.match(row, /styles\.dateTile/u, "a date tile leads the row");
+  assert.match(row, /styles\.stageChip/u, "the stage reads as a tinted pill");
+  assert.match(row, /styles\.stageDot/u, "the pill keeps the dot shape beside the colour");
   assert.doesNotMatch(row, /stage-badge|eventStageClassName/u);
   assert.match(row, /<strong>\{lead\}<\/strong>/u, "the date leads in strong type");
   assert.match(row, /"일정 미정"/u, "unknown dates stay explicit");
@@ -58,6 +66,7 @@ test("a row is name, one date line, countdown, arrow; the next action is a sibli
   assert.ok(row.indexOf("</ProductLink>") < row.indexOf("styles.rowAction"), "the action is not nested in the entry link");
   assert.equal((row.match(/<ProductLink/g) || []).length, 2, "one entry and one optional action");
   assert.match(css, /\.rowAction\s*\{[^}]*min-height:\s*44px/su);
+  assert.match(css, /\.rowActionPill\s*\{[^}]*var\(--warning-soft\)/su, "waiting work is the amber pill");
   assert.match(css, /\.rowAction\s*\{[^}]*word-break:\s*keep-all[^}]*overflow-wrap:\s*anywhere/su);
   for (const sel of [".eventRowLink:focus-visible", ".rowAction:focus-visible"]) {
     assert.ok(css.includes(sel), `${sel} keeps a visible focus style`);
@@ -65,9 +74,9 @@ test("a row is name, one date line, countdown, arrow; the next action is a sibli
 });
 
 test("the countdown stays quiet text; only today and tomorrow are emphasised", () => {
-  assert.doesNotMatch(css, /\.eventRecency[^{]*\{[^}]*background/su, "countdown is text, not a filled badge");
+  assert.doesNotMatch(css, /\.eventRecency\s*\{[^}]*background/su, "the countdown stays text unless it is today or tomorrow");
   assert.match(css, /\.eventRecency\s*\{[^}]*color:\s*var\(--muted\)[^}]*font-variant-numeric:\s*tabular-nums/su);
-  assert.match(css, /\.eventRecency\[data-soon\]\s*\{[^}]*color:\s*var\(--ink\)[^}]*font-weight:\s*800/su);
+  assert.match(css, /\.eventRecency\[data-soon\]\s*\{[^}]*background:\s*var\(--ink\)[^}]*font-weight:\s*800/su, "today and tomorrow become an ink pill");
   assert.match(home, /recency === "오늘" \|\| recency === "내일"/u);
   for (const token of ["오늘", "내일", "어제", "D-${days}", "D+${days}"]) assert.ok(home.includes(token), `countdown keeps ${token}`);
   assert.match(home, /event\.date > todayKey/u);

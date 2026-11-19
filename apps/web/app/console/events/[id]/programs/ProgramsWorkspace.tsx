@@ -1876,6 +1876,19 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       {state.canManage ? (
         state.modules.length ? (
           <section className={styles.listSection} aria-label="참여 콘텐츠 목록">
+            <dl className={styles.statStrip} aria-label="콘텐츠 현황">
+              {([
+                ["live", "진행 중", state.modules.filter((module) => module.status === "OPEN").length],
+                ["prep", "준비 중", state.modules.filter((module) => module.status === "DRAFT").length],
+                ["done", "종료", state.modules.filter((module) => module.status === "CLOSED").length],
+                ["resp", "받은 응답", state.responses.length],
+              ] as const).map(([tone, label, count]) => (
+                <div key={tone} className={styles.statCard} data-tone={tone}>
+                  <dt>{label}</dt>
+                  <dd>{count}</dd>
+                </div>
+              ))}
+            </dl>
             {state.modules.length > 8 || hasProgramFilter ? (
               <div className={styles.listTools}>
                 <label>
@@ -1908,7 +1921,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
               <>
                 {moduleGroups.map((group) => (
                   <div key={group.key} className={styles.moduleGroup}>
-                    <h2 className={styles.groupTitle}>{group.label}</h2>
+                    <h2 className={styles.groupTitle} data-group={group.key}>{group.label}<span className={styles.groupCount}>{group.modules.length}</span></h2>
                     <ul className={styles.moduleList}>
                       {group.modules.map((module) => (
                         <ModuleCard

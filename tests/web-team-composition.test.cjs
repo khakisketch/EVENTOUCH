@@ -2,8 +2,9 @@
 
 // Team and permissions (팀·권한), approved 2026-11-16 (design-review
 // team-options-b.html → team-options-b4.html, option A: three-bar gauge).
-// Source-only; rendering rides the real browser check. Change it only on a
-// new owner decision.
+// Reopened 2026-11-19: a status strip tops the list, tabs are a segmented pill
+// control, avatars take the role colour and role/state read as pills. Rows stay
+// flat and hold one control. Source-only; rendering rides the real browser check.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -16,6 +17,7 @@ const css = fs.readFileSync(path.join(DIR, "team.module.css"), "utf8");
 test("approved team design stays locked: three tabs, flat people rows, no buttons in a row", () => {
   // Tabs: 구성원 / 행사별 권한 (owner only) / 연동·활동; panels stay mounted.
   assert.match(team, /<ConsoleSectionNav mode="tabs" label="팀·권한 작업" items=\{tabItems\} initialId="team-members" onNavigate=\{setActiveTab\} \/>/u);
+  assert.match(css, /\.tabsHost :global\(\[role="tab"\]\[aria-selected="true"\]\)\s*\{[^}]*background:\s*var\(--ink\)/su, "the chosen tab is an ink-filled segment");
   assert.match(team, /\.\.\.\(state\.isOwner \? \[\{ id: "team-event-permissions", label: "행사별 권한" \}\] : \[\]\)/u);
   assert.match(team, /\{ id: "team-operations", label: "연동·활동" \}/u);
   assert.doesNotMatch(team, /operationsDetails|<details/u, "연동·활동 is a tab, not a folded box");
@@ -40,6 +42,16 @@ test("approved team design stays locked: three tabs, flat people rows, no button
 
   // One orange action on the page.
   assert.match(team, /className="button button-primary"\s+disabled=\{hasUnconfirmedInvite \|\| refreshState !== "idle"\}/u);
+});
+
+test("reopened 2026-11-19: status strip from loaded accounts, role-tinted avatars and pills", () => {
+  assert.match(team, /className=\{teamStyles\.teamStats\} role="group" aria-label="구성원 현황"/u);
+  assert.match(team, /state\.accounts\.filter\(\(account\) => account\.role === role\)\.length/u);
+  assert.match(team, /state\.isOwner \? \(\s*<div className=\{teamStyles\.statWait\}/u, "the invitation count is owner-only like the queue");
+  assert.match(css, /\.statWait\[data-alert="true"\]\s*\{[^}]*var\(--warning-line\)/su, "waiting invitations are the only amber card");
+  assert.match(css, /\.rolePill\[data-role="AGENCY"\]\s*\{[^}]*background:\s*var\(--ink\)/su);
+  assert.match(css, /\.avatar\[data-role="MANAGER"\]/u);
+  assert.doesNotMatch(css, /\.(?:personRow|permRow)\s*\{[^}]*(?:box-shadow|border-radius)/su, "a row is still not a card");
 });
 
 test("member drawer is docked, owner-only, and keeps the role and account write contracts", () => {

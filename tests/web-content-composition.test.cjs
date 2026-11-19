@@ -1,5 +1,7 @@
 'use strict';
 
+// Reopened 2026-11-19: the tabs are an ink-filled segmented control with count chips and
+// ledger rows carry a tinted state circle plus a status pill. Everything else below still holds.
 // Approved 공지·안내 composition (2026-11-14, option C): ink tabs over one flat
 // ledger per type, editors that open in place beside an always-on attendee
 // phone, and a phone that reads the published 참가자 페이지 design. Behavior
@@ -29,7 +31,7 @@ test('content screen is ink tabs over flat ledgers with one orange add action', 
   assert.match(workspace, /<span className=\{styles\.dot\} data-status=\{status\} aria-hidden="true" \/>/u, 'state is a dot; the text carries the meaning');
   assert.match(workspace, /<span className=\{styles\.rowStatus\} data-status=\{status\}>\{statusLabel\}<\/span>/u);
   assert.doesNotMatch(workspace, /styles\.badge\b/u, 'no state chips');
-  assert.match(css, /\.tab\[aria-selected="true"\]\s*\{[^}]*border-bottom-color:\s*var\(--ink\)/su);
+  assert.match(css, /\.tab\[aria-selected="true"\]\s*\{[^}]*background:\s*var\(--ink\)/su);
   // One orange action at a time: the header add action hides while an editor
   // is open, and the editor's primary moves between 저장 and 게시 검토.
   assert.equal((workspace.match(/variant="primary"/gu) ?? []).length, 3, 'two header add buttons and the venue form save; nothing else is fixed orange');

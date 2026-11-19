@@ -448,3 +448,63 @@
 @media (min-width: 1200px) {
   .memberLayout[data-open] { grid-template-columns: minmax(0, 1fr) minmax(360px, 400px); }
 }
+
+/* ---- 재설계 2026-11-19 ----
+   구성원 위에 현황 카드(전체 인원과 역할 분포 막대, 대기 초대, 사용 중지), 탭은 분절 알약,
+   아바타는 역할색, 역할·상태는 알약으로 읽히게 한다. 행은 여전히 평면 hairline이고 행 안에는 컨트롤이 없다. */
+.tabsHost :global([role="tablist"]) { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-muted); }
+.tabsHost :global([role="tab"]) { min-height: 44px; padding: 0 var(--s5); border: 0; border-radius: 999px; font-weight: 650; }
+.tabsHost :global([role="tab"][aria-selected="true"]) { background: var(--ink); color: var(--paper); font-weight: 750; }
+.tabsHost :global([role="tab"]:hover:not([aria-selected="true"])) { background: var(--paper); color: var(--ink); }
+
+.teamStats { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: var(--s3); margin: 0 0 var(--s4); }
+.teamStats:has(> :nth-child(2):last-child) { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+.statTotal, .statWait, .statOff { display: grid; align-content: space-between; gap: var(--s2); min-height: 112px; padding: var(--s3) var(--s4); border: 1px solid var(--line); border-radius: var(--radius-large); background: var(--paper); }
+.statTotal > span:first-child, .statWait > span, .statOff > span { color: var(--muted); font-size: var(--small); font-weight: 650; word-break: keep-all; }
+.statTotal strong, .statWait strong, .statOff strong { display: inline-flex; align-items: baseline; gap: 2px; font-size: 32px; font-weight: 750; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.statTotal strong small, .statWait strong small, .statOff strong small { color: var(--muted); font-size: var(--small); font-weight: 600; letter-spacing: 0; }
+.statWait[data-alert="true"] { border-color: var(--warning-line); background: linear-gradient(180deg, var(--warning-soft), var(--paper) 85%); }
+.statWait[data-alert="true"] strong { color: var(--warning); }
+.statOff[data-alert="true"] strong { color: var(--muted); }
+.roleBar { display: flex; gap: 3px; height: 8px; overflow: hidden; border-radius: 999px; }
+.roleBar i { min-width: 8px; border-radius: 999px; background: var(--line-strong); }
+.roleBar i[data-role="AGENCY"], .roleLegend li[data-role="AGENCY"]::before { background: var(--ink); }
+.roleBar i[data-role="MANAGER"], .roleLegend li[data-role="MANAGER"]::before { background: var(--info); }
+.roleBar i[data-role="STAFF"], .roleLegend li[data-role="STAFF"]::before { background: var(--success); }
+.roleLegend { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4); margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--small); font-weight: 600; }
+.roleLegend li { display: inline-flex; align-items: center; gap: var(--s2); }
+.roleLegend li::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
+.roleLegend b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.peopleList { border-top: 0; }
+.personRow { grid-template-columns: 48px minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.8fr) 20px; min-height: 76px; padding-inline: var(--s2); }
+.avatar { width: 44px; height: 44px; border: 0; color: var(--ink); font-size: var(--body); }
+.avatar[data-role="AGENCY"] { background: var(--ink); color: var(--paper); }
+.avatar[data-role="MANAGER"] { background: var(--info-soft); color: var(--info); }
+.avatar[data-role="STAFF"] { background: var(--success-soft); color: var(--success); }
+.avatarInvite { border: 1px dashed var(--line-strong); background: var(--paper); color: var(--muted); }
+.rolePill { justify-self: start; padding: 3px 12px; border-radius: 999px; background: var(--surface-muted); color: var(--ink); font-size: var(--small); font-weight: 700; }
+.rolePill[data-role="AGENCY"] { background: var(--ink); color: var(--paper); }
+.rolePill[data-role="MANAGER"] { background: var(--info-soft); color: var(--info); }
+.rolePill[data-role="STAFF"] { background: var(--success-soft); color: var(--success); }
+.personState:has(.inviteDot) { justify-self: start; padding: 4px 12px; border-radius: 999px; background: var(--warning-soft); color: var(--warning); }
+.personState:has(.offDot) { justify-self: start; padding: 4px 12px; border-radius: 999px; background: var(--surface-muted); color: var(--muted); }
+
+.gaugeBars { gap: 4px; }
+.gaugeBars i { height: 10px; border-radius: 999px; }
+
+@media (max-width: 768px) {
+  .tabsHost :global([role="tab"]) { padding: 0 var(--s3); }
+  .teamStats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); }
+  .teamStats > :first-child { grid-column: 1 / -1; }
+  .teamStats:has(> :nth-child(2):last-child) { grid-template-columns: minmax(0, 1fr); }
+  .statTotal, .statWait, .statOff { min-height: 92px; padding: var(--s3); }
+  .personRow { padding-inline: 0; }
+}
+
+/* 앞의 데스크톱 열 정의가 좁은 화면 규칙보다 뒤에 오므로 휴대폰 배치를 다시 선언한다. */
+.personState:has(.inviteDot), .personState:has(.offDot) { border-radius: var(--radius-large); }
+@media (max-width: 768px) {
+  .personRow { grid-template-columns: 48px minmax(0, 1fr) 20px; padding-block: var(--s3); }
+  .personRow > .personState:has(.inviteDot), .personRow > .personState:has(.offDot) { justify-self: start; }
+}

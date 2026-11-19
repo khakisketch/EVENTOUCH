@@ -291,6 +291,12 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 - Drawer rows use `review-*` ids; list rows keep `moderation-*`. Recovery banners close the drawer so they are never behind the scrim.
 - Search and status tabs appear only for long lists (more than 8) or while a filter is active.
 
+Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behaviour and the one-orange-action rule):
+
+- Four status cards top the list (진행 중, 준비 중, 종료, 받은 응답; 32px counts, a dot for the state, green number for running). They are read-only; the filter tabs stay for long lists and are a segmented control with an ink-filled choice.
+- "검토할 것 N" is an amber-tinted card with the count in heading size and a white "열기" pill; the calm state is a soft band. Group titles carry a count chip (green running, amber preparing).
+- Rows get a rounded hover surface, 48px type tiles, an 8px meter and a 24px count. 시작 / 다시 열기 are outlined pills at the row end.
+
 ## 공지·안내 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/content/`, option C: an always-on attendee phone). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-content-composition.test.cjs` guards it. This is where notices, the schedule and the venue guide that attendees read are written; draft, publish review and unpublish rules are unchanged.
@@ -301,6 +307,11 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 - Editors open in place of the ledger (not a modal): a quiet crumb (‹ 공지 / ‹ 일정; pressing the open tab again does the same), the item's title as the heading with its state dot, fields, then actions. The editor stays open after 초안 저장 on the saved item. The one orange action moves between 초안 저장 (unsaved or new) and 게시 검토 (saved with changes); 게시 검토 and 게시 내리기 need a saved draft; 전광판 출력 and 삭제 keep their confirmations. The venue tab is one always-open form.
 - The notice body is a rich editor (Tiptap in `RichEditor.tsx`, external library, not hand-built) on a deliberately small schema: bold, italic, bullet and numbered lists, links, pictures. It is stored as Markdown in the existing `body` field (3000 characters including marks), so an old plain-text notice opens and reads unchanged. A picture is an uploaded event file written `![alt](file:<id>)`; phone photos shrink in the browser to the 600KB limit before upload; the server checks every reference is this event's image (6 per notice) and the public file route serves exactly the pictures in published notices. `lib/rich-text.ts` parses the subset to data and `ui/RichText.tsx` renders it with no HTML injection (links only http(s)/mail/phone); the event page and attendee home render it, the venue board shows words only. The 게시 검토 comparison still shows the raw Markdown text.
 - The header carries one orange add action for the open tab (공지 작성 / 일정 추가) and hides it while that tab's editor is open.
+
+Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behaviour and the one-orange-action rule):
+
+- The 공지 / 일정 / 장소 안내 tabs are a segmented pill control (the chosen tab is ink-filled) with the count as a chip, not an underline.
+- A ledger row keeps hairlines and the whole-row hit target, but its state dot sits in a 36px tinted circle (green published, amber edited draft, hollow private) and the state word is a tinted pill. 고정 and PDF are small chips. The phone rail is unchanged.
 
 ## 참가자 페이지 확정 구성
 
@@ -323,6 +334,11 @@ The owner approved this composition on 2026-11-15 (`apps/web/app/console/events/
 - A published event (READY and beyond) that saves with a changed address code confirms first: 이전/새 주소를 나란히 보여 주고 확인은 검정 ("주소 바꾸고 저장"), never orange. Draft-stage saves skip the confirm. Existing duplicate-address and change-conflict handling is unchanged.
 - Save, publish review, close confirm, conflict recovery, receipt recovery, permission locks and the draft guard (naming its dirty sections) are unchanged; recovery banners close the drawer so they are never behind the scrim, and the basics drawer reopens read-frozen while a request is unconfirmed.
 
+Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behaviour and the one-orange-action rule):
+
+- The event card's head carries a soft brand tint and a larger name; the stage block is a connected five-step stepper (finished steps green with a check, the current step an ink circle with a 현재 chip, the next step an outlined circle with a 다음 chip). Orange stays on the primary actions only.
+- Each 운영 기능 tile shows a switch (ink track when on). The real checkbox stays inside the tile, transparent over it, so keyboard and screen readers are unchanged.
+
 ## 메시지 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/messages/MessagingWorkspace.tsx`, option B with a widened writing column). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-messages-composer-contract.test.cjs` guards it.
@@ -333,6 +349,12 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 - "발송 검토로" (and "내용 작성" on step 1) is the only orange action in the composer, left-aligned with the hint beside it. 이전, 수신자 변경, 발송 기록 보기, 내용 수정 and the header 참가자 명단 are ghost. Variable chips are neutral pills, never orange text.
 - 발송 기록 / 템플릿 관리 tabs use the same ink underline. On the template tab the save button is the one orange action.
 - Review stays a separate step. Scheduling, mock send and the send confirmation live there and keep the existing request gates and receipts.
+
+Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behaviour and the one-orange-action rule):
+
+- 발송 기록 / 템플릿 관리 are a segmented pill control; the chosen segment is ink-filled. Step 1/2/3 of the composer are pills with numbered dots; the current step is ink-filled.
+- History opens with three filter cards (전체 발송, 예약된 발송, 확인 필요한 발송: label over a 32px count, ink outline when chosen, amber only for 확인 필요 when it is above zero). Rows keep the table but show channel and recipient count as quiet chips and status as a pill with a dot.
+- Recipient selection shows the chosen count large on a soft band; each recipient row starts with a status-tinted initial avatar. The step recipient summary is a soft band with the count in heading size.
 
 ## 현장 운영 확정 구성
 
@@ -369,6 +391,12 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/Console
 - The next action sits at the row's end as amber text only when one exists (today: "승인 대기 n명 처리"). It is a sibling link, never nested in the row link.
 - The directory carries no progress numbers; showing live entry counts here needs a server change first.
 
+Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behaviour):
+
+- Stage filters are four summary cards that stay the filter: a 32px tabular count and a share-of-all bar, ink outline when chosen, a green dot and bar for 진행 중. The approval toggle is an outlined pill that turns solid ink when on and carries its count in an amber chip when work waits. 콜시트/달력 is a segmented control with icons and sits in the search row. Search is a round field with a magnifier.
+- The running event is one dark card (ink with a brand glow): a live chip, the name in white, a white "운영 현황 열기" pill.
+- A row leads with a date tile (month over day, tinted by stage), then the name with a tinted stage pill (dot plus word, aria-hidden because the stage word stays in the accessible name), the date line, the countdown (today and tomorrow are an ink pill) and an arrow. Waiting approvals are an amber pill; groups show their counts.
+
 ## 결과 보고서 확정 구성
 
 The owner approved this composition on 2026-11-15 (`apps/web/app/console/events/[id]/reports/`, option "최종안": 탭 + 문서 카드 + PPTX 내보내기). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-reports-composition.test.cjs` guards it; `tests/web-reports-presentation.test.cjs` and `tests/web-reports-archive-checklist.test.cjs` keep pinning the A4/16:9 toggle and the print-clone/checklist mechanics those files describe.
@@ -401,6 +429,11 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/console/clients
 - Files wait for a saved form: while fields differ from their opening values the file rows are disabled with a one-line note. Starting an upload or confirming a removal closes the drawer first so that the recovery panel and result messages are on the page, never behind the scrim.
 - Save, upload, link, removal, receipt recovery, same-request retry, the write locks and the draft guard are unchanged.
 
+Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behaviour and the one-orange-action rule):
+
+- Three read-only cards top the list: 전체 고객사, 로고 등록, 사업자등록증 등록 (32px counts with a share-of-all bar, computed from the loaded clients). Search is a round field with a magnifier; 고객사 등록 carries a plus.
+- A row is still flat with hairlines and no controls, but the initial sits in a 48px tinted tile (five soft tones picked from the name) and each file state is a pill: green-tinted with a green dot when registered, a hollow dot on a soft pill when not. The word and the screen-reader state are unchanged.
+
 ## 팀·권한 확정 구성
 
 The owner approved this composition on 2026-11-16 (`apps/web/app/console/team/TeamWorkspace.tsx`, mockup `team-options-b4.html` option A: the three-bar gauge). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-team-composition.test.cjs` guards it.
@@ -411,6 +444,11 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/console/team/Te
 - 행사별 권한 shows one gauge row per 조직 구성원 for the chosen event: a name for the level plus one plain sentence, with three bars repeating it. Levels: 전체 (3 bars, stored as `["all"]`), 설정 제외 (2, every scope but `settings`), 직접 설정 (1, "N개 범위만 바꿀 수 있어요") and 읽기 전용 (0, `[]`). A person not yet on the event reads 배정 전.
 - Tapping a row opens a drawer with the levels as cards (each with an eight-segment preview), 설정 제외 marked 추천 as guidance only, and 직접 선택 which unfolds the eight scopes in three groups. One orange 권한 저장. Pending saves freeze the event picker, the levels and the scopes, keep the drawer open and replay the same request; unsaved edits ask before closing.
 - Server permission model, command ids, receipts, retry replay, last-owner rules and the draft guard are unchanged; only the presentation moved.
+
+Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behaviour and the one-orange-action rule):
+
+- The three tabs are a segmented pill control (ink-filled choice). 구성원 opens with a status strip from the loaded accounts: 전체 구성원 with a role-share bar and legend (조직 소유자 ink, 조직 구성원 blue, 현장 스태프 green), 대기 중인 초대 (owners only, the single amber card when above zero) and 사용 중지.
+- Rows stay flat hairline rows with one control, but the initial is a role-tinted circle (owner ink, member blue, staff green, invitation dashed), the role is a pill and 대기 중 / 사용 중지 are tinted pills. 구성원 초대 carries a plus. The gauge bars are rounder and thicker; the drawer, role flow and write contracts are unchanged.
 
 ## 명단 가져오기 확정 구성
 

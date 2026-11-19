@@ -10,7 +10,7 @@ import ProductLink from "../../ui/ProductLink";
 import { buildStaffAssignHandoffHref, sortTeamEventsForAssign, teamEventOptionLabel } from "../console-handoff";
 import { loginHrefForLocation } from "../../auth-redirect";
 import ConsoleConfirm from "../console-ui/ConsoleConfirm";
-import { CopyIcon } from "../console-ui/ConsoleIcons";
+import { CopyIcon, PlusIcon } from "../console-ui/ConsoleIcons";
 import ConsolePage from "../console-ui/ConsolePage";
 import ConsoleToolbar from "../console-ui/ConsoleToolbar";
 import ConsoleFeedback from "../console-ui/ConsoleFeedback";
@@ -484,7 +484,7 @@ export default function TeamWorkspace() {
   return (
     <ConsolePage
       pageId="team"
-      sectionNav={<ConsoleSectionNav mode="tabs" label="팀·권한 작업" items={tabItems} initialId="team-members" onNavigate={setActiveTab} />}
+      sectionNav={<div className={teamStyles.tabsHost}><ConsoleSectionNav mode="tabs" label="팀·권한 작업" items={tabItems} initialId="team-members" onNavigate={setActiveTab} /></div>}
       toolbar={
         state.isOwner ? (
           <ConsoleToolbar
@@ -494,6 +494,7 @@ export default function TeamWorkspace() {
                 className="button button-primary"
                 disabled={hasUnconfirmedInvite || refreshState !== "idle"}
                 onClick={requestInviteOpen}
+                icon={<PlusIcon />}
               >
                 구성원 초대
               </ProductButton>
@@ -566,6 +567,35 @@ export default function TeamWorkspace() {
       <div className={teamStyles.teamFieldsContent}>
       <div className={teamStyles.memberLayout} data-open={memberRow && state.canManageTeam ? "" : undefined}>
       <ConsoleSection headingId="team-members" title="구성원" surface="plain" width="full" className={teamStyles.hiddenHead}>
+        {state.accounts.length ? (
+          <div className={teamStyles.teamStats} role="group" aria-label="구성원 현황">
+            <div className={teamStyles.statTotal}>
+              <span>전체 구성원</span>
+              <strong>{state.accounts.length}<small>명</small></strong>
+              <span className={teamStyles.roleBar} aria-hidden="true">
+                {(["AGENCY", "MANAGER", "STAFF"] as const).map((role) => {
+                  const count = state.accounts.filter((account) => account.role === role).length;
+                  return count ? <i key={role} data-role={role} style={{ flexGrow: count }} /> : null;
+                })}
+              </span>
+              <ul className={teamStyles.roleLegend}>
+                {(["AGENCY", "MANAGER", "STAFF"] as const).map((role) => (
+                  <li key={role} data-role={role}>{roleLabel(role)} <b>{state.accounts.filter((account) => account.role === role).length}</b></li>
+                ))}
+              </ul>
+            </div>
+            {state.isOwner ? (
+              <div className={teamStyles.statWait} data-alert={state.invitations.length > 0 ? "true" : undefined}>
+                <span>대기 중인 초대</span>
+                <strong>{state.invitations.length}<small>건</small></strong>
+              </div>
+            ) : null}
+            <div className={teamStyles.statOff} data-alert={state.accounts.some((account) => !account.active) ? "true" : undefined}>
+              <span>사용 중지</span>
+              <strong>{state.accounts.filter((account) => !account.active).length}<small>명</small></strong>
+            </div>
+          </div>
+        ) : null}
         {state.isOwner && state.invitations.length ? (
           <ConsoleSection headingId="pending-invites" title="대기 중인 초대" surface="plain" width="full">
             <ul className={teamStyles.peopleList} aria-label="대기 중인 초대 목록">
@@ -587,7 +617,7 @@ export default function TeamWorkspace() {
                       <p className={teamStyles.personContact}><SafeContact value={invitation.email} /></p>
                     </div>
                     <p className={teamStyles.personRole}>
-                      {roleLabel(invitation.role)}
+                      <span className={teamStyles.rolePill} data-role={invitation.role}>{roleLabel(invitation.role)}</span>
                       <small>{eventName ? `담당 행사: ${eventName}` : "담당 행사 미지정"}</small>
                     </p>
                     <p className={teamStyles.personState}>
@@ -616,7 +646,7 @@ export default function TeamWorkspace() {
                 : 0;
               return (
                 <li className={teamStyles.personRow} key={account.id}>
-                  <span className={teamStyles.avatar} aria-hidden="true">{initialOf(account.name)}</span>
+                  <span className={teamStyles.avatar} data-role={account.role} aria-hidden="true">{initialOf(account.name)}</span>
                   <div className={teamStyles.personMain}>
                     <h3 className={teamStyles.personName}>
                       {/* The name button's ::after covers the row, so the whole row is
@@ -633,8 +663,8 @@ export default function TeamWorkspace() {
                     </h3>
                     <p className={teamStyles.personContact}><SafeContact value={account.email} /></p>
                   </div>
-                  <p className={teamStyles.personRole}>
-                    {roleLabel(account.role)}
+                  <p className={teamStyles.personRole} data-role={account.role}>
+                    <span className={teamStyles.rolePill} data-role={account.role}>{roleLabel(account.role)}</span>
                     {grantedEvents ? <small>쓰기 권한 {grantedEvents}개 행사</small> : null}
                   </p>
                   <p className={teamStyles.personState}>

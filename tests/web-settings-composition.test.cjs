@@ -1,5 +1,8 @@
 'use strict';
 
+// Reopened 2026-11-19: the stage row is a connected stepper (done = green check, current = ink
+// circle, next = outline) and the feature tiles carry a switch. Layout, drawer and behaviour below
+// are unchanged.
 // Approved 행사 설정 composition (2026-11-15, option A5): one workbench page
 // (event card with identity plus stage on top, intake and features panels
 // below, basics editing in a right-edge drawer). Behavior (per-section save,
@@ -74,6 +77,14 @@ test('intake reads as a status band plus the participant form', () => {
   // conflict then surfaces in review). Unpublished edits rename it 변경 게시.
   assert.match(workspace, /!state\.registrationOpen \? "양식 게시·접수 열기" : intakeDirty \? "변경 게시" : "양식 게시·접수 열기"/u);
   assert.match(workspace, /void runCommand\("form\.close"/u);
+});
+
+test('reopened 2026-11-19: stage is a stepper and each feature tile shows a switch', () => {
+  assert.match(workspace, /data-done=\{isDone \? "true" : undefined\}/u);
+  assert.match(css, /\.stageStep\[data-done="true"\]::before\s*\{[^}]*var\(--success\)/su, 'finished steps are green with a check');
+  assert.match(css, /\.stageStepCurrent::before\s*\{[^}]*background:\s*var\(--ink\)/su, 'the current step is ink, orange stays for actions');
+  assert.match(css, /\.featureGrid > \.check::after\s*\{[^}]*width:\s*40px/su, 'the switch track');
+  assert.match(css, /\.featureGrid > \.check input\s*\{[^}]*opacity:\s*0/su, 'the real checkbox stays in the tile for keyboard and screen readers');
 });
 
 test('features are always-visible tiles with revert beside save', () => {

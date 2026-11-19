@@ -1,8 +1,10 @@
 "use strict";
 
 // Clients (고객사), approved 2026-11-16 (design-review clients-options.html,
-// option A). Source-only; rendering rides the real browser check. Change it
-// only on a new owner decision.
+// option A). Reopened 2026-11-19: a three-card file-status strip tops the list,
+// avatars are tinted tiles and file state is a pill (dot plus word). The list
+// stays flat and rows still hold no controls. Source-only; rendering rides the
+// real browser check.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -14,7 +16,7 @@ const css = fs.readFileSync(path.join(DIR, "clients.module.css"), "utf8");
 
 test("approved clients design stays locked", () => {
   // A flat list: hairline rows, no card, no buttons inside a row.
-  assert.match(css, /\.clientList\s*\{[^}]*border-top:\s*1px solid var\(--line\)/su);
+  assert.match(css, /\.clientRow\s*\{[^}]*border-bottom:\s*1px solid var\(--line\)/su, "hairline rows");
   assert.doesNotMatch(css, /\.clientRow\s*\{[^}]*(?:box-shadow|border-radius|background:\s*var\(--paper\))/su, "a row is not a card");
   const row = list.slice(list.indexOf("<li className={styles.clientRow}"), list.indexOf("</ul>"));
   assert.doesNotMatch(row, /<ProductButton|<details|<label/u, "a row holds no secondary controls");
@@ -34,6 +36,15 @@ test("approved clients design stays locked", () => {
   assert.equal([...list.matchAll(/button-primary/gu)].length, 2, "고객사 등록 and the drawer save, nothing else");
   assert.match(css, /\.listSection \[data-console-section-head\]\s*\{[^}]*clip:/su);
   assert.doesNotMatch(list, /검색 지우기/u, "the search input clears itself");
+});
+
+test("reopened 2026-11-19: file-status strip and tinted avatars, from real data only", () => {
+  assert.match(list, /<dl className=\{styles\.stats\} aria-label="고객사 자료 현황">/u);
+  assert.match(list, /state\.clients\.filter\(\(client\) => client\.logoFileId\)\.length/u);
+  assert.match(list, /state\.clients\.filter\(\(client\) => client\.docFileId\)\.length/u);
+  assert.match(css, /\.stat dd\s*\{[^}]*font-size:\s*32px[^}]*tabular-nums/su);
+  assert.match(list, /data-tone=\{\(client\.name\.trim\(\)\.codePointAt\(0\) \?\? 0\) % 5\}/u);
+  assert.match(css, /\.clientFiles > span\[data-state="yes"\]\s*\{[^}]*var\(--success-soft\)/su);
 });
 
 test("info and files are managed in one drawer with the write gates intact", () => {

@@ -661,3 +661,66 @@
 @media (max-width: 640px) {
   .conflictComparison { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---- 재설계 2026-11-19 ----
+   진행 단계는 이어진 단계 표시(지난 단계는 ink 원+체크, 현재는 brand 링, 다음은 윤곽)로,
+   운영 기능은 켜고 끄는 스위치가 달린 타일로 읽히게 한다. 상단 카드는 브랜드 틴트 머리를 가진다. */
+.eventCard { overflow: hidden; border: 1px solid var(--line); box-shadow: none; }
+.eventTop { background: linear-gradient(135deg, var(--paper) 55%, var(--brand-tint)); }
+.cal { width: 68px; padding: var(--s2) var(--s2) var(--s3); border-radius: var(--radius-large); }
+.eventName > h2 { font-size: clamp(22px, 2.6vw, 28px); font-weight: 800; }
+.eventFlags { display: inline-flex; flex-wrap: wrap; gap: var(--s2); }
+.cardEdit :global([data-variant="secondary"]) { border-radius: 999px; }
+
+.stageName { font-weight: 800; }
+.stageTimeline { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; counter-reset: step; }
+.stageStep {
+  position: relative; display: grid; justify-items: center; align-content: start; gap: var(--s1);
+  min-width: 0; padding: 40px var(--s1) 0; border: 0; border-radius: 0; background: transparent; color: var(--muted);
+  font-size: var(--small); font-weight: 650; text-align: center; word-break: keep-all; counter-increment: step;
+}
+.stageStep::before {
+  content: counter(step) / ""; position: absolute; top: 0; left: 50%; z-index: 1; display: grid; place-items: center;
+  width: 28px; height: 28px; border-radius: 50%; background: var(--paper); box-shadow: inset 0 0 0 2px var(--line-strong);
+  color: var(--muted); font-size: var(--label); font-weight: 800; font-variant-numeric: tabular-nums; transform: translateX(-50%);
+}
+.stageStep::after { content: ""; position: absolute; top: 13px; left: calc(50% + 14px); width: calc(100% - 28px); height: 2px; background: var(--line); }
+.stageStep:last-child::after { display: none; }
+.stageStep[data-done="true"]::after { background: var(--ink); }
+.stageStep[data-done="true"]::before { content: "✓" / ""; background: var(--ink); box-shadow: none; color: var(--paper); }
+.stageStep[data-done="true"] { color: var(--ink); }
+.stageStepCurrent { border: 0; background: transparent; color: var(--ink); font-weight: 800; }
+.stageStepCurrent::before { background: var(--brand); box-shadow: 0 0 0 5px var(--brand-tint); color: var(--on-brand); }
+.stageStepNext { border: 0; background: transparent; color: var(--ink); font-weight: 700; }
+.stageStepNext::before { background: var(--paper); box-shadow: inset 0 0 0 2px var(--ink); color: var(--ink); }
+.stageStepMark { min-width: 0; height: 20px; padding: 0 var(--s2); font-size: var(--label); }
+.stageStepCurrent .stageStepMark { background: var(--brand); color: var(--on-brand); }
+
+.featureGrid > .check { position: relative; justify-content: space-between; gap: var(--s3); min-height: 60px; padding-inline: var(--s4); cursor: pointer; transition: background-color 0.15s; }
+.featureGrid > .check:hover { background: var(--surface-muted); }
+.featureGrid > .check:has(input:checked) { background: color-mix(in srgb, var(--ink) 4%, var(--paper)); }
+/* 체크박스는 타일 왼쪽 가장자리에 투명하게 남긴다(타일 전체를 덮으면 열린 드로어 아래의 클릭 대상이 겹친다). 타일 어디를 눌러도 라벨이 토글한다. */
+.featureGrid > .check input { position: absolute; top: 50%; left: var(--s3); width: 20px; height: 20px; margin: 0; opacity: 0; cursor: pointer; transform: translateY(-50%); }
+.featureGrid > .check::after { content: ""; flex: none; width: 40px; height: 24px; border-radius: 999px; background: var(--line-strong); transition: background-color 0.15s; }
+.featureGrid > .check::before { content: ""; position: absolute; top: 50%; right: calc(var(--s4) + 18px); z-index: 1; width: 18px; height: 18px; border-radius: 50%; background: var(--paper); box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 30%, transparent); transform: translateY(-50%); transition: right 0.15s; }
+.featureGrid > .check:has(input:checked)::after { background: var(--ink); }
+.featureGrid > .check:has(input:checked)::before { right: calc(var(--s4) + 3px); }
+.featureGrid > .check:has(input:disabled) { cursor: not-allowed; opacity: 0.6; }
+.featureGroupLabel { color: var(--ink); font-weight: 750; }
+
+.intakeBand { border-radius: var(--radius-large); }
+.bandOpen .bandDot { box-shadow: 0 0 0 5px color-mix(in srgb, var(--success) 22%, transparent); }
+
+@media (max-width: 768px) {
+  .stageStep { font-size: var(--label); padding-inline: 0; }
+  .featureGrid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .featureGrid > .check, .featureGrid > .check::after, .featureGrid > .check::before { transition: none; }
+}
+
+/* 주황은 주 동작에만 쓴다: 진행 단계는 지난 단계 초록 체크, 현재 단계 ink 원, 다음 단계 윤곽이다. */
+.stageStep[data-done="true"]::before { background: var(--success); }
+.stageStep[data-done="true"]::after { background: var(--success); }
+.stageStepCurrent::before { background: var(--ink); box-shadow: 0 0 0 5px color-mix(in srgb, var(--ink) 14%, transparent); color: var(--paper); }
+.stageStepCurrent .stageStepMark { background: var(--ink); color: var(--paper); }
