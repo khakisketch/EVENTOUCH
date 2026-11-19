@@ -19,7 +19,9 @@ import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import ConsoleFormActions from "../../../console-ui/ConsoleFormActions";
 import ConsolePage from "../../../console-ui/ConsolePage";
 import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
+import ConsoleEmptyState from "../../../console-ui/ConsoleEmptyState";
 import ConsoleSection from "../../../console-ui/ConsoleSection";
+import StatusPill from "../../../console-ui/StatusPill";
 import DeviceFrame from "../../../console-ui/DeviceFrame";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import uiStyles from "../../../console-ui/console-ui.module.css";
@@ -193,7 +195,9 @@ function boothScheduleNeedsReview(start: string, end: string): boolean {
 // section without any timeout.
 
 function StepPill({ n, tone, children }: { n: number; tone: "ok" | "warn" | "todo" | "wait" | "day"; children: ReactNode }) {
-  return <span className={styles.stepPill} data-tone={tone}><b aria-hidden="true">{n}</b>{children}</span>;
+  // ok = done, warn/todo = work waiting on a person (amber), wait/day = not yet (quiet).
+  const pillTone = tone === "ok" ? "ok" : tone === "warn" || tone === "todo" ? "wait" : "neutral";
+  return <StatusPill tone={pillTone} className={styles.stepPill}><b className={styles.stepNo} aria-hidden="true">{n}</b>{children}</StatusPill>;
 }
 
 export default function OperationsWorkspace({ eventId }: { eventId: string }) {
@@ -1060,7 +1064,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   function operationRecovery(): ReactNode {
     if (!pendingOperation) return null;
     return <section className={styles.recovery} aria-labelledby="operations-recovery-heading">
-      <h2 id="operations-recovery-heading">현장 운영 처리 확인 필요</h2>
+      <h2 id="operations-recovery-heading" className={styles.conflictTitle}>현장 운영 처리 확인 필요</h2>
       <p>이전 요청이 반영됐을 수 있습니다. 서버 확인은 요청을 다시 보내지 않습니다.</p>
       {commandBlocked(pendingOperation.command) ? <p>현재 권한으로 같은 요청을 다시 보낼 수 없습니다. 서버 처리 확인이나 담당자 확인을 이용하세요.</p> : null}
       {operationRecoveryError ? <p role="alert">{operationRecoveryError}</p> : null}
@@ -1281,8 +1285,9 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           <ConsoleSection
             headingId="ops-desks"
             title="입장 데스크 만들기"
+            heading="rule"
             description={<StepPill n={1} tone={desks.length ? "ok" : "todo"}>{desks.length ? `완료 · 데스크 ${desks.length}곳${deskOpenCount === desks.length ? "" : ` (가동 ${deskOpenCount}곳)`}` : "데스크를 만드세요"}</StepPill>}
-            className={`${styles.anchorSection} ${styles.stepSection}`}
+            className={`${styles.anchorSection} ${styles.stepSection}${desks.length ? "" : ` ${styles.stepAmber}`}`}
             action={(
               <ProductButton
                 type="button"
@@ -1296,7 +1301,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             )}
           >
             {deskConflict?.kind === "toggle" ? <section className={styles.deskConflict} aria-labelledby="desk-conflict-heading">
-          <h3 id="desk-conflict-heading" tabIndex={-1}>{deskConflict.incomplete ? "데스크 정보를 확인해야 합니다" : "다른 작업에서 데스크 상태가 변경됐습니다"}</h3>
+          <h3 id="desk-conflict-heading" className={styles.conflictTitle} tabIndex={-1}>{deskConflict.incomplete ? "데스크 정보를 확인해야 합니다" : "다른 작업에서 데스크 상태가 변경됐습니다"}</h3>
           <p>{deskConflict.incomplete ? "가동 요청은 반영되지 않았습니다. 최신 데스크를 확인하고 편집에서 이름·작업 방향·화면 방식을 확인해 주세요." : "이번 요청은 반영되지 않았습니다. 최신 상태를 확인한 뒤 직접 가동하거나 중지해 주세요."}</p>
           {deskConflict.error ? <p role="alert">{deskConflict.error}</p> : null}
           {deskConflict.latest ? <>
@@ -1346,7 +1351,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                 })}
               </ul>
             ) : (
-              <p className="empty-state">등록된 데스크가 없습니다. 진행 중 전환에는 데스크와 스태프 배정이 필요합니다.</p>
+              <ConsoleEmptyState title="등록된 데스크가 없습니다" description="진행 중 전환에는 데스크와 스태프 배정이 필요합니다." />
             )}
             {deskStopPending ? (
               <ConsoleConfirm
@@ -1371,11 +1376,12 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           <ConsoleSection
             headingId="ops-staff"
             title="스태프 배정"
+            heading="rule"
             description={<StepPill n={2} tone={assignableTargets === 0 ? "wait" : gapTargets.length ? "warn" : "ok"}>{assignableTargets === 0 ? "1단계를 먼저" : gapTargets.length ? `${gapTargets.length}곳 담당 필요` : `완료 · 배정 ${assignments.length}건`}</StepPill>}
-            className={`${styles.anchorSection} ${styles.stepSection}`}
+            className={`${styles.anchorSection} ${styles.stepSection}${assignableTargets > 0 && gapTargets.length ? ` ${styles.stepAmber}` : ""}`}
           >
             {assignableTargets === 0 ? (
-              <p className="notice" role="status">배정하려면 먼저 데스크나 부스를 만드세요.</p>
+              <ConsoleEmptyState title="배정하려면 먼저 데스크나 부스를 만드세요" />
             ) : gapTargets.length ? (
               <div className={styles.gapSurface}>
                 <p className={styles.gapHead}><span className={styles.gapMark} aria-hidden="true" />담당이 없는 곳 <b>{gapTargets.length}</b>곳</p>
@@ -1395,7 +1401,11 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                     </ProductButton>
                   </div>
                 ))}
-                {!deskStaffCount ? (
+                {!assignments.length ? (
+                  <p className={styles.gapCondition} role="status">
+                    배정된 스태프가 없습니다. 진행 중으로 전환하려면 입장 데스크에 스태프를 배정하세요.
+                  </p>
+                ) : !deskStaffCount ? (
                   <p className={styles.gapCondition} role="status">
                     진행 중 전환 조건: 등록 데스크 {desks.length}개 · 데스크 배정 {deskStaffCount}건
                   </p>
@@ -1406,16 +1416,12 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                 <p className={styles.gapOk}><span className={styles.gapOkMark} aria-hidden="true"><CrewIcon /></span>모든 위치에 담당이 있습니다 · 배정 {assignments.length}건</p>
               </div>
             )}
-            {assignableTargets > 0 && !assignments.length ? (
-              <p className="empty-state">
-                배정된 스태프가 없습니다. 진행 중으로 전환하려면 입장 데스크에 스태프를 배정하세요.
-              </p>
-            ) : null}
           </ConsoleSection>
 
           <ConsoleSection
             headingId="ops-scan"
             title="스태프 폰에서 스캔"
+            heading="rule"
             description={<StepPill n={3} tone="day">당일</StepPill>}
             className={`${styles.anchorSection} ${styles.stepSection}`}
           >
@@ -1454,8 +1460,9 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           <ConsoleSection
             headingId="ops-booths"
             title="부스 (선택)"
+            heading="rule"
             description={boothSummary}
-            className={styles.anchorSection}
+            className={`${styles.anchorSection} ${styles.stepSection}`}
             action={(
               <ProductButton
                 type="button"
@@ -1496,7 +1503,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                 })}
               </ul>
             ) : (
-              <p className="empty-state">등록된 부스가 없습니다.</p>
+              <ConsoleEmptyState title="등록된 부스가 없습니다" />
             )}
           </ConsoleSection>
           ) : (
@@ -1607,7 +1614,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             ) : null}
           </div>
           {mapUploadUncertain ? <section className={styles.recovery} aria-labelledby="operations-map-upload-heading">
-            <h3 id="operations-map-upload-heading">지도 파일 확인 필요</h3>
+            <h3 id="operations-map-upload-heading" className={styles.conflictTitle}>지도 파일 확인 필요</h3>
             <p>파일이 이미 올라갔을 수 있습니다. 같은 파일 요청을 다시 시도해 결과를 확인하세요. 선택한 파일은 이 화면에만 유지되므로 새로고침하거나 떠나면 같은 요청을 다시 시도할 수 없습니다.</p>
             {mapUploadError ? <p role="alert">{mapUploadError}</p> : null}
             <div className={styles.recoveryActions}>
@@ -1639,7 +1646,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           {(() => {
             const image = mapImageOverride ?? boothMap.draft?.image ?? null;
             if (!image) {
-              return <p className="empty-state">아직 배치도가 없습니다. 배치도 올리기로 시작하세요.</p>;
+              return <ConsoleEmptyState title="아직 배치도가 없습니다" description="배치도 올리기로 시작하세요." />;
             }
             return (
               <div className={styles.mapWrap}>
@@ -1937,7 +1944,7 @@ function DeskDialog({
         }}
       >
         {conflict ? <section className={styles.deskConflict} aria-labelledby="desk-conflict-heading">
-          <h3 id="desk-conflict-heading" tabIndex={-1}>다른 작업에서 데스크 정보가 변경됐습니다</h3>
+          <h3 id="desk-conflict-heading" className={styles.conflictTitle} tabIndex={-1}>다른 작업에서 데스크 정보가 변경됐습니다</h3>
           <p>이번 저장은 반영되지 않았습니다. 작성 중인 내용은 그대로 있습니다. 최신 데스크를 확인해 주세요.</p>
           {conflict.error ? <p role="alert">{conflict.error}</p> : null}
           {conflict.latest ? <>
@@ -2109,7 +2116,7 @@ function BoothDialog({
         }}
       >
         {conflict ? <section className={styles.deskConflict} aria-labelledby="booth-conflict-heading">
-          <h3 id="booth-conflict-heading" tabIndex={-1}>다른 작업에서 부스 정보가 변경됐습니다</h3>
+          <h3 id="booth-conflict-heading" className={styles.conflictTitle} tabIndex={-1}>다른 작업에서 부스 정보가 변경됐습니다</h3>
           <p>이번 저장은 반영되지 않았습니다. 작성 중인 내용은 그대로 있습니다. 최신 정보와 비교해 주세요.</p>
           {conflict.error ? <p role="alert">{conflict.error}</p> : null}
           {conflict.latest ? <>
