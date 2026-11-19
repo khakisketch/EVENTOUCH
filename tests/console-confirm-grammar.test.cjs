@@ -90,11 +90,12 @@ test("every screen that changes something irreversible uses the shared confirmat
   }
 });
 
-test("the stage-draw work comes first and setup forms fold away", () => {
+test("the stage-draw picker and card come first and setup forms fold away", () => {
   const draws = read("console/events/[id]/draws/DrawsWorkspace.tsx");
   assert.ok(
-    draws.indexOf('<StagePreview') < draws.indexOf('<h2 className={styles.pickerTitle}>'),
-    "the stage card with the live preview comes before the picker"
+    // Reopened 2026-11-19: the picker cards lead, the stage card with the live preview follows.
+    draws.indexOf('<h2 className={styles.pickerTitle}>') < draws.indexOf('<StagePreview'),
+    "the picker cards come before the stage card with the live preview"
   );
   assert.match(draws, /setupDetails/u);
   assert.match(draws, /추첨 프로그램 만들기/u, "program settings open from a dialog");
