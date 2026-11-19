@@ -593,7 +593,9 @@
     }
 
     .tear,
-  .ticketSuccess {
+  .ticketSuccess,
+  .ticketPage [data-bottom-action],
+  .ticketPage [data-bottom-action-spacer] {
       display: none;
     }
 }
@@ -652,4 +654,11 @@
   font-weight: 800;
   text-decoration: none;
   text-align: center;
+}
+
+/* A state message inside the white card of its own screen is a flat block, not a box in a box. */
+.ticketMessage .messageInline {
+  padding: 0;
+  border: 0;
+  background: transparent;
 }

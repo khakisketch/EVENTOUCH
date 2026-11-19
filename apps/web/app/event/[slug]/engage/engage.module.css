@@ -505,3 +505,9 @@
   .programDisclosure > summary span[data-state] { grid-column: 2 / -1; grid-row: 2; justify-self: start; }
   .programDisclosure > summary::after { grid-column: 3; grid-row: 1; }
 }
+
+/* The ticket-missing and error screens put the message straight on the page; the page already is the surface. */
+.noticeCard { padding: 0; border: 0; background: transparent; color: var(--engage-ink); }
+.noticeCard h2 { color: inherit; font-size: var(--text-xl); letter-spacing: var(--ls-heading); }
+.noticeCard .actions { margin-top: var(--s2); }
+.noticeCard .actions a { color: var(--engage-ink); }

@@ -247,7 +247,7 @@ async function main() {
       const page = await context.newPage();
       await page.goto(`${f.baseUrl}/event/${f.slug}/engage?ticket=${encodeURIComponent(approved.ticket)}`, { waitUntil: 'networkidle' });
       // Reopened 2026-11-20: the poll this participant already answered sits in the folded "완료한 참여" list, so it is in the page but not visible.
-      await page.getByRole('heading', { name: '공개 투표' }).waitFor({ state: 'attached' });
+      await page.getByRole('heading', { name: '공개 투표', includeHidden: true }).waitFor({ state: 'attached' });
       await page.goto(`${f.baseUrl}/event/${nextId}/engage`, { waitUntil: 'networkidle' });
       await page.getByRole('heading', { name: '티켓이 확인되지 않습니다', exact: true }).waitFor();
       assert.equal(new URL(page.url()).searchParams.has('ticket'), false);
@@ -360,7 +360,8 @@ async function main() {
       if (state === '참가 확정') {
         await page.getByRole('button', { name: '참가 메뉴' }).click();
         await page.getByRole('link', { name: /참여 콘텐츠 보기/ }).click();
-        await page.getByRole('heading', { name: '공개 투표' }).waitFor();
+        // Reopened 2026-11-20: a poll this participant answered sits in the folded "완료한 참여" list (in the page, not visible).
+        await page.getByRole('heading', { name: '공개 투표', includeHidden: true }).waitFor({ state: 'attached' });
         assert.equal(await page.getByText('초안 표식').count(), 0);
         assert.equal(await page.getByText('꺼진 기능 표식').count(), 0);
         await page.screenshot({ path: path.join(out, 'engage-320.png'), fullPage: true });
@@ -410,7 +411,7 @@ async function main() {
       await page.getByText('합성 공개 답변', { exact: true }).waitFor();
       await page.getByRole('button', { name: '참가 메뉴' }).click();
       await page.getByRole('link', { name: /참여 콘텐츠 보기/ }).click();
-      await page.getByRole('heading', { name: '공개 투표' }).waitFor();
+      await page.getByRole('heading', { name: '공개 투표', includeHidden: true }).waitFor({ state: 'attached' });
       // Full reload cannot safely bind the shared cookie to the chosen
       // participant when storage is unavailable; ask again instead.
       await page.reload({ waitUntil: 'networkidle' });

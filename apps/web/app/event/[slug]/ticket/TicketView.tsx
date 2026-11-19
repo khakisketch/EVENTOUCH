@@ -499,7 +499,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
         {/* Same state, same words as the home entries: the attendee has no
             ticket here, and the way forward is the same everywhere. */}
         <h1>티켓이 확인되지 않습니다</h1>
-        <AttendeeStateMessage kind="info" icon="ticket" title={!storageAvailable ? "이 탭에서 티켓이 확인되지 않습니다." : "이 브라우저에 티켓이 보관되어 있지 않습니다."}>
+        <AttendeeStateMessage kind="info" icon="ticket" className={styles.messageInline} title={!storageAvailable ? "이 탭에서 티켓이 확인되지 않습니다." : "이 브라우저에 티켓이 보관되어 있지 않습니다."}>
           {!storageAvailable ? null : recoveryBlocked
             ? "이 행사는 문자로 다시 연결할 수 없으므로 신청을 완료한 브라우저 탭을 확인하세요. 탭을 찾을 수 없다면 행사 주최 측에 문의하세요."
             : "신청할 때 쓴 연락처를 인증하면 다시 열 수 있습니다."}
@@ -524,7 +524,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
       <section className={`${styles.ticketCard} ${styles.ticketMessage}${pass ? ` ${styles.passMessage}` : ""}`}>
         {pass ? <span className={styles.messageIcon} data-tone="bad"><AttendeeIcon name="info" size={26} /></span> : null}
         <h1>티켓을 사용할 수 없습니다</h1>
-        <AttendeeStateMessage kind="error" title={state.message}>
+        <AttendeeStateMessage kind="error" className={styles.messageInline} title={state.message}>
           {state.canRecover
             ? `새 티켓 안내 링크를 확인하세요. ${recoveryBlocked
               ? "새 티켓을 받지 못했다면 행사 주최 측에 문의하세요."
