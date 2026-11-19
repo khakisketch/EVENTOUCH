@@ -16,11 +16,18 @@ import { cancellationNeedsReview } from "../../../../../lib/cancellation-state.c
 import {
   RANGE_DAYS_CAP,
   analyzePeriod,
+  companyBreakdown,
+  hourlyEntries,
   localDateKey,
+  periodDelta,
   presetRange,
+  previousRange,
+  type PeriodAnalysis,
+  type PeriodDelta,
   type PeriodEntry,
   type PeriodPreset,
 } from "../../../../../lib/period-analysis";
+import { CompanyBars, DailyChart, HourlyBars } from "./PeriodCharts";
 import styles from "./analysis.module.css";
 
 type AnalysisData = {
@@ -30,6 +37,7 @@ type AnalysisData = {
   canManage: boolean;
   available: boolean;
   applications: string[];
+  applicants: Array<{ at: string; company: string }>;
   entries: PeriodEntry[];
   cancellationReview: number;
   updatedAt: string;
@@ -118,6 +126,9 @@ export default function PeriodAnalysisWorkspace({ eventId }: { eventId: string }
             canManage,
             available: participantsAvailable && checksAvailable,
             applications: people.map((person) => text(person.createdAt)).filter((value) => value !== ""),
+            applicants: people
+              .filter((person) => text(person.createdAt) !== "")
+              .map((person) => ({ at: text(person.createdAt), company: text(person.company) })),
             entries: checkRecords
               .filter((check) => text(check.action) === "IN")
               .map((check) => ({ at: text(check.at), key: text(check.participantId) || String(check.id) })),
@@ -194,6 +205,34 @@ export default function PeriodAnalysisWorkspace({ eventId }: { eventId: string }
   );
 }
 
+// 직전 같은 길이 기간과 비교할 때 붙는 이름. 오늘은 아직 끝나지 않은 하루라
+// 증감을 계산하지 않고 어제 하루 전체를 기준값으로만 보여 준다.
+function comparisonLabel(preset: PeriodPreset, days: number): string {
+  if (preset === "today") return "어제 하루";
+  if (preset === "yesterday") return "그제";
+  if (preset === "last7") return "직전 7일";
+  return days === 1 ? "전날" : `직전 ${days}일`;
+}
+
+function Compare({ delta, label }: { delta: PeriodDelta; label: string }) {
+  // 두 기간 모두 0명이면 "변동 없음"은 정보가 아니라 소음이다.
+  if (delta.previous === 0 && delta.change === 0) return null;
+  return (
+    <dd className={styles.kpiNote}>
+      <span className={styles.delta} data-dir={delta.direction}>
+        {delta.direction === "same" ? "변동 없음" : (
+          <>
+            <i aria-hidden="true">{delta.direction === "up" ? "▲" : "▼"}</i>
+            {Math.abs(delta.change)}명 {delta.direction === "up" ? "증가" : "감소"}
+            {delta.percent !== null ? ` (${delta.percent}%)` : ""}
+          </>
+        )}
+      </span>
+      <span className={styles.base}>{label} {delta.previous}명</span>
+    </dd>
+  );
+}
+
 function PeriodView({
   data,
   preset,
@@ -210,40 +249,61 @@ function PeriodView({
   const [showZeroDays, setShowZeroDays] = useState(false);
   const [showBasis, setShowBasis] = useState(false);
 
-  const result = analyzePeriod(data.applications, data.entries, range.from, range.to);
+  const result: PeriodAnalysis = analyzePeriod(data.applications, data.entries, range.from, range.to);
   const { points, periodApplications, dailyEntriesSum, periodUnique } = result;
   const zeroPoints = points.filter((point) => point.applications === 0 && point.entries === 0);
   const activePoints = points.filter((point) => point.applications > 0 || point.entries > 0);
   const tablePoints = showZeroDays || zeroPoints.length === 0 ? points : activePoints;
-
-  const maxValue = Math.max(1, ...points.map((point) => Math.max(point.applications, point.entries)));
-  const chartWidth = 640;
-  const chartHeight = 200;
-  const axisPad = 8;
-  const plotTop = 12;
-  const plotBottom = chartHeight - 28;
-  const pairGap = Math.max(2, Math.min(10, Math.floor((chartWidth - axisPad * 2) / Math.max(1, points.length) / 4)));
-  const slot = points.length ? (chartWidth - axisPad * 2) / points.length : 0;
-  const barWidth = Math.max(2, Math.min(26, (slot - pairGap) / 2));
-  const bar = (value: number) => Math.round((value / maxValue) * (plotBottom - plotTop));
-  const tickPoints = points.length > 2 ? [0, Math.floor((points.length - 1) / 2), points.length - 1] : points.map((_, index) => index);
   const todayKey = localDateKey(new Date());
+  const days = points.length;
+  const fromKey = points[0]?.key ?? range.from;
+  const toKey = result.effectiveTo ?? range.to;
+
+  // 직전 같은 길이 기간은 이미 불러온 기록에서 같은 정의로 다시 센다. 행사 전체는 비교할 앞 기간이 없다.
+  const previous = (() => {
+    if (result.error || days === 0 || preset === "all") return null;
+    const span = previousRange(fromKey, days);
+    return span ? analyzePeriod(data.applications, data.entries, span.from, span.to) : null;
+  })();
+  const compareLabel = comparisonLabel(preset, days);
+  const showDelta = previous !== null && !previous.error && preset !== "today";
+  const showReference = previous !== null && !previous.error && preset === "today";
+
+  // 입장률은 행사 전체에서만 말이 된다(그 기간 밖에서 신청한 사람이 입장해도 분모에 없으므로).
+  const rate = preset === "all" && !result.clamped && periodApplications > 0 && periodUnique <= periodApplications
+    ? Math.round((periodUnique / periodApplications) * 100)
+    : null;
+
+  const hours = hourlyEntries(data.entries, fromKey, toKey);
+  const companies = companyBreakdown(data.applicants, fromKey, toKey, 5);
+  const emptyPeriod = periodApplications === 0 && dailyEntriesSum === 0;
+  const chartLabel = `선택 기간 일별 신청·입장 막대그래프. 기간 신청 ${periodApplications}명, 일별 입장 합 ${dailyEntriesSum}명, 기간 고유 입장 ${periodUnique}명.`;
 
   return (
     <div className={styles.view}>
-      <fieldset className={styles.presets}>
-        <legend className="sr-only">기간 선택</legend>
-        {PRESETS.map((item, index) => (
-          <label key={item.value} className={styles.preset} htmlFor={`period-preset-${index}`}>
-            <input id={`period-preset-${index}`} type="radio" name="period-preset" value={item.value}
-              checked={preset === item.value} onChange={() => {
-                onPresetChange(item.value);
-                setShowZeroDays(false);
-              }} />
-            <span>{item.label}</span>
-          </label>
-        ))}
-      </fieldset>
+      <div className={styles.controls}>
+        <fieldset className={styles.presets}>
+          <legend className="sr-only">기간 선택</legend>
+          {PRESETS.map((item, index) => (
+            <label key={item.value} className={styles.preset} htmlFor={`period-preset-${index}`}>
+              <input id={`period-preset-${index}`} type="radio" name="period-preset" value={item.value}
+                checked={preset === item.value} onChange={() => {
+                  onPresetChange(item.value);
+                  setShowZeroDays(false);
+                }} />
+              <span>{item.label}</span>
+            </label>
+          ))}
+        </fieldset>
+        <p className={styles.dateLine}>
+          {result.error ? null : (
+            <>
+              <strong>{fromKey} ~ {toKey}</strong>
+              <span>{days}일{points[days - 1]?.key === todayKey ? " · 오늘 포함" : ""}</span>
+            </>
+          )}
+        </p>
+      </div>
 
       {preset === "custom" ? (
         <div className={styles.rangeFields}>
@@ -259,103 +319,130 @@ function PeriodView({
           </div>
         </div>
       ) : null}
-      <p className={styles.dateLine}>
-        {result.error ? null : `${points[0]?.key ?? range.from} ~ ${result.effectiveTo ?? range.to}${points[points.length - 1]?.key === todayKey ? " (오늘 포함)" : ""}`}
-      </p>
       {result.error ? <p className={styles.error} role="alert">{result.error}</p> : null}
       {result.clamped && !result.error ? <p className={styles.note} role="status">최대 {RANGE_DAYS_CAP}일까지만 봅니다. 종료일을 {result.effectiveTo}로 맞췄습니다.</p> : null}
 
       {!result.error && points.length > 0 ? (
         <>
-          <dl className={styles.totals}>
-            <div><dt>신청</dt><dd>{periodApplications}<small>명</small></dd></div>
-            <div><dt>일별 입장 합</dt><dd>{dailyEntriesSum}<small>명</small></dd></div>
-            <div><dt>기간 고유 입장</dt><dd>{periodUnique}<small>명</small></dd></div>
+          <dl className={styles.kpis}>
+            <div className={`${styles.kpi} ${styles.kpiHero}`}>
+              <dt><i className={styles.dotEntries} aria-hidden="true" />기간 고유 입장</dt>
+              <dd className={styles.kpiValue} data-metric="unique">{periodUnique}<small>명</small></dd>
+              {rate !== null ? (
+                <dd className={styles.rate}>
+                  <span className={styles.rateHead}>
+                    <span>신청 {periodApplications}명 중 {periodUnique}명 입장</span>
+                    <b>입장률 {rate}%</b>
+                  </span>
+                  <span className={styles.rateTrack} aria-hidden="true"><span style={{ width: `${rate}%` }} /></span>
+                </dd>
+              ) : showDelta && previous ? (
+                <Compare delta={periodDelta(periodUnique, previous.periodUnique)} label={compareLabel} />
+              ) : showReference && previous ? (
+                <dd className={styles.kpiNote}><span className={styles.base}>{compareLabel} {previous.periodUnique}명</span></dd>
+              ) : null}
+              <dd className={styles.kpiHint}>선택한 기간 전체에서 중복 제거</dd>
+            </div>
+            <div className={styles.kpi}>
+              <dt><i className={styles.dotApplications} aria-hidden="true" />신청</dt>
+              <dd className={styles.kpiValue} data-metric="applications">{periodApplications}<small>명</small></dd>
+              {showDelta && previous ? (
+                <Compare delta={periodDelta(periodApplications, previous.periodApplications)} label={compareLabel} />
+              ) : showReference && previous ? (
+                <dd className={styles.kpiNote}><span className={styles.base}>{compareLabel} {previous.periodApplications}명</span></dd>
+              ) : null}
+              <dd className={styles.kpiHint}>취소 제외</dd>
+            </div>
+            <div className={styles.kpi}>
+              <dt><i className={styles.dotEntries} aria-hidden="true" />일별 입장 합</dt>
+              <dd className={styles.kpiValue} data-metric="entriesSum">{dailyEntriesSum}<small>명</small></dd>
+              {showDelta && previous ? (
+                <Compare delta={periodDelta(dailyEntriesSum, previous.dailyEntriesSum)} label={compareLabel} />
+              ) : showReference && previous ? (
+                <dd className={styles.kpiNote}><span className={styles.base}>{compareLabel} {previous.dailyEntriesSum}명</span></dd>
+              ) : null}
+              <dd className={styles.kpiHint}>하루 한 번씩 더한 값</dd>
+            </div>
           </dl>
           <p className="sr-only" role="status">
             기간 신청 {periodApplications}명 · 일별 입장 합 {dailyEntriesSum}명 · 기간 고유 입장 {periodUnique}명(중복 제거)
           </p>
-          <svg className={styles.chart} viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label={`선택 기간 일별 신청·입장 막대그래프. 기간 신청 ${periodApplications}명, 일별 입장 합 ${dailyEntriesSum}명, 기간 고유 입장 ${periodUnique}명.`}>
-            {[0, 0.5, 1].map((fraction) => {
-              const y = plotBottom - (plotBottom - plotTop) * fraction;
-              const value = Math.round(maxValue * fraction);
-              return (
-                <g key={fraction}>
-                  <line x1={axisPad} x2={chartWidth - axisPad} y1={y} y2={y} className={styles.grid} />
-                  <text x={axisPad} y={Math.max(10, y - 3)} className={styles.axis}>{value}</text>
-                </g>
-              );
-            })}
-            {points.map((point, index) => {
-              const x = axisPad + index * slot + (slot - barWidth * 2 - pairGap) / 2;
-              const appHeight = bar(point.applications);
-              const entryHeight = bar(point.entries);
-              return (
-                <g key={point.key}>
-                  <rect x={x} y={plotBottom - appHeight} width={barWidth} height={appHeight} className={styles.barApplications}>
-                    <title>{`${point.key} 신청 ${point.applications}명`}</title>
-                  </rect>
-                  <rect x={x + barWidth + pairGap} y={plotBottom - entryHeight} width={barWidth} height={entryHeight} className={styles.barEntries}>
-                    <title>{`${point.key} 입장 ${point.entries}명(일별 고유)`}</title>
-                  </rect>
-                </g>
-              );
-            })}
-            {tickPoints.map((index) => {
-              const point = points[index];
-              if (!point) return null;
-              return (
-                <text key={`tick-${point.key}`} x={axisPad + index * slot + slot / 2} y={chartHeight - 8} textAnchor="middle" className={styles.axis}>
-                  {point.label}
-                </text>
-              );
-            })}
-          </svg>
-          <ul className={styles.legend} aria-label="막대그래프 범례">
-            <li><span className={`${styles.swatch} ${styles.swatchApplications}`} aria-hidden="true" />신청</li>
-            <li><span className={`${styles.swatch} ${styles.swatchEntries}`} aria-hidden="true" />입장(일별 고유)</li>
-            <li className={styles.basisToggle}>
-              <ProductButton type="button" className="button button-quiet" icon={<InfoIcon />} aria-expanded={showBasis} aria-controls="period-basis"
-                onClick={() => setShowBasis((current) => !current)}>
-                집계 기준
-              </ProductButton>
-            </li>
-          </ul>
-          {showBasis ? (
-            <p className={styles.note} id="period-basis">
-              신청은 신청 상태가 취소인 기록을 제외합니다.{data.cancellationReview ? " 취소 기록과 신청 상태가 다른 인원은 확인 전까지 포함합니다." : ""} 입장은 정정된 기록을 제외하며 같은 날의 재입장은 중복 집계하지 않습니다. 일별 입장은 그 날의 고유 입장자 수이며, 기간 고유 입장은 선택한 전체 기간의 중복 제거 수라서 일별 합과 다를 수 있습니다. 날짜는 이 브라우저의 달력 날짜입니다.
-            </p>
-          ) : null}
-          <div className={styles.tableWrap}>
-            <table className={styles.table} aria-label="선택 기간 일별 신청·입장">
-              <thead>
-                <tr>
-                  <th scope="col">날짜</th>
-                  <th scope="col">신청</th>
-                  <th scope="col">입장(일별 고유)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tablePoints.map((point) => (
-                  <tr key={point.key}>
-                    <th scope="row">{point.key}</th>
-                    <td>{point.applications}명</td>
-                    <td>{point.entries}명</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+          <section className={styles.card} aria-labelledby="period-daily-title">
+            <div className={styles.cardHead}>
+              <div>
+                <h2 className={styles.cardTitle} id="period-daily-title">일별 신청·입장</h2>
+              </div>
+              <div className={styles.cardTools}>
+                <ul className={styles.legend} aria-label="막대그래프 범례">
+                  <li><span className={`${styles.swatch} ${styles.swatchApplications}`} aria-hidden="true" />신청</li>
+                  <li><span className={`${styles.swatch} ${styles.swatchEntries}`} aria-hidden="true" />입장(일별 고유)</li>
+                </ul>
+                <ProductButton type="button" variant="ghost" icon={<InfoIcon />} aria-expanded={showBasis} aria-controls="period-basis"
+                  onClick={() => setShowBasis((current) => !current)}>
+                  집계 기준
+                </ProductButton>
+              </div>
+            </div>
+            {showBasis ? (
+              <p className={styles.basis} id="period-basis">
+                신청은 신청 상태가 취소인 기록을 제외합니다.{data.cancellationReview ? " 취소 기록과 신청 상태가 다른 인원은 확인 전까지 포함합니다." : ""} 입장은 정정된 기록을 제외하며 같은 날의 재입장은 중복 집계하지 않습니다. 일별 입장은 그 날의 고유 입장자 수이며, 기간 고유 입장은 선택한 전체 기간의 중복 제거 수라서 일별 합과 다를 수 있습니다. 날짜는 이 브라우저의 달력 날짜입니다.
+              </p>
+            ) : null}
+            <DailyChart points={points} label={chartLabel} empty={emptyPeriod} />
+          </section>
+
+          <div className={styles.split}>
+            <section className={styles.card} aria-labelledby="period-hours-title">
+              <div className={styles.cardHead}>
+                <h2 className={styles.cardTitle} id="period-hours-title">시간대별 입장</h2>
+                <p className={styles.cardSub}>하루의 첫 입장 시각 기준</p>
+              </div>
+              <HourlyBars buckets={hours} />
+            </section>
+            <section className={styles.card} aria-labelledby="period-company-title">
+              <div className={styles.cardHead}>
+                <h2 className={styles.cardTitle} id="period-company-title">소속별 신청</h2>
+                <p className={styles.cardSub}>많은 순 상위 5곳</p>
+              </div>
+              <CompanyBars {...companies} />
+            </section>
           </div>
-          {zeroPoints.length > 0 ? (
-            <p>
-              <ProductButton type="button" className="button button-quiet" aria-expanded={showZeroDays}
-                onClick={() => setShowZeroDays((current) => !current)}>
-                {showZeroDays ? `0명 ${zeroPoints.length}일 접기` : `0명 ${zeroPoints.length}일 보기`}
-              </ProductButton>
-            </p>
-          ) : null}
+
+          <section className={styles.card} aria-labelledby="period-table-title">
+            <div className={styles.cardHead}>
+              <h2 className={styles.cardTitle} id="period-table-title">일별 기록</h2>
+              {zeroPoints.length > 0 ? (
+                <ProductButton type="button" variant="ghost" aria-expanded={showZeroDays}
+                  onClick={() => setShowZeroDays((current) => !current)}>
+                  {showZeroDays ? `0명 ${zeroPoints.length}일 접기` : `0명 ${zeroPoints.length}일 보기`}
+                </ProductButton>
+              ) : null}
+            </div>
+            <div className={styles.tableWrap}>
+              <table className={styles.table} aria-label="선택 기간 일별 신청·입장">
+                <thead>
+                  <tr>
+                    <th scope="col">날짜</th>
+                    <th scope="col">신청</th>
+                    <th scope="col">입장(일별 고유)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tablePoints.map((point) => (
+                    <tr key={point.key}>
+                      <th scope="row">{point.key}</th>
+                      <td>{point.applications}명</td>
+                      <td>{point.entries}명</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </>
       ) : null}
     </div>
   );
 }
+

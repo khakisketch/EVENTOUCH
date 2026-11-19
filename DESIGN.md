@@ -217,7 +217,7 @@ The owner approved this composition on 2026-11-13 and reopened it on 2026-11-19,
 - The board is a single column that stretches across the page (`boardLayout`), so the old named grid areas stay only for the finished stages.
 
 - Header: one stage pill. Intake state and D-day read as plain text, not chips.
-- 기간 분석 (owner decision 2026-11-18, option A): the collapsible period block is gone. The bottom of the page keeps one line (today's applications and entries, last-7-day applications, "기간 분석 보기 →"); the analysis itself is its own screen in the 결과 group (`analysis/PeriodAnalysisWorkspace.tsx`): period buttons (오늘·어제·최근 7일·행사 전체·직접 선택), three totals, one bar chart, a daily table, and a "집계 기준" note behind a button. The date inputs appear only under 직접 선택.
+- 기간 분석 (owner decision 2026-11-18, option A): the collapsible period block is gone. The bottom of the page keeps one line (today's applications and entries, last-7-day applications, "기간 분석 보기 →"); the analysis itself is its own screen in the 결과 group (`analysis/PeriodAnalysisWorkspace.tsx`): period buttons (오늘·어제·최근 7일·행사 전체·직접 선택), three totals, one bar chart, a daily table, and a "집계 기준" note behind a button. The date inputs appear only under 직접 선택. (Recomposed 2026-11-20; see 기간 분석 확정 구성.)
 - Phone header (owner decision 2026-11-18): the open-page link and copy are icons on the title row, and the check time (prefix dropped) sits at the right end of the stage row, so the header stays three rows tall instead of adding an action row under it.
 - Entry progress (finished summary): the bar and the rate are ink, not orange. Below the bar sit one legend (입장 / 확정자 중 미입장) and one "명단 보기" link. The live card and the finished summary share the legend block. The default basis lives in the bar's accessible name; visible basis copy appears only during cancellation review. Archived events link to the confirmed roster.
 - One primary per page. During live, "현장 운영 열기" owns it and the task queue adds none. Archived pages have none.
@@ -225,6 +225,17 @@ The owner approved this composition on 2026-11-13 and reopened it on 2026-11-19,
 - An empty schedule slot keeps the height of its sibling card.
 - 최근 입퇴장 is a timeline: time, then a rail dot (in = green, out = ink outline, other = muted), then details.
 - Reopened 2026-11-19 (stage decks): below the stage board the page splits by stage, and every block is a card. Before the event: the schedule (wide) beside a 신청 흐름 card (오늘·어제·최근 7일 신청 tiles), with no empty entry log for managers. During the event: the schedule and the 신청·입장 흐름 card on the left, the live entry feed (avatar, name, 입장/퇴장 pill, desk · time ago) on the right. After the event: the close status is one card, and 최종 요약 opens with a final entry-rate ring. Schedule cues are bordered rows with a large time, and the current cue is ink.
+
+## 기간 분석 확정 구성
+
+Reopened 2026-11-20 (owner: 기간 분석이 다른 화면과 다르게 조잡하고 미완성 같다). The screen (`analysis/PeriodAnalysisWorkspace.tsx`, `PeriodCharts.tsx`, `lib/period-analysis.ts`) now speaks the 운영 현황 board language. Definitions, copy and the table contract (`tests/web-event-overview-range.test.cjs`, `scripts/web-period-analysis-audit.cjs`) are unchanged; only composition moved. This section wins over the one-line description of the analysis screen in 운영 현황 확정 구성.
+
+- Period picker: one rounded segmented control (오늘·어제·최근 7일·행사 전체·직접 선택), ink for the chosen segment, native radios, 44px targets. The date range and day count sit at the right. Date inputs open in a soft panel only under 직접 선택.
+- Summary row: a dark hero card (기간 고유 입장 at 84px) beside two white cards (신청, 일별 입장 합). Each card repeats the chart color as a dot (신청 = ink, 입장 = success). Orange is never a data color; its one use is the 입장률 pill on the hero.
+- Comparison only where the data backs it: the equal-length span right before the period, recounted with the same definitions (▲/▼ with words, percent only when the earlier value is above zero, nothing when both are 0). 오늘 is unfinished, so it shows 어제 하루 as a plain reference with no change. 행사 전체 has no earlier span and shows 입장률 (고유 입장 ÷ 신청) instead, only when that ratio is sound (not clamped, 입장 not above 신청).
+- Daily chart card: native SVG grouped bars (ink 신청, success 입장), dotted grid with round axis steps, date labels thinned to fit, hover/tap readout of one day, peak day by default. `role="img"` with the full numeric label; the 일별 기록 table below carries the same values and keeps the zero-day toggle. 집계 기준 is a ghost disclosure. A period with no records says so inside the chart instead of drawing nothing.
+- Breakdown cards from loaded data only: 시간대별 입장 (first entry hour per person per day, so the bars add up to 일별 입장 합) and 소속별 신청 (top 5, 그 외, 소속 미기재). Both have a dashed empty state.
+- One column on phones, no horizontal overflow at 320/390, reduced motion respected. All colors are tokens.
 
 ## 참가자 명단 확정 구성
 

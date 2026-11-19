@@ -143,3 +143,93 @@ export function analyzePeriod(
     periodUnique: periodUnique.size,
   };
 }
+
+// ---- 2026-11-20 재설계: 직전 같은 길이 기간 비교, 시간대·소속 분해 ----
+// 모두 이미 불러온 신청·입장 기록에서만 계산한다. 새 서버 값이나 추정은 없다.
+
+/** 선택 기간 바로 앞의 같은 일수 기간. 날짜가 잘못되면 null. */
+export function previousRange(from: string, days: number): { from: string; to: string } | null {
+  const start = parseLocalDay(from);
+  if (!start || !Number.isInteger(days) || days < 1) return null;
+  return {
+    from: localDateKey(addDays(start.start, -days)),
+    to: localDateKey(addDays(start.start, -1)),
+  };
+}
+
+export type PeriodDelta = { previous: number; change: number; direction: "up" | "down" | "same"; percent: number | null };
+
+/** 이전 값이 0이면 비율은 만들지 않는다(0으로 나누지 않고 지어내지도 않는다). */
+export function periodDelta(current: number, previous: number): PeriodDelta {
+  const change = current - previous;
+  return {
+    previous,
+    change,
+    direction: change > 0 ? "up" : change < 0 ? "down" : "same",
+    percent: previous > 0 ? Math.round((Math.abs(change) / previous) * 100) : null,
+  };
+}
+
+export type HourBucket = { hour: number; entries: number };
+
+/**
+ * 시간대별 입장. 일별 고유 입장(같은 날 한 명은 한 번)의 첫 입장 시각을 그
+ * 시각의 시(브라우저 로컬)에 센다. 그래서 24칸의 합은 일별 입장 합과 같다.
+ */
+export function hourlyEntries(entries: PeriodEntry[], fromKey: string, toKey: string): HourBucket[] {
+  const buckets = Array.from({ length: 24 }, (_, hour) => ({ hour, entries: 0 }));
+  const firstByDay = new Map<string, number>();
+  for (const entry of entries) {
+    const time = Date.parse(entry.at);
+    if (!Number.isFinite(time)) continue;
+    const day = localDateKey(new Date(time));
+    if (day < fromKey || day > toKey) continue;
+    const id = `${day}|${entry.key}`;
+    const known = firstByDay.get(id);
+    if (known === undefined || time < known) firstByDay.set(id, time);
+  }
+  for (const time of firstByDay.values()) buckets[new Date(time).getHours()].entries += 1;
+  return buckets;
+}
+
+export type CompanyShare = { name: string; count: number };
+
+/** 기간 신청을 소속별로 센다. 상위 limit개 + 나머지 합 + 미기재. */
+export function companyBreakdown(
+  applicants: Array<{ at: string; company: string }>,
+  fromKey: string,
+  toKey: string,
+  limit = 5,
+): { top: CompanyShare[]; otherCount: number; otherNames: number; blank: number; total: number } {
+  const counts = new Map<string, number>();
+  let blank = 0;
+  let total = 0;
+  for (const item of applicants) {
+    const day = toLocalKey(item.at);
+    if (day === null || day < fromKey || day > toKey) continue;
+    total += 1;
+    const name = item.company.trim();
+    if (!name) blank += 1;
+    else counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  const sorted = [...counts].map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "ko"));
+  const rest = sorted.slice(limit);
+  return {
+    top: sorted.slice(0, limit),
+    otherCount: rest.reduce((sum, item) => sum + item.count, 0),
+    otherNames: rest.length,
+    blank,
+    total,
+  };
+}
+
+/** y축 눈금용 보기 좋은 최대값(1·2·4·5×10^n). */
+export function niceMax(value: number): number {
+  if (value <= 4) return Math.max(1, Math.ceil(value));
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  for (const step of [1, 2, 4, 5, 10]) {
+    if (value <= step * magnitude) return step * magnitude;
+  }
+  return 10 * magnitude;
+}

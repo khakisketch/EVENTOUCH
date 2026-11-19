@@ -22,8 +22,11 @@ const FAILURE = '기간 분석을 불러오지 못했습니다.';
 
 async function assertNumbers(page, expected, days, showZero = false) {
   await page.waitForFunction(values => {
+    // Reopened 2026-11-20: 요약 카드의 숫자 dd는 data-metric으로 고르고, 비교·설명 dd는 건너뛴다.
     const list = [...document.querySelectorAll('main dl')].find(dl => [...dl.querySelectorAll('dt')].some(dt => dt.textContent === '기간 고유 입장'));
-    return list && JSON.stringify([...list.querySelectorAll('dd')].map(dd => Number.parseInt(dd.textContent, 10))) === JSON.stringify(values);
+    if (!list) return false;
+    const pick = name => Number.parseInt(list.querySelector(`dd[data-metric="${name}"]`)?.textContent, 10);
+    return JSON.stringify([pick('applications'), pick('entriesSum'), pick('unique')]) === JSON.stringify(values);
   }, expected);
   const table = page.getByRole('table', { name: '선택 기간 일별 신청·입장', exact: true });
   const actual = await table.locator('tbody tr').evaluateAll(rows => rows.map(row => [...row.querySelectorAll('th,td')].map(cell => cell.textContent.trim())));

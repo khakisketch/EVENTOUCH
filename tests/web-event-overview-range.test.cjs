@@ -15,7 +15,8 @@ const ts = require('../apps/web/node_modules/typescript');
 
 const ROOT = path.join(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(ROOT, file), 'utf8');
-const workspace = read('apps/web/app/console/events/[id]/analysis/PeriodAnalysisWorkspace.tsx');
+const workspace = read('apps/web/app/console/events/[id]/analysis/PeriodAnalysisWorkspace.tsx')
+  + read('apps/web/app/console/events/[id]/analysis/PeriodCharts.tsx'); // Reopened 2026-11-20: charts moved to their own file
 const css = read('apps/web/app/console/events/[id]/analysis/analysis.module.css');
 const overview = read('apps/web/app/console/events/[id]/EventOverview.tsx');
 const libSource = read('apps/web/lib/period-analysis.ts');
@@ -126,7 +127,8 @@ test('analysis reuses the fixed-bucket definitions, never redefines them', () =>
 test('analysis screen is native SVG with the same values in table and summary', () => {
   assert.match(workspace, /<svg/, 'one native SVG, no chart library');
   assert.doesNotMatch(workspace, /from "recharts"|from "chart\.js"|from "victory"|nivo|echarts/, 'no external chart dependency');
-  assert.match(workspace, /aria-label=\{`선택 기간 일별 신청·입장 막대그래프/, 'the chart carries a text equivalent');
+  assert.match(workspace, /const chartLabel = `선택 기간 일별 신청·입장 막대그래프/, 'the chart carries a text equivalent');
+  assert.match(workspace, /role="img" aria-label=\{label\}/, 'the label is on the svg role=img');
   assert.match(workspace, /<title>\{`/, 'each bar names its value');
   assert.match(workspace, /aria-label="선택 기간 일별 신청·입장"/, 'the table repeats the same values accessibly');
   assert.match(workspace, /기간 신청 .*일별 입장 합 .*기간 고유 입장/, 'summary states all three numbers');
@@ -138,8 +140,8 @@ test('analysis screen is native SVG with the same values in table and summary', 
   assert.match(workspace, /최대 \{RANGE_DAYS_CAP\}일까지만 봅니다/, 'clamping is announced, not silent');
   assert.match(css, /\.rangeFields input\s*\{\s*min-height: 44px/, 'date inputs keep touch targets');
   assert.match(css, /\.preset\s*\{[^}]*min-height: 44px/s, 'period buttons keep touch targets');
-  assert.match(css, /\.legend li\s*\{[^}]*min-height: 44px/s, 'legend rows keep touch targets');
-  assert.match(css, /\.tableWrap\s*\{[^}]*overflow-x: auto/s, 'wide tables scroll in place');
+  assert.match(css, /\.kpiHero\s*\{/, 'the entry card is the hero of the summary row');
+  assert.match(css, /\.tableWrap\s*\{[^}]*overflow: auto/s, 'wide tables scroll in place');
 });
 
 test('overview keeps one summary line and the screen is reachable from the results group', () => {
@@ -149,4 +151,74 @@ test('overview keeps one summary line and the screen is reachable from the resul
   assert.match(nav, /pageIds: \["reports", "analysis"\], defaultPageId: "reports"/);
   assert.match(nav, /analysis: \{ label: "기간 분석", title: "기간 분석", scope: "event", layout: "workspace" \}/);
   assert.match(read('apps/web/app/console/events/[id]/analysis/page.tsx'), /PeriodAnalysisWorkspace eventId=\{id\}/);
+});
+
+// Reopened 2026-11-20 (기간 분석 재설계): 비교·시간대·소속은 이미 불러온 기록에서만 계산한다.
+test('previous period is the equal-length span right before, and deltas never divide by zero', () => {
+  assert.deepEqual({ ...lib.previousRange('2026-11-12', 7) }, { from: '2026-11-05', to: '2026-11-11' });
+  assert.deepEqual({ ...lib.previousRange('2026-03-01', 1) }, { from: '2026-02-28', to: '2026-02-28' });
+  assert.equal(lib.previousRange('nope', 7), null);
+  assert.equal(lib.previousRange('2026-11-12', 0), null);
+  assert.deepEqual({ ...lib.periodDelta(6, 4) }, { previous: 4, change: 2, direction: 'up', percent: 50 });
+  assert.deepEqual({ ...lib.periodDelta(1, 4) }, { previous: 4, change: -3, direction: 'down', percent: 75 });
+  assert.deepEqual({ ...lib.periodDelta(3, 3) }, { previous: 3, change: 0, direction: 'same', percent: 0 });
+  assert.equal(lib.periodDelta(5, 0).percent, null, '이전이 0이면 비율을 만들지 않는다');
+});
+
+test('hourly entries count each person once per day at the first entry hour', () => {
+  const buckets = lib.hourlyEntries([
+    { at: at('2026-11-17', 9), key: 'p1' },
+    { at: at('2026-11-17', 14), key: 'p1' }, // 같은 날 재입장은 첫 시각 한 번
+    { at: at('2026-11-17', 9), key: 'p2' },
+    { at: at('2026-11-18', 10), key: 'p1' }, // 다음 날은 따로
+    { at: at('2026-11-20', 10), key: 'p3' }, // 기간 밖
+    { at: 'bad', key: 'p4' },
+  ], '2026-11-17', '2026-11-18');
+  assert.equal(buckets.length, 24);
+  assert.equal(buckets[9].entries, 2);
+  assert.equal(buckets[10].entries, 1);
+  assert.equal(buckets[14].entries, 0);
+  assert.equal(buckets.reduce((sum, bucket) => sum + bucket.entries, 0), 3, '합은 일별 입장 합과 같다');
+});
+
+test('company breakdown keeps the top N, folds the rest and names blanks', () => {
+  const applicants = [
+    ...['A', 'A', 'A', 'B', 'B', 'C', 'D'].map((company) => ({ at: at('2026-11-17'), company })),
+    { at: at('2026-11-17'), company: '  ' },
+    { at: at('2026-11-10'), company: 'A' }, // 기간 밖
+    { at: 'bad', company: 'A' },
+  ];
+  const result = lib.companyBreakdown(applicants, '2026-11-17', '2026-11-18', 2);
+  assert.deepEqual(Array.from(result.top, (item) => [item.name, item.count]), [['A', 3], ['B', 2]]);
+  assert.equal(result.otherCount, 2);
+  assert.equal(result.otherNames, 2);
+  assert.equal(result.blank, 1);
+  assert.equal(result.total, 8);
+});
+
+test('niceMax rounds up to a readable axis top', () => {
+  assert.equal(lib.niceMax(0), 1);
+  assert.equal(lib.niceMax(3), 3);
+  assert.equal(lib.niceMax(7), 10);
+  assert.equal(lib.niceMax(13), 20);
+  assert.equal(lib.niceMax(33), 40);
+  assert.equal(lib.niceMax(45), 50);
+  assert.equal(lib.niceMax(120), 200);
+});
+
+test('redesigned analysis screen compares only what the data supports and keeps one orange accent', () => {
+  // Reopened 2026-11-20: 기간 분석을 운영 현황 수준으로 다시 짰다.
+  assert.match(workspace, /previousRange\(fromKey, days\)/, 'comparison is the equal-length span right before');
+  assert.match(workspace, /preset === "all"\) return null/, '행사 전체에는 비교할 앞 기간이 없다');
+  assert.match(workspace, /showDelta = previous !== null && !previous\.error && preset !== "today"/, '오늘은 끝나지 않은 하루라 증감을 만들지 않는다');
+  assert.match(workspace, /preset === "all" && !result\.clamped && periodApplications > 0 && periodUnique <= periodApplications/, '입장률은 행사 전체에서 분자가 분모를 넘지 않을 때만');
+  assert.match(workspace, /data-metric="unique"/);
+  assert.match(workspace, /<HourlyBars/);
+  assert.match(workspace, /<CompanyBars/);
+  assert.doesNotMatch(css, /var\(--brand\)\s*;[^}]*\}\s*\.barEntries/s, 'orange is not a data color');
+  assert.match(css, /\.barApplications \{ fill: var\(--ink\); \}/);
+  assert.match(css, /\.barEntries \{ fill: var\(--success\); \}/);
+  assert.match(css, /\.rateHead b \{[^}]*var\(--brand\)/, 'the single orange accent is the rate pill');
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/, 'tokens only, no raw hex');
 });
