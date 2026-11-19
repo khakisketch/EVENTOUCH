@@ -1,8 +1,9 @@
 'use strict';
 
-// Approved attendee page studio (2026-11-14): the home takes one of four
-// compositions (tile, poster, typography and, since 2026-11-18, the photo-first
-// instagram feed of approved participant photos), the banner can be a picture,
+// Approved attendee page studio (2026-11-14): the home takes one of three
+// compositions (tile, poster and, since 2026-11-18, the photo-first instagram
+// feed of approved participant photos; the typography layout and the poster
+// list menus were retired on 2026-11-19), the banner can be a picture,
 // a gradient or a solid color, and the
 // editor is a live phone beside a short settings list whose rows open in place.
 // The server and the web read the same style keys with the same defaults; this
@@ -34,7 +35,7 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 const fail = (status, message, field) => Object.assign(new Error(message), { status, field });
 
 test('server and web share one default for every layout and banner key', () => {
-  for (const key of ['layout', 'menuShape', 'bannerKind', 'bannerColor', 'bannerColor2', 'bannerAngle']) {
+  for (const key of ['layout', 'bannerKind', 'bannerColor', 'bannerColor2', 'bannerAngle']) {
     assert.equal(plain(lib.DEFAULT_HOME_STYLE)[key], server.DEFAULT_HOME_STYLE[key], `${key} default matches`);
   }
   assert.equal(server.DEFAULT_HOME_STYLE.layout, 'tile', 'tile is the default composition');
@@ -42,10 +43,10 @@ test('server and web share one default for every layout and banner key', () => {
 });
 
 test('stored styles read through the same allowlist on both sides, and an unknown layout never survives', () => {
-  const stored = { layout: 'grid', menuShape: 'list', bannerKind: 'gradient', bannerColor: '#2e3d5b', bannerColor2: 'red', bannerAngle: 'sideways' };
+  const stored = { layout: 'grid', bannerKind: 'gradient', bannerColor: '#2e3d5b', bannerColor2: 'red', bannerAngle: 'sideways' };
   const fromServer = server.normalizeHomeStyle(stored);
   const fromWeb = plain(lib.normalizeHomeStyle(stored));
-  for (const key of ['layout', 'menuShape', 'bannerKind', 'bannerColor', 'bannerColor2', 'bannerAngle']) {
+  for (const key of ['layout', 'bannerKind', 'bannerColor', 'bannerColor2', 'bannerAngle']) {
     assert.equal(fromWeb[key], fromServer[key], `${key} reads the same`);
   }
   assert.equal(fromServer.layout, 'tile', 'an unknown layout falls back to the default composition');
@@ -56,15 +57,24 @@ test('stored styles read through the same allowlist on both sides, and an unknow
 
 test('saving validates the new keys strictly and leaves omitted ones alone', () => {
   const stored = server.defaultHomeStyle();
-  const next = server.validateHomeStyleUpdate({ layout: 'poster', menuShape: 'list', bannerKind: 'solid', bannerColor: '#c8441f' }, stored, fail);
+  const next = server.validateHomeStyleUpdate({ layout: 'poster', bannerKind: 'solid', bannerColor: '#c8441f' }, stored, fail);
   assert.equal(next.layout, 'poster');
   assert.equal(next.bannerColor, '#C8441F');
   assert.equal(next.bannerColor2, stored.bannerColor2, 'omitted keys merge from the stored style');
-  for (const bad of [{ layout: 'grid' }, { layout: 'Instagram' }, { menuShape: 'square' }, { bannerKind: 'video' }, { bannerColor: 'blue' }, { bannerColor2: '#12345' }, { bannerAngle: 'diag' }]) {
+  for (const bad of [{ layout: 'grid' }, { layout: 'Instagram' }, { bannerKind: 'video' }, { bannerColor: 'blue' }, { bannerColor2: '#12345' }, { bannerAngle: 'diag' }]) {
     assert.throws(() => server.validateHomeStyleUpdate(bad, stored, fail), (error) => error.status === 400 && String(error.field).startsWith('homeStyle.'), JSON.stringify(bad));
   }
   assert.throws(() => server.assertPublishableHomeStyle({ layout: 'grid' }, fail), (error) => error.status === 400, 'a malformed stored draft never publishes');
   assert.equal(server.assertPublishableHomeStyle(undefined, fail).layout, 'tile', 'a legacy draft publishes the default composition');
+});
+
+test('retired choices read, save and publish as their replacements and are never an error', () => {
+  const stored = { layout: 'typography', menuShape: 'list' };
+  assert.equal(server.normalizeHomeStyle(stored).layout, 'tile', 'a stored typography page reads as the tile home');
+  assert.equal(plain(lib.normalizeHomeStyle(stored)).layout, 'tile', 'and so does the web');
+  assert.ok(!('menuShape' in server.normalizeHomeStyle(stored)) && !('menuShape' in plain(lib.normalizeHomeStyle(stored))), 'menuShape is no longer a style key');
+  assert.equal(server.validateHomeStyleUpdate({ layout: 'typography', menuShape: 'list' }, server.defaultHomeStyle(), fail).layout, 'tile', 'an editor tab from before the retirement saves as tile');
+  assert.equal(server.assertPublishableHomeStyle({ layout: 'typography', menuShape: 'list' }, fail).layout, 'tile', 'a stored typography draft still publishes');
 });
 
 test('the photo-first instagram layout saves, publishes and reads the same on both sides', () => {
@@ -109,14 +119,17 @@ test('a color banner derives its own CSS and a readable tone', () => {
   assert.equal(lib.readableInk('#F3EEE6'), '#17252B');
 });
 
-test('the landing renders one of four compositions with the same entries; the feed needs approved photos', () => {
+test('the landing renders one of three compositions with the same entries; the feed needs approved photos', () => {
   const landing = read('app/event/[slug]/home/AttendeeHomeLanding.tsx');
   const css = read('app/event/[slug]/home/home-layouts.module.css');
   assert.match(landing, /const homeStyle = normalizeHomeStyle\(homeStyleInput\);/u, 'partial or stored styles read through the defaults');
-  assert.match(landing, /layout === "typography" \? \(/u);
-  assert.match(landing, /const shape = layout === "tile" \? "tile" : layout === "poster" && homeStyle\.menuShape === "circle" \? "circle" : "row";/u, 'the menu shape only varies on the poster');
-  assert.match(landing, /const fill = bannerFillCss\(homeStyle\);/u);
-  assert.match(landing, /const tone = fill \? bannerFillTone\(homeStyle\) : neutralBanner \? "light" : homeStyle\.textTone;/u, 'a color banner reads its own tone');
+  assert.doesNotMatch(landing + css, /typography|typoHead/u, 'the typography layout is retired');
+  assert.match(landing, /const shape = layout === "tile" \? "tile" : layout === "poster" \? "circle" : "row";/u, 'poster menus are always round');
+  // The banner is shared with the event guide so both read the same published design.
+  const heroSource = read('app/event/[slug]/home/HomeHero.tsx');
+  assert.match(landing, /<HomeHero\b/u);
+  assert.match(heroSource, /const fill = bannerFillCss\(homeStyle\);/u);
+  assert.match(heroSource, /const tone = fill \? bannerFillTone\(homeStyle\) : neutralBanner \? "light" : homeStyle\.textTone;/u, 'a color banner reads its own tone');
   // instagram: a feed of approved participant photos under a slim banner.
   assert.match(landing, /const layout = homeStyle\.layout === "instagram" && !photos\.length && !preview \? "tile" : homeStyle\.layout;/u, 'a public page with no approved photo reads as the tile home; the console preview keeps the layout');
   assert.match(landing, /const feed = layout === "instagram" \? \(/u);
@@ -144,14 +157,14 @@ test('the studio is a live phone beside a short list; rows open in place; the ph
   const theme = read('app/console/events/[id]/page/ThemeWorkspace.tsx');
   const picker = read('app/console/events/[id]/page/LayoutPicker.tsx');
   assert.match(theme, /<LayoutPicker[\s\S]{0,700}onLayout=\{selectLayout\}/u);
-  assert.match(theme, /next === "typography" && form\.homeStyle\.backgroundColor === DEFAULT_HOME_STYLE\.backgroundColor \? \{ backgroundColor: "#1E2026" \}/u, 'large type moves off only the untouched default background');
-  assert.match(theme, /homeStyle\.layout !== "typography" \? <li>\{studioRow\("banner"/u, 'the banner row is hidden where there is no banner');
+  assert.doesNotMatch(theme + picker, /typography|menuShape|onMenuShape/u, 'the typography layout and the menu shape choice are retired');
+  assert.match(theme, /<li>\{studioRow\("banner", "배너"/u, 'every layout has a banner');
+  assert.deepEqual([...picker.matchAll(/\{ id: "(\w+)", name:/gu)].map((match) => match[1]), ['tile', 'poster', 'instagram'], 'the studio offers the tile, poster and photo layouts');
   assert.match(picker, /\{ id: "instagram", name: "인스타형", hint: "참가자 사진 피드" \}/u, 'the photo layout is a real card, no longer locked');
   assert.doesNotMatch(picker, /곧 제공|styles\.locked|aria-disabled="true"/u);
   assert.match(picker, /photos=\{photos\}/u, 'the card thumbnail is the real home with the real photos');
   assert.match(picker, /<AttendeeHomeLanding/u, 'cards are the real home, scaled');
   assert.match(picker, /inert>/u, 'a card thumbnail is not interactive');
-  assert.match(picker, /value === "poster" \?/u, 'menu shape is offered only for the poster');
   // Banner: picture / gradient / solid, with colors through the picker.
   for (const kind of ['image', 'gradient', 'solid']) assert.match(theme, new RegExp(`value: "${kind}", name:`), `${kind} banner kind`);
   assert.match(theme, /GRADIENT_PRESETS\.map/u);

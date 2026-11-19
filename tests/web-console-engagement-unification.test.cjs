@@ -139,12 +139,15 @@ test('unified-frame: dialogs use the shared shell with dismissal gates, not besp
 });
 
 test('unified-frame: preview landing keeps one h1 per page', () => {
+  // The title lives in HomeHero (shared by the landing and the event guide).
   const landing = read('app/event/[slug]/home/AttendeeHomeLanding.tsx');
-  assert.match(landing, /const Title = preview \? "h3" : "h1";/, 'heading level follows preview semantics');
-  assert.match(landing, /<Title className=\{L\.title\}>\{title\}<\/Title>/, 'same title class and visual styles in both modes');
-  assert.doesNotMatch(landing, /<h1[\s>]/, 'no literal h1 remains in the shared landing');
-  assert.doesNotMatch(landing, /<section[^>]*aria-hidden/, 'preview section stays exposed to assistive technology');
-  assert.doesNotMatch(landing, /<Title[^>]*aria-hidden/, 'preview title stays exposed to assistive technology');
+  const hero = read('app/event/[slug]/home/HomeHero.tsx');
+  assert.match(hero, /const Title = preview \? "h3" : "h1";/, 'heading level follows preview semantics');
+  assert.match(hero, /<Title className=\{L\.title\}>\{title\}<\/Title>/, 'same title class and visual styles in both modes');
+  assert.match(landing, /<HomeHero\b[^>]*preview=\{preview\}/u, 'the landing passes its preview mode to the banner');
+  assert.doesNotMatch(landing + hero, /<h1[\s>]/, 'no literal h1 remains in the shared landing');
+  assert.doesNotMatch(landing + hero, /<section[^>]*aria-hidden/, 'preview section stays exposed to assistive technology');
+  assert.doesNotMatch(landing + hero, /<Title[^>]*aria-hidden/, 'preview title stays exposed to assistive technology');
 });
 
 test('unified-frame: unsaved work is reported to the cross-route guard before early returns', () => {

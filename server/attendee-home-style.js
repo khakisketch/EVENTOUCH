@@ -18,8 +18,7 @@
 //     textAlign: 'left' | 'center' | 'right',
 //     textTone: 'light' | 'dark',
 //     overlay: 'none' | 'soft' | 'strong',
-//     layout: 'tile' | 'poster' | 'typography' | 'instagram',   // home composition (default 'tile')
-//     menuShape: 'circle' | 'list',                // poster menus only
+//     layout: 'tile' | 'poster' | 'instagram',   // home composition (default 'tile')
 //     bannerKind: 'image' | 'gradient' | 'solid',  // banner fill; 'image' uses the uploaded picture
 //     bannerColor: '#1E2026',                      // solid color / gradient start
 //     bannerColor2: '#C8441F',                     // gradient end
@@ -42,7 +41,6 @@ const DEFAULT_HOME_STYLE = {
   textTone: 'light',
   overlay: 'none',
   layout: 'tile',
-  menuShape: 'circle',
   bannerKind: 'image',
   bannerColor: '#1E2026',
   bannerColor2: '#C8441F',
@@ -61,11 +59,17 @@ const ENUMS = {
   // 'instagram' is the photo-first home (approved participant photos). It is a
   // pure presentation choice: the public projection already carries only
   // approved photos, and a page with none reads as the tile home.
-  layout: new Set(['tile', 'poster', 'typography', 'instagram']),
-  menuShape: new Set(['circle', 'list']),
+  layout: new Set(['tile', 'poster', 'instagram']),
   bannerKind: new Set(['image', 'gradient', 'solid']),
   bannerAngle: new Set(['diagonal', 'vertical', 'horizontal']),
 };
+
+// Owner decision 2026-11-19: the typography layout and the poster list-menu
+// shape are retired (the first release offers tile, poster and instagram, and
+// poster menus are always round). Stored pages are never rewritten: a retired
+// layout reads as the tile home, publishes as tile and saves as tile, and the
+// stored menuShape key is simply no longer a known key.
+const RETIRED_LAYOUTS = new Map([['typography', 'tile']]);
 
 const COLOR_KEYS = new Set(['backgroundColor', 'bannerColor', 'bannerColor2']);
 
@@ -113,6 +117,7 @@ function validateField(key, value, fail) {
     return value;
   }
   if (Object.hasOwn(ENUMS, key)) {
+    if (key === 'layout' && RETIRED_LAYOUTS.has(value)) return RETIRED_LAYOUTS.get(value);
     if (typeof value !== 'string' || !ENUMS[key].has(value)) {
       fieldError(fail, key, '홈 화면 표시 값을 확인하세요');
     }
@@ -144,7 +149,8 @@ function normalizeHomeStyle(value) {
           merged[key] = raw;
         }
       } else if (Object.hasOwn(ENUMS, key)) {
-        if (typeof raw === 'string' && ENUMS[key].has(raw)) merged[key] = raw;
+        if (key === 'layout' && RETIRED_LAYOUTS.has(raw)) merged[key] = RETIRED_LAYOUTS.get(raw);
+        else if (typeof raw === 'string' && ENUMS[key].has(raw)) merged[key] = raw;
       }
     } catch (error) {
       // Defensive: normalization never throws; the default stands.

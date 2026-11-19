@@ -1,4 +1,4 @@
-/* Attendee home compositions (homeStyle.layout): tile, poster, typography, instagram.
+/* Attendee home compositions (homeStyle.layout): tile, poster, instagram.
    The container is .homePage (inline-size container), so sizes follow the
    phone width, not the operator's window. Colors come from the page background
    (--home-background-color) and its readable ink (--lay-ink); cards stay white
@@ -76,14 +76,13 @@
 
 .toneLight { color: #fff; }
 .toneDark { color: #142b35; }
-.alignLeft .heroText, .alignLeft.typoHead { text-align: left; }
-.alignCenter .heroText, .alignCenter.typoHead { text-align: center; }
-.alignRight .heroText, .alignRight.typoHead { text-align: right; }
+.alignLeft .heroText { text-align: left; }
+.alignCenter .heroText { text-align: center; }
+.alignRight .heroText { text-align: right; }
 
 /* ---- ticket ---- */
 .ticketWrap { position: relative; z-index: 1; padding: 0 16px; }
 .tile .ticketWrap, .poster .ticketWrap, .instagram .ticketWrap { margin-top: -26px; }
-.typography .ticketWrap { margin-top: 0; }
 
 .root .ticket {
   display: flex;
@@ -104,9 +103,6 @@
 .ticketText { display: grid; min-width: 0; flex: 1; }
 .ticketLabel { font-size: 16px; font-weight: 800; }
 .ticketGo { flex: none; padding: 8px 14px; border-radius: 12px; background: var(--brand, #c8441f); color: var(--on-brand, #19191c); font-size: 13px; font-weight: 800; }
-.typography .ticket { background: var(--lay-ink); color: var(--home-background-color, #1e2026); box-shadow: none; min-height: 72px; }
-.typography .ticket :global(svg) { color: inherit; }
-.typography .ticketGo { background: var(--home-background-color, #1e2026); color: var(--lay-ink); }
 
 /* ---- menus ---- */
 .menus { display: grid; gap: 0; padding: 18px 16px 0; }
@@ -181,7 +177,6 @@
 .group_row > .row:first-child { border-top: 0; }
 .root .row:disabled { opacity: 1; cursor: default; }
 .row :global(svg) { width: 20px; height: 20px; color: #17252b; }
-.typography .row :global(svg) { color: var(--lay-ink); }
 .entryLabel { display: flex; align-items: center; min-width: 0; font-size: 15px; font-weight: 800; line-height: 1.3; word-break: keep-all; overflow-wrap: anywhere; text-align: left; }
 
 /* ---- instagram: a feed of approved participant photos ---- */
@@ -203,14 +198,6 @@
 .feedMore { margin: 10px 4px 0; font-size: 12.5px; font-weight: 700; color: var(--lay-ink); text-align: center; }
 .instagram .menus { padding-top: 22px; }
 
-/* ---- typography ---- */
-.typoHead { padding: max(28px, 8cqi) 0 20px; }
-.typoHead .heroText { padding: 0 max(20px, 6cqi); }
-.typoHead .title { font-size: clamp(36px, 12cqi, 56px); line-height: 1.08; letter-spacing: -0.04em; }
-.typoHead.titleLarge .title { font-size: clamp(42px, 14cqi, 64px); }
-.typoHead .subtitle { margin-top: 6px; color: var(--lay-ink); }
-.typography .menus { padding-top: 22px; }
-
 /* ---- links ---- */
 .links { display: grid; gap: 8px; padding: 18px 16px 0; }
 .links > a, .links > button {
@@ -230,7 +217,6 @@
   text-decoration: none;
 }
 .links > button:disabled { opacity: 1; cursor: default; }
-.typography .links > a, .typography .links > button { background: color-mix(in srgb, var(--lay-ink) 12%, transparent); color: var(--lay-ink); }
 
 /* ---- Astryx button anatomy ----
    ProductButton renders button > span(content) > span(icon) + span(label).
@@ -305,7 +291,6 @@
   border-radius: 11px;
   background: rgb(255 255 255 / 80%);
 }
-.typography .row > span:first-child > span:first-child { background: color-mix(in srgb, var(--lay-ink) 14%, transparent); }
 
 /* The ticket overlaps the banner's lower edge: the poster's text clears it. */
 .poster .heroText { padding-bottom: 44px; }

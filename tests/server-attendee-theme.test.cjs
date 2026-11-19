@@ -89,7 +89,6 @@ const customStyle = {
   textTone: 'dark',
   overlay: 'soft',
   layout: 'poster',
-  menuShape: 'list',
   bannerKind: 'gradient',
   bannerColor: '#2E3D5B',
   bannerColor2: '#E58A4B',
@@ -245,8 +244,6 @@ test('invalid homeStyle values reject with field errors and keep the draft versi
     [{ heroLayout: null }, 'homeStyle.heroLayout'],
     [{ layout: 'grid' }, 'homeStyle.layout'],
     [{ layout: 'Instagram' }, 'homeStyle.layout'],
-    [{ menuShape: 'square' }, 'homeStyle.menuShape'],
-    [{ menuShape: null }, 'homeStyle.menuShape'],
     [{ bannerKind: 'video' }, 'homeStyle.bannerKind'],
     [{ bannerColor: 'blue' }, 'homeStyle.bannerColor'],
     [{ bannerColor2: '#12345' }, 'homeStyle.bannerColor2'],
@@ -505,4 +502,14 @@ test('theme state survives an HTTP restart', async () => {
   const afterPublic = await publicEvent(eventA.slug);
   assert.deepEqual(afterPublic.json, beforePublic.json);
   assert.deepEqual(await readWorkspace(eventA.id), beforeWorkspace);
+});
+
+test('retired choices (typography layout, list menus) save as their replacements', async () => {
+  // An editor tab opened before the retirement may still send them. The row is
+  // never rejected; the typography layout becomes tile and menuShape is no
+  // longer a known key, so it is dropped.
+  const res = await managerCommand(eventA.id, 'attendee.page.save', pagePayload({ homeStyle: { layout: 'typography', menuShape: 'list' } }));
+  assert.equal(res.status, 200, JSON.stringify(res.json));
+  assert.equal(res.json.draft.homeStyle.layout, 'tile');
+  assert.ok(!Object.hasOwn(res.json.draft.homeStyle, 'menuShape'));
 });

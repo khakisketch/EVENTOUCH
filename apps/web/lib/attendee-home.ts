@@ -7,8 +7,7 @@ export type HeroOverlay = "none" | "soft" | "strong";
 // "instagram" is the photo-first home: a feed of approved participant photos
 // under a slim banner (owner decision 2026-11-18). It needs approved photos to
 // say anything, so a public page with none reads as the tile home.
-export type HomeLayout = "tile" | "poster" | "typography" | "instagram";
-export type MenuShape = "circle" | "list";
+export type HomeLayout = "tile" | "poster" | "instagram";
 export type BannerKind = "image" | "gradient" | "solid";
 export type BannerAngle = "diagonal" | "vertical" | "horizontal";
 
@@ -23,7 +22,6 @@ export type HomeStyle = {
   textTone: TextTone;
   overlay: HeroOverlay;
   layout: HomeLayout;
-  menuShape: MenuShape;
   bannerKind: BannerKind;
   bannerColor: string;
   bannerColor2: string;
@@ -51,7 +49,6 @@ export const DEFAULT_HOME_STYLE: HomeStyle = {
   textTone: "light",
   overlay: "none",
   layout: "tile",
-  menuShape: "circle",
   bannerKind: "image",
   bannerColor: "#1E2026",
   bannerColor2: "#C8441F",
@@ -84,8 +81,7 @@ export function normalizeHomeStyle(value: unknown): HomeStyle {
     textAlign: value.textAlign === "left" || value.textAlign === "right" ? value.textAlign : "center",
     textTone: value.textTone === "dark" ? "dark" : "light",
     overlay: value.overlay === "soft" || value.overlay === "strong" ? value.overlay : "none",
-    layout: value.layout === "poster" || value.layout === "typography" || value.layout === "instagram" ? value.layout : "tile",
-    menuShape: value.menuShape === "list" ? "list" : "circle",
+    layout: value.layout === "poster" || value.layout === "instagram" ? value.layout : "tile",
     bannerKind: value.bannerKind === "gradient" || value.bannerKind === "solid" ? value.bannerKind : "image",
     bannerColor: hexOr(value.bannerColor, DEFAULT_HOME_STYLE.bannerColor),
     bannerColor2: hexOr(value.bannerColor2, DEFAULT_HOME_STYLE.bannerColor2),
