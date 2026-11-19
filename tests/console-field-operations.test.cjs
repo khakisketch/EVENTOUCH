@@ -1,3 +1,7 @@
+// Reopened 2026-11-20 (입장·스태프 + 현장 모드): the screen is now the three-step
+// "입장을 받을 준비" flow (desks, staff on duty, scanning on the staff phone) with
+// booths optional. The 전광판 출력 block and the 2-card KPI strip are gone; the
+// display output lives in 현장 모드 (tests/web-live-mode-composition.test.cjs).
 // Field-day operations console: desks lead with the running count as the one
 // card, booths and the display state their status in the description slot, the
 // before-the-day presets stay folded with their current value in the folded
@@ -27,15 +31,17 @@ test("the operations screen reads as one page: no sidebar nav, one primary entry
 
 test("same-day and before-the-day sections split through one summary slot", () => {
   const source = ops();
-  assert.match(source, /<b>\{deskOpenCount\}<\/b><span>\/ \{desks\.length\} 가동<\/span>/u, "desks lead with the running count");
+  assert.match(source, /<StepPill n=\{1\}/u, "step 1 states its status in the description slot");
+  assert.match(source, /<StepPill n=\{2\} tone=\{assignableTargets === 0 \? "wait" : gapTargets\.length \? "warn" : "ok"\}/u, "step 2 turns amber while a place has no one on duty");
+  assert.match(source, /<StepPill n=\{3\} tone="day">/u);
+  assert.doesNotMatch(source, /kpiStrip|kpiCard|현장 운영 요약/u, "no big-number strip on a work screen");
   assert.match(source, /description=\{boothSummary\}/u);
   assert.match(source, /<summary[^>]*>인증 방식 · \{modeValueLabel\}<\/summary>/u);
   assert.match(source, /<summary[^>]*>부스 지도 · \{mapStatusText\}<\/summary>/u);
-  assert.match(source, /description=\{displaySummary\}/u, "display names the current same-day output");
-  assert.match(source, /`현재 \$\{currentDisplayLabel\}`/u);
+  assert.doesNotMatch(source, /ops-display|displaySummary|전광판 출력/u, "the display output moved to 현장 모드");
   assert.match(source, /`운영 \$\{boothOpenCount\} \/ 전체 \$\{booths\.length\}`/u);
   assert.doesNotMatch(source, /modeSummary|mapSummary/u, "the folded summaries alone carry preset state");
-  for (const id of ["ops-desks", "ops-participation", "ops-booths", "ops-booth-mode", "ops-booth-map", "ops-display", "ops-staff"]) {
+  for (const id of ["ops-desks", "ops-staff", "ops-scan", "ops-booths", "ops-booth-mode", "ops-booth-map"]) {
     assert.match(source, new RegExp(`headingId="${id}"`), `the ${id} section keeps its anchor`);
   }
   assert.doesNotMatch(source, /console\/events\/\$\{[^}]*\}\/(?!(?:page|programs)\b)[a-z-]+`(?!\/)/u, "handoffs use only the existing page and participation routes");
@@ -55,15 +61,6 @@ test("presets start folded with current values and anchor recovery", () => {
   assert.match(source, /onToggle=\{\(event\) => setPresetOpen\(\(prev\)/u, "the operator can unfold either side by hand");
   const desksBody = source.slice(source.indexOf('headingId="ops-desks"'), source.indexOf('headingId="ops-booths"'));
   assert.doesNotMatch(desksBody, /<details/u, "desk start/stop never folds");
-  const displayAt = source.indexOf('headingId="ops-display"');
-  // Section-exact bounds: the display ConsoleSection opens on the same line
-  // as its heading id and closes at the next section end, so the booth
-  // sections below never leak into this slice.
-  const displayOpen = source.lastIndexOf('<ConsoleSection', displayAt);
-  const displayClose = source.indexOf('</ConsoleSection>', displayAt);
-  assert.ok(displayOpen >= 0 && displayClose > displayOpen, 'display section bounds resolve');
-  const displayBody = source.slice(displayOpen, displayClose);
-  assert.doesNotMatch(displayBody, /<details/u, "display apply never folds");
   const style = css();
   assert.match(style, /\.presetSummary \{[\s\S]*?min-height: 44px;/u, "folded summaries keep the 44px touch floor");
   assert.match(style, /\.presetFold\[open\] \.presetSummary \{/u);
@@ -90,13 +87,6 @@ test("staff assignment keeps its guidance and its release path", () => {
   assert.match(source, />\s*해제\s*<\/button>/u, "the release affordance stays on the row");
 });
 
-test("display apply names its busy state on the button", () => {
-  // 현장 마감 사유: 전광판 적용은 공용 작성자 잠금을 쓰므로 버튼 문구가
-  // '적용 중입니다'로 바뀌어야 대기 상태가 보인다. 명령·권한 게이트 불변.
-  const source = ops();
-  assert.match(source, /\{busy \? "적용 중입니다" : displayChoice/);
-});
-
 test("no server contract moves with this change", () => {
   const source = ops();
   for (const command of [
@@ -107,12 +97,12 @@ test("no server contract moves with this change", () => {
     "booth.map.save",
     "booth.map.publish",
     "booth.map.unpublish",
-    "display.set",
     "staff.assign",
     "staff.unassign",
   ]) {
     assert.match(source, new RegExp(command.replace(".", "\\.")), `${command} still rides the command path`);
   }
+  assert.doesNotMatch(source, /"display\.set"/u, "the display command is sent from 현장 모드 only");
   assert.doesNotMatch(source, /localStorage|sessionStorage/u);
   assert.match(source, /eventouch:shell-reload/u);
 });

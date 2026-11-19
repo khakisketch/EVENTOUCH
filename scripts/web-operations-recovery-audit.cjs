@@ -74,11 +74,12 @@ async function main() {
     if (!before && !beforeMap) {
       phase = 'operation sections and keyboard navigation';
       const sections = page.locator('[data-workspace-section^="ops-"]:visible');
-      const basic = ['ops-desks', 'ops-booths', 'ops-staff'];
-      const boothSettings = ['ops-booth-mode', 'ops-booth-map'];
-      const all = [...basic, 'ops-display', 'ops-participation', ...boothSettings];
+      // Reopened 2026-11-20: 입장·스태프 is three steps; booths (and their presets) appear only with the feature on.
+      const basic = ['ops-desks', 'ops-staff', 'ops-scan'];
+      const boothSettings = ['ops-booths', 'ops-booth-mode', 'ops-booth-map'];
+      const all = [...basic, ...boothSettings];
       const sectionIds = () => sections.evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-labelledby')));
-      await page.getByRole('heading', { name: '데스크', exact: true }).waitFor();
+      await page.getByRole('heading', { name: '입장 데스크 만들기', exact: true }).waitFor();
       assert.deepEqual(await sectionIds(), all);
       let navigationWrites = 0;
       const countWrite = request => {
@@ -108,8 +109,8 @@ async function main() {
       await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/operations`);
       const featureCases = [
         { features: [], sections: basic },
-        { features: ['poll'], sections: [...basic, 'ops-participation'] },
-        { features: ['screen'], sections: [...basic, 'ops-display'] },
+        { features: ['poll'], sections: basic },
+        { features: ['screen'], sections: basic },
         { features: ['stamp'], sections: [...basic, ...boothSettings] },
         { features: ['draw', 'poll', 'reward', 'screen', 'venue', 'stamp'], sections: all },
       ];
@@ -120,7 +121,7 @@ async function main() {
         });
         assert.ok(changed.status >= 200 && changed.status < 300, `feature case ${index} is accepted`);
         await page.reload({ waitUntil: 'networkidle' });
-        await page.getByRole('heading', { name: '데스크', exact: true }).waitFor();
+        await page.getByRole('heading', { name: '입장 데스크 만들기', exact: true }).waitFor();
         assert.deepEqual(await sectionIds(), scenario.sections);
       }
     }

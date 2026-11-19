@@ -133,49 +133,9 @@
 .uploadDisabled { opacity: 0.6; cursor: not-allowed; }
 
 
-.participationGrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s6); }
-.participationColumn { min-width: 0; }
-.participationColumn + .participationColumn { border-left: 1px solid var(--line); padding-left: var(--s6); }
-.participationColumn h3 { margin: 0 0 var(--s3); font-size: var(--h3); }
-.participationCount { margin-left: var(--s2); color: var(--muted); font-size: var(--small); font-weight: 400; }
-.liveContents { margin: 0 0 var(--s4); padding: 0; list-style: none; }
-.liveContents li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s3); padding-block: var(--s3); }
-.liveContents li + li { border-top: 1px solid var(--line); }
-.liveContents strong { overflow-wrap: anywhere; }
-.liveContents p { margin: var(--s1) 0 0; color: var(--muted); font-size: var(--small); }
-.liveContents a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink); font-weight: 650; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 4px; }
-@media (max-width: 800px) {
-  .participationGrid { grid-template-columns: minmax(0, 1fr); gap: var(--s5); }
-  .participationColumn + .participationColumn { border-left: 0; border-top: 1px solid var(--line); padding: var(--s5) 0 0; }
-}
-
-/* Redesign 2026-11-19: the page opens on a summary strip (what is running and
-   who covers it), rows read as places (tile, name, facts, who is on duty), the
-   gap list is amber work waiting for a person, and the display is a dark stage
-   so it reads as the venue's screen. Orange stays with the page's one action. */
-.kpiStrip { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: var(--s3); margin-bottom: var(--s6); }
-.kpiCard {
-  display: grid;
-  align-content: space-between;
-  gap: var(--s2);
-  min-width: 0;
-  min-height: 112px;
-  padding: var(--s4) var(--s5);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-large);
-  background: var(--paper);
-}
-.kpiLabel { color: var(--muted); font-size: var(--small); font-weight: 650; word-break: keep-all; }
-.kpiCard[data-alert="true"] { border-color: var(--warning-line); background: var(--warning-soft); }
-.kpiCard[data-alert="true"] .kpiLabel { display: inline-flex; align-items: center; gap: var(--s2); color: var(--warning); }
-.kpiCard[data-alert="true"] .kpiLabel::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--warning); }
-.kpiCard[data-alert="true"] .heroBar { background: var(--warning-line); }
-.kpiCard[data-alert="true"] .heroBar i { background: var(--warning); }
-.heroFigure { display: flex; align-items: baseline; gap: var(--s2); }
-.heroFigure b { font-size: 36px; font-weight: 750; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
-.heroFigure span { color: var(--muted); font-size: var(--small); font-weight: 650; word-break: keep-all; }
-.heroBar { height: 6px; overflow: hidden; border-radius: 999px; background: var(--line); }
-.heroBar i { display: block; height: 100%; border-radius: inherit; background: var(--ink); }
+/* Redesign 2026-11-19: rows read as places (tile, name, facts, who is on duty), the
+   gap list is amber work waiting for a person. (The dark display stage moved
+   to 현장 모드.) Orange stays with the page's one action. */
 
 /* Section heads on this page are a step larger than the shared default. */
 .anchorSection [data-console-section-head] h2 { font-size: var(--h3); font-weight: 700; letter-spacing: -0.01em; word-break: keep-all; }
@@ -265,21 +225,6 @@
 .gapSurface:has(.gapOk) { padding: 0; border: 0; background: transparent; }
 
 /* Display output: a dark stage, like the screen it drives. */
-.displayBoard > :global(.astryx-section) { padding: var(--s5); border-radius: var(--radius-large); background: var(--stage); color: var(--side-text); }
-.displayBoard [data-console-section-head] h2 { color: var(--side-text); }
-.displayBoard [data-console-section-head] p { color: var(--side-muted); }
-.displayBoard [data-console-section-head] p::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: var(--s2); border-radius: 50%; background: var(--success-line); vertical-align: baseline; }
-.displayBoard select { border-color: var(--stage-line); background-color: var(--stage-2); color: var(--side-text); }
-.displayBoard .hint { color: var(--side-muted); }
-.displayBoard :global(.notice) { border-color: var(--stage-line); background: var(--stage-2); color: var(--side-text); }
-.displayBoard .buttonRow > :global(.astryx-button) { border: 1px solid var(--paper); background: var(--paper); color: var(--ink); font-weight: 700; }
-.displayBoard .buttonRow > :global(.astryx-button:disabled) { border: 1px solid var(--stage-line); background: transparent; color: var(--side-muted); opacity: 1; }
-.screenLink { display: inline-flex; align-items: center; gap: var(--s2); border-radius: 999px; }
-.screenLink svg { width: 18px; height: 18px; }
-.displayBoard .screenLink { border: 1px solid var(--side-muted); background: transparent; color: var(--side-text); }
-.displayBoard .screenLink:hover { border-color: var(--paper); background: var(--side-hover); }
-.moreLink { display: inline-flex; align-items: center; gap: var(--s2); color: var(--ink); font-weight: 650; }
-.moreLink svg { width: 16px; height: 16px; }
 
 /* Detail dialog: who is on duty, with their release. */
 .dutyList { display: grid; margin: 0; padding: 0; list-style: none; }
@@ -296,29 +241,50 @@
 .presetSummary { min-height: 56px; padding: var(--s3) var(--s4); font-size: var(--body); }
 .presetBody { margin: var(--s4); }
 
-@media (min-width: 1101px) {
-  .opsGrid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--s6); align-items: start; }
-}
-.opsSide .participationGrid { grid-template-columns: minmax(0, 1fr); gap: var(--s5); }
-.opsSide .participationColumn + .participationColumn { border-left: 0; padding-left: 0; }
-.opsMain, .opsSide { display: grid; gap: var(--s6); min-width: 0; align-content: start; }
-@media (max-width: 1100px) {
-  .opsGrid { display: grid; gap: var(--s6); }
-  .opsSide { order: 1; }
-}
 @media (max-width: 768px) {
-  .kpiStrip { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: var(--s2); margin-bottom: var(--s5); }
-  .kpiCard { min-height: 96px; padding: var(--s3) var(--s4); }
-  .heroFigure b { font-size: 28px; }
-  .heroFigure { flex-wrap: wrap; gap: 0 var(--s2); }
   .locationOpen { grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--s3); min-height: 72px; padding-inline: 0; }
   .locationOpen .locationChevron { display: none; }
   .dutyCaption { display: none; }
   .locationTile { width: 40px; height: 40px; }
   .presetGrid { grid-template-columns: minmax(0, 1fr); gap: var(--s4); margin-top: var(--s5); }
-  .displayBoard > :global(.astryx-section) { padding: var(--s4); }
 }
 @media (prefers-reduced-motion: reduce) {
   .locationOpen, .locationChevron, .presetFold { transition: none; }
   .locationOpen:hover .locationChevron { transform: none; }
+}
+
+
+/* Reopened 2026-11-20 (입장·스태프): three steps in one flow. 1 desks, 2 staff on
+   duty (amber while a place has no one), 3 scanning on the staff phone. Booths
+   are an optional section after them; the venue-display output moved to 현장 모드. */
+.steps { display: grid; gap: var(--s6); min-width: 0; }
+.stepSection { padding-top: var(--s5); border-top: 1px solid var(--line); }
+.stepSection:first-child { padding-top: 0; border-top: 0; }
+.stepPill { display: inline-flex; align-items: center; gap: var(--s2); min-height: 28px; padding: 2px var(--s3) 2px 2px; border-radius: 999px; background: var(--surface-muted); color: var(--ink); font-size: var(--small); font-weight: 700; }
+.stepPill b { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: var(--paper); font-size: var(--label); font-variant-numeric: tabular-nums; }
+.stepPill[data-tone="ok"] { background: var(--success-soft); color: var(--success); }
+.stepPill[data-tone="ok"] b { background: var(--success); }
+.stepPill[data-tone="warn"] { background: var(--warning-soft); color: var(--warning); }
+.stepPill[data-tone="warn"] b { background: var(--warning); }
+.stepPill[data-tone="todo"] { background: var(--brand-tint); color: var(--brand-text); }
+.stepPill[data-tone="todo"] b { background: var(--brand-text); }
+.stepPill[data-tone="wait"] b, .stepPill[data-tone="day"] b { background: var(--muted); }
+.scanStep { display: grid; grid-template-columns: minmax(0, 1fr) 208px; align-items: center; gap: var(--s6); }
+.scanCopy { display: grid; gap: var(--s3); min-width: 0; }
+.scanList { display: grid; gap: var(--s2); margin: 0; padding-left: var(--s5); list-style: decimal; }
+.scanList li::marker { color: var(--muted); font-weight: 700; }
+.scanLink { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin: 0; color: var(--muted); font-size: var(--small); }
+.scanLink code { padding: var(--s1) var(--s2); border-radius: var(--radius-small); background: var(--surface-muted); color: var(--ink); font-family: var(--mono-font); overflow-wrap: anywhere; }
+.scanActions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.scanPhone { width: 100%; max-width: 208px; justify-self: center; }
+.phoneScreen { display: grid; align-content: start; gap: 14px; height: 100%; padding: 24px 22px; background: var(--paper); color: var(--ink); }
+.phoneScreen small { color: var(--muted); font-size: 15px; font-weight: 600; }
+.phoneScreen strong { font-size: 26px; letter-spacing: -0.02em; }
+.phoneCamera { display: grid; place-items: center; height: 200px; border-radius: 18px; background: var(--stage); color: var(--side-muted); font-size: 15px; font-weight: 700; }
+.phoneButtons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.phoneButtons i { display: grid; place-items: center; height: 54px; border: 1px solid var(--line-strong); border-radius: 14px; font-size: 15px; font-style: normal; font-weight: 700; }
+.optionalNote { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin: 0; color: var(--muted); font-size: var(--small); }
+@media (max-width: 760px) {
+  .scanStep { grid-template-columns: minmax(0, 1fr); }
+  .scanPhone { justify-self: start; }
 }
