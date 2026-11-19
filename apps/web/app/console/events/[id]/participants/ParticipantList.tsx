@@ -31,7 +31,7 @@ import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
 import ConsoleChoiceGroup from "../../../console-ui/ConsoleChoiceGroup";
 import uiStyles from "../../../console-ui/console-ui.module.css";
-import { CheckIcon, ChevronRightIcon, CopyIcon, DownloadIcon, PlusIcon, UploadIcon } from "../../../console-ui/ConsoleIcons";
+import { CheckIcon, ChevronRightIcon, CopyIcon, DownloadIcon, FilterIcon, MessageIcon, PlusIcon, SearchIcon, UploadIcon, UsersIcon, XIcon } from "../../../console-ui/ConsoleIcons";
 import { UNCONFIRMED_WRITE_CLOSE_MESSAGE, useConsoleDraftGuard } from "../../../console-draft-guard";
 import { buildApprovedMessageHandoffHref } from "../../../console-handoff";
 import { useEventCloseHandoff } from "../../../use-event-close-handoff";
@@ -1857,6 +1857,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
             <>
               <label className={styles.searchField} data-toolbar-span="full">
                 <span className="sr-only" id="roster-search-label">이름·소속·연락처 검색</span>
+                <span className={styles.searchGlyph} aria-hidden="true"><SearchIcon /></span>
                 <input
                   id="roster-search"
                   aria-labelledby="roster-search-label"
@@ -1872,10 +1873,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                 id="roster-filter-toggle"
                 ref={filterToggleRef}
                 className={`pill ${styles.filterToggle}`}
+                data-active={advancedActiveCount > 0 ? "true" : undefined}
                 aria-expanded={filtersOpen}
                 aria-controls="roster-advanced-filters"
                 onClick={toggleAdvancedFilters}
               >
+                <FilterIcon />
                 <span>필터{advancedActiveCount > 0 ? ` · ${advancedActiveCount}개 적용 중` : ""}</span>
                 {advancedSummary ? (
                   <span className={styles.filterToggleSummary}>{advancedSummary}</span>
@@ -1948,7 +1951,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                 </select>
               </label>
               <details className={styles.rosterUtilities} ref={rosterUtilitiesRef}>
-                <summary aria-label="명단 도구"><span className={styles.longAction}>명단 도구</span><span className={styles.shortAction} aria-hidden="true">도구</span></summary>
+                <summary aria-label="명단 도구"><DownloadIcon /><span className={styles.longAction}>명단 도구</span><span className={styles.shortAction} aria-hidden="true">도구</span></summary>
                 <div className={styles.utilityMenu}>
               <ProductButton type="button" className="button button-secondary" aria-label={`엑셀 내보내기 · 검색·필터 결과 ${visiblePeople.length}명`} aria-describedby={state.exportIssue ? "roster-export-unavailable" : undefined} title={`검색·필터 결과 ${visiblePeople.length}명을 현재 정렬 순서로 내보냅니다.`} disabled={exporting || rosterUnavailable || Boolean(state.exportIssue)} onClick={() => void exportXlsx()} icon={<DownloadIcon />}>
 
@@ -2070,10 +2073,15 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               key={preset.key}
               type="button"
               className="pill"
+              data-preset={preset.key}
+              data-alert={preset.key === "pending" && preset.count > 0 ? "true" : undefined}
               aria-pressed={presetActive}
               onClick={() => applyRosterPreset(preset)}
             >
-              {preset.label} · {preset.count}명
+              <span className="sr-only">{preset.label} · {preset.count}명</span>
+              <span className={styles.funnelLabel} aria-hidden="true">{preset.label}</span>
+              <span className={styles.funnelCount} aria-hidden="true">{preset.count}<small>명</small></span>
+              <span className={styles.funnelBar} aria-hidden="true"><i style={{ width: `${presetCounts.all ? Math.round((preset.count / presetCounts.all) * 100) : 0}%` }} /></span>
             </button>
           );
         })}
@@ -2140,6 +2148,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                     type="button"
                     id="roster-approve-selected"
                     className="button button-secondary"
+                    icon={<CheckIcon />}
+                    data-bulk="primary"
                     disabled={bulkBusy || Boolean(bulkRetry) || Boolean(statusRetry) || unconfirmedStatus || !approvalCandidates.length}
                     aria-describedby={bulkRetry ? "roster-bulk-retry-message" : undefined}
                     onClick={() => void approveSelected()}
@@ -2148,7 +2158,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   </ProductButton>
                 ) : null}
                 {canMutateStatus && waitlistCandidates.length > 0 ? (
-                  <ProductButton type="button" id="roster-approve-waitlist" className="button button-secondary"
+                  <ProductButton type="button" id="roster-approve-waitlist" className="button button-secondary" icon={<CheckIcon />} data-bulk="primary"
                     disabled={bulkBusy || Boolean(bulkRetry) || Boolean(statusRetry) || unconfirmedStatus}
                     aria-describedby={bulkRetry ? "roster-bulk-retry-message" : undefined}
                     onClick={() => void approveSelected(false, "WAITLIST")}>
@@ -2159,6 +2169,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   type="button"
                   className="button button-secondary"
                   aria-describedby="roster-group-scope"
+                  icon={<UsersIcon />}
                   disabled={unconfirmedGroup || (!effectiveSelection.length && !pendingGroupRef.current)}
                   onClick={(event) => {
                     closeSelectionMenu(event.currentTarget);
@@ -2194,6 +2205,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                       id="roster-send-message"
                       className={`button button-secondary ${styles.selectionButton}`}
                       disabled
+                      icon={<MessageIcon />}
                       aria-describedby="roster-message-scope"
                       title="대상이 너무 많습니다. 필터로 대상을 좁혀 주세요"
                     >
@@ -2207,12 +2219,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                     aria-describedby="roster-message-scope"
                     href={closeHref(handoffHref)}
                   >
-                    메시지 작성 <span aria-hidden="true">{hiddenSelectedCount ? `· 전체 ${handoffIds.length}명` : ""}</span>
+                    <MessageIcon /> 메시지 작성 <span aria-hidden="true">{hiddenSelectedCount ? `· 전체 ${handoffIds.length}명` : ""}</span>
                   </ProductLink>
                 )}
                 <p className="sr-only" id="roster-message-scope">필터 밖을 포함한 선택 {handoffIds.length}명 대상{hiddenSelectedCount ? ` · 필터 밖 ${hiddenSelectedCount}명` : ""}</p>
                 {canMutateStatus ? <>
-                  <ProductButton type="button" className="button button-secondary" aria-describedby="roster-cancel-scope" disabled={unconfirmedStatus || receiptRefreshLock || bulkBusy || Boolean(bulkRetry) || Boolean(statusRetry) || !cancelCandidates.length || cancelCandidates.length > 1000}
+                  <ProductButton type="button" className="button button-secondary" aria-describedby="roster-cancel-scope" icon={<XIcon />} data-bulk="danger" disabled={unconfirmedStatus || receiptRefreshLock || bulkBusy || Boolean(bulkRetry) || Boolean(statusRetry) || !cancelCandidates.length || cancelCandidates.length > 1000}
                     onClick={(event) => {
                       closeSelectionMenu(event.currentTarget);
                       setBulkCancelTargets(cancelCandidates.map(({ id, name, status, inside, company, phone }) => ({ id, name, status, inside, company, phone: maskPhone(phone) })));
@@ -2271,7 +2283,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   {canAssignGroup ? <td className={styles.selectColumn}><label className={styles.participantSelectTarget}>
                     <input type="checkbox" className={styles.participantSelect} aria-label={`${person.name} 선택`} checked={effectiveSelection.includes(person.id)} onChange={() => togglePerson(person.id)} />
                   </label></td> : null}
-                  <td><span className={styles.tableIdentity}><strong id={`roster-name-desktop-${person.id}`}>{person.name}</strong><small>{person.company || "소속 미입력"}</small></span></td>
+                  <td><span className={styles.nameCell}><span className={styles.avatar} data-status={person.status} aria-hidden="true">{[...person.name.trim()][0] ?? "?"}</span><span className={styles.tableIdentity}><strong id={`roster-name-desktop-${person.id}`}>{person.name}</strong><small>{person.company || "소속 미입력"}</small></span></span></td>
                   <td className={styles.rosterContact}>{maskPhone(person.phone)}</td><td className={styles.rosterGroup}>{person.group || "미지정"}</td>
                   <td><span className={`status-chip ${tone} ${styles.participantStatus}`}>{statusLabel(person.status)}</span>{["PENDING", "WAITLIST"].includes(person.status) && person.ticketReview === "cancelled" ? <small className={styles.ticketReviewLabel}>취소 상태 확인 필요</small> : null}{["PENDING", "WAITLIST"].includes(person.status) && person.ticketNeedsExplicitReissue ? <small className={styles.ticketReviewLabel}>승인 후 티켓 재발급 필요</small> : null}</td>
                   <td><span className={person.inside ? styles.presenceInside : styles.presence}>{presenceLabel(person)}</span></td>
@@ -2372,8 +2384,13 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               <div className={styles.rosterInspector}>
                 <>
                   <div className={styles.inspectorHead}>
+                    <span className={`${styles.avatar} ${styles.avatarLarge}`} data-status={selectedPerson.status} aria-hidden="true">{[...selectedPerson.name.trim()][0] ?? "?"}</span>
                     <div className={styles.inspectorIdentity}>
                       <h3 ref={inspectorHeadingRef} tabIndex={-1}>신청 정보</h3>
+                      <p className={styles.inspectorBadges}>
+                        <span className={`status-chip ${selectedPerson.status === "APPROVED" ? "good" : selectedPerson.status === "WAITLIST" ? "wait" : selectedPerson.status === "CANCELLED" ? "bad" : "info"} ${styles.participantStatus}`}>{statusLabel(selectedPerson.status)}</span>
+                        <span className={selectedPerson.inside ? styles.presenceInside : styles.presence}>{presenceLabel(selectedPerson)}</span>
+                      </p>
                     </div>
                   </div>
                   <div className={styles.participantDetails}>

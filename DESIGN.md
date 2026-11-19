@@ -230,7 +230,9 @@ The owner approved this composition on 2026-11-13 and reopened it on 2026-11-19,
 The owner approved this composition on 2026-11-13 (`apps/web/app/console/events/[id]/participants/ParticipantList.tsx`, option A "조용한 명단"). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-participant-roster-presets.test.cjs` guards it.
 
 - One flat ledger: no card box around the controls or the list. Hairlines divide; the header row and pagination share the page surface.
-- Status views are ink-underline tabs. The active tab is ink, not orange.
+- Reopened 2026-11-19 (owner picked 시안 A): the status views are a four-card funnel (전체 · 승인 대기 · 참가 확정 · 확정자 중 미입장). Each card is still the filter, shows a large count and a bar of its share of 전체. The chosen card is ink-outlined; amber marks only 승인 대기 when it is above zero; no orange.
+- Search carries a magnifier, the filter control a filter icon (solid ink when filters are active), 명단 도구 and 명단 가져오기 are outlined pills. Rows start with an initial avatar tinted by status. The ink selection bar keeps one solid forward action (승인/확정), outlines the rest with icons, and marks 신청 취소 as quiet-destructive.
+- Person details stay in the docked inspector (modal sheet on phones): avatar, status pill and entry state first, then a hairline list of actions instead of wrapped pill buttons.
 - "참가자 추가" is the only orange action. 명단 가져오기, 명단 도구 and pagination are ghost.
 - The scope action "필터 결과 전체 N명 선택" lives only inside the ink selection bar, so no caption row sits above the list.
 - A whole row opens the detail dialog; a chevron replaces the "상세" text. Checkbox, "승인" and other inline buttons never trigger it. "승인" appears only on PENDING and WAITLIST rows.

@@ -239,3 +239,40 @@ export function ClockIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function FilterIcon({ className }: IconProps) {
+  return (
+    <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <path d="M4 7h10m4 0h2M4 17h2m4 0h10" />
+      <circle cx="16" cy="7" r="2" />
+      <circle cx="8" cy="17" r="2" />
+    </svg>
+  );
+}
+
+export function UsersIcon({ className }: IconProps) {
+  return (
+    <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <circle cx="9" cy="8.5" r="3.2" />
+      <path d="M3.5 19c.5-3.3 2.8-5 5.5-5s5 1.7 5.5 5" />
+      <path d="M15.5 5.600a3 3 0 0 1 0 5.800M17.5 14.300c1.7.6 2.800 2.200 3 4.700" />
+    </svg>
+  );
+}
+
+export function MessageIcon({ className }: IconProps) {
+  return (
+    <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <path d="M5 5h14a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 17h-8l-4.500 3.500V17H5a1.5 1.5 0 0 1-1.5-1.5v-9A1.5 1.5 0 0 1 5 5z" />
+    </svg>
+  );
+}
+
+export function TicketIcon({ className }: IconProps) {
+  return (
+    <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <path d="M4 8.500A1.5 1.5 0 0 1 5.5 7h13A1.5 1.5 0 0 1 20 8.500V10a2 2 0 0 0 0 4v1.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 15.5V14a2 2 0 0 0 0-4z" />
+      <path d="M14 7v2m0 3v0m0 3v2" />
+    </svg>
+  );
+}

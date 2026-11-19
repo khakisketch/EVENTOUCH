@@ -34,9 +34,21 @@ test('approved roster design stays locked', () => {
   // One flat ledger: no card box around controls or list.
   assert.match(css, /\.workbenchControls \{[^}]*background: transparent/su, 'controls are not a card');
   assert.match(css, /\.rosterSection \{[^}]*border: 0;[^}]*box-shadow: none/su, 'list is not a card');
-  // Ink-underline tabs, not orange.
-  assert.match(css, /\.quickPresets :global\(\.pill\[aria-pressed="true"\]\) \{[^}]*border-bottom-color: var\(--ink\)/su, 'active tab is ink');
-  assert.doesNotMatch(css, /\.quickPresets[^{]*\{[^}]*var\(--brand/su, 'tabs carry no orange');
+  // Reopened 2026-11-19 (participants 시안 A): the tabs are funnel cards that are
+  // still the filter. Ink marks the chosen view, amber only waiting work, never orange.
+  assert.match(css, /\.quickPresets \{ display: grid; grid-template-columns: repeat\(4/u, 'view filters are a four-card funnel');
+  assert.match(css, /\.quickPresets :global\(\.pill\[aria-pressed="true"\]\) \{[^}]*border-color: var\(--ink\)/su, 'chosen card is ink');
+  assert.doesNotMatch(css, /\.quickPresets[^{]*\{[^}]*var\(--brand/su, 'funnel cards carry no orange');
+  assert.match(list, /className=\{styles\.funnelCount\}/u, 'cards show a large count');
+  assert.match(list, /<span className="sr-only">\{preset\.label\} · \{preset\.count\}명<\/span>/u, 'the card keeps its full accessible name');
+  assert.match(list, /data-alert=\{preset\.key === "pending" && preset\.count > 0/u, 'waiting approvals are flagged');
+  // Search, filter and tools carry icons; rows carry an initial avatar; the bulk bar actions carry icons.
+  assert.match(list, /<span className=\{styles\.searchGlyph\} aria-hidden="true"><SearchIcon \/><\/span>/u, 'search has a magnifier');
+  assert.match(list, /<FilterIcon \/>\s*<span>필터/u, 'filter control has a filter icon');
+  assert.match(list, /className=\{styles\.avatar\} data-status=\{person\.status\}/u, 'rows carry an initial avatar');
+  assert.match(list, /icon=\{<UsersIcon \/>\}/u);
+  assert.match(list, /<MessageIcon \/> 메시지 작성/u);
+  assert.match(list, /data-bulk="danger"/u, 'bulk cancel is marked destructive');
   // Whole row opens the detail dialog; a chevron replaces the 상세 text.
   assert.ok(list.includes('onClick={(event) => openDetailsFromRow(event, person.id)}'), 'row click opens details');
   assert.match(list, /<ChevronRightIcon \/>/u);
