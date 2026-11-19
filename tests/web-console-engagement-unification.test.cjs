@@ -55,8 +55,9 @@ test('unified-frame: every engagement page renders the shared frame, not a bespo
 test('unified-frame: primary actions live in toolbars or editing areas, feedback is shared', () => {
   const programs = read(PROGRAMS);
   assert.match(programs, /headerActions=\{/, 'programs create/refresh ride the page header actions');
-  assert.match(programs, /variant="primary" onClick=\{openCreate\}/, 'programs create is the single orange action');
-  assert.match(programs, />\s*콘텐츠 만들기\s*</, 'programs keeps the standard create action');
+  // Reopened 2026-11-20: 이벤트 만들기 opens the template chooser; the type tile then opens the existing create dialog.
+  assert.match(programs, /variant="primary" aria-haspopup="dialog" onClick=\{\(\) => setTemplateOpen\(true\)\}/, "programs create is the single orange action");
+  assert.match(programs, />\s*이벤트 만들기\s*</, "programs keeps the standard create action");
   const reports = read(REPORTS);
   // The task-first redesign puts create alongside its report list instead of
   // in a separate toolbar, while retaining its real permission gate.
@@ -409,7 +410,7 @@ test('engagement-growth: long program and photo lists page incrementally', () =>
   // The remainder must count what the list actually shows (the list can be
   // filtered), so the button never promises rows that are not there.
   assert.match(programs, /더 보기 \(\{visibleModules\.length - moduleLimit\}\)/, 'programs grow with a remainder count');
-  assert.match(programs, /등록된 콘텐츠가 없습니다/, 'programs empty state stays');
+  assert.match(programs, /첫 이벤트를 만들어 보세요/, "programs empty state stays (template tiles inline)");
   const photos = read(PHOTOS);
   assert.match(photos, /PHOTO_PAGE_SIZE = 12/, 'photos reveal the first 12 of the section');
   assert.match(photos, /slice\(0, photoLimit\)/, 'photos window the current-section grid');

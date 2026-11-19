@@ -135,7 +135,7 @@ test('boundaries helper pins stable workspace markers, not styling', () => {
     '#program-title',
     '#program-options',
     'module-title-',
-    '콘텐츠 만들기',
+    '이벤트 만들기',
     '더 보기',
     '이전 발송 더 보기',
   ]) {

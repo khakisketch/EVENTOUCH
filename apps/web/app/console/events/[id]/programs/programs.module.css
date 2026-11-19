@@ -1,6 +1,6 @@
 /* Programs screen. Rows are a flat ledger grouped by run state (진행 중 /
    준비 중 / 종료): a type tile, a name with one quiet line, an optional thin
-   meter and one number. The orange action is "콘텐츠 만들기"; everything
+   meter and one number. The orange action is "이벤트 만들기"; everything
    attendees sent that needs a decision lives in the review drawer. */
 
 .headerActions {
@@ -227,18 +227,6 @@
 }
 
 .moduleWarn { color: var(--warning); font-weight: 700; }
-
-.meter {
-  display: flex;
-  height: 6px;
-  overflow: hidden;
-  border-radius: 3px;
-  background: var(--chart-track);
-}
-
-.meter i { display: block; height: 100%; background: var(--ink); }
-.meter i + i { background: var(--line-strong); }
-.meter i + i + i { background: var(--line); }
 
 .moduleCount {
   color: var(--muted);
@@ -824,8 +812,6 @@ button.drawerItemMain { cursor: pointer; min-height: 44px; align-content: center
   .headerActions { justify-content: flex-start; }
 
   .moduleSummary { grid-template-columns: 44px minmax(0, 1fr) auto; gap: var(--s3); }
-  .meter,
-  .meterSpacer { display: none; }
   .moduleBody { padding-left: 0; }
   .returnLink { margin-left: 0; }
 
@@ -862,16 +848,6 @@ button.drawerItemMain { cursor: pointer; min-height: 44px; align-content: center
 
 /* ---- 재설계 2026-11-19 ----
    위에 현황 카드 4칸(큰 숫자), 검토할 것은 amber 카드, 행은 둥근 호버 면과 더 큰 유형 타일·진행 막대로 읽히게 한다. */
-.statStrip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s3); margin: 0 0 var(--s2); }
-.statCard { display: grid; align-content: space-between; gap: var(--s2); min-height: 92px; margin: 0; padding: var(--s3) var(--s4); border: 1px solid var(--line); border-radius: var(--radius-large); background: var(--paper); }
-.statCard dt { color: var(--muted); font-size: var(--small); font-weight: 650; word-break: keep-all; }
-.statCard dt::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: var(--s2); border-radius: 50%; background: var(--line-strong); }
-.statCard[data-tone="live"] dt::before { background: var(--success); }
-.statCard[data-tone="prep"] dt::before { background: var(--warning); }
-.statCard[data-tone="done"] dt::before { background: var(--paper); box-shadow: inset 0 0 0 2px var(--line-strong); }
-.statCard[data-tone="resp"] dt::before { background: var(--ink); }
-.statCard dd { margin: 0; font-size: 32px; font-weight: 750; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.statCard[data-tone="live"] dd { color: var(--success); }
 
 .reviewLine { min-height: 64px; margin-bottom: var(--s3); border: 1px solid var(--warning-line); border-radius: var(--radius-large); background: linear-gradient(90deg, var(--warning-soft), var(--paper) 90%); }
 .reviewToggle { min-height: 64px; padding: var(--s3) var(--s5); font-size: var(--h3); }
@@ -885,10 +861,9 @@ button.drawerItemMain { cursor: pointer; min-height: 44px; align-content: center
 
 .moduleSummary { padding: var(--s3) var(--s3); border-radius: var(--radius-large); transition: background-color 0.12s; }
 .moduleSummary:hover { background: var(--surface-muted); }
-.moduleSummary[data-has-action="true"] { padding-right: 112px; }
+.moduleSummary[data-has-action="true"] { padding-right: 124px; }
 .rowAction { right: var(--s3); top: 18px; }
 .typeTile { width: 48px; height: 48px; border-radius: 14px; }
-.meter { height: 8px; border-radius: 999px; }
 .moduleCount b { font-size: 24px; font-weight: 750; }
 .statusTabs { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-muted); }
 .statusTabs button { padding: 0 var(--s4); border: 0; border-radius: 999px; }
@@ -897,13 +872,139 @@ button.drawerItemMain { cursor: pointer; min-height: 44px; align-content: center
 .empty { border-radius: var(--radius-large); background: var(--surface-muted); }
 
 @media (max-width: 768px) {
-  .statStrip { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); }
-  .statCard { min-height: 80px; padding: var(--s3); }
-  .statCard dd { font-size: 28px; }
-  .moduleSummary { padding-inline: var(--s2); }
+        .moduleSummary { padding-inline: var(--s2); }
 }
 @media (prefers-reduced-motion: reduce) { .moduleSummary { transition: none; } }
 
 /* 시작·다시 열기는 윤곽 알약으로, 흰 버튼 더미가 되지 않게 한 줄에 하나만 둔다. */
 .rowAction { padding-inline: var(--s4); border: 1px solid var(--line-strong); border-radius: 999px; background: var(--paper); font-weight: 700; }
 .rowAction:hover:not(:disabled) { background: var(--surface-muted); }
+
+/* ---- 참여 이벤트 재구성 2026-11-20 ----
+   한 메뉴·한 목록·한 생명주기. 행: 유형 타일(그룹 색) · 제목과 한 줄 메타 · 4칸 생명주기 · 개수 · 상태 알약.
+   위 현황 카드는 개수 탭으로, 검토할 것은 얇은 띠로 줄였다. */
+.listTools { gap: var(--s3) var(--s4); }
+.listTools label { flex: 1 1 200px; max-width: 340px; }
+.listFacts { margin: 0 0 0 auto; color: var(--muted); font-size: var(--small); word-break: keep-all; }
+.listFacts b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.statusTabs button { display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); padding: 0 var(--s3) 0 var(--s4); white-space: nowrap; }
+.statusTabs small { min-width: 24px; margin: 0; padding: 1px 7px; border-radius: 999px; background: var(--paper); color: var(--muted); font-size: var(--label); font-weight: 750; text-align: center; }
+.statusTabs button[data-tone="live"] small { background: var(--success-soft); color: var(--success); }
+.statusTabs button[data-tone="prep"] small { background: var(--warning-soft); color: var(--warning); }
+.statusTabs button[aria-pressed="true"] small { background: color-mix(in srgb, var(--paper) 24%, transparent); color: var(--paper); }
+
+/* group tints: 참여형 blue, 추첨형 orange, 미션형 green */
+.typeTile[data-type="poll"],
+.typeTile[data-type="quiz"],
+.typeTile[data-type="qa"],
+.typeTile[data-type="survey"] { background: var(--info-soft); color: var(--info); }
+.typeTile[data-type="draw"],
+.typeTile[data-type="roulette"],
+.typeTile[data-type="lucky"],
+.typeTile[data-type="vote"] { background: color-mix(in srgb, var(--brand) 13%, var(--paper)); color: var(--brand-text); }
+.typeTile[data-type="photo"],
+.typeTile[data-type="board"] { background: var(--success-soft); color: var(--success); }
+
+.moduleSummary { grid-template-columns: 48px minmax(0, 1fr) 176px 72px 92px; gap: var(--s4); }
+.moduleSummary { padding-right: 124px; }
+.rowAction { right: var(--s3); top: 18px; }
+.moduleName h3 { font-size: var(--body); }
+.moduleLine { gap: 0; font-size: var(--small); }
+.moduleLine > span + span::before { content: "·"; margin: 0 var(--s2); color: var(--line-strong); }
+.moduleBody { padding-left: calc(48px + var(--s4)); }
+
+/* 4-segment life cycle: 준비 · 진행 · 결과 · 경품 */
+.lifeMeter { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s1); margin: 0; padding: 0; list-style: none; }
+.lifeMeter li { display: grid; gap: var(--s1); min-width: 0; }
+.lifeMeter i { display: block; height: 6px; border-radius: 999px; background: var(--chart-track); }
+.lifeMeter li > span { color: var(--muted); font-size: var(--label); font-weight: 600; text-align: center; word-break: keep-all; }
+.lifeMeter li[data-state="done"] i { background: var(--ink); }
+.lifeMeter li[data-state="current"] i { background: var(--warning-line); }
+.lifeMeter li[data-key="run"][data-state="current"] i { background: var(--success); }
+.lifeMeter li[data-state="current"] > span { color: var(--ink); font-weight: 750; }
+.lifeMeter li[data-state="na"] i { background: repeating-linear-gradient(90deg, var(--line-strong) 0 4px, transparent 4px 7px); }
+
+.statusPill { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 28px; padding: 0 var(--s3); border-radius: 999px; background: var(--surface-muted); color: var(--muted); font-size: var(--small); font-weight: 700; white-space: nowrap; justify-self: end; }
+.statusPill[data-tone="live"] { background: var(--ink); color: var(--paper); }
+.statusPill[data-tone="live"]::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+.statusPill[data-tone="review"] { background: var(--warning-soft); color: var(--warning); box-shadow: inset 0 0 0 1px var(--warning-line); }
+.statusPill[data-tone="ready"] { background: var(--success-soft); color: var(--success); }
+.statusPill[data-tone="done"] { background: transparent; box-shadow: inset 0 0 0 1px var(--line-strong); }
+.statusPill[data-tone="check"] { background: var(--danger-soft); color: var(--danger); }
+
+/* 5-step header inside an opened event */
+.stepper { display: grid; gap: var(--s3); padding: var(--s4); border-radius: var(--radius-large); background: var(--surface-muted); }
+.stepper ol { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--s3); margin: 0; padding: 0; list-style: none; }
+.stepper li { position: relative; display: grid; justify-items: start; align-content: start; gap: var(--s2); min-width: 0; }
+.stepper li:not(:last-child)::before { content: ""; position: absolute; top: 13px; left: 36px; right: calc(var(--s3) * -1 + 4px); height: 2px; background: var(--line-strong); }
+.stepper li[data-state="done"]:not(:last-child)::before { background: var(--ink); }
+.stepDot { position: relative; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--line-strong); background: var(--paper); color: var(--muted); font-size: var(--label); font-weight: 750; font-variant-numeric: tabular-nums; }
+.stepper li[data-state="done"] .stepDot { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.stepper li[data-state="current"] .stepDot { border-color: var(--brand); background: var(--brand); color: var(--on-brand); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 20%, transparent); }
+.stepper li[data-state="na"] .stepDot { border-style: dashed; }
+.stepText { display: grid; gap: 2px; min-width: 0; padding-right: var(--s2); }
+.stepText b { font-size: var(--small); font-weight: 750; word-break: keep-all; }
+.stepText > span { color: var(--muted); font-size: var(--label); line-height: 1.45; word-break: keep-all; overflow-wrap: break-word; }
+.stepper li[data-state="todo"] .stepText b,
+.stepper li[data-state="na"] .stepText b { color: var(--muted); }
+.stepLink { min-height: 44px; justify-self: start; padding-inline: 0; font-size: var(--label); }
+.stepNow { margin: 0; color: var(--muted); font-size: var(--small); }
+.stepNow b { color: var(--ink); }
+
+.factList { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
+.factList li { padding: var(--s1) var(--s3); border-radius: 999px; background: var(--surface-muted); font-size: var(--small); word-break: keep-all; }
+
+/* review: a slim amber row, not a card */
+.reviewLine { min-height: 48px; margin: 0 0 var(--s2); border-radius: var(--radius-medium); background: var(--warning-soft); }
+.reviewToggle { min-height: 48px; padding: var(--s2) var(--s4); font-size: var(--body); }
+.reviewToggle small { margin-left: var(--s3); font-size: var(--small); font-weight: 600; word-break: keep-all; }
+.reviewToggle > span:last-child { padding: 0; background: transparent; box-shadow: none; }
+.reviewLineCalm { min-height: 44px; padding: 0 var(--s2); border: 0; background: transparent; }
+
+/* template chooser */
+.templateGroups { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s5); }
+.templateGroup li { display: flex; align-self: stretch; }
+.templateGroup li > .templateTile { align-self: stretch; height: auto; }
+.templateGroup h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s2); margin: 0 0 var(--s2); font-size: var(--body); font-weight: 750; }
+.templateGroup h3 span { color: var(--muted); font-size: var(--small); font-weight: 500; }
+.templateGroup ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--s2); align-items: stretch; margin: 0; padding: 0; list-style: none; }
+.templateTile.templateTile { display: flex; align-items: center; gap: var(--s3); width: 100%; min-height: 72px; padding: var(--s3) var(--s4); border: 1px solid var(--line); border-radius: var(--radius-large); background: var(--paper); color: var(--ink); font: inherit; text-align: left; text-decoration: none; cursor: pointer; transition: border-color 0.12s, background-color 0.12s; }
+.templateTile.templateTile:hover:not(:disabled):not([aria-disabled="true"]) { border-color: var(--ink); background: var(--surface-muted); }
+.templateTile.templateTile:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.templateTile.templateTile:disabled,
+.templateTile.templateTile[aria-disabled="true"] { opacity: 0.6; cursor: not-allowed; }
+.templateText { display: grid; gap: 2px; min-width: 0; }
+.templateText b { font-weight: 750; }
+.templateText > span { color: var(--muted); font-size: var(--small); line-height: 1.45; word-break: keep-all; }
+.templateHint { margin: 0; padding: var(--s3) var(--s4); border: 1px dashed var(--line-strong); border-radius: var(--radius-large); color: var(--muted); font-size: var(--small); text-align: center; word-break: keep-all; }
+.emptyChooser { display: grid; gap: var(--s3); padding: var(--s5) 0; }
+.emptyChooser h2 { margin: 0; font-size: var(--h2); letter-spacing: -0.01em; }
+.emptyChooser > p { margin: 0 0 var(--s2); color: var(--muted); }
+
+@media (max-width: 1100px) {
+  .stepper ol { grid-template-columns: 1fr; gap: var(--s3); }
+  .stepper li { grid-template-columns: 28px minmax(0, 1fr); column-gap: var(--s3); }
+  .stepper li:not(:last-child)::before { display: none; }
+}
+
+@media (max-width: 768px) {
+  .listFacts { margin-left: 0; flex-basis: 100%; }
+  .statusTabs { display: flex; width: 100%; }
+  .statusTabs button { flex: 1 1 0; flex-direction: column; gap: 0; min-height: 52px; padding: var(--s1) var(--s2); }
+  .statusTabs small { order: -1; min-width: 0; padding: 0; background: transparent; font-size: var(--body); }
+  .statusTabs button[aria-pressed="true"] small,
+  .statusTabs button[data-tone="live"] small,
+  .statusTabs button[data-tone="prep"] small { background: transparent; }
+  .moduleSummary { grid-template-columns: 48px minmax(0, 1fr) auto; grid-template-areas: "tile name pill" "tile meter meter"; align-items: center; gap: var(--s2) var(--s3); }
+  .moduleSummary > :nth-child(1) { grid-area: tile; align-self: start; }
+  .moduleSummary > :nth-child(2) { grid-area: name; }
+  .moduleSummary > :nth-child(3) { grid-area: meter; }
+  .moduleSummary > :nth-child(4) { display: none; }
+  .moduleSummary > :nth-child(5) { grid-area: pill; align-self: start; }
+  .moduleSummary { padding-right: var(--s2); }
+  .rowAction { position: static; display: block; margin: calc(var(--s1) * -1) 0 var(--s2) calc(48px + var(--s3) + var(--s2)); }
+  .moduleBody { padding-left: 0; }
+  .templateGroup ul { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { .templateTile.templateTile { transition: none; } }

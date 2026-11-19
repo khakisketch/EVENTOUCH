@@ -20,6 +20,7 @@ import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import { consoleFetch, subscribeConsoleFreshness } from "../../../../../lib/console-api";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
 import { PARTICIPATION_TYPES, participationTypeLabel, readParticipationHandoff, type ParticipationReview } from "../../../../../lib/participation-work";
+import { drawEventsSnapshot, eventPill, lifecycleSegments, lifecycleSteps, type DrawEvent, type DrawEventsSnapshot, type EventFacts } from "../../../../../lib/participation-events";
 import { abandonOperatorAttempt, acknowledgeOperatorReceipt, confirmsModuleSave, confirmsProgramOperation, confirmsQuestionManagement, isOrganizationContextBlock } from "../../../../../lib/operator-context";
 import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib/operator-receipts";
 import { useEventReceipts } from "../../../../../lib/use-event-receipts";
@@ -27,6 +28,10 @@ import { useOperatorContextSnapshot } from "../../../../../lib/use-operator-cont
 import styles from "./programs.module.css";
 import ProgramTypeIcon from "./ProgramIcons";
 import ReviewDrawer, { questionNeedsReview, type ReviewTab } from "./ReviewDrawer";
+import StatusTabs from "./StatusTabs";
+import TemplateChooser, { TemplateGroups } from "./TemplateChooser";
+import DrawEventRow from "./DrawEventRow";
+import { EventStepper, LifecycleMeter, StatusPill } from "./EventLifecycle";
 import QuizGrading, { type GradePayload, type GradeResult } from "./QuizGrading";
 import { useEventCloseHandoff } from "../../../use-event-close-handoff";
 import { readCloseSnapshot, type CloseSnapshot } from "../../../console-event-close";
@@ -104,6 +109,7 @@ type WorkspaceState =
       questions: Question[];
       photos: Photo[];
       posts: Post[];
+      drawEvents: DrawEventsSnapshot;
     };
 
 type Failure = { message: string; field: string | null };
@@ -323,6 +329,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
   const [draft, setDraft] = useState<ModuleDraft>(EMPTY_DRAFT);
   const [dialogFailure, setDialogFailure] = useState<Failure | null>(null);
   const [dialogBusy, setDialogBusy] = useState(false);
@@ -820,6 +827,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
         questions,
         photos,
         posts,
+        drawEvents: drawEventsSnapshot(workspace),
       });
       return true;
     } catch {
@@ -1069,6 +1077,17 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     if (writeLocked || moduleSaveRetryRef.current || otherModuleReceipt) return;
     dialogUnresolvedRef.current = false;
     setDraft(EMPTY_DRAFT);
+    setDialogFailure(null);
+    setDialogFieldError(null);
+    setDialogOpen(true);
+  }
+
+  // 이벤트 만들기 → template: the existing create dialog with the type preselected.
+  function openCreateOfType(type: string) {
+    if (writeLocked || moduleSaveRetryRef.current || otherModuleReceipt) return;
+    dialogUnresolvedRef.current = false;
+    setTemplateOpen(false);
+    setDraft({ ...EMPTY_DRAFT, type });
     setDialogFailure(null);
     setDialogFieldError(null);
     setDialogOpen(true);
@@ -1666,7 +1685,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   if (state.kind === "loading" || (state.kind === "ready" && loadedProgramEventRef.current !== eventId)) {
     return (
       <ConsolePage pageId="programs" eventId={eventId}>
-        <ConsoleStatePanel kind="loading" message="참여 콘텐츠 정보를 불러오고 있습니다." onRetry={() => {}} />
+        <ConsoleStatePanel kind="loading" message="참여 이벤트 정보를 불러오고 있습니다." onRetry={() => {}} />
       </ConsolePage>
     );
   }
@@ -1696,6 +1715,14 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     if (!programQueryText) return true;
     return `${module.title} ${typeLabel(module.type)}`.toLocaleLowerCase("ko-KR").includes(programQueryText);
   });
+  const drawEvents = state.drawEvents.events;
+  const visibleDrawEvents = drawEvents.filter((event) => {
+    if (programStatusFilter && event.status !== programStatusFilter) return false;
+    if (!programQueryText) return true;
+    return `${event.title} ${event.typeLabel}`.toLocaleLowerCase("ko-KR").includes(programQueryText);
+  });
+  const totalEvents = state.modules.length + drawEvents.length;
+  const statusCount = (status: string) => state.modules.filter((module) => module.status === status).length + drawEvents.filter((event) => event.status === status).length;
   const hasProgramFilter = programQuery.trim() !== "" || programStatusFilter !== "";
   function clearProgramFilters(): void {
     setProgramQuery("");
@@ -1735,7 +1762,8 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   ].map((group) => ({
     ...group,
     modules: shownModules.filter((module) => group.key === "OTHER" ? !STATUS_GROUPS.some((known) => known.key === module.status) : module.status === group.key),
-  })).filter((group) => group.modules.length);
+    draws: group.key === "OTHER" ? [] : visibleDrawEvents.filter((event) => event.status === group.key),
+  })).filter((group) => group.modules.length || group.draws.length);
 
   // One count for everything attendees sent that still needs a decision.
   // A question needing both an answer and an approval counts once.
@@ -1759,8 +1787,8 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
           <ProductLink variant="ghost" href={returnBack}>{returnLabel}</ProductLink>
           {state.canManage ? <ConsoleRefreshButton label="새로고침" disabled={busy !== null} onRefresh={() => load(true)} /> : null}
           {state.canManage ? (
-            <ProductButton type="button" variant="primary" onClick={openCreate} disabled={writeLocked || Boolean(moduleSaveRetry) || otherModuleReceipt}>
-              콘텐츠 만들기
+            <ProductButton type="button" variant="primary" aria-haspopup="dialog" onClick={() => setTemplateOpen(true)} disabled={writeLocked || Boolean(moduleSaveRetry) || otherModuleReceipt}>
+              이벤트 만들기
             </ProductButton>
           ) : null}
         </div>
@@ -1825,7 +1853,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
           <div className={`${styles.reviewLine} ${reviewTotal ? "" : styles.reviewLineCalm}`} id="moderation-status" tabIndex={-1} role="status">
             {reviewTotal ? (
               <button type="button" className={styles.reviewToggle} aria-haspopup="dialog" aria-expanded={drawerOpen} onClick={() => { setDrawerTab("all"); setDrawerOpen(true); }}>
-                <span>검토할 것 {reviewTotal}</span>
+                <span>검토할 것 {reviewTotal}<small>{[reviewQuestions ? `질문 ${reviewQuestions}` : "", reviewPhotos ? `사진 ${reviewPhotos}` : "", reviewPosts ? `글 ${reviewPosts}` : ""].filter(Boolean).join(" · ")}</small></span>
                 <span aria-hidden="true">열기 ›</span>
               </button>
             ) : <span>검토할 항목이 없습니다.</span>}
@@ -1874,59 +1902,53 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
         }} onCancel={() => setAbandonOperation(false)} /> : null}
       </section> : null}
       {state.canManage ? (
-        state.modules.length ? (
-          <section className={styles.listSection} aria-label="참여 콘텐츠 목록">
-            <dl className={styles.statStrip} aria-label="콘텐츠 현황">
-              {([
-                ["live", "진행 중", state.modules.filter((module) => module.status === "OPEN").length],
-                ["prep", "준비 중", state.modules.filter((module) => module.status === "DRAFT").length],
-                ["done", "종료", state.modules.filter((module) => module.status === "CLOSED").length],
-                ["resp", "받은 응답", state.responses.length],
-              ] as const).map(([tone, label, count]) => (
-                <div key={tone} className={styles.statCard} data-tone={tone}>
-                  <dt>{label}</dt>
-                  <dd>{count}</dd>
-                </div>
-              ))}
-            </dl>
-            {state.modules.length > 8 || hasProgramFilter ? (
-              <div className={styles.listTools}>
+        totalEvents ? (
+          <section className={styles.listSection} aria-label="참여 이벤트 목록">
+            <div className={styles.listTools}>
+              <StatusTabs
+                label="진행 상태별 보기"
+                value={programStatusFilter}
+                onChange={setProgramStatusFilter}
+                tabs={[
+                  { value: "", label: "전체", count: totalEvents },
+                  { value: "OPEN", label: "진행 중", count: statusCount("OPEN"), tone: "live" },
+                  { value: "DRAFT", label: "준비 중", count: statusCount("DRAFT"), tone: "prep" },
+                  { value: "CLOSED", label: "종료", count: statusCount("CLOSED") },
+                ]}
+              />
+              {totalEvents > 8 || hasProgramFilter ? (
                 <label>
-                  <span className="sr-only" id="program-search-label">콘텐츠 검색</span>
+                  <span className="sr-only" id="program-search-label">이벤트 검색</span>
                   <input
                     aria-labelledby="program-search-label"
                     type="search"
-                    placeholder="콘텐츠 이름·유형 검색"
+                    placeholder="이벤트 이름·유형 검색"
                     value={programQuery}
                     onChange={(event) => setProgramQuery(event.target.value)}
                   />
                 </label>
-                <div className={styles.statusTabs} role="group" aria-label="진행 상태별 보기">
-                  <span className="sr-only" id="program-status-label">진행 상태별 보기</span>
-                  {([["", "전체"], ["OPEN", "진행 중"], ["DRAFT", "준비 중"], ["CLOSED", "종료"]] as const).map(([value, label]) => (
-                    <button key={value || "all"} type="button" aria-pressed={programStatusFilter === value} onClick={() => setProgramStatusFilter(value)}>
-                      {label}<small>{value ? state.modules.filter((module) => module.status === value).length : state.modules.length}</small>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
+              ) : null}
+              <p className={styles.listFacts}>받은 응답 <b>{state.responses.length}</b>건</p>
+            </div>
             {hasProgramFilter ? (
               <p className={styles.resultCount} role="status">
-                검색·필터 결과 {visibleModules.length}개 · 전체 {state.modules.length}개 중 {Math.min(moduleLimit, visibleModules.length)}개 표시{" "}
+                검색·필터 결과 {visibleModules.length + visibleDrawEvents.length}개 · 전체 {totalEvents}개{" "}
                 <ProductButton type="button" variant="ghost" onClick={clearProgramFilters}>검색·필터 지우기</ProductButton>
               </p>
             ) : null}
-            {visibleModules.length ? (
+            {visibleModules.length + visibleDrawEvents.length ? (
               <>
                 {moduleGroups.map((group) => (
                   <div key={group.key} className={styles.moduleGroup}>
-                    <h2 className={styles.groupTitle} data-group={group.key}>{group.label}<span className={styles.groupCount}>{group.modules.length}</span></h2>
+                    <h2 className={styles.groupTitle} data-group={group.key}>{group.label}<span className={styles.groupCount}>{group.modules.length + group.draws.length}</span></h2>
                     <ul className={styles.moduleList}>
                       {group.modules.map((module) => (
                         <ModuleCard
                           key={module.id}
                           module={module}
+                          rewardCount={module.type === "draw" ? (state.drawEvents.moduleRewards[module.id] ?? 0) : null}
+                          reviewCount={module.type === "qa" ? state.questions.filter((question) => question.moduleId === module.id && questionNeedsReview(question)).length : module.type === "photo" ? reviewPhotos : module.type === "board" ? reviewPosts : 0}
+                          rewardsHref={`/console/events/${encodeURIComponent(eventId)}/rewards`}
                           featureOn={state.features.includes(module.type)}
                           eventId={eventId}
                           busy={busy}
@@ -2009,6 +2031,15 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
                           }}
                         />
                       ))}
+                      {group.draws.map((event) => (
+                        <DrawEventRow
+                          key={event.key}
+                          event={event}
+                          eventId={eventId}
+                          featureOn={state.features.includes(event.featureKey)}
+                          closeHref={closeHref}
+                        />
+                      ))}
                     </ul>
                   </div>
                 ))}
@@ -2022,7 +2053,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
               </>
             ) : (
               <div className={styles.empty}>
-                <p>조건에 맞는 콘텐츠가 없습니다.</p>
+                <p>조건에 맞는 이벤트가 없습니다.</p>
                 <p>검색어·상태 조건을 바꾸거나 지우고 다시 찾아보세요.</p>
                 <p>
                   <ProductButton type="button" variant="secondary" onClick={clearProgramFilters}>
@@ -2032,11 +2063,16 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
               </div>
             )}
             <p className={styles.drawsLink}>
-              <ProductLink variant="ghost" href={`/console/events/${encodeURIComponent(eventId)}/draws`}>무대 추첨·순위 투표·룰렛 관리</ProductLink>
+              <ProductLink variant="ghost" href={closeHref(`/console/events/${encodeURIComponent(eventId)}/draws`)}>무대 운영 화면 (추첨·룰렛·순위 투표)</ProductLink>
             </p>
           </section>
         ) : (
-          <p className={styles.empty}>등록된 콘텐츠가 없습니다. 위에서 첫 콘텐츠를 만드세요.</p>
+          <section className={styles.emptyChooser} aria-label="이벤트 만들기">
+            <h2>첫 이벤트를 만들어 보세요</h2>
+            <p>종류를 고르면 해당 설정이 열립니다.</p>
+            <TemplateGroups eventId={eventId} closeHref={closeHref} isTypeEnabled={isTypeEnabled} isDrawEnabled={(key) => state.features.includes(key)}
+              disabled={writeLocked || Boolean(moduleSaveRetry) || otherModuleReceipt} onPickModule={openCreateOfType} />
+          </section>
         )
       ) : null}
 
@@ -2066,6 +2102,18 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
           onConfirmPost={(post, status) => void moderatePost(post, status)}
           onCancelPost={() => setPostPending(null)}
           onClose={() => setDrawerOpen(false)}
+        />
+      ) : null}
+
+      {templateOpen && state.kind === "ready" && state.canManage ? (
+        <TemplateChooser
+          eventId={eventId}
+          closeHref={closeHref}
+          isTypeEnabled={isTypeEnabled}
+          isDrawEnabled={(key) => state.features.includes(key)}
+          disabled={writeLocked || Boolean(moduleSaveRetry) || otherModuleReceipt}
+          onPickModule={openCreateOfType}
+          onClose={() => setTemplateOpen(false)}
         />
       ) : null}
 
@@ -2146,6 +2194,16 @@ function rowSummary(module: Module, moduleResponses: Response[], questions: Ques
   }
 }
 
+// "Prepared" is only what the type needs to run, read from saved content.
+function moduleConfigured(module: Module): boolean {
+  switch (module.type) {
+    case "poll": return module.options.length >= 2;
+    case "quiz": return module.answer.trim() !== "";
+    case "survey": return module.questions.length > 0;
+    default: return true;
+  }
+}
+
 // A module whose content attendees already touched keeps its questions
 // locked: the server rejects module.save with 409, so the UI disables
 // editing with the same guidance instead of letting the save fail.
@@ -2167,6 +2225,10 @@ function editLockReason(module: Module, responseCount: number, questions: Questi
 }
 
 function ModuleCard(props: {
+  /** Linked reward count; null when this type has no reward path. */
+  rewardCount: number | null;
+  reviewCount: number;
+  rewardsHref: string;
   returnLink?: { label: string; href: string };
   closeHref: (target: string) => string;
   module: Module;
@@ -2245,6 +2307,13 @@ function ModuleCard(props: {
   const state = module.status === "OPEN" ? "live" : module.status === "CLOSED" ? "done" : "prep";
   const rowAction = module.status === "DRAFT" ? { label: "시작", to: "OPEN" as const } : module.status === "CLOSED" ? { label: "다시 열기", to: "OPEN" as const } : null;
   const actionsDisabled = props.busy !== null || props.locked || !props.featureOn;
+  const facts: EventFacts = {
+    status: module.status,
+    configured: moduleConfigured(module),
+    hasResult: module.type === "draw" ? module.drawHistory.length > 0 : module.status === "CLOSED",
+    rewardCount: props.rewardCount,
+  };
+  const pill = eventPill(facts, props.reviewCount);
   return (
     <li className={styles.moduleCard} data-status={module.status} data-feature-off={props.featureOn ? undefined : "true"}>
       <details className={styles.moduleDetails}>
@@ -2254,19 +2323,18 @@ function ModuleCard(props: {
             <h3 id={`module-title-${module.id}`} tabIndex={-1}>{module.title}</h3>
             <span className={styles.moduleLine}>
               <span>{summary.line}</span>
+              {props.rewardCount !== null && props.rewardCount > 0 ? <span>경품 {props.rewardCount}</span> : null}
               {summary.warn ? <b className={styles.moduleWarn}>{summary.warn}</b> : null}
               {!props.featureOn ? <b className={styles.moduleWarn}>이 유형이 꺼져 있습니다</b> : null}
               <span className="sr-only"> · {statusLabel(module)}</span>
             </span>
           </span>
-          {summary.meter && module.status === "OPEN" ? (
-            <span className={styles.meter} role="img" aria-label={summary.meterLabel ?? undefined}>
-              {summary.meter.map((value, index) => <i key={index} style={{ width: `${value}%` }} />)}
-            </span>
-          ) : <span className={styles.meterSpacer} aria-hidden="true" />}
+          <LifecycleMeter segments={lifecycleSegments(facts)} />
           <span className={styles.moduleCount}>{summary.count !== null && module.status !== "DRAFT" ? <><b>{summary.count}</b>{summary.unit}</> : null}</span>
+          <StatusPill tone={pill.tone} label={pill.label} />
         </summary>
         <div className={styles.moduleBody}>
+          <EventStepper steps={lifecycleSteps(facts)} rewardsHref={props.rewardsHref} rewardCount={props.rewardCount} />
           {!props.featureOn ? (
             <p className={styles.featureOff} role="note">
               이 유형이 꺼져 있습니다.{" "}
@@ -2994,7 +3062,7 @@ function ModuleDialog(props: {
   }
   return (
     <ConsoleDialog
-      title={draft.id ? "콘텐츠 편집" : "콘텐츠 만들기"}
+      title={draft.id ? "이벤트 편집" : "이벤트 만들기"}
       titleId="program-dialog-title"
       onClose={onClose}
       busy={busy}

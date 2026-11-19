@@ -296,6 +296,10 @@ Reopened 2026-11-19 (owner: 같은 흰 버튼·얇은 선, 무대 선택이 화�
 Reopened 2026-11-20 (owner: 미리보기가 평평한 상자라 별로, 모바일 껍데기 시뮬레이션으로). 이 항목이 위 설명과 다르면 이 항목이 우선한다.
 - Every console preview is drawn inside one shared device simulator (`console-ui/DeviceFrame.tsx`): a phone (bezel, side keys, dynamic island, status bar, home indicator), a venue screen (thin bezel, stand, floor shadow) or a tablet. The content is laid out at the device's real CSS size (390px, 1280x720) and the whole device is scaled to its host, so the preview reads like the real page. Chrome is `aria-hidden`; the content keeps its own semantics. Here the board scene is the 16:9 screen and vote, roulette and lucky are the phone, on a quiet desk behind the device.
 
+Reopened 2026-11-20 (참여 이벤트 통합; the menu "추첨·투표" merged into 참여 이벤트). 이 항목이 위 설명과 다르면 이 항목이 우선한다.
+- The draws screen is no longer a rail menu: the rail lights 참여 이벤트 here, and every stage draw, 순위 투표, 룰렛 and 럭키번호 is also a row of the one event list. This screen stays at `/draws` as the stage where a draw-type event is run (실행, 무대 터치, 결과 공개, winners, settings).
+- The header carries a ghost back link "참여 이벤트" beside 추첨 프로그램 만들기. The heading, `pageId="draws"`, `#draws-vote` / `#draws-roulette` / `#draws-lucky` / `#draw-program-<id>` selection and every confirmation, blocker line and permission lock are unchanged; the event list links into them.
+
 ## 참여 콘텐츠 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/programs/`, review drawer with the merged answer card). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-programs-composition.test.cjs` guards it.
@@ -312,6 +316,13 @@ Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behav
 - Four status cards top the list (진행 중, 준비 중, 종료, 받은 응답; 32px counts, a dot for the state, green number for running). They are read-only; the filter tabs stay for long lists and are a segmented control with an ink-filled choice.
 - "검토할 것 N" is an amber-tinted card with the count in heading size and a white "열기" pill; the calm state is a soft band. Group titles carry a count chip (green running, amber preparing).
 - Rows get a rounded hover surface, 48px type tiles, an 8px meter and a 24px count. 시작 / 다시 열기 are outlined pills at the row end.
+
+Reopened 2026-11-20 (참여 이벤트 통합; owner approved proposal B in `design-review/onsite-ux-proposal.html`). 이 항목이 위 설명과 다르면 이 항목이 우선한다.
+- The menu is "참여 이벤트" (`/programs`): one list of every event. 투표·퀴즈·Q&A·설문·참여 사진·게시판·간단 추첨 and the stage draws, 순위 투표, 룰렛 and 럭키번호 (rows from `DrawEventRow.tsx`, listed only once configured) share the same ledger, search, count tabs and 진행 중 / 준비 중 / 종료 groups. The route `/draws` keeps working for deep links and handoffs.
+- A row is a type tile tinted by group (참여형 blue, 추첨형 orange, 미션형 green), the title with one quiet meta line, a 4-segment life cycle (준비 · 진행 · 결과 · 경품), the count and a status pill (진행 중 ink with a green dot, 검토 N amber, 준비 완료 green, 종료 outlined). A segment is lit only by data that exists (configured, run state, results, linked rewards); a type with no reward path draws 경품 dashed as not applicable instead of inventing a state.
+- The four status cards are gone: count tabs (전체 · 진행 중 · 준비 중 · 종료, a segmented control with count badges, `StatusTabs.tsx`, swappable for the shared `console-ui` CountTabs) top the list, with 받은 응답 as a quiet number beside them. "검토할 것 N" is a slim amber row that still opens the review drawer.
+- "이벤트 만들기" (the one orange action) opens a template chooser grouped 참여형 (투표 · 퀴즈 · Q&A · 설문), 추첨형 (룰렛 · 럭키번호 · 간단 추첨 · 무대 추첨 · 순위 투표) and 미션형 (참여 사진 · 참여 게시판). A module tile opens the existing create dialog with the type preselected; a draw tile opens that item's existing settings on the draws screen (`?new=program` opens 추첨 프로그램 만들기 once). Only types that exist get a tile; 기획안 게임 are a dashed hint line.
+- An opened event starts with a 5-step header (문항·설정 준비 → 화면·공개 → 진행 → 결과 → 경품 연결) whose current step comes from real state, followed by the existing editors and results. A draw-type item links "무대에서 진행·당첨 보기" to its `/draws#…` selection; its reward step links to 경품 지급.
 
 ## 공지·안내 확정 구성
 
