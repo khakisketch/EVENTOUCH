@@ -1503,3 +1503,85 @@
 @media (prefers-reduced-motion: no-preference) {
   .hubRowLink { transition: background-color 120ms ease-out; }
 }
+
+/* ------------------------------------------------------------------
+   Redesign 2026-11-19: the dark field column gets presence. The desk/booth
+   switch is a segmented control, the station select is a pill title, the idle
+   stage is a lit viewfinder with a slow scan line, and the bar's entries are
+   icon tiles. Orange stays on the one thing to press.
+   ------------------------------------------------------------------ */
+.eventWorkPage .fieldApp .fieldContext .taskSwitch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  width: min(100%, 360px);
+  margin: var(--s1) auto var(--s2);
+  padding: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--paper) 12%, transparent);
+}
+.eventWorkPage .fieldApp .fieldContext .taskSwitch :global(.astryx-button) {
+  flex: none;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 var(--s3);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: color-mix(in srgb, var(--paper) 78%, transparent);
+  font-size: var(--small);
+  font-weight: 700;
+  word-break: keep-all;
+}
+.eventWorkPage .fieldApp .fieldContext .taskSwitch :global(.astryx-button)[aria-pressed="true"] {
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 800;
+}
+.eventWorkPage .fieldApp .fieldContext .taskSwitch :global(.astryx-button):disabled { opacity: 0.55; }
+
+/* The station select reads as the screen title, in a pill that says it can be changed. */
+.fieldContext :global(.staff-select-field) select {
+  min-height: 52px;
+  padding: 0 var(--s7) 0 var(--s5);
+  border: 1px solid color-mix(in srgb, var(--paper) 22%, transparent);
+  border-radius: 999px;
+  background-color: color-mix(in srgb, var(--paper) 8%, transparent);
+  background-position: right 18px center;
+  background-size: 20px;
+  font-size: 1.125rem;
+  letter-spacing: -0.01em;
+  word-break: keep-all;
+}
+.fieldContext :global(.staff-select-field) select:disabled { opacity: 0.7; }
+
+/* Idle stage: a lit viewfinder, not a dead grey frame. */
+.fieldStage { background: radial-gradient(65% 55% at 50% 48%, color-mix(in srgb, var(--paper) 10%, var(--ink)) 0%, var(--ink) 100%); }
+.fieldStage[data-tone] { background-color: var(--ink); }
+.idleFrame { opacity: 0.85; }
+.idleFrame i { border-color: var(--paper); filter: drop-shadow(0 0 10px color-mix(in srgb, var(--paper) 35%, transparent)); }
+.idleFrame::after {
+  content: "";
+  position: absolute;
+  inset-inline: 10px;
+  top: 12%;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--brand), transparent);
+  opacity: 0.85;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .idleFrame::after { animation: idleScan 2.8s ease-in-out infinite alternate; }
+  @keyframes idleScan { from { top: 12%; } to { top: 86%; } }
+}
+.idleText { max-width: 30ch; color: color-mix(in srgb, var(--paper) 82%, transparent); font-size: 1rem; font-weight: 600; word-break: keep-all; }
+
+/* Bottom bar: a wide camera button and icon tiles. */
+.scanPrimary { gap: var(--s3); border-radius: 18px; }
+.scanPrimary svg { width: 24px; height: 24px; }
+.bar3 { gap: var(--s2); }
+.bar3 button { min-height: 72px; gap: 6px; border: 1px solid var(--line); border-radius: 18px; background: var(--paper); font-size: var(--small); font-weight: 700; word-break: keep-all; }
+.bar3 button:hover:not(:disabled) { border-color: var(--ink); background: var(--surface-muted); }
+.bar3 svg { width: 24px; height: 24px; color: var(--ink); }
+.bar3 button[aria-pressed="true"] { border-color: var(--ink); }

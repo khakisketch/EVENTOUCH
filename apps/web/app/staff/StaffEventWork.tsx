@@ -33,6 +33,7 @@ import {
 import { OrganizationContextNotice } from "../OrganizationSwitcher";
 import StaffAccountMenu from "./StaffAccountMenu";
 import { BackIcon, BangIcon, CheckIcon, ClockIcon, CopyIcon, GiftIcon, InfoIcon, KeyIcon, ListIcon, MoreIcon, RefreshIcon, XIcon } from "../console/console-ui/ConsoleIcons";
+import { CameraIcon } from "./StaffIcons";
 import { useOperatorContextSnapshot } from "./use-operator-context";
 import { useEventReceipts } from "../../lib/use-event-receipts";
 import { forgetOperatorReceipt } from "../../lib/operator-receipts";
@@ -2424,6 +2425,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                 type="button"
                 variant="primary"
                 className={prizeStyles.scanPrimary}
+                icon={<CameraIcon />}
                 disabled={!ready || writeLocked || submitting}
                 aria-describedby="staff-scan-hint"
                 onClick={() => { primeScanFeedback(); setResult({ kind: "idle" }); setCameraOpen(true); }}

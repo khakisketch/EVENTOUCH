@@ -409,6 +409,11 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/staff/StaffEven
 - A result's buttons live inside its own region (the white bar at the bottom of the colored face: 다음 참가자, 확인, 같은 요청 재확인 with its server check, the prize list), never in the scan bar. The code or name-search sheet stays open while its request is in flight (read-only code, "처리 중입니다") and closes when the result arrives. A plain success or an already-entered notice is one big tap target (its text lets the tap through); every other result takes taps normally. The shared 처리 결과 확인 panel (another window's unconfirmed request) shows in the page flow above the stage, never only inside the ⋯ menu. A rejected prize handout keeps its message and the lookup form open.
 - The SELF booth shows its QR on a light stage with one 최근 처리 button. Request ids, same-request recovery, frozen receipts, the draft and leave guards, correction, direction review and the prize contracts are unchanged; only the presentation and the scan loop moved.
 
+Reopened 2026-11-19 (owner: plain; `tests/web-staff-field-composition.test.cjs` asserts the additions below; the flow above is unchanged):
+- The 데스크 체크인 / 부스 인증 switch is one segmented pill on a translucent track (chosen = paper fill), not two outlined buttons; the station select is a pill title with a visible chevron.
+- The idle stage is a lit viewfinder: a soft radial lift, glowing corners and a slow orange scan line (only for users without a reduced-motion preference).
+- The bar's "카메라 켜기" carries a camera glyph (still the only orange); 코드 입력 / 명단 찾기 / 최근 처리 are 72px outlined icon tiles with 14px labels instead of grey chips.
+
 ## Product component boundary
 
 Astryx supplies the production theme, actions, icon actions, links, labeled text fields, headings, sections and feedback. `app/ui/ProductButton`, `ProductLink`, `ProductInput` and `ProductNotice` keep the product-facing contract small. The production theme in `apps/web/src/themes/eventouch/` aliases `tokens.css`; generated theme files are rebuilt, not edited. The product explicitly uses light mode and Pretendard. The isolated design-review pilot is not a runtime dependency.
