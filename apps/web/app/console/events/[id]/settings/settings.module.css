@@ -9,7 +9,7 @@
   align-items: center;
   gap: var(--s2);
   min-height: 44px;
-  font-size: var(--small);
+  font-size: var(--text-sm);
 }
 
 .check input {
@@ -27,8 +27,8 @@
 
 .featureGroups legend {
   padding: 0;
-  font-size: var(--small);
-  font-weight: 650;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
 }
 
 .featureGroup {
@@ -40,8 +40,8 @@
 .featureGroupLabel {
   margin: 0 0 var(--s1);
   color: var(--muted);
-  font-size: var(--small);
-  font-weight: 650;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
 }
 
 /* 운영 기능은 눌러서 켜고 끄는 타일. 체크박스 자체는 숨기지 않고 타일
@@ -59,10 +59,10 @@
   min-height: 56px;
   margin: 0;
   padding: 0 var(--s3);
-  border-radius: var(--radius-medium);
+  border-radius: var(--r-ctl);
   background: var(--paper);
   box-shadow: inset 0 0 0 1px var(--line-strong);
-  font-weight: 650;
+  font-weight: var(--fw-strong);
 }
 
 .featureGrid > .check:has(input:checked) {
@@ -77,14 +77,9 @@
 .help {
   margin: 0;
   color: var(--muted);
-  font-size: var(--small);
+  font-size: var(--text-sm);
   word-break: keep-all;
   overflow-wrap: break-word;
-}
-
-.intakeFieldsLink:global([data-variant="ghost"]) {
-  padding-inline: var(--s2);
-  color: var(--brand-text);
 }
 
 /* 참가 접수 상태 띠: 접수 중은 초록 바탕, 닫힘은 회색 바탕. 상태 문구와
@@ -95,7 +90,7 @@
   flex-wrap: wrap;
   gap: var(--s2) var(--s3);
   padding: var(--s3) var(--s4);
-  border-radius: var(--radius-medium);
+  border-radius: var(--r-ctl);
 }
 
 .bandOpen {
@@ -125,7 +120,7 @@
   gap: var(--s2);
   min-width: 0;
   padding: var(--s3) var(--s4);
-  border-radius: var(--radius-medium);
+  border-radius: var(--r-ctl);
   background: var(--surface-muted);
 }
 
@@ -137,7 +132,7 @@
 }
 
 .previewHead > b {
-  font-size: var(--body);
+  font-size: var(--text-md);
   letter-spacing: -0.01em;
 }
 
@@ -153,11 +148,11 @@
 .previewFields > li {
   min-height: 44px;
   padding: var(--s2) var(--s3);
-  border-radius: var(--radius-small);
+  border-radius: var(--r-ctl);
   background: var(--paper);
   box-shadow: inset 0 0 0 1px var(--line);
   color: var(--muted);
-  font-size: var(--small);
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
@@ -167,13 +162,7 @@
   }
 }
 .intakeWarningText { margin: 0; }
-.intakeWarningLink:global([data-variant="ghost"]) {
-  display: flex;
-  width: fit-content;
-  margin-top: var(--s1);
-  padding-inline: var(--s2);
-  color: var(--brand-text);
-}
+.intakeWarningLink { margin-top: var(--s1); }
 
 .ticketExpiryHelp { margin-block-start: var(--s2); }
 
@@ -196,8 +185,8 @@
 
 .groupTitle {
   margin: 0 0 var(--s1);
-  font-size: var(--body);
-  font-weight: 700;
+  font-size: var(--text-md);
+  font-weight: var(--fw-strong);
   overflow-wrap: break-word;
 }
 
@@ -209,7 +198,7 @@
   min-width: 0;
   margin: 0;
   border: 1px solid var(--line);
-  border-radius: var(--radius-medium);
+  border-radius: var(--r-ctl);
   background: var(--paper);
 }
 
@@ -228,8 +217,8 @@
   flex: 1 1 auto;
   min-width: 0;
   margin: 0;
-  font-size: var(--body);
-  font-weight: 800;
+  font-size: var(--text-md);
+  font-weight: var(--fw-heavy);
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
@@ -237,30 +226,24 @@
 .scopeNote {
   margin: 0;
   color: var(--muted);
-  font-size: var(--small);
+  font-size: var(--text-sm);
 }
 
 /* 한 장의 작업 판: 맨 위 행사 카드, 아래 두 작업 판(참가 접수·운영 기능).
    좁은 화면에서는 세로로 쌓는다. */
 .workPanels {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s4);
   align-items: start;
   margin-top: var(--s4);
-}
-
-@media (max-width: 1024px) {
-  .workPanels {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 /* 행사 개요와 진행 단계를 합친 맨 위 카드. */
 .eventCard {
   display: grid;
   min-width: 0;
-  border-radius: var(--radius-card);
+  border-radius: var(--r-card);
   background: var(--paper);
   box-shadow: var(--shadow-raised);
 }
@@ -278,7 +261,7 @@
   flex: none;
   width: 64px;
   padding: var(--s2);
-  border-radius: var(--radius-medium);
+  border-radius: var(--r-ctl);
   background: var(--ink);
   color: var(--paper);
   line-height: 1.15;
@@ -287,15 +270,15 @@
 
 .cal > small,
 .cal > span {
-  font-size: var(--label);
-  font-weight: 700;
+  font-size: var(--text-xs);
+  font-weight: var(--fw-strong);
   /* No translucency on the dark block: dimmed paper fails contrast. */
   color: var(--paper);
 }
 
 .cal > b {
-  font-size: 27px;
-  letter-spacing: -0.03em;
+  font-size: var(--text-2xl);
+  letter-spacing: var(--ls-heading);
 }
 
 .eventName {
@@ -305,10 +288,11 @@
   min-width: 0;
 }
 
-.eventName > h2 {
+.eventTitle {
   margin: 0;
-  font-size: var(--h2);
-  letter-spacing: -0.025em;
+  font-size: var(--text-xl);
+  font-weight: var(--fw-heavy);
+  letter-spacing: var(--ls-heading);
   overflow-wrap: anywhere;
 }
 
@@ -316,13 +300,13 @@
 .eventFlags {
   margin: 0;
   color: var(--muted);
-  font-size: var(--small);
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
 .eventFlags {
   color: var(--ink);
-  font-weight: 650;
+  font-weight: var(--fw-strong);
 }
 
 .cardEdit {
@@ -337,7 +321,7 @@
   align-items: center;
   gap: var(--s2);
   margin: 0;
-  font-size: var(--h1);
+  font-size: var(--text-2xl);
   letter-spacing: -0.03em;
 }
 
@@ -346,13 +330,13 @@
   height: 12px;
   flex: none;
   border-radius: 50%;
-  background: var(--brand);
-  box-shadow: 0 0 0 5px var(--brand-tint);
+  background: var(--ink);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--ink) 14%, transparent);
 }
 
 .stagePrompt {
   margin: 0;
-  font-weight: 650;
+  font-weight: var(--fw-strong);
   overflow-wrap: anywhere;
 }
 
@@ -373,7 +357,7 @@
 @keyframes sectionFlash {
   0% {
     background: var(--brand-tint);
-    border-radius: var(--radius-medium);
+    border-radius: var(--r-ctl);
   }
 
   100% {
@@ -396,7 +380,7 @@
   }
 
   .stageName {
-    font-size: var(--h2);
+    font-size: var(--text-xl);
   }
 }
 
@@ -422,7 +406,7 @@
 .footerResult {
   margin: 0;
   color: var(--muted);
-  font-size: var(--small);
+  font-size: var(--text-sm);
 }
 
 .footerResultSuccess {
@@ -435,7 +419,7 @@
 
 .sectionStatus {
   margin: 0;
-  font-size: var(--small);
+  font-size: var(--text-sm);
 }
 
 .sectionStatusSuccess {
@@ -449,8 +433,8 @@
 .fieldError {
   margin: var(--s2) 0 0;
   color: var(--danger);
-  font-size: var(--small);
-  font-weight: 650;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
 }
 .fieldRecovery { margin-top: var(--s2); }
 
@@ -469,7 +453,7 @@
   margin-top: var(--s4);
   padding: var(--s1) var(--s3);
   border: 1px dashed var(--line-strong);
-  border-radius: var(--radius-medium);
+  border-radius: var(--r-ctl);
 }
 
 .pageDisclosure > summary {
@@ -479,8 +463,8 @@
   min-width: 0;
   cursor: pointer;
   color: var(--muted);
-  font-size: var(--small);
-  font-weight: 650;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
 }
 
 .pageDisclosure > summary:focus-visible {
@@ -507,10 +491,10 @@
   gap: var(--s1);
   padding: var(--s1) var(--s3);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--surface-muted);
   color: var(--muted);
-  font-size: var(--small);
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
 
@@ -518,14 +502,14 @@
   border-color: var(--ink);
   background: var(--paper);
   color: var(--ink);
-  font-weight: 800;
+  font-weight: var(--fw-heavy);
 }
 
 .stageStepNext {
   border-color: var(--brand);
   background: var(--paper);
   color: var(--brand-text);
-  font-weight: 700;
+  font-weight: var(--fw-strong);
 }
 
 .stageStepMark {
@@ -535,18 +519,17 @@
   min-width: 22px;
   height: 22px;
   padding: 0 var(--s1);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--ink);
   color: var(--paper);
-  font-size: var(--label);
-  font-weight: 800;
+  font-size: var(--text-xs);
+  font-weight: var(--fw-heavy);
   font-variant-numeric: tabular-nums;
 }
 
 .unsavedTag {
-  color: var(--brand-text);
-  font-size: var(--small);
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
 }
 
 .stagePrecondition {
@@ -555,10 +538,10 @@
   margin: 0;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--warning-line);
-  border-radius: var(--radius-medium);
+  border-radius: var(--r-ctl);
   background: var(--warning-soft);
   color: var(--warning);
-  font-size: var(--small);
+  font-size: var(--text-sm);
 }
 
 .stageActions {
@@ -577,7 +560,7 @@
 
 .stageConfirmation > p {
   margin: 0;
-  font-weight: 700;
+  font-weight: var(--fw-strong);
 }
 
 /* A sidebar-width workspace cannot fit a date beside two native time
@@ -609,10 +592,11 @@
   margin: var(--s3) 0;
   padding: var(--s4);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-medium);
+  border-radius: var(--r-ctl);
   background: var(--paper);
 }
-.recovery h2, .recovery p { margin: 0; }
+.recovery p { margin: 0; }
+.blockTitle { margin: 0; font-size: var(--text-md); font-weight: var(--fw-strong); line-height: var(--lh-tight); }
 .recoveryActions { display: flex; flex-wrap: wrap; gap: var(--s2); }
 
 .scheduleReview {
@@ -621,14 +605,13 @@
   margin-top: var(--s4);
   padding: var(--s4);
   border: 1px solid var(--line);
-  border-radius: var(--radius-medium);
+  border-radius: var(--r-ctl);
   background: var(--paper);
 }
-.scheduleReview h3, .scheduleReview p { margin: 0; }
-.scheduleReview h3 { font-size: var(--body); }
+.scheduleReview p { margin: 0; }
 .scheduleReview p { color: var(--muted); line-height: 1.6; }
 .scheduleReviewLinks { display: flex; flex-wrap: wrap; gap: 0 var(--s4); }
-.scheduleReviewLinks a { display: inline-flex; align-items: center; min-height: 44px; padding: var(--s2) var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); background: var(--paper); color: var(--ink); font-weight: 650; text-decoration: none; }
+.scheduleReviewLinks a { display: inline-flex; align-items: center; min-height: 44px; padding: var(--s2) var(--s3); border: 1px solid var(--line-strong); border-radius: var(--r-ctl); background: var(--paper); color: var(--ink); font-weight: var(--fw-strong); text-decoration: none; }
 .scheduleReviewLinks a:hover { border-color: var(--ink); background: var(--surface-muted); }
 
 .conflict {
@@ -638,8 +621,7 @@
   padding: var(--s4) 0;
   border-block: 1px solid var(--warning-line);
 }
-.conflict h3, .conflict p { margin: 0; }
-.conflict h3 { font-size: var(--body); }
+.conflict p { margin: 0; }
 .conflict > button { justify-self: start; }
 .conflictComparison {
   display: grid;
@@ -647,17 +629,17 @@
   gap: var(--s3);
 }
 .conflictComparison > div { min-width: 0; }
-.conflictComparison strong { font-size: var(--small); }
+.conflictComparison strong { font-size: var(--text-sm); }
 .conflictComparison p { margin-top: var(--s1); white-space: pre-wrap; overflow-wrap: anywhere; }
 .conflictFields { margin: var(--s2) 0 0; padding-left: var(--s4); overflow-wrap: anywhere; }
-.settingsComparison { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--small); font-variant-numeric: tabular-nums; text-align: left; }
-.settingsComparison caption { margin-bottom: var(--s2); text-align: left; font-weight: 700; }
+.settingsComparison { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--text-sm); font-variant-numeric: tabular-nums; text-align: left; }
+.settingsComparison caption { margin-bottom: var(--s2); text-align: left; font-weight: var(--fw-strong); }
 .settingsComparison th, .settingsComparison td { padding: var(--s2); border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
 .settingsComparison th:first-child { width: 26%; }
-.settingsComparison thead th { color: var(--muted); font-weight: 650; }
-.settingsComparison tbody th { font-weight: 550; }
+.settingsComparison thead th { color: var(--muted); font-weight: var(--fw-strong); }
+.settingsComparison tbody th { font-weight: var(--fw-strong); }
 .settingsComparison .comparisonChanged { background: var(--surface-muted); }
-.comparisonDifference { display: block; color: var(--brand-text); font-size: var(--xsmall, 12px); font-weight: 700; }
+.comparisonDifference { display: block; color: var(--brand-text); font-size: var(--text-xs); font-weight: var(--fw-strong); }
 @media (max-width: 640px) {
   .conflictComparison { grid-template-columns: minmax(0, 1fr); }
 }
@@ -667,33 +649,31 @@
    운영 기능은 켜고 끄는 스위치가 달린 타일로 읽히게 한다. 상단 카드는 브랜드 틴트 머리를 가진다. */
 .eventCard { overflow: hidden; border: 1px solid var(--line); box-shadow: none; }
 .eventTop { background: linear-gradient(135deg, var(--paper) 55%, var(--brand-tint)); }
-.cal { width: 68px; padding: var(--s2) var(--s2) var(--s3); border-radius: var(--radius-large); }
-.eventName > h2 { font-size: clamp(22px, 2.6vw, 28px); font-weight: 800; }
+.cal { width: 68px; padding: var(--s2) var(--s2) var(--s3); border-radius: var(--r-card); }
 .eventFlags { display: inline-flex; flex-wrap: wrap; gap: var(--s2); }
-.cardEdit :global([data-variant="secondary"]) { border-radius: 999px; }
 
-.stageName { font-weight: 800; }
+.stageName { font-weight: var(--fw-heavy); }
 .stageTimeline { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; counter-reset: step; }
 .stageStep {
   position: relative; display: grid; justify-items: center; align-content: start; gap: var(--s1);
   min-width: 0; padding: 40px var(--s1) 0; border: 0; border-radius: 0; background: transparent; color: var(--muted);
-  font-size: var(--small); font-weight: 650; text-align: center; word-break: keep-all; counter-increment: step;
+  font-size: var(--text-sm); font-weight: var(--fw-strong); text-align: center; word-break: keep-all; counter-increment: step;
 }
 .stageStep::before {
   content: counter(step) / ""; position: absolute; top: 0; left: 50%; z-index: 1; display: grid; place-items: center;
   width: 28px; height: 28px; border-radius: 50%; background: var(--paper); box-shadow: inset 0 0 0 2px var(--line-strong);
-  color: var(--muted); font-size: var(--label); font-weight: 800; font-variant-numeric: tabular-nums; transform: translateX(-50%);
+  color: var(--muted); font-size: var(--text-xs); font-weight: var(--fw-heavy); font-variant-numeric: tabular-nums; transform: translateX(-50%);
 }
 .stageStep::after { content: ""; position: absolute; top: 13px; left: calc(50% + 14px); width: calc(100% - 28px); height: 2px; background: var(--line); }
 .stageStep:last-child::after { display: none; }
 .stageStep[data-done="true"]::after { background: var(--ink); }
 .stageStep[data-done="true"]::before { content: "✓" / ""; background: var(--ink); box-shadow: none; color: var(--paper); }
 .stageStep[data-done="true"] { color: var(--ink); }
-.stageStepCurrent { border: 0; background: transparent; color: var(--ink); font-weight: 800; }
+.stageStepCurrent { border: 0; background: transparent; color: var(--ink); font-weight: var(--fw-heavy); }
 .stageStepCurrent::before { background: var(--brand); box-shadow: 0 0 0 5px var(--brand-tint); color: var(--on-brand); }
-.stageStepNext { border: 0; background: transparent; color: var(--ink); font-weight: 700; }
+.stageStepNext { border: 0; background: transparent; color: var(--ink); font-weight: var(--fw-strong); }
 .stageStepNext::before { background: var(--paper); box-shadow: inset 0 0 0 2px var(--ink); color: var(--ink); }
-.stageStepMark { min-width: 0; height: 20px; padding: 0 var(--s2); font-size: var(--label); }
+.stageStepMark { min-width: 0; height: 20px; padding: 0 var(--s2); font-size: var(--text-xs); }
 .stageStepCurrent .stageStepMark { background: var(--brand); color: var(--on-brand); }
 
 .featureGrid > .check { position: relative; justify-content: space-between; gap: var(--s3); min-height: 60px; padding-inline: var(--s4); cursor: pointer; transition: background-color 0.15s; }
@@ -701,18 +681,18 @@
 .featureGrid > .check:has(input:checked) { background: color-mix(in srgb, var(--ink) 4%, var(--paper)); }
 /* 체크박스는 타일 왼쪽 가장자리에 투명하게 남긴다(타일 전체를 덮으면 열린 드로어 아래의 클릭 대상이 겹친다). 타일 어디를 눌러도 라벨이 토글한다. */
 .featureGrid > .check input { position: absolute; top: 50%; left: var(--s3); width: 20px; height: 20px; margin: 0; opacity: 0; cursor: pointer; transform: translateY(-50%); }
-.featureGrid > .check::after { content: ""; flex: none; width: 40px; height: 24px; border-radius: 999px; background: var(--line-strong); transition: background-color 0.15s; }
+.featureGrid > .check::after { content: ""; flex: none; width: 40px; height: 24px; border-radius: var(--r-pill); background: var(--line-strong); transition: background-color 0.15s; }
 .featureGrid > .check::before { content: ""; position: absolute; top: 50%; right: calc(var(--s4) + 18px); z-index: 1; width: 18px; height: 18px; border-radius: 50%; background: var(--paper); box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 30%, transparent); transform: translateY(-50%); transition: right 0.15s; }
 .featureGrid > .check:has(input:checked)::after { background: var(--ink); }
 .featureGrid > .check:has(input:checked)::before { right: calc(var(--s4) + 3px); }
 .featureGrid > .check:has(input:disabled) { cursor: not-allowed; opacity: 0.6; }
-.featureGroupLabel { color: var(--ink); font-weight: 750; }
+.featureGroupLabel { color: var(--ink); font-weight: var(--fw-strong); }
 
-.intakeBand { border-radius: var(--radius-large); }
+.intakeBand { border-radius: var(--r-card); }
 .bandOpen .bandDot { box-shadow: 0 0 0 5px color-mix(in srgb, var(--success) 22%, transparent); }
 
 @media (max-width: 768px) {
-  .stageStep { font-size: var(--label); padding-inline: 0; }
+  .stageStep { font-size: var(--text-xs); padding-inline: 0; }
   .featureGrid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -724,3 +704,88 @@
 .stageStep[data-done="true"]::after { background: var(--success); }
 .stageStepCurrent::before { background: var(--ink); box-shadow: 0 0 0 5px color-mix(in srgb, var(--ink) 14%, transparent); color: var(--paper); }
 .stageStepCurrent .stageStepMark { background: var(--ink); color: var(--paper); }
+
+/* ---- 디자인 시스템 적용 2026-11-20 ----
+   좌측 목차 + 오른쪽 작업 열. 섹션은 흰 바탕 위 카드(헤어라인)이고, 저장·게시 줄은
+   카드 아래쪽에 붙어 스크롤해도 같은 자리에 있다. 숫자 카드·큰 장식은 쓰지 않는다. */
+.layout {
+  display: grid;
+  grid-template-columns: 188px minmax(0, 1fr);
+  gap: var(--s6);
+  align-items: start;
+  margin-top: var(--s4);
+}
+
+.layout > nav {
+  position: sticky;
+  top: var(--s4);
+}
+
+.main {
+  min-width: 0;
+}
+
+@media (max-width: 1024px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s3);
+  }
+
+  .layout > nav {
+    position: static;
+  }
+}
+
+.intakeGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s5);
+  align-items: start;
+}
+
+.intakeStatus {
+  grid-column: 1 / -1;
+}
+
+.intakeStatus,
+.intakeCompose {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+}
+
+@media (max-width: 1180px) {
+  .intakeGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.saveBar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: var(--s3) 0;
+  border-top: 1px solid var(--line);
+  background: var(--surface-work);
+}
+
+.featureGrid {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.featureGroups { position: relative; }
+
+.featureGroups legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .featureGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

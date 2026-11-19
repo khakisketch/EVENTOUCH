@@ -14,6 +14,9 @@ import ConsoleChoiceGroup from "../../../../console-ui/ConsoleChoiceGroup";
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon } from "../../../../console-ui/ConsoleIcons";
 import FieldsPhonePreview, { type PreviewSheet } from "./FieldsPhonePreview";
 import ConsoleStatePanel from "../../../../console-ui/ConsoleStatePanel";
+import ListRow from "../../../../console-ui/ListRow";
+import StatusPill from "../../../../console-ui/StatusPill";
+import ProductLink from "../../../../../ui/ProductLink";
 import { useConsoleDraftGuard } from "../../../../console-draft-guard";
 import { consoleFetch } from "../../../../../../lib/console-api";
 import { canWriteEvent } from "../../../../../../lib/event-capabilities";
@@ -241,7 +244,7 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
       ? state.fields.map((field) => field.id === draft.id ? edited : field)
       : [...state.fields, edited];
   })();
-  return <ConsolePage pageId="settings" title="신청 항목" parentContext={{ href: `/console/events/${encodeURIComponent(eventId)}/settings#settings-intake`, label: "행사 설정 · 참가 접수" }} eventId={eventId} eventName={state.name} headerActions={<a className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings#settings-intake`}>참가 접수로</a>} feedback={<>
+  return <ConsolePage pageId="settings" title="신청 항목" parentContext={{ href: `/console/events/${encodeURIComponent(eventId)}/settings#settings-intake`, label: "행사 설정 · 참가 접수" }} eventId={eventId} eventName={state.name} headerActions={<ProductLink variant="ghost" href={`/console/events/${encodeURIComponent(eventId)}/settings#settings-intake`}>참가 접수로</ProductLink>} feedback={<>
     {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
     {error && !pending ? <ConsoleFeedback kind="error">{error}</ConsoleFeedback> : null}
     {!writable ? <ConsoleFeedback kind="warning">{state.archived ? "보관된 행사는 읽기 전용입니다." : "신청 항목을 바꾸려면 참가자 쓰기 권한이 필요합니다."}</ConsoleFeedback> : null}
@@ -249,17 +252,17 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
     {refreshingOther ? <ConsoleFeedback kind="info">최신 신청 항목을 불러오고 있습니다.</ConsoleFeedback> : null}
     {needsRefresh && !refreshingOther ? <ConsoleFeedback kind="warning">최신 신청 항목을 불러온 뒤 변경할 수 있습니다. <ProductButton type="button" className="button button-secondary" onClick={() => { setRefreshingOther(true); void load(true).then((ok) => { if (ok) setNeedsRefresh(false); }).finally(() => setRefreshingOther(false)); }}>다시 불러오기</ProductButton></ConsoleFeedback> : null}
   </>}>
-    <ConsoleSection headingId="application-fields-heading" title="항목 관리">
+    <ConsoleSection headingId="application-fields-heading" title="항목 관리" heading="rule">
       <p className={styles.help}>항목 변경은 초안에 저장됩니다. 참가 신청 화면에는 참가 접수에서 양식을 게시한 뒤 적용됩니다. 초안 {state.formVersion} · 게시 {state.publishedVersion || "없음"}</p>
       <p className={styles.help}>이름과 연락처는 필수입니다. 항목을 제외해도 기존 답변은 즉시 삭제되지 않지만 새 양식과 내보내기에서는 빠질 수 있습니다.</p>
       {conflict ? <section className={styles.recovery} aria-labelledby="field-conflict-heading">
-        <h3 id="field-conflict-heading">신청 항목이 변경됐습니다</h3>
+        <h3 id="field-conflict-heading" className={styles.editorTitle}>신청 항목이 변경됐습니다</h3>
         <p>다른 작업에서 양식이 바뀌었습니다. 입력한 내용은 유지했습니다. 최신 목록을 확인한 뒤 다시 저장하세요.</p>
         {draft?.existing ? <p>{latestField ? `현재 서버 항목: ${latestField.label} · ${TYPE_LABELS[latestField.type] || latestField.type} · ${latestField.required ? "필수" : "선택"}${latestField.type === "select" ? ` · ${latestField.options.join(", ")}` : ""}` : "이 항목이 최신 양식에서 제외됐습니다. 입력을 확인한 뒤 취소하고 새 항목으로 추가하세요."}</p> : null}
         <nav className={styles.actions} aria-label="최신 변경 작업"><ProductButton type="button" className="button button-secondary" disabled={locked} onClick={() => { setConflict(false); setError(null); }}>최신 변경 확인</ProductButton></nav>
       </section> : null}
       {pending ? <section className={styles.recovery} aria-labelledby="field-recovery-heading">
-        <h3 id="field-recovery-heading" tabIndex={-1}>신청 항목 처리 확인 필요</h3>
+        <h3 id="field-recovery-heading" tabIndex={-1} className={styles.editorTitle}>신청 항목 처리 확인 필요</h3>
         <p>{LABELS[pending.command]} 요청이 반영됐을 수 있습니다. 서버 확인은 요청을 다시 보내지 않습니다.</p>
         {error ? <p role="alert">{error}</p> : null}
         <nav className={styles.actions} aria-label="처리 결과 작업">
@@ -274,7 +277,7 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
           void load(true).then((ok) => { if (activeIdRef.current === attempt.eventId && ok) setNeedsRefresh(false); }).finally(() => { if (activeIdRef.current === attempt.eventId) setRefreshingOther(false); });
         }} onCancel={() => setAbandon(false)} /> : null}
       </section> : null}
-      <p className={state.formVersion > state.publishedVersion ? styles.statePending : styles.statePublished} role="status">{state.formVersion > state.publishedVersion ? (state.publishedVersion ? "게시 안 된 변경 있음" : "아직 게시 전") : "게시된 양식과 같음"}</p>
+      <p className={styles.stateLine} role="status"><StatusPill tone={state.formVersion > state.publishedVersion ? "wait" : "ok"} dot>{state.formVersion > state.publishedVersion ? (state.publishedVersion ? "게시 안 된 변경 있음" : "아직 게시 전") : "게시된 양식과 같음"}</StatusPill></p>
       <section className={styles.split} aria-label="신청 항목 편집">
         <section className={styles.listColumn} aria-label="신청 항목 초안">
           <header className={styles.listHead}>
@@ -285,21 +288,19 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
             </nav>
           </header>
           <ul className={styles.list}>
-            {state.fields.map((field, index) => <li className={`${styles.row} ${draft?.existing && draft.id === field.id ? styles.rowSelected : ""}`} key={field.id}>
-              {/* The button holds only the name so its accessible name contains its visible text; the row's other text rides beside it and its hit area covers the whole row. */}
-              <header className={styles.rowInfo}>
-                <button type="button" className={styles.rowOpen} aria-label={`${field.label} 수정`} disabled={!writable || writeLocked || Boolean(draft) || !Object.hasOwn(TYPE_LABELS, field.type)} onClick={() => start(toDraft(field))}>{field.label || "이름 없는 항목"}</button>
-                <p className={styles.rowMeta}>{TYPE_LABELS[field.type] || "지원하지 않는 형식"}{["name", "phone"].includes(field.id) ? " · 고정 항목" : ""}{field.type === "select" ? ` · 선택지 ${field.options.length}개` : ""}</p>
-              </header>
-              <p className={field.required ? styles.reqOn : styles.reqOff}>{field.required ? "필수" : "선택"}</p>
-              <nav className={styles.move} aria-label={`${field.label} 순서 변경`}>
-                <ProductButton type="button" variant="ghost" size="sm" aria-label={`${field.label} 위로 이동`} disabled={!writable || writeLocked || Boolean(draft) || index === 0} onClick={() => reorder(field.id, -1)}><ArrowUpIcon /></ProductButton>
-                <ProductButton type="button" variant="ghost" size="sm" aria-label={`${field.label} 아래로 이동`} disabled={!writable || writeLocked || Boolean(draft) || index === state.fields.length - 1} onClick={() => reorder(field.id, 1)}><ArrowDownIcon /></ProductButton>
-              </nav>
-            </li>)}
+            {state.fields.map((field, index) => <ListRow as="li" className={`${styles.row} ${draft?.existing && draft.id === field.id ? styles.rowSelected : ""}`} key={field.id}
+              title={<button type="button" className={styles.rowOpen} aria-label={`${field.label} 수정`} disabled={!writable || writeLocked || Boolean(draft) || !Object.hasOwn(TYPE_LABELS, field.type)} onClick={() => start(toDraft(field))}>{field.label || "이름 없는 항목"}</button>}
+              meta={<>{TYPE_LABELS[field.type] || "지원하지 않는 형식"}{["name", "phone"].includes(field.id) ? " · 고정 항목" : ""}{field.type === "select" ? ` · 선택지 ${field.options.length}개` : ""}</>}
+              trailing={<>
+                <StatusPill tone={field.required ? "ink" : "neutral"} size="sm">{field.required ? "필수" : "선택"}</StatusPill>
+                <nav className={styles.move} aria-label={`${field.label} 순서 변경`}>
+                  <ProductButton type="button" variant="ghost" size="sm" aria-label={`${field.label} 위로 이동`} disabled={!writable || writeLocked || Boolean(draft) || index === 0} onClick={() => reorder(field.id, -1)}><ArrowUpIcon /></ProductButton>
+                  <ProductButton type="button" variant="ghost" size="sm" aria-label={`${field.label} 아래로 이동`} disabled={!writable || writeLocked || Boolean(draft) || index === state.fields.length - 1} onClick={() => reorder(field.id, 1)}><ArrowDownIcon /></ProductButton>
+                </nav>
+              </>} />)}
           </ul>
           {draft ? <ValidatedForm className={styles.editor} onSubmit={submit}>
-            <h3>{draft.existing ? "항목 수정" : "새 항목"}</h3>
+            <h3 className={styles.editorTitle}>{draft.existing ? "항목 수정" : "새 항목"}</h3>
             <label className={styles.field}>항목 이름<input id="field-label" maxLength={60} required value={draft.label} disabled={locked || !writable} onChange={(event) => setDraft({ ...draft, label: event.target.value })} /></label>
             <ConsoleChoiceGroup id="field-type" label="입력 방식" value={draft.type} disabled={locked || !writable || ["name", "phone", "company"].includes(draft.id)} onChange={(type) => setDraft({ ...draft, type })}
               options={[{ value: "text", label: "짧은 답변" }, { value: "email", label: "이메일" }, { value: "select", label: "하나 선택" }, { value: "checkbox", label: "체크" }]} hint={draft.existing ? "기존 답변이 있는 항목의 입력 방식은 바꿀 수 없습니다." : undefined} />

@@ -64,3 +64,13 @@ test('Reopened 2026-11-20: the preview is the real registration sheet inside a p
   for (const title of ['참가자 정보', '연락처 인증', '정보 수집 동의']) assert.match(preview, new RegExp(title, 'u'));
   assert.match(work, /sheet=\{state\.sheet\}/u);
 });
+
+// Reopened 2026-11-20 (디자인 시스템 적용): rows are ListRow, required/optional and the draft state are StatusPill.
+test('Reopened 2026-11-20: ledger rows use ListRow and states use StatusPill', () => {
+  assert.match(work, /<ListRow as="li"/u);
+  assert.match(work, /<StatusPill tone=\{field\.required \? "ink" : "neutral"\} size="sm">/u);
+  assert.match(work, /<StatusPill tone=\{state\.formVersion > state\.publishedVersion \? "wait" : "ok"\} dot>/u);
+  assert.match(work, /<ConsoleSection headingId="application-fields-heading" title="항목 관리" heading="rule">/u);
+  assert.doesNotMatch(css, /\.reqOn|\.statePending|\.statePublished/u);
+  assert.doesNotMatch(css, /font-weight:\s*(650|700|750)/u);
+});
