@@ -19,6 +19,9 @@ import {
   type ConsoleEventMeta,
 } from "../../../console-ui/ConsolePageHeader";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
+import ConsoleEmptyState from "../../../console-ui/ConsoleEmptyState";
+import ListRow from "../../../console-ui/ListRow";
+import StatusPill, { type StatusPillTone } from "../../../console-ui/StatusPill";
 import uiStyles from "../../../console-ui/console-ui.module.css";
 import styles from "./content.module.css";
 import { consoleFetch } from "../../../../../lib/console-api";
@@ -318,13 +321,37 @@ function CrumbChevron() {
   return <svg className={styles.crumbIcon} viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M14.5 6.5 9 12l5.5 5.5" /></svg>;
 }
 
-// One flat ledger row for every content type: a state dot, the title with a
-// one-line summary, and quiet meta on the right. The row itself opens the
-// editor; there are no per-row buttons. Status is spoken as text, the dot is
-// decoration (green published, amber edited draft, hollow private).
-function LedgerRow({ status, statusLabel, title, summary, pinned = false, attachment = false, note = "", onOpen, disabled, disabledReason }: {
-  status: "live" | "edit" | "off";
-  statusLabel: string;
+type ContentStatus = "live" | "edit" | "off";
+
+// Ties the list to the phone: only published items reach attendees, so the
+// ledger says how many of them the phone shows and how many drafts still wait.
+function LedgerNote({ live, waiting, hint }: { live: number; waiting: number; hint?: string }) {
+  return (
+    <p className={styles.ledgerNote} data-ledger-note>
+      <span>참가자 폰에는 <strong>게시 중 {live}개</strong>만 보입니다.</span>
+      {waiting ? <span>수정본 {waiting}개는 게시 검토를 기다립니다.</span> : null}
+      {hint ? <span>{hint}</span> : null}
+    </p>
+  );
+}
+
+// Reopened 2026-11-20 (디자인 시스템 적용): state is one StatusPill everywhere
+// (ledger rows, editor head). 게시 중 = ok, 수정본 있음 = wait (the draft waits
+// on a publish review), 비공개 = neutral. The text carries the meaning.
+const STATUS_TONE: Record<ContentStatus, StatusPillTone> = { live: "ok", edit: "wait", off: "neutral" };
+const STATUS_LABEL: Record<ContentStatus, string> = { live: "게시 중", edit: "수정본 있음", off: "비공개" };
+
+function ContentStatusPill({ status, size = "md" }: { status: ContentStatus; size?: "sm" | "md" }) {
+  return <StatusPill tone={STATUS_TONE[status]} size={size} dot>{STATUS_LABEL[status]}</StatusPill>;
+}
+
+// One flat ledger row for every content type (shared ListRow): a state tile,
+// the title with a one-line summary, and the state pill on the right. The row
+// itself opens the editor; there are no per-row buttons. A row that is shown
+// on the attendee phone says so in its tile (green); the amber tile is an
+// edited draft that still waits for a publish review.
+function LedgerRow({ status, title, summary, pinned = false, attachment = false, note = "", onOpen, disabled, disabledReason }: {
+  status: ContentStatus;
   title: string;
   summary: string;
   pinned?: boolean;
@@ -334,27 +361,25 @@ function LedgerRow({ status, statusLabel, title, summary, pinned = false, attach
   disabled: boolean;
   disabledReason?: string;
 }) {
-  const body = (
-    <>
-      <span className={styles.dot} data-status={status} aria-hidden="true" />
-      <span className={styles.rowText}>
-        <span className={styles.rowTitle}>{title || "제목 없음"}</span>
-        {summary || note ? <span className={styles.rowSummary}>{[note, summary].filter(Boolean).join(" · ")}</span> : null}
-      </span>
-      <span className={styles.rowMeta}>
-        {pinned ? <span className={styles.rowFlag}>★ 고정</span> : null}
-        {attachment ? <span className={styles.rowFlag}>PDF</span> : null}
-        <span className={styles.rowStatus} data-status={status}>{statusLabel}</span>
-      </span>
-    </>
-  );
+  const open = onOpen && !disabled ? onOpen : undefined;
   return (
-    <li className={styles.ledgerItem}>
-      {onOpen ? (
-        <button type="button" className={styles.ledgerRow} disabled={disabled} title={disabled ? disabledReason : undefined} onClick={onOpen}>{body}</button>
-      ) : (
-        <div className={styles.ledgerRow}>{body}</div>
-      )}
+    <li className={styles.ledgerItem} data-ledger-status={status} data-disabled={disabled && onOpen ? "true" : undefined} title={disabled && onOpen ? disabledReason : undefined}>
+      <ListRow
+        as="div"
+        title={title || "제목 없음"}
+        meta={summary || note ? <span className={styles.rowSummary}>{[note, summary].filter(Boolean).join(" · ")}</span> : undefined}
+        leading={<span className={styles.dot} data-status={status} aria-hidden="true" />}
+        trailing={(
+          <>
+            {pinned ? <StatusPill tone="info" size="sm">고정</StatusPill> : null}
+            {attachment ? <StatusPill tone="neutral" size="sm">PDF</StatusPill> : null}
+            <ContentStatusPill status={status} />
+          </>
+        )}
+        onClick={open}
+        chevron={Boolean(open)}
+        density="comfortable"
+      />
     </li>
   );
 }
@@ -1662,9 +1687,13 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                     <div className={styles.editor}>
                       <div className={styles.editorHead}>
                         <button type="button" className={styles.crumb} disabled={noticeDialogBusy} onClick={closeNoticeEditor}><CrumbChevron />공지</button>
-                        {noticeDraft.id ? (() => { const status = !noticeDraft.published ? "off" : editingNotice && hasChanges(noticeChanges(editingNotice)) ? "edit" : "live"; return <span className={styles.editorState}><span className={styles.dot} data-status={status} aria-hidden="true" />{status === "off" ? "비공개" : status === "edit" ? "수정본 있음" : "게시 중"}</span>; })() : null}
+                        <span className={styles.editorState}>
+                          {noticeDraft.id ? <ContentStatusPill status={!noticeDraft.published ? "off" : editingNotice && hasChanges(noticeChanges(editingNotice)) ? "edit" : "live"} /> : null}
+                          {noticeDirty || !noticeDraft.id ? <StatusPill tone="info">{noticeDraft.id ? "저장 전 변경" : "새 항목 · 저장 전"}</StatusPill> : null}
+                        </span>
                       </div>
                       <h2 id="content-notice-dialog-title" className={styles.editorTitle}><span className="sr-only">{noticeDraft.id ? "공지 편집: " : "공지 작성: "}</span>{noticeDraft.title || (noticeDraft.id ? "제목 없음" : "새 공지")}</h2>
+                      <p className={styles.previewTie} data-preview-tie>편집 중인 내용은 폰 미리보기에 윤곽선으로 먼저 보입니다. 게시 전까지 참가자에게는 보이지 않습니다.</p>
                       <ValidatedForm className={uiStyles.formStack} onSubmit={(event) => void saveNotice(event)}>
                         <fieldset className={styles.draftFields} disabled={Boolean(pendingContent) || checkingContent || noticeDialogBusy}>
                         <legend className="sr-only">공지 내용</legend>
@@ -1759,6 +1788,11 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                       </ValidatedForm>
                     </div>
                   ) : state.notices.length ? (
+                    <>
+                    <LedgerNote
+                      live={state.notices.filter((item) => item.published).length}
+                      waiting={state.notices.filter((item) => item.published && hasChanges(noticeChanges(item))).length}
+                    />
                     <ul className={styles.ledger}>
                       {state.notices.map((item) => {
                         const edited = item.published && hasChanges(noticeChanges(item));
@@ -1766,7 +1800,6 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                           <LedgerRow
                             key={item.id}
                             status={edited ? "edit" : item.published ? "live" : "off"}
-                            statusLabel={edited ? "수정본 있음" : item.published ? "게시 중" : "비공개"}
                             title={item.draft.title}
                             summary={richSummary(item.draft.body)}
                             pinned={item.pinned}
@@ -1778,8 +1811,9 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                         );
                       })}
                     </ul>
+                    </>
                   ) : (
-                    <p className={styles.empty}>등록된 공지가 없습니다.{canWritePage ? " 위 ‘공지 작성’으로 첫 공지를 작성하세요." : ""}</p>
+                    <ConsoleEmptyState title="등록된 공지가 없습니다." description={canWritePage ? "위 ‘공지 작성’으로 첫 공지를 작성하세요." : undefined} />
                   )
                 ) : null}
                 {activeTab === "program" ? (
@@ -1787,9 +1821,13 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                     <div className={styles.editor}>
                       <div className={styles.editorHead}>
                         <button type="button" className={styles.crumb} disabled={programDialogBusy || uploadingAttachment} onClick={closeProgramEditor}><CrumbChevron />일정</button>
-                        {programDraft.id ? (() => { const status = !programDraft.published ? "off" : editingProgram && hasChanges(programChanges(editingProgram)) ? "edit" : "live"; return <span className={styles.editorState}><span className={styles.dot} data-status={status} aria-hidden="true" />{status === "off" ? "비공개" : status === "edit" ? "수정본 있음" : "게시 중"}</span>; })() : null}
+                        <span className={styles.editorState}>
+                          {programDraft.id ? <ContentStatusPill status={!programDraft.published ? "off" : editingProgram && hasChanges(programChanges(editingProgram)) ? "edit" : "live"} /> : null}
+                          {programDirty || !programDraft.id ? <StatusPill tone="info">{programDraft.id ? "저장 전 변경" : "새 항목 · 저장 전"}</StatusPill> : null}
+                        </span>
                       </div>
                       <h2 id="content-program-dialog-title" className={styles.editorTitle}><span className="sr-only">{programDraft.id ? "일정 편집: " : "일정 추가: "}</span>{programDraft.title || (programDraft.id ? "제목 없음" : "새 일정")}</h2>
+                      <p className={styles.previewTie} data-preview-tie>편집 중인 내용은 폰 미리보기에 윤곽선으로 먼저 보입니다. 게시 전까지 참가자에게는 보이지 않습니다.</p>
                       <ValidatedForm className={uiStyles.formStack} onSubmit={(event) => void saveProgram(event)}>
                         <fieldset className={styles.draftFields} disabled={Boolean(pendingContent) || checkingContent || programDialogBusy}>
                         <legend className="sr-only">일정 내용</legend>
@@ -1951,7 +1989,11 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                     </div>
                   ) : state.program.length ? (
                     <>
-                    <p className={styles.help}>게시된 일정은 날짜·시작 시간 순으로 보입니다.</p>
+                    <LedgerNote
+                      live={state.program.filter((item) => item.published).length}
+                      waiting={state.program.filter((item) => item.published && hasChanges(programChanges(item))).length}
+                      hint="날짜·시작 시간 순으로 보입니다."
+                    />
                     <ul className={styles.ledger}>
                       {state.program.map((item) => {
                         const edited = item.published && hasChanges(programChanges(item));
@@ -1959,7 +2001,6 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                           <LedgerRow
                             key={item.id}
                             status={edited ? "edit" : item.published ? "live" : "off"}
-                            statusLabel={edited ? "수정본 있음" : item.published ? "게시 중" : "비공개"}
                             title={item.draft.title}
                             summary={programMeta(item.draft)}
                             attachment={Boolean(item.draft.attachment)}
@@ -1972,11 +2013,12 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                     </ul>
                     </>
                   ) : (
-                    <p className={styles.empty}>등록된 일정이 없습니다.{canWritePrograms ? " 위 ‘일정 추가’로 첫 일정을 추가하세요." : ""}</p>
+                    <ConsoleEmptyState title="등록된 일정이 없습니다." description={canWritePrograms ? "위 ‘일정 추가’로 첫 일정을 추가하세요." : undefined} />
                   )
                 ) : null}
                 {activeTab === "venue" ? (
                   <div className={styles.venuePanel}>
+                    {venueDirty || venueFile ? <StatusPill tone="info">저장 전 변경</StatusPill> : hasChanges(venueChanges(state.venue)) ? <StatusPill tone="wait" dot>수정본 있음</StatusPill> : null}
                     <p className={styles.help}>{venueDirty || venueFile ? "작성 중입니다. 초안을 저장하면 게시 검토를 진행할 수 있습니다." : hasChanges(venueChanges(state.venue)) ? "저장한 초안이 있습니다. 게시 전까지 기존 장소 안내가 유지됩니다." : "게시된 장소 안내와 저장한 초안이 같습니다."}</p>
                     {!venueFeatureOn ? (
                       <p className={styles.featureOff} role="note">

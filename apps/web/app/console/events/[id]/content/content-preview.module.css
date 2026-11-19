@@ -29,8 +29,8 @@
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: var(--small);
-  font-weight: 700;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
@@ -42,8 +42,8 @@
 .caption {
   margin: 0;
   color: var(--muted);
-  font-size: var(--small);
-  font-weight: 650;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
 }
 
 .screenTabs {
@@ -62,7 +62,7 @@
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-weight: 700;
+  font-weight: var(--fw-strong);
   cursor: pointer;
 }
 
@@ -79,7 +79,7 @@
 
 .phone {
   padding: var(--s2);
-  border-radius: 28px;
+  border-radius: var(--r-card);
   background: var(--ink);
 }
 
@@ -87,7 +87,7 @@
   width: calc(var(--phone-width) * var(--phone-scale));
   height: calc(var(--phone-height) * var(--phone-scale));
   overflow: hidden;
-  border-radius: 20px;
+  border-radius: var(--r-ctl);
   background: var(--paper);
 }
 
@@ -128,18 +128,18 @@
 .draftTag {
   margin: var(--s2) 0 0;
   color: var(--muted);
-  font-size: var(--small);
-  font-weight: 700;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
 }
 
 .hiddenNote,
 .emptyNote {
   margin: 0 0 var(--s3);
   padding: var(--s3);
-  border-radius: var(--radius-small);
+  border-radius: var(--r-ctl);
   background: var(--surface-muted);
   color: var(--muted);
-  font-size: var(--small);
+  font-size: var(--text-sm);
 }
 
 .venue {
@@ -149,7 +149,7 @@
 .venueAddress {
   margin: 0;
   color: var(--muted);
-  font-size: var(--small);
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
@@ -159,7 +159,7 @@
   gap: var(--s2);
   margin: 0;
   color: var(--muted);
-  font-size: var(--small);
+  font-size: var(--text-sm);
 }
 
 .swatch {
@@ -226,11 +226,11 @@
   min-height: 44px;
   padding: 0 var(--s4);
   border: 1px solid color-mix(in srgb, var(--paper) 45%, transparent);
-  border-radius: var(--radius-small);
+  border-radius: var(--r-ctl);
   background: transparent;
   color: var(--paper);
   font: inherit;
-  font-weight: 700;
+  font-weight: var(--fw-strong);
   cursor: pointer;
 }
 

@@ -28,10 +28,15 @@ test('content screen is ink tabs over flat ledgers with one orange add action', 
   assert.doesNotMatch(workspace, /프로그램 일정<\/|label: "프로그램 일정"/u);
   assert.doesNotMatch(workspace, /ConsoleSection\b|ConsoleSectionNav/u, 'no section panels or jump nav');
   assert.match(workspace, /function LedgerRow\(/u);
-  assert.match(workspace, /<span className=\{styles\.dot\} data-status=\{status\} aria-hidden="true" \/>/u, 'state is a dot; the text carries the meaning');
-  assert.match(workspace, /<span className=\{styles\.rowStatus\} data-status=\{status\}>\{statusLabel\}<\/span>/u);
+  // Reopened 2026-11-20 (디자인 시스템 적용): rows are the shared ListRow; state is a tile dot plus one StatusPill whose text carries the meaning.
+  assert.match(workspace, /<ListRow\s/u);
+  assert.match(workspace, /<span className=\{styles\.dot\} data-status=\{status\} aria-hidden="true" \/>/u, 'state tile is decoration; the pill text carries the meaning');
+  assert.match(workspace, /function ContentStatusPill\(/u);
+  assert.match(workspace, /<ConsoleEmptyState title="등록된 공지가 없습니다\."/u);
+  assert.match(workspace, /<LedgerNote/u, 'the ledger says how many items the attendee phone shows');
   assert.doesNotMatch(workspace, /styles\.badge\b/u, 'no state chips');
   assert.match(css, /\.tab\[aria-selected="true"\]\s*\{[^}]*background:\s*var\(--ink\)/su);
+  assert.doesNotMatch(css, /font-weight:\s*(?:6[0-9]{2}|7[0-9]{2})\b/u, 'weights are the three tokens only');
   // One orange action at a time: the header add action hides while an editor
   // is open, and the editor's primary moves between 저장 and 게시 검토.
   assert.equal((workspace.match(/variant="primary"/gu) ?? []).length, 3, 'two header add buttons and the venue form save; nothing else is fixed orange');
@@ -111,7 +116,9 @@ test('the way back from an editor is a quiet crumb or the open tab, never a stra
   assert.match(css, /\.crumb\s*\{[^}]*min-height:\s*44px/su);
   // The editor names the item it edits as a heading; the state is a dot plus text.
   assert.match(workspace, /className=\{styles\.editorTitle\}><span className="sr-only">/u);
-  assert.match(workspace, /className=\{styles\.editorState\}><span className=\{styles\.dot\} data-status=\{status\} aria-hidden="true" \/>/u);
+  // Reopened 2026-11-20: the state is a StatusPill (plus a 저장 전 변경 pill while dirty) and the editor says it is mirrored on the phone.
+  assert.match(workspace, /<span className=\{styles\.editorState\}>\s*\{noticeDraft\.id \? <ContentStatusPill status=/u);
+  assert.match(workspace, /data-preview-tie/u);
 });
 
 test('the notice body is a rich editor on a small schema, stored as Markdown with pictures as event files', () => {
