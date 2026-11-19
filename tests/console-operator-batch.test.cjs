@@ -33,7 +33,8 @@ test("group assignment states its visible-only scope when rows are hidden", () =
 
 test("the report analysis names the approval backlog and the create dialog warns", () => {
   const reports = read("console/events/[id]/reports/ReportsWorkspace.tsx");
-  assert.match(reports, /<span>승인 대기 \(명\)<\/span>/u);
+  // Reopened 2026-11-20: the analysis counts are the shared StatCard.
+  assert.match(reports, /<StatCard tone="wait" label="승인 대기" value=\{state\.metrics\.pending\} unit="명" \/>/u);
   assert.match(reports, /승인 대기 \{pendingApproval\}명이 남아 있습니다/u);
   assert.match(reports, /participants\?status=PENDING/u);
 });

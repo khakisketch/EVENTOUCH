@@ -14,6 +14,8 @@ import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
 import ConsoleDialog from "../../../console-ui/ConsoleDialog";
 import EvidenceGallery, { type GalleryItem } from "./EvidenceGallery";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
+import ConsoleEmptyState from "../../../console-ui/ConsoleEmptyState";
+import StatusPill from "../../../console-ui/StatusPill";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import styles from "./evidence-photos.module.css";
 import { consoleFetch } from "../../../../../lib/console-api";
@@ -819,7 +821,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
                 ) : <ImageGlyph />}
               </span>
               <span className={styles.tileName}>{section.label}</span>
-              <span className={styles.tileCount} data-empty={section.count === 0 || undefined}>{section.count === 0 ? "비어 있음" : `${section.count}장`}</span>
+              <span className={styles.tileCount} data-empty={section.count === 0 || undefined}>{section.count === 0 ? <StatusPill tone="wait" size="sm">비어 있음</StatusPill> : `${section.count}장`}</span>
             </button>
           );
         })}
@@ -1009,7 +1011,10 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
             ) : null}
           </>
         ) : (
-          <p className={styles.empty}>이 구간에는 아직 등록된 사진이 없습니다. {writeLocked ? "" : "‘사진 올리기’로 첫 사진을 올리세요."}</p>
+          <ConsoleEmptyState
+            title="이 구간에는 아직 등록된 사진이 없습니다."
+            description={writeLocked ? undefined : "‘사진 올리기’로 첫 사진을 올리세요."}
+          />
         )}
       </div>
 

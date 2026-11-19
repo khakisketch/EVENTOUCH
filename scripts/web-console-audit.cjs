@@ -2087,7 +2087,7 @@ async function main() {
         await assertConsoleScreen(page, SCREENS.find((screen) => screen.key === 'reports'), eventId, eventName);
         // The analysis tab is gone: the counts sit in the 결과 분석 box beside the reports.
         await page.getByRole('tab', { name: '보고서', exact: true }).click();
-        const backlog = page.getByText('승인 대기 (명)');
+        const backlog = page.locator('#reports-analysis').getByText('승인 대기', { exact: true });
         await backlog.first().waitFor({ timeout: 10000 });
         const backlogValue = await backlog.first().locator('xpath=..').innerText();
         if (!/2/.test(backlogValue)) throw new Error(`approval backlog card shows no pending count: ${backlogValue}`);

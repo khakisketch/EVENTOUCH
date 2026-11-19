@@ -238,6 +238,8 @@ Reopened 2026-11-20 (owner: 기간 분석이 다른 화면과 다르게 조잡�
 - Breakdown cards from loaded data only: 시간대별 입장 (first entry hour per person per day, so the bars add up to 일별 입장 합) and 소속별 신청 (top 5, 그 외, 소속 미기재). Both have a dashed empty state.
 - One column on phones, no horizontal overflow at 320/390, reduced motion respected. All colors are tokens.
 
+Reopened 2026-11-20 (디자인 시스템 적용, C1): the screen keeps its definitions, copy and table contract. Composition: one big number only (기간 고유 입장 as the shared `StatCard`) with its comparison or 입장률 (`StatusPill` live, the one orange accent); 신청 and 일별 입장 합 became side figures beside it (`data-metric` kept); the daily chart is a flat `ConsoleSection heading="rule"`; 시간대별 입장 · 소속별 신청 · 일별 기록 are secondary tabs (`role="tablist"`, the table sits in the last tab). Empty charts use `ConsoleEmptyState`. The dark hero card and boxed chart cards are gone; weights are 400/600/800 and sizes/radii are tokens.
+
 ## 참가자 명단 확정 구성
 
 The owner approved this composition on 2026-11-13 (`apps/web/app/console/events/[id]/participants/ParticipantList.tsx`, option A "조용한 명단"). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-participant-roster-presets.test.cjs` guards it.
@@ -268,6 +270,8 @@ Reopened 2026-11-19 (owner: 얇은 선·작은 회색 글씨). 구성은 그대�
 - 구간 현황은 옅은 회색 요약 띠(48px 합계 + 12px 8칸 막대 + 비어 있는 구간 이름)다. 구간 타일의 장수는 표지 사진 위 알약 칩(선택된 구간은 잉크 채움, 빈 구간은 앰버 "비어 있음")이고 선택된 타일은 잉크 3px 외곽선이다.
 - 갤러리 머리는 24px 구간 이름과 헤어라인, ZIP 다운로드는 잉크 외곽선 알약, 업로드 안내문은 한 덩어리의 정보 상자다. 사진 모서리는 더 둥글다.
 
+Reopened 2026-11-20 (디자인 시스템 적용, C1): composition unchanged. The coverage band is flat (hairline, no grey box) with one bar segment per section, and a section with no photos is amber everywhere it appears (bar segment, dashed tile, `StatusPill` 비어 있음). Empty gallery uses `ConsoleEmptyState`. `evidence-photos.module.css` was rewritten without the dead pre-redesign rules and uses only tokens (weights 400/600/800, `--text-*`, `--r-*`).
+
 ## 경품 지급 현황 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/rewards/`, option V1). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-rewards-composition.test.cjs` guards it. This is the operator oversight list (blocked prizes, missing recipients, uncertain outcomes); handing a prize to a person at the venue belongs to the staff exit desk.
@@ -283,6 +287,8 @@ Reopened 2026-11-19 (owner: 얇은 선·작은 글씨·필터가 다른 버튼�
 - 상태 탭의 건수는 알약 칩이고 선택된 탭의 칩은 잉크 채움이다. 검색창은 돋보기 글리프가 있는 둥근 입력이다.
 - 그룹 제목은 상태색 원형 마크, 굵은 제목, 오른쪽 큰 건수와 상태색 2px 밑줄이다. 행은 헤어라인으로 나뉘고 경품명이 18px로 커졌다.
 - Reopened 2026-11-20 (owner: 카드 띠도 개수 탭으로): 카드 띠 → 개수 탭. The progress ring and the three status tiles are replaced by one row of count tabs (전체 · 확인 필요 · 지급 대기 · 수령 완료; 확인 필요 and 지급 대기 amber) with a quiet "지급 완료 n / m" text; the urgency-grouped ledger below is unchanged. Shared component `console-ui/CountTabs` (segmented control, pill count badges, ink fill when chosen, amber badge only for waiting work, scrolls inside its own box on phones). Big-number cards and rings stay only on 운영 현황, 현장 모드, 결과 보고서 and 기간 분석.
+
+Reopened 2026-11-20 (디자인 시스템 적용, C1): 지급 대기 (and 확인 필요) lead; 완료·취소 is folded (`details`, opens by itself while the 수령 완료 tab or a search is active). Rows are the shared `ListRow` + `ConsoleAvatar` (tone by state) + `StatusPill`; the row action (수령 처리 / 참가자 명단에서 확인 / 추첨에서 수령자 지정) sits beside the row and 경품 취소 moves behind a 상세 disclosure button under the row (`aria-expanded`). Empty states use `ConsoleEmptyState`; groups use `ConsoleSection heading="rule"`. Confirms, recovery and write locks are unchanged.
 
 ## 추첨·투표 확정 구성
 
@@ -435,6 +441,8 @@ The owner approved this composition on 2026-11-20 (proposal C, `design-review/on
 - Gates: before 진행 중 only a "행사를 진행 중 단계로 바꾸면 사용할 수 있습니다" panel; 종료·보관 is read-only; each control group follows its source screen's `canWriteEvent` scope and feature. Read-only operators see the same panes with no controls (not disabled ones).
 - Refresh: visibility-aware polling (10s, `ifVersion` shortcut), the console freshness subscription, and a failed read keeps the last good screen with an inline retry. Targets are 48px, status changes are announced (`aria-live`), motion respects reduced-motion.
 
+Reopened 2026-11-20 (디자인 시스템 적용, C1): the dark stage and three-pane layout stay. The middle pane now leads with 무대 이벤트 and the selected event's control panel, where the one primary (열기 or 마감) is the biggest control (88px, 800 weight), and the venue-screen preview, output picker and 추첨 프로그램 follow. The right pane starts with 다음에 할 일 and is sticky on wide rooms. Event status is `LivePill` (a local dark-stage `StatusPill`: same shape and type tokens, stage line colours; OPEN green, DRAFT amber, CLOSED quiet). Weights are 400/600/800, sizes `--text-*`, radii `--r-*`. Needed in the shared kit: a `StatusPill` tone for dark surfaces.
+
 ## 행사 목록 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/ConsoleHome.tsx`, mockup B2). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-console-events-composition.test.cjs` ("approved event list design stays locked") guards it.
@@ -474,6 +482,8 @@ Reopened 2026-11-19 (owner: 실제 화면이 밋밋하다 — 작은 회색 글�
 - 참여 콘텐츠는 행마다 이름·막대·건수(0건은 흐리게), 만족도는 큰 평균 점수+5칸 게이지, 항목마다 평균 막대. 원래 텍스트 줄은 그대로 있다.
 - 오른쪽 레일의 결과 분석은 입장률 링+큰 숫자, 3칸 숫자 타일(승인 대기만 앰버)이다. 실행 영역은 주 동작 하나(오렌지)+내용 편집(secondary, 연필 아이콘)+닫기(ghost)이고, 내보내기는 구분선 행 목록, A4/발표용 전환은 잉크 세그먼트 컨트롤(오렌지 아님)이다. 긴 안내문은 `<details>`로 접었다(JSON 원본 범위 안내만 항상 보임).
 - Reopened 2026-11-20 (디자인 시스템 적용, 업무 점검 "급한 행사·오늘 일정이 목록 속에 묻힘"): the list is regrouped as the running-event card, then **지금 챙길 행사** (ink count pill: other running events, today, tomorrow, or approvals waiting, never a closed event; ordered today, tomorrow, then the most approvals waiting, then date), then 다가오는 행사 and 지난 행사. Stage and countdown are the shared `StatusPill` (stage: green running, blue preparing, grey closed; amber is kept for approvals waiting; today and tomorrow an ink pill and the date tile itself turns ink); the approval follow-up is the amber `StatusPill` "승인 대기 n명 처리 ›", and the running card carries the same link under 운영 현황 열기. Empty and filtered-out states are `ConsoleEmptyState`. Sizes, radii and weights are tokens (400/600/800). The create dialog keeps its A3 composition and only its type, radii and weights moved to tokens.
+
+Reopened 2026-11-20 (디자인 시스템 적용, C1): the report document stays the centre and the rail now puts the actions first (공유 완료로 표시 / 새 버전 만들기, 내용 편집, 내보내기, 보기) with 결과 분석 below, so export is pinned at the right while the document scrolls (the rail is sticky and scrolls inside itself when taller than the window). The analysis counts are the shared `StatCard` (two columns) under the 입장률 lead; report status is `StatusPill` (초안 amber, 공유 완료 green); empty states use `ConsoleEmptyState`. 기간 분석 stays in the header. `reports.module.css` drops the numeric weights, raw sizes and radii in favour of tokens.
 
 ## 고객사 확정 구성
 

@@ -140,7 +140,10 @@ test('analysis screen is native SVG with the same values in table and summary', 
   assert.match(workspace, /최대 \{RANGE_DAYS_CAP\}일까지만 봅니다/, 'clamping is announced, not silent');
   assert.match(css, /\.rangeFields input\s*\{\s*min-height: 44px/, 'date inputs keep touch targets');
   assert.match(css, /\.preset\s*\{[^}]*min-height: 44px/s, 'period buttons keep touch targets');
-  assert.match(css, /\.kpiHero\s*\{/, 'the entry card is the hero of the summary row');
+  // Reopened 2026-11-20 (디자인 시스템 적용): the hero is the shared StatCard (기간 고유 입장); 신청·일별 입장 합 are side figures.
+  assert.match(css, /\.hero\s*\{/, 'the entry card is the hero of the summary row');
+  assert.match(workspace, /<StatCard\s+className=\{styles\.hero\}\s+label="기간 고유 입장"/, 'the hero is a StatCard');
+  assert.match(workspace, /role="tablist" aria-label="세부 보기 선택"/, '시간대·소속·일별 기록 are secondary tabs');
   assert.match(css, /\.tableWrap\s*\{[^}]*overflow: auto/s, 'wide tables scroll in place');
 });
 
@@ -218,7 +221,7 @@ test('redesigned analysis screen compares only what the data supports and keeps 
   assert.doesNotMatch(css, /var\(--brand\)\s*;[^}]*\}\s*\.barEntries/s, 'orange is not a data color');
   assert.match(css, /\.barApplications \{ fill: var\(--ink\); \}/);
   assert.match(css, /\.barEntries \{ fill: var\(--success\); \}/);
-  assert.match(css, /\.rateHead b \{[^}]*var\(--brand\)/, 'the single orange accent is the rate pill');
+  assert.match(workspace, /<StatusPill tone="live">입장률 \{rate\}%<\/StatusPill>/, 'the single orange accent is the rate pill (StatusPill live)');
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/, 'tokens only, no raw hex');
 });

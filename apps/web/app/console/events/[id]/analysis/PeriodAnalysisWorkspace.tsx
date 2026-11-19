@@ -9,7 +9,10 @@ import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
 import ConsolePage from "../../../console-ui/ConsolePage";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import ConsoleRefreshButton from "../../../console-ui/ConsoleRefreshButton";
+import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
+import StatCard from "../../../console-ui/StatCard";
+import StatusPill from "../../../console-ui/StatusPill";
 import { InfoIcon } from "../../../console-ui/ConsoleIcons";
 import { consoleFetch } from "../../../../../lib/console-api";
 import { cancellationNeedsReview } from "../../../../../lib/cancellation-state.cjs";
@@ -55,6 +58,12 @@ const PRESETS: ReadonlyArray<{ value: PeriodPreset; label: string }> = [
   { value: "last7", label: "최근 7일" },
   { value: "all", label: "행사 전체" },
   { value: "custom", label: "직접 선택" },
+];
+type DetailTab = "hours" | "company" | "records";
+const DETAIL_TABS: ReadonlyArray<{ key: DetailTab; label: string }> = [
+  { key: "hours", label: "시간대별 입장" },
+  { key: "company", label: "소속별 신청" },
+  { key: "records", label: "일별 기록" },
 ];
 const UPDATED_FORMAT = new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
 
@@ -218,18 +227,18 @@ function Compare({ delta, label }: { delta: PeriodDelta; label: string }) {
   // 두 기간 모두 0명이면 "변동 없음"은 정보가 아니라 소음이다.
   if (delta.previous === 0 && delta.change === 0) return null;
   return (
-    <dd className={styles.kpiNote}>
-      <span className={styles.delta} data-dir={delta.direction}>
+    <span className={styles.compare}>
+      <StatusPill tone={delta.direction === "up" ? "ok" : "neutral"} size="sm">
         {delta.direction === "same" ? "변동 없음" : (
           <>
-            <i aria-hidden="true">{delta.direction === "up" ? "▲" : "▼"}</i>
+            <i className={styles.arrow} aria-hidden="true">{delta.direction === "up" ? "▲" : "▼"}</i>
             {Math.abs(delta.change)}명 {delta.direction === "up" ? "증가" : "감소"}
             {delta.percent !== null ? ` (${delta.percent}%)` : ""}
           </>
         )}
-      </span>
+      </StatusPill>
       <span className={styles.base}>{label} {delta.previous}명</span>
-    </dd>
+    </span>
   );
 }
 
@@ -248,6 +257,7 @@ function PeriodView({
 }) {
   const [showZeroDays, setShowZeroDays] = useState(false);
   const [showBasis, setShowBasis] = useState(false);
+  const [detailTab, setDetailTab] = useState<DetailTab>("hours");
 
   const result: PeriodAnalysis = analyzePeriod(data.applications, data.entries, range.from, range.to);
   const { points, periodApplications, dailyEntriesSum, periodUnique } = result;
@@ -278,6 +288,24 @@ function PeriodView({
   const companies = companyBreakdown(data.applicants, fromKey, toKey, 5);
   const emptyPeriod = periodApplications === 0 && dailyEntriesSum === 0;
   const chartLabel = `선택 기간 일별 신청·입장 막대그래프. 기간 신청 ${periodApplications}명, 일별 입장 합 ${dailyEntriesSum}명, 기간 고유 입장 ${periodUnique}명.`;
+
+  const compareFor = (value: number, before: number) => showDelta && previous
+    ? <Compare delta={periodDelta(value, before)} label={compareLabel} />
+    : showReference && previous
+      ? <span className={styles.base}>{compareLabel} {before}명</span>
+      : null;
+  const rateBlock = rate !== null ? (
+    <span className={styles.rate}>
+      <span className={styles.rateHead}>
+        <span>신청 {periodApplications}명 중 {periodUnique}명 입장</span>
+        <StatusPill tone="live">입장률 {rate}%</StatusPill>
+      </span>
+      <span className={styles.rateTrack} aria-hidden="true"><span style={{ width: `${rate}%` }} /></span>
+    </span>
+  ) : null;
+  const heroCompare = rateBlock ?? (previous ? compareFor(periodUnique, previous.periodUnique) : null);
+  const applicationsCompare = previous ? compareFor(periodApplications, previous.periodApplications) : null;
+  const entriesCompare = previous ? compareFor(dailyEntriesSum, previous.dailyEntriesSum) : null;
 
   return (
     <div className={styles.view}>
@@ -324,55 +352,43 @@ function PeriodView({
 
       {!result.error && points.length > 0 ? (
         <>
-          <dl className={styles.kpis}>
-            <div className={`${styles.kpi} ${styles.kpiHero}`}>
-              <dt><i className={styles.dotEntries} aria-hidden="true" />기간 고유 입장</dt>
-              <dd className={styles.kpiValue} data-metric="unique">{periodUnique}<small>명</small></dd>
-              {rate !== null ? (
-                <dd className={styles.rate}>
-                  <span className={styles.rateHead}>
-                    <span>신청 {periodApplications}명 중 {periodUnique}명 입장</span>
-                    <b>입장률 {rate}%</b>
-                  </span>
-                  <span className={styles.rateTrack} aria-hidden="true"><span style={{ width: `${rate}%` }} /></span>
-                </dd>
-              ) : showDelta && previous ? (
-                <Compare delta={periodDelta(periodUnique, previous.periodUnique)} label={compareLabel} />
-              ) : showReference && previous ? (
-                <dd className={styles.kpiNote}><span className={styles.base}>{compareLabel} {previous.periodUnique}명</span></dd>
-              ) : null}
-              <dd className={styles.kpiHint}>선택한 기간 전체에서 중복 제거</dd>
-            </div>
-            <div className={styles.kpi}>
-              <dt><i className={styles.dotApplications} aria-hidden="true" />신청</dt>
-              <dd className={styles.kpiValue} data-metric="applications">{periodApplications}<small>명</small></dd>
-              {showDelta && previous ? (
-                <Compare delta={periodDelta(periodApplications, previous.periodApplications)} label={compareLabel} />
-              ) : showReference && previous ? (
-                <dd className={styles.kpiNote}><span className={styles.base}>{compareLabel} {previous.periodApplications}명</span></dd>
-              ) : null}
-              <dd className={styles.kpiHint}>취소 제외</dd>
-            </div>
-            <div className={styles.kpi}>
-              <dt><i className={styles.dotEntries} aria-hidden="true" />일별 입장 합</dt>
-              <dd className={styles.kpiValue} data-metric="entriesSum">{dailyEntriesSum}<small>명</small></dd>
-              {showDelta && previous ? (
-                <Compare delta={periodDelta(dailyEntriesSum, previous.dailyEntriesSum)} label={compareLabel} />
-              ) : showReference && previous ? (
-                <dd className={styles.kpiNote}><span className={styles.base}>{compareLabel} {previous.dailyEntriesSum}명</span></dd>
-              ) : null}
-              <dd className={styles.kpiHint}>하루 한 번씩 더한 값</dd>
-            </div>
-          </dl>
+          {/* 2026-11-20 (디자인 시스템 적용): 핵심 숫자는 기간 고유 입장 하나와 그 비교(또는 입장률).
+              신청·일별 입장 합은 같은 줄의 보조 숫자이고, 시간대·소속·일별 기록은 아래 보조 탭에 둔다. */}
+          <div className={styles.summary}>
+            <StatCard
+              className={styles.hero}
+              label="기간 고유 입장"
+              value={<span className={styles.heroNum} data-metric="unique">{periodUnique}</span>}
+              unit="명"
+              detail={(
+                <span className={styles.heroDetail}>
+                  {heroCompare}
+                  <span className={styles.hint}>선택한 기간 전체에서 중복 제거</span>
+                </span>
+              )}
+            />
+            <dl className={styles.side}>
+              <div className={styles.sideRow}>
+                <dt><i className={styles.dotApplications} aria-hidden="true" />신청</dt>
+                <dd className={styles.sideValue}><b data-metric="applications">{periodApplications}</b>명</dd>
+                <dd className={styles.sideNote}>{applicationsCompare}<span className={styles.hint}>취소 제외</span></dd>
+              </div>
+              <div className={styles.sideRow}>
+                <dt><i className={styles.dotEntries} aria-hidden="true" />일별 입장 합</dt>
+                <dd className={styles.sideValue}><b data-metric="entriesSum">{dailyEntriesSum}</b>명</dd>
+                <dd className={styles.sideNote}>{entriesCompare}<span className={styles.hint}>하루 한 번씩 더한 값</span></dd>
+              </div>
+            </dl>
+          </div>
           <p className="sr-only" role="status">
             기간 신청 {periodApplications}명 · 일별 입장 합 {dailyEntriesSum}명 · 기간 고유 입장 {periodUnique}명(중복 제거)
           </p>
 
-          <section className={styles.card} aria-labelledby="period-daily-title">
-            <div className={styles.cardHead}>
-              <div>
-                <h2 className={styles.cardTitle} id="period-daily-title">일별 신청·입장</h2>
-              </div>
+          <ConsoleSection
+            headingId="period-daily-title"
+            title="일별 신청·입장"
+            heading="rule"
+            action={(
               <div className={styles.cardTools}>
                 <ul className={styles.legend} aria-label="막대그래프 범례">
                   <li><span className={`${styles.swatch} ${styles.swatchApplications}`} aria-hidden="true" />신청</li>
@@ -383,66 +399,81 @@ function PeriodView({
                   집계 기준
                 </ProductButton>
               </div>
-            </div>
+            )}
+          >
             {showBasis ? (
               <p className={styles.basis} id="period-basis">
                 신청은 신청 상태가 취소인 기록을 제외합니다.{data.cancellationReview ? " 취소 기록과 신청 상태가 다른 인원은 확인 전까지 포함합니다." : ""} 입장은 정정된 기록을 제외하며 같은 날의 재입장은 중복 집계하지 않습니다. 일별 입장은 그 날의 고유 입장자 수이며, 기간 고유 입장은 선택한 전체 기간의 중복 제거 수라서 일별 합과 다를 수 있습니다. 날짜는 이 브라우저의 달력 날짜입니다.
               </p>
             ) : null}
             <DailyChart points={points} label={chartLabel} empty={emptyPeriod} />
-          </section>
+          </ConsoleSection>
 
-          <div className={styles.split}>
-            <section className={styles.card} aria-labelledby="period-hours-title">
-              <div className={styles.cardHead}>
-                <h2 className={styles.cardTitle} id="period-hours-title">시간대별 입장</h2>
-                <p className={styles.cardSub}>하루의 첫 입장 시각 기준</p>
-              </div>
-              <HourlyBars buckets={hours} />
-            </section>
-            <section className={styles.card} aria-labelledby="period-company-title">
-              <div className={styles.cardHead}>
-                <h2 className={styles.cardTitle} id="period-company-title">소속별 신청</h2>
-                <p className={styles.cardSub}>많은 순 상위 5곳</p>
-              </div>
-              <CompanyBars {...companies} />
-            </section>
-          </div>
-
-          <section className={styles.card} aria-labelledby="period-table-title">
-            <div className={styles.cardHead}>
-              <h2 className={styles.cardTitle} id="period-table-title">일별 기록</h2>
-              {zeroPoints.length > 0 ? (
-                <ProductButton type="button" variant="ghost" aria-expanded={showZeroDays}
-                  onClick={() => setShowZeroDays((current) => !current)}>
-                  {showZeroDays ? `0명 ${zeroPoints.length}일 접기` : `0명 ${zeroPoints.length}일 보기`}
-                </ProductButton>
-              ) : null}
+          <ConsoleSection headingId="period-detail-title" title="세부 보기" heading="rule">
+            <div className={styles.subTabs} role="tablist" aria-label="세부 보기 선택">
+              {DETAIL_TABS.map((tab) => (
+                <button key={tab.key} type="button" role="tab" id={`period-tab-${tab.key}`} className={styles.subTab}
+                  aria-selected={detailTab === tab.key} aria-controls={`period-panel-${tab.key}`} tabIndex={detailTab === tab.key ? 0 : -1}
+                  onClick={() => setDetailTab(tab.key)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+                    event.preventDefault();
+                    const at = DETAIL_TABS.findIndex((item) => item.key === detailTab);
+                    const next = DETAIL_TABS[(at + (event.key === "ArrowRight" ? 1 : DETAIL_TABS.length - 1)) % DETAIL_TABS.length];
+                    setDetailTab(next.key);
+                    document.getElementById(`period-tab-${next.key}`)?.focus();
+                  }}>
+                  {tab.label}
+                </button>
+              ))}
             </div>
-            <div className={styles.tableWrap}>
-              <table className={styles.table} aria-label="선택 기간 일별 신청·입장">
-                <thead>
-                  <tr>
-                    <th scope="col">날짜</th>
-                    <th scope="col">신청</th>
-                    <th scope="col">입장(일별 고유)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tablePoints.map((point) => (
-                    <tr key={point.key}>
-                      <th scope="row">{point.key}</th>
-                      <td>{point.applications}명</td>
-                      <td>{point.entries}명</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className={styles.subPanel} role="tabpanel" id={`period-panel-${detailTab}`} aria-labelledby={`period-tab-${detailTab}`}>
+              {detailTab === "hours" ? (
+                <>
+                  <p className={styles.cardSub}>하루의 첫 입장 시각 기준</p>
+                  <HourlyBars buckets={hours} />
+                </>
+              ) : detailTab === "company" ? (
+                <>
+                  <p className={styles.cardSub}>많은 순 상위 5곳</p>
+                  <CompanyBars {...companies} />
+                </>
+              ) : (
+                <>
+                  {zeroPoints.length > 0 ? (
+                    <div className={styles.tableTools}>
+                      <ProductButton type="button" variant="ghost" aria-expanded={showZeroDays}
+                        onClick={() => setShowZeroDays((current) => !current)}>
+                        {showZeroDays ? `0명 ${zeroPoints.length}일 접기` : `0명 ${zeroPoints.length}일 보기`}
+                      </ProductButton>
+                    </div>
+                  ) : null}
+                  <div className={styles.tableWrap}>
+                    <table className={styles.table} aria-label="선택 기간 일별 신청·입장">
+                      <thead>
+                        <tr>
+                          <th scope="col">날짜</th>
+                          <th scope="col">신청</th>
+                          <th scope="col">입장(일별 고유)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tablePoints.map((point) => (
+                          <tr key={point.key}>
+                            <th scope="row">{point.key}</th>
+                            <td>{point.applications}명</td>
+                            <td>{point.entries}명</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
-          </section>
+          </ConsoleSection>
         </>
       ) : null}
     </div>
   );
 }
-

@@ -15,7 +15,11 @@ import RewardGlyph from "./RewardGlyph";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { UNCONFIRMED_WRITE_CLOSE_MESSAGE, useConsoleDraftGuard } from "../../../console-draft-guard";
 import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
-import consoleUiStyles from "../../../console-ui/console-ui.module.css";
+import ConsoleAvatar, { type ConsoleAvatarTone } from "../../../console-ui/ConsoleAvatar";
+import ConsoleEmptyState from "../../../console-ui/ConsoleEmptyState";
+import ConsoleSection from "../../../console-ui/ConsoleSection";
+import ListRow from "../../../console-ui/ListRow";
+import StatusPill from "../../../console-ui/StatusPill";
 import { consoleFetch } from "../../../../../lib/console-api";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
 import { abandonOperatorAttempt, acknowledgeOperatorReceipt, isOrganizationContextBlock } from "../../../../../lib/operator-context";
@@ -125,12 +129,6 @@ function issueSentence(issue: Reward["participantIssue"]): string {
     : "수령자의 참가자 정보를 확인할 수 없습니다.";
 }
 
-function avatarTone(id: string): number {
-  let sum = 0;
-  for (const char of id) sum = (sum + char.charCodeAt(0)) % 5;
-  return sum + 1;
-}
-
 function formatTime(value: string): string {
   if (!value) return "시각 확인 중";
   const date = new Date(value);
@@ -178,6 +176,10 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
   // participant/company/경품명/추첨명 plus a status bucket. Never a new fetch.
   const [rewardQuery, setRewardQuery] = useState("");
   const [rewardStatusFilter, setRewardStatusFilter] = useState("");
+  // 2026-11-20 (디자인 시스템 적용): 지급 대기를 먼저 보여 주고 완료·취소는 접어 둔다.
+  // 한 번에 한 행만 펼쳐 상세(경품 취소·메모)를 보인다.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [doneOpen, setDoneOpen] = useState(false);
   // Same-turn in-flight gate: `busy` state flips only on re-render.
   const busyGateRef = useRef(false);
   const pendingRewardActionRef = useRef<RewardAttempt | null>(null);
@@ -587,6 +589,114 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
     setRewardStatusFilter("");
   }
 
+  // One reward row: ListRow carries who/what/state, the one action sits beside it,
+  // and the details (reason, 경품 취소) open under the row on request.
+  function renderReward(reward: Reward): ReactNode {
+    if (state.kind !== "ready") return null;
+    const bucket = bucketOf(reward);
+    const canFulfill = state.featureOn && canAct && (reward.status === "READY" || reward.status === "FAILED") && !reward.participantIssue;
+    const canCancel = state.featureOn && canAct && reward.status !== "RECEIVED" && reward.status !== "CANCELLED";
+    const unassigned = reward.pendingAssignee;
+    const who = unassigned ? (reward.company || "업체 당첨") : reward.participantName;
+    const avatarTone: ConsoleAvatarTone = reward.status === "RECEIVED" ? "ok" : reward.status === "CANCELLED" || unassigned ? "neutral" : bucket === "done" ? "neutral" : "wait";
+    const drawHref = reward.drawProgramId
+      ? `/console/events/${encodeURIComponent(eventId)}/draws#draw-program-${encodeURIComponent(reward.drawProgramId)}`
+      : `/console/events/${encodeURIComponent(eventId)}/draws#draws-programs`;
+    const participantsHref = `/console/events/${encodeURIComponent(eventId)}/participants${reward.participantIssue === "conflict" ? "?ticket=review" : ""}`;
+    const needsLink = Boolean(reward.participantIssue) && (reward.status === "READY" || reward.status === "FAILED");
+    const expanded = expandedId === reward.id;
+    const bodyId = `reward-body-${reward.id}`;
+    return (
+      <li className={styles.row} key={reward.id} data-bucket={bucket} data-reward-row>
+        <ListRow
+          as="div"
+          className={styles.ledgerRow}
+          leading={<ConsoleAvatar name={unassigned ? "?" : (reward.participantName || reward.company || "?")} tone={avatarTone} size="lg" />}
+          title={reward.name}
+          meta={(
+            <span className={styles.rowLine}>
+              <strong>{who}</strong>
+              {reward.status === "READY" || reward.status === "FAILED" || reward.status === "RECEIVED" || reward.status === "CANCELLED" ? (
+                <span className={styles.method}><RewardGlyph name={reward.method === "GIFT" ? "ticket" : "hand"} small />{reward.method === "GIFT" ? "기프티콘(모의)" : "현장 수령"}</span>
+              ) : null}
+              {unassigned ? <StatusPill tone="wait" size="sm">수령자 지정 필요</StatusPill> : null}
+              {needsLink ? <StatusPill tone="danger" size="sm">{issueLabel(reward.participantIssue)}</StatusPill> : null}
+              {reward.status === "FAILED" && !reward.participantIssue ? <StatusPill tone="danger" size="sm">지급 실패</StatusPill> : null}
+              {reward.status === "NEEDS_CONNECTION" ? <StatusPill tone="info" size="sm">연결 필요</StatusPill> : null}
+              {reward.status === "PENDING" && !unassigned ? <StatusPill tone="wait" size="sm">{statusLabel(reward.status)}</StatusPill> : null}
+              {!["READY", "FAILED", "RECEIVED", "CANCELLED", "NEEDS_CONNECTION", "PENDING"].includes(reward.status) ? <StatusPill tone="danger" size="sm">{statusLabel(reward.status)}</StatusPill> : null}
+              {reward.status === "RECEIVED" ? <StatusPill tone="ok" size="sm">수령 완료</StatusPill> : null}
+              {reward.status === "CANCELLED" ? <StatusPill tone="neutral" size="sm">취소</StatusPill> : null}
+              {reward.code ? <span className={styles.method}><RewardGlyph name="ticket" small />{reward.code}</span> : null}
+            </span>
+          )}
+        />
+        <div className={styles.rowActions}>
+          {canFulfill ? (
+            <ProductButton
+              type="button"
+              variant="secondary"
+              disabled={writeLocked}
+              onClick={() => {
+                // The server refuses a cancel once the prize is
+                // received, so the one irreversible step asks first —
+                // in place, with the same summary as before.
+                if (!writeLocked) setRewardPending({ id: reward.id, command: "reward.fulfill" });
+              }}
+            >
+              {busy === reward.id ? "처리 중…" : reward.method === "GIFT" ? "기프티콘 지급(모의)" : "수령 처리"}
+            </ProductButton>
+          ) : needsLink ? (
+            <ProductLink variant="secondary" href={participantsHref} aria-describedby={`reward-participant-${reward.id}`}>참가자 명단에서 확인 ›</ProductLink>
+          ) : unassigned && canAct && state.featureOn ? (
+            <ProductLink variant="secondary" href={drawHref}>추첨에서 수령자 지정 ›</ProductLink>
+          ) : null}
+          <ProductButton
+            type="button"
+            variant="ghost"
+            aria-expanded={expanded}
+            aria-controls={bodyId}
+            aria-label={`${reward.name} ${who} 상세`}
+            onClick={() => setExpandedId(expanded ? null : reward.id)}
+          >
+            상세
+          </ProductButton>
+        </div>
+        {expanded ? (
+          <div className={styles.rowBody} id={bodyId}>
+            {needsLink ? <p id={`reward-participant-${reward.id}`} role="note">{issueSentence(reward.participantIssue)}</p> : null}
+            {unassigned ? <p>{reward.company ? `${reward.company} 업체 당첨` : "업체 당첨"}{reward.programTitle ? ` · ${reward.programTitle}` : ""} · 수령자를 지정한 뒤 지급할 수 있습니다.</p> : null}
+            {!unassigned && reward.programTitle ? <p>추첨 · {reward.programTitle}</p> : null}
+            <p>등록 {formatTime(reward.at)}{reward.code ? ` · 코드 ${reward.code}` : ""} · {statusLabel(reward.status)}</p>
+            {canCancel ? (
+              <div className={styles.rowFoot}>
+                <ProductButton type="button" variant="destructive" disabled={writeLocked} onClick={() => { if (!writeLocked) setRewardPending({ id: reward.id, command: "reward.cancel" }); }}>경품 취소</ProductButton>
+              </div>
+            ) : null}
+          </div>
+        ) : needsLink ? (
+          // The reason sentence stays readable for the link's description even while the row is folded.
+          <p id={`reward-participant-${reward.id}`} className="sr-only" role="note">{issueSentence(reward.participantIssue)}</p>
+        ) : null}
+        {rewardPending?.id === reward.id ? (
+          <ConsoleConfirm
+            summary={confirmLines(
+              rewardPending.command === "reward.fulfill" ? fulfillSummary(reward) : cancelSummary(reward)
+            )}
+            confirmLabel={rewardPending.command === "reward.fulfill" ? "처리한다" : "취소한다"}
+            busy={busy === reward.id}
+            onConfirm={() => {
+              const pending = rewardPending;
+              setRewardPending(null);
+              void runCommand(pending.id, pending.command);
+            }}
+            onCancel={() => setRewardPending(null)}
+          />
+        ) : null}
+      </li>
+    );
+  }
+
   return (
     <ConsolePage
       pageId="rewards"
@@ -646,10 +756,12 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
       }
     >
       {!state.rewards.length ? (
-        <div className={consoleUiStyles.empty}>
-          <h2 className={consoleUiStyles.emptyTitle}>등록된 경품이 없습니다.</h2>
-          <p>참가자 화면에서 참가 확정자에게 경품을 등록하세요.</p>
-        </div>
+        <ConsoleEmptyState
+          titleAs="h2"
+          title="등록된 경품이 없습니다."
+          description="참가자 화면에서 참가 확정자에게 경품을 등록하세요."
+          action={<ProductLink variant="secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자 명단 열기</ProductLink>}
+        />
       ) : (
         <section className={styles.oversight} aria-label="경품 지급 목록">
           <CountTabs
@@ -679,110 +791,46 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
             </p>
           ) : null}
           {!visibleRewards.length ? (
-            <div className={consoleUiStyles.empty}>
-              <h2 className={consoleUiStyles.emptyTitle}>조건에 맞는 경품이 없습니다.</h2>
-              <p>검색어·상태 조건을 바꾸거나 지우고 다시 찾아보세요.</p>
-              <p>
-                <ProductButton type="button" variant="secondary" onClick={clearRewardFilters}>검색·필터 지우기</ProductButton>
-              </p>
-            </div>
-          ) : buckets.map((group) => (
-            <div key={group.key} className={styles.group}>
-              <h2 className={styles.groupTitle} data-tone={group.key}><span className={styles.groupMark}><RewardGlyph name={group.key === "attention" ? "alert" : group.key === "waiting" ? "clock" : "check"} /></span>{group.label}<span className={styles.groupCount} aria-hidden="true">{group.rewards.length}</span></h2>
+            <ConsoleEmptyState
+              kind="filtered"
+              titleAs="h2"
+              title="조건에 맞는 경품이 없습니다."
+              description="검색어·상태 조건을 바꾸거나 지우고 다시 찾아보세요."
+              action={<ProductButton type="button" variant="ghost" onClick={clearRewardFilters}>검색·필터 지우기</ProductButton>}
+            />
+          ) : buckets.map((group) => {
+            const list = (
               <ul className={styles.rows} aria-label={`경품 목록 · ${group.label}`}>
-                {group.rewards.map((reward) => {
-                  const bucket = bucketOf(reward);
-                  const canFulfill = state.featureOn && canAct && (reward.status === "READY" || reward.status === "FAILED") && !reward.participantIssue;
-                  const canCancel = state.featureOn && canAct && reward.status !== "RECEIVED" && reward.status !== "CANCELLED";
-                  const unassigned = reward.pendingAssignee;
-                  const initial = (reward.participantName || reward.company || "?").trim().slice(0, 1) || "?";
-                  const badge = reward.status === "CANCELLED" ? "off" : reward.status === "RECEIVED" ? "done" : bucket === "waiting" ? "wait" : reward.participantIssue === "cancelled" ? "cross" : "alert";
-                  const drawHref = reward.drawProgramId
-                    ? `/console/events/${encodeURIComponent(eventId)}/draws#draw-program-${encodeURIComponent(reward.drawProgramId)}`
-                    : `/console/events/${encodeURIComponent(eventId)}/draws#draws-programs`;
-                  const participantsHref = `/console/events/${encodeURIComponent(eventId)}/participants${reward.participantIssue === "conflict" ? "?ticket=review" : ""}`;
-                  const needsLink = Boolean(reward.participantIssue) && (reward.status === "READY" || reward.status === "FAILED");
-                  return (
-                    <li className={styles.row} key={reward.id} data-bucket={bucket}>
-                      <details className={styles.rowDetails}>
-                        <summary className={styles.rowSummary} data-has-action={canFulfill || needsLink || (unassigned && canAct && state.featureOn) ? "true" : undefined}>
-                          <span className={styles.avatar} data-tone={unassigned ? "none" : avatarTone(reward.id)} data-badge={badge} aria-hidden="true">
-                            {unassigned ? "?" : initial}
-                            <i><RewardGlyph name={badge === "wait" ? "clock" : badge === "done" ? "check" : badge === "off" || badge === "cross" ? "x" : "alert"} /></i>
-                          </span>
-                          <span className={styles.rowMain}>
-                            <b>{reward.name}</b>
-                            <span className={styles.rowLine}>
-                              <strong>{unassigned ? (reward.company || "업체 당첨") : reward.participantName}</strong>
-                              {reward.status === "READY" || reward.status === "FAILED" || reward.status === "RECEIVED" || reward.status === "CANCELLED" ? (
-                                <span className={styles.method}><RewardGlyph name={reward.method === "GIFT" ? "ticket" : "hand"} small />{reward.method === "GIFT" ? "기프티콘(모의)" : "현장 수령"}</span>
-                              ) : null}
-                              {unassigned ? <span className={styles.pill} data-tone="warn"><RewardGlyph name="userplus" small />수령자 지정 필요</span> : null}
-                              {needsLink ? <span className={styles.pill} data-tone="danger"><RewardGlyph name={reward.participantIssue === "cancelled" ? "userx" : "alert"} small />{issueLabel(reward.participantIssue)}</span> : null}
-                              {reward.status === "FAILED" && !reward.participantIssue ? <span className={styles.pill} data-tone="danger"><RewardGlyph name="alert" small />지급 실패</span> : null}
-                              {reward.status === "NEEDS_CONNECTION" ? <span className={styles.pill} data-tone="info"><RewardGlyph name="plug" small />연결 필요</span> : null}
-                              {reward.status === "PENDING" && !unassigned ? <span className={styles.pill} data-tone="warn">{statusLabel(reward.status)}</span> : null}
-                              {!["READY", "FAILED", "RECEIVED", "CANCELLED", "NEEDS_CONNECTION", "PENDING"].includes(reward.status) ? <span className={styles.pill} data-tone="danger">{statusLabel(reward.status)}</span> : null}
-                              {reward.status === "RECEIVED" ? <span className={styles.pill} data-tone="ok">수령 완료</span> : null}
-                              {reward.status === "CANCELLED" ? <span className={styles.method}>취소</span> : null}
-                              {reward.code ? <span className={styles.method}><RewardGlyph name="ticket" small />{reward.code}</span> : null}
-                            </span>
-                          </span>
-                          <span aria-hidden="true" />
-                        </summary>
-                        <div className={styles.rowBody}>
-                          {needsLink ? <p id={`reward-participant-${reward.id}`} role="note">{issueSentence(reward.participantIssue)}</p> : null}
-                          {unassigned ? <p>{reward.company ? `${reward.company} 업체 당첨` : "업체 당첨"}{reward.programTitle ? ` · ${reward.programTitle}` : ""} · 수령자를 지정한 뒤 지급할 수 있습니다.</p> : null}
-                          {!unassigned && reward.programTitle ? <p>추첨 · {reward.programTitle}</p> : null}
-                          <p>등록 {formatTime(reward.at)}{reward.code ? ` · 코드 ${reward.code}` : ""} · {statusLabel(reward.status)}</p>
-                          {canCancel ? (
-                            <div className={styles.rowFoot}>
-                              <ProductButton type="button" variant="destructive" disabled={writeLocked} onClick={() => { if (!writeLocked) setRewardPending({ id: reward.id, command: "reward.cancel" }); }}>경품 취소</ProductButton>
-                            </div>
-                          ) : null}
-                        </div>
-                      </details>
-                      {canFulfill ? (
-                        <ProductButton
-                          type="button"
-                          variant="ghost"
-                          className={styles.rowGo}
-                          disabled={writeLocked}
-                          onClick={() => {
-                            // The server refuses a cancel once the prize is
-                            // received, so the one irreversible step asks first —
-                            // in place, with the same summary as before.
-                            if (!writeLocked) setRewardPending({ id: reward.id, command: "reward.fulfill" });
-                          }}
-                        >
-                          {busy === reward.id ? "처리 중…" : reward.method === "GIFT" ? "기프티콘 지급(모의)" : "수령 처리"}
-                        </ProductButton>
-                      ) : needsLink ? (
-                        <ProductLink variant="ghost" className={styles.rowGo} data-soft="true" href={participantsHref} aria-describedby={`reward-participant-${reward.id}`}>참가자 명단에서 확인 ›</ProductLink>
-                      ) : unassigned && canAct && state.featureOn ? (
-                        <ProductLink variant="ghost" className={styles.rowGo} data-soft="true" href={drawHref}>추첨에서 수령자 지정 ›</ProductLink>
-                      ) : null}
-                      {rewardPending?.id === reward.id ? (
-                        <ConsoleConfirm
-                          summary={confirmLines(
-                            rewardPending.command === "reward.fulfill" ? fulfillSummary(reward) : cancelSummary(reward)
-                          )}
-                          confirmLabel={rewardPending.command === "reward.fulfill" ? "처리한다" : "취소한다"}
-                          busy={busy === reward.id}
-                          onConfirm={() => {
-                            const pending = rewardPending;
-                            setRewardPending(null);
-                            void runCommand(pending.id, pending.command);
-                          }}
-                          onCancel={() => setRewardPending(null)}
-                        />
-                      ) : null}
-                    </li>
-                  );
-                })}
+                {group.rewards.map((reward) => renderReward(reward))}
               </ul>
-            </div>
-          ))}
+            );
+            // 완료·취소는 접어 둔다. 받은 경품만 보거나 검색 중이면 펼쳐서 바로 보인다.
+            if (group.key === "done") {
+              const open = doneOpen || rewardStatusFilter === "received" || rewardSearch !== "";
+              return (
+                <details key={group.key} className={styles.doneFold} open={open} onToggle={(event) => setDoneOpen(event.currentTarget.open)} data-reward-group="done">
+                  <summary className={styles.doneSummary}>
+                    <h2 className={styles.groupTitle} data-tone="done">{group.label}</h2>
+                    <span className={styles.groupCount}>{group.rewards.length}건</span>
+                    <span className={styles.doneHint} aria-hidden="true">{open ? "접기" : "펼치기"}</span>
+                  </summary>
+                  {list}
+                </details>
+              );
+            }
+            return (
+              <ConsoleSection
+                key={group.key}
+                headingId={`reward-group-${group.key}`}
+                title={group.label}
+                heading="rule"
+                className={styles.group}
+                action={<span className={styles.groupCount} data-tone={group.key}>{group.rewards.length}건</span>}
+              >
+                {list}
+              </ConsoleSection>
+            );
+          })}
         </section>
       )}
     </ConsolePage>

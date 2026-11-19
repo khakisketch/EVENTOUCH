@@ -76,10 +76,15 @@ test('per-photo actions keep their confirmations and move to the neighbour after
 });
 
 // Reopened 2026-11-19: same composition, stronger presentation.
-test('Reopened 2026-11-19: summary band, count chips on the tiles, outlined ZIP pill', () => {
-  assert.match(css, /\.coverage \{[^}]*background: var\(--surface-muted\)/su);
+// Reopened 2026-11-20 (디자인 시스템 적용): the band is flat (hairline, no grey box); an empty section is amber in the bar,
+// on the tile and as a StatusPill; weights, sizes and radii are tokens.
+test('Reopened 2026-11-20: flat coverage band, amber for empty sections, tokens only', () => {
+  assert.match(css, /\.coverage \{[^}]*border-bottom: 1px solid var\(--line\)/su);
+  assert.match(css, /\.coverageBar i \{[^}]*background: var\(--warning-line\)/su, 'a missing section is amber in the bar');
   assert.match(css, /\.tileCount \{[^}]*position: absolute/su, 'the count sits on the cover photo as a chip');
-  assert.match(css, /\.tileCount\[data-empty\] \{ background: var\(--warning-soft\)/u, 'empty sections stay amber');
-  assert.match(css, /a\[data-native-control="download"\] \{[^}]*border-radius: 999px/su);
+  assert.match(workspace, /<StatusPill tone="wait" size="sm">비어 있음<\/StatusPill>/u, 'an empty tile says so with a pill');
+  assert.match(workspace, /<ConsoleEmptyState/u);
+  assert.match(css, /a\[data-native-control="download"\] \{[^}]*border-radius: var\(--r-pill\)/su);
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/u);
+  assert.doesNotMatch(css, /font-weight:\s*(?:[1-9]\d\d)\b/u, 'weights are the three tokens, not numbers');
 });

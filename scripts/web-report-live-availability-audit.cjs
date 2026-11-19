@@ -59,7 +59,7 @@ async function main() {
     await analysis.waitFor();
     if (process.argv.includes('--baseline')) {
       await page.screenshot({ path: path.join(out, 'before-analysis-1280.png'), fullPage: true });
-      assert.match(await analysis.innerText(), /취소 제외 등록 \(명\)/);
+      assert.match(await analysis.innerText(), /취소 제외 등록\s+\d+\s+명/);
       assert.match(await analysis.innerText(), /누적 입장률/);
       assert.doesNotMatch(await analysis.innerText(), /확인할 수 없/);
       await page.getByRole('tab', { name: '행사 마감' }).click();
@@ -117,7 +117,7 @@ async function main() {
     await save(partlyRepaired);
     await page.reload({ waitUntil: 'networkidle' });
     // 결과 분석 is always visible now; no tab click needed to reach it.
-    assert.match(await analysis.innerText(), /취소 제외 등록 \(명\)/, 'available attendance remains visible');
+    assert.match(await analysis.innerText(), /취소 제외 등록\s+\d+\s+명/, 'available attendance remains visible');
     assert.match(await analysis.innerText(), /사진 자료를 확인할 수 없습니다/, 'partial availability is visible without expanding details');
     await analysis.locator('summary').filter({ hasText: '그룹·부스·프로그램별 상세 집계' }).click();
     assert.match(await analysis.innerText(), /사진.*확인할 수 없/);
@@ -137,7 +137,7 @@ async function main() {
     await page.getByRole('button', { name: '보고서 자료 다시 확인', exact: true }).click();
     await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => button.textContent.trim() === '보고서 만들기' && !button.disabled));
     await page.waitForFunction(() => !document.body.textContent.includes('사진 자료를 확인할 수 없'));
-    assert.match(await analysis.innerText(), /취소 제외 등록 \(명\)/);
+    assert.match(await analysis.innerText(), /취소 제외 등록\s+\d+\s+명/);
     assert.equal(await page.getByRole('button', { name: '보고서 만들기', exact: true }).first().isEnabled(), true);
     assert.doesNotMatch(await reportList.innerText(), /자료를 확인할 수 없어 현재 집계로 보고서를 만들 수 없습니다/);
     for (const missing of ['participants', 'reportSourceAvailability']) {

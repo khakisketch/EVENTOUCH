@@ -49,9 +49,9 @@ async function main() {
     const execute = async (n, action) => {
       if (action === 'fulfill') await row(n).getByRole('button', { name: '수령 처리', exact: true }).click();
       else {
-        // Cancel sits inside the row's fold.
-        const fold = row(n).locator('details').first();
-        if (!await fold.evaluate(el => el.open)) await fold.locator('summary').first().click();
+        // Cancel sits behind the row's 상세 disclosure (2026-11-20: a button under the row, not a details fold).
+        const toggle = row(n).getByRole('button', { name: /상세$/ });
+        if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
         await row(n).getByRole('button', { name: '경품 취소', exact: true }).click();
       }
       await row(n).getByRole('group', { name: '실행 확인' }).getByRole('button', { name: action === 'fulfill' ? '처리한다' : '취소한다', exact: true }).click();

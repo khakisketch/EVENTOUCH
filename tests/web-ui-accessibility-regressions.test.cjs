@@ -20,7 +20,8 @@ test('embedded content preview does not skip heading levels and retains the appr
 test('reward empty titles are section headings without changing their visual style', () => {
   const rewards = fs.readFileSync(path.join(__dirname, '../apps/web/app/console/events/[id]/rewards/RewardsWorkspace.tsx'), 'utf8');
   for (const title of ['등록된 경품이 없습니다.', '조건에 맞는 경품이 없습니다.']) {
-    assert.ok(rewards.includes(`<h2 className={consoleUiStyles.emptyTitle}>${title}</h2>`));
+    // Reopened 2026-11-20: the shared ConsoleEmptyState renders the title as an h2.
+    assert.match(rewards, new RegExp(`<ConsoleEmptyState[\\s\\S]{0,80}titleAs="h2"[\\s\\S]{0,80}title="${title.replace('.', '\\.')}"`, 'u'));
   }
   const css = fs.readFileSync(path.join(__dirname, '../apps/web/app/console/console-ui/console-ui.module.css'), 'utf8');
   assert.match(css, /\.empty \.emptyTitle\s*\{[^}]*font-size: var\(--h3\)/s);

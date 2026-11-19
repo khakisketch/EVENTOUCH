@@ -1,8 +1,8 @@
 {
   "note": "Ratchet baseline for tests/web-design-tokens-guard.test.cjs. Counts may only go down. Refresh with: node tests/web-design-tokens-guard.test.cjs --update",
   "totals": {
-    "fontSizePx": 152,
-    "radius": 109,
+    "fontSizePx": 126,
+    "radius": 82,
     "hex": 177
   },
   "files": {
@@ -82,8 +82,8 @@
       "hex": 0
     },
     "console/events/[id]/analysis/analysis.module.css": {
-      "fontSizePx": 7,
-      "radius": 9,
+      "fontSizePx": 0,
+      "radius": 0,
       "hex": 0
     },
     "console/events/[id]/content/content-preview.module.css": {
@@ -117,7 +117,7 @@
       "hex": 0
     },
     "console/events/[id]/live/live.module.css": {
-      "fontSizePx": 3,
+      "fontSizePx": 0,
       "radius": 0,
       "hex": 0
     },
@@ -172,8 +172,8 @@
       "hex": 0
     },
     "console/events/[id]/photos/evidence-photos.module.css": {
-      "fontSizePx": 10,
-      "radius": 2,
+      "fontSizePx": 0,
+      "radius": 0,
       "hex": 0
     },
     "console/events/[id]/programs/programs.module.css": {
@@ -182,12 +182,12 @@
       "hex": 0
     },
     "console/events/[id]/reports/reports.module.css": {
-      "fontSizePx": 3,
-      "radius": 16,
+      "fontSizePx": 0,
+      "radius": 0,
       "hex": 0
     },
     "console/events/[id]/rewards/rewards.module.css": {
-      "fontSizePx": 3,
+      "fontSizePx": 0,
       "radius": 0,
       "hex": 0
     },
