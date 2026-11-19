@@ -35,7 +35,7 @@ async function main() {
     const dialog = page.getByRole('dialog', { name: person.name });
     await dialog.getByLabel(`${person.name} 상태 변경`).waitFor();
     if (unknownBefore) {
-      await dialog.getByText(/출입 미입장/).waitFor();
+      await dialog.getByText('미입장', { exact: true }).waitFor();
       await page.screenshot({ path: path.join(out, 'unknown-shown-as-absent-1280.png'), fullPage: true });
       console.log('Confirmed prior behavior: unknown presence displayed as not entered'); return;
     }
@@ -123,7 +123,7 @@ async function main() {
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/participants`);
     await page.locator('#roster-search').fill(other.name);
     await page.getByRole('button', { name: `${other.name} 참가자 상세`, exact: true }).click();
-    await otherDialog.getByText(/출입 확인 필요/).waitFor();
+    await otherDialog.getByText('확인 필요', { exact: true }).waitFor();
     await otherDialog.getByText(/출입 기록을 확인할 수 없습니다/).waitFor();
     await page.screenshot({ path: path.join(out, 'unknown-presence-1280.png'), fullPage: true });
     for (const width of [390, 320]) {

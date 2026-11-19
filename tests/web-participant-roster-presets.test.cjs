@@ -53,6 +53,17 @@ test('approved roster design stays locked', () => {
   assert.ok(list.includes('onClick={(event) => openDetailsFromRow(event, person.id)}'), 'row click opens details');
   assert.match(list, /<ChevronRightIcon \/>/u);
   assert.match(css, /\.rosterRow \{ cursor: pointer; \}/u);
+  // Reopened 2026-11-20 (owner: the docked column squeezed the table): details are an
+  // overlay sheet over the full-width table, never a grid column. It steps through the
+  // filtered, sorted roster with 이전/다음 and Up/Down, and keeps one primary approval.
+  assert.match(list, /<ConsoleDialog presentation="drawer" title=\{selectedPerson\.name\} titleId=\{`participant-details-\$\{selectedPerson\.id\}`\}/u, 'details use the modal drawer');
+  assert.doesNotMatch(list, /presentation="inspector"/u, 'no docked inspector');
+  assert.doesNotMatch(css, /rosterWorkbench:has\(/u, 'the table never reflows when details open');
+  assert.match(list, /aria-label="이전 참가자"/u);
+  assert.match(list, /aria-label="다음 참가자"/u);
+  assert.match(list, /event\.key !== "ArrowUp" && event\.key !== "ArrowDown"/u, 'arrow keys step through people');
+  assert.match(list, /variant="primary" className=\{styles\.sheetPrimary\}/u, 'the sheet carries the one approve action');
+  assert.match(css, /prefers-reduced-motion: reduce\) \{ :global\(\.dialog\)\[role="dialog"\]:has\(> \.rosterSheet\) \{ animation: none/u, 'the slide respects reduced motion');
   // Mobile rows are two lines: no phone line.
   assert.doesNotMatch(list, /styles\.mobileContact/u, 'phone stays in the detail dialog');
   // Utilities and pagination are ghost; the scope action sits in the selection bar.

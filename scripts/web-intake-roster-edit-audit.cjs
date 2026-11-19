@@ -177,7 +177,8 @@ async function main() {
     assert.equal(first.answers[meal.id], '일반'); assert.equal(first.answers.retired, '기존 답변 보존');
     phase = 'concurrent edit and explicit merge';
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.getByRole('button', { name: '수정된 합성 참가자 참가자 상세' }).click();
+    // Details are a modal sheet now (2026-11-20): it is still open after the editor closed.
+    await page.getByRole('dialog', { name: '수정된 합성 참가자' }).waitFor();
     await page.getByRole('button', { name: '신청 정보 수정' }).click();
     editor = page.getByRole('dialog', { name: '참가자 정보 수정' });
     await editor.getByLabel('소속', { exact: true }).fill('내 입력 회사');
@@ -193,6 +194,8 @@ async function main() {
     await editor.waitFor({ state: 'detached' });
     first = (await read()).participants.find((person) => person.id === first.id); assert.equal(first.company, '내 입력 회사');
     phase = 'participant result after reload and failed roster refresh';
+    // The details sheet from the previous phase is still open and modal (2026-11-20).
+    if (await page.getByRole('dialog').count()) await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
     await page.getByRole('button', { name: '감사 참가자 3 참가자 상세' }).click();
     await page.getByRole('button', { name: '신청 정보 수정' }).click();
     editor = page.getByRole('dialog', { name: '참가자 정보 수정' });
@@ -205,6 +208,10 @@ async function main() {
     shared = page.getByRole('region', { name: '처리 결과 확인' }); await shared.waitFor();
     await page.getByRole('button', { name: '감사 참가자 3 참가자 상세' }).click();
     assert.equal(await page.getByRole('button', { name: '신청 정보 수정' }).isDisabled(), true);
+    // The details sheet is modal (2026-11-20): close it to reach the page-level recovery panel, reopen to check the action.
+    const detail3Name = '감사 참가자 3 참가자 상세';
+    const closeDetail3 = () => page.getByRole('dialog', { name: '감사 참가자 3' }).getByRole('button', { name: '닫기', exact: true }).click();
+    await closeDetail3();
     let failRefresh = true;
     await page.route('**/api/events/*/bootstrap', async (route) => {
       if (failRefresh) { failRefresh = false; return route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }); }
@@ -213,8 +220,11 @@ async function main() {
     const editPosts = seen.edit.length;
     await shared.getByRole('button', { name: '서버 처리 확인' }).click();
     await page.getByText('최신 참가자 목록을 불러온 뒤 수정할 수 있습니다.', { exact: false }).waitFor();
+    await page.getByRole('button', { name: detail3Name }).click();
     assert.equal(await page.getByRole('button', { name: '신청 정보 수정' }).isDisabled(), true);
+    await closeDetail3();
     await page.getByRole('button', { name: '다시 불러오기' }).click();
+    await page.getByRole('button', { name: detail3Name }).click();
     await page.waitForFunction(() => [...document.querySelectorAll('button')].some((button) => button.textContent.trim() === '신청 정보 수정' && !button.disabled));
     assert.equal(seen.edit.length, editPosts);
     await page.unroute('**/api/events/*/bootstrap');
