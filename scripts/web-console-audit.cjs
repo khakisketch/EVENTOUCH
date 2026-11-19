@@ -1168,7 +1168,7 @@ async function main() {
         const expected = people.filter((person) => person.status === 'APPROVED' && person.everIn !== true);
         if (!expected.length) throw new Error('seed has no never-entered approved people');
         if (expected.length >= people.length) throw new Error('subset is not a subset');
-        const countText = (await page.locator('p[role="status"]').first().innerText()).replace(/\s+/g, ' ');
+        const countText = (await page.locator('p[role="status"]').filter({ hasText: /전체 \d+명/ }).first().innerText()).replace(/\s+/g, ' ');
         if (!countText.includes(`${expected.length}명 / 전체 ${people.length}명`)) {
           throw new Error(`filtered count is ${JSON.stringify(countText)}`);
         }
@@ -1203,7 +1203,7 @@ async function main() {
         // Reset through the visible filters restores the full list and URL.
         await page.getByLabel('상태별 보기', { exact: true }).selectOption('');
         await page.getByLabel('출입 상태별 보기', { exact: true }).selectOption('');
-        const resetCount = (await page.locator('p[role="status"]').first().innerText()).replace(/\s+/g, ' ');
+        const resetCount = (await page.locator('p[role="status"]').filter({ hasText: /전체 \d+명/ }).first().innerText()).replace(/\s+/g, ' ');
         if (!resetCount.includes(`전체 ${people.length}명`) || resetCount.includes('/')) {
           throw new Error(`reset count is ${JSON.stringify(resetCount)}`);
         }

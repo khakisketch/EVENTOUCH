@@ -20,7 +20,7 @@ test('operator form preview uses the attendee field order and real disabled cont
     exports,
     require(id) {
       if (id === 'react') return React;
-      if (id === 'react/jsx-runtime') return require('react/jsx-runtime');
+      if (id === 'react/jsx-runtime') return require(path.join(__dirname, '..', 'apps/web/node_modules/react/jsx-runtime'));
       if (id.endsWith('fields.module.css')) return { default: new Proxy({}, { get: (_target, key) => String(key) }) };
       if (id.endsWith('/ProductInput')) return { default: (props) => React.createElement('input', props) };
       if (id.endsWith('/ProductSelect')) return { default: (props) => React.createElement('select', props) };

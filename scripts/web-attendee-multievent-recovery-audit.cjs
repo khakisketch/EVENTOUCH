@@ -111,6 +111,10 @@ async function main() {
     await transition.evaluate(blocked => { window.__fixtureStorageMode = blocked ? 'ticket-blocked' : 'available'; }, writesBlocked);
     await transition.getByRole('link', { name: '← 참가 메뉴로' }).click();
     await transition.getByRole('link', { name: '행사 안내 보기' }).click();
+    // The guide renders the no-ticket state on the server and swaps to the ticket
+    // state once the browser has checked this tab's storage; a click that lands
+    // during that swap is lost. Wait for hydration before using the link.
+    await transition.waitForLoadState('networkidle');
     await transition.getByRole('link', { name: '이미 신청했다면 내 티켓 찾기' }).click();
     await transition.getByLabel('신청할 때 입력한 연락처').fill(phone);
     await transition.getByRole('button', { name: '인증번호 받기', exact: true }).click();
