@@ -73,8 +73,8 @@ test('closed intake has one way forward: find my ticket becomes the primary', ()
   // The registration card is the home's ticket-card slot: open intake offers
   // "참가 신청"; closed intake turns the same slot into "내 티켓 찾기" (or a quiet
   // closed note where recovery is unavailable), so there is still one way forward.
-  assert.match(eventPage, /\{acceptingSignup \? \(\s*<GuideCard href=\{`\$\{guideHref\}\/register`\}/u);
-  assert.match(eventPage, /: !recoveryBlocked \? \(\s*<GuideCard href=\{`\$\{guideHref\}\/ticket\/recover`\}/u);
+  assert.match(eventPage, /\{acceptingSignup \? \(\s*<GuideCard slot=\{!simple\} href=\{`\$\{guideHref\}\/register`\}/u);
+  assert.match(eventPage, /: !recoveryBlocked \? \(\s*<GuideCard slot=\{!simple\} href=\{`\$\{guideHref\}\/ticket\/recover`\}/u);
   assert.match(eventCss, /\.closedCard\s*\{[^}]*background:/su);
 });
 

@@ -96,6 +96,85 @@
   letter-spacing: 0.01em;
 }
 
+/* Tile and photo layouts: one plain summary card, not the home's tiles. */
+.summary {
+  margin: 14px 16px 0;
+  padding: 4px 18px 18px;
+  border-radius: var(--lay-radius, 22px);
+  background: #fff;
+  color: #17252b;
+  box-shadow: 0 8px 22px -16px rgb(16 17 20 / 70%);
+}
+
+.factRows {
+  display: grid;
+}
+
+.factRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 0;
+  border-top: 1px solid #e5e5e7;
+}
+
+.factRow:first-child {
+  border-top: 0;
+}
+
+.factRow .dday {
+  position: static;
+  margin-left: auto;
+}
+
+.summary .factIcon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+}
+
+.summaryAction {
+  margin-top: 4px;
+}
+
+.summaryIntro {
+  margin: 14px 2px 0;
+  color: #4a5258;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.primaryBlock {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+
+.primaryAction {
+  display: flex;
+  width: 100%;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.primarySub {
+  margin: 0;
+  color: color-mix(in srgb, #17252b 66%, #fff);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.summary .closedCard {
+  background: #f4f4f6;
+}
+
 /* The registration card is a link, not a button. */
 .cardLink {
   text-decoration: none;

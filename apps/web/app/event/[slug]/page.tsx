@@ -239,6 +239,57 @@ export default async function EventPage({
   const guideHref = `/event/${encodeURIComponent(slug)}`;
 
 
+  // Poster keeps the home's own composition (ticket-card slot, icon tiles); tile and
+  // photo layouts read as one plain summary card, then plain cards (owner decision 2026-11-19).
+  const simple = layout !== "poster";
+  const registration = (
+    <TabTicketChoice slug={slug} whenPresent={
+      <GuideCard
+        slot={!simple}
+        href={`${guideHref}/ticket`}
+        prefetch={false}
+        icon="ticket"
+        label="내 티켓 열기"
+        sub={acceptingSignup ? stageLabel : "현재 신청을 받지 않습니다"}
+        go="열기"
+      />
+    }>
+      {acceptingSignup ? (
+        <GuideCard slot={!simple} href={`${guideHref}/register`} icon="register" label="참가 신청하기" sub={`${stageLabel} · 접수 중`} go="신청" />
+      ) : !recoveryBlocked ? (
+        <GuideCard slot={!simple} href={`${guideHref}/ticket/recover`} icon="ticket" label="이미 신청했다면 내 티켓 찾기" sub="현재 신청을 받지 않습니다" go="찾기" />
+      ) : (
+        <div className={styles.closedCard}>
+          <GuideIcon type="register" />
+          <p className={styles.registrationClosed} role="status">현재 신청을 받지 않습니다.</p>
+        </div>
+      )}
+    </TabTicketChoice>
+  );
+  const facts = whenText || whereText ? (
+    <div className={simple ? styles.factRows : styles.facts}>
+      {whenText ? (
+        <div className={simple ? styles.factRow : styles.fact} data-guide-when>
+          <span className={styles.factIcon} aria-hidden="true"><GuideIcon type="calendar" /></span>
+          <span className={styles.factText}>
+            <span className={styles.factMain}>{whenText}</span>
+            <span className={styles.factSub}>{clock || "시간 미정"}</span>
+          </span>
+          {dday ? <span className={styles.dday}>{dday}</span> : null}
+        </div>
+      ) : null}
+      {whereText ? (
+        <div className={simple ? styles.factRow : styles.fact} data-guide-where>
+          <span className={styles.factIcon} aria-hidden="true"><GuideIcon type="venue" /></span>
+          <span className={styles.factText}>
+            <span className={styles.factMain}>{whereText}</span>
+            {whereSub ? <span className={styles.factSub}>{whereSub}</span> : null}
+          </span>
+        </div>
+      ) : null}
+    </div>
+  ) : null;
+
   const photoUrl = (fileId: string) => `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`;
   const sectionLabel = `${L.groupLabel} ${styles.sectionLabel}`;
 
@@ -254,55 +305,21 @@ export default async function EventPage({
           label={`${event.name} 행사 안내`}
         />
 
-        <div className={L.ticketWrap}>
-          <TabTicketChoice slug={slug} whenPresent={
-            <GuideCard
-              href={`${guideHref}/ticket`}
-              prefetch={false}
-              icon="ticket"
-              label="내 티켓 열기"
-              sub={acceptingSignup ? stageLabel : "현재 신청을 받지 않습니다"}
-              go="열기"
-            />
-          }>
-            {acceptingSignup ? (
-              <GuideCard href={`${guideHref}/register`} icon="register" label="참가 신청하기" sub={`${stageLabel} · 접수 중`} go="신청" />
-            ) : !recoveryBlocked ? (
-              <GuideCard href={`${guideHref}/ticket/recover`} icon="ticket" label="이미 신청했다면 내 티켓 찾기" sub="현재 신청을 받지 않습니다" go="찾기" />
-            ) : (
-              <div className={styles.closedCard}>
-                <GuideIcon type="register" />
-                <p className={styles.registrationClosed} role="status">현재 신청을 받지 않습니다.</p>
-              </div>
-            )}
-          </TabTicketChoice>
-        </div>
-
-        {whenText || whereText ? (
-          <div className={styles.facts}>
-            {whenText ? (
-              <div className={styles.fact} data-guide-when>
-                <span className={styles.factIcon} aria-hidden="true"><GuideIcon type="calendar" /></span>
-                <span className={styles.factText}>
-                  <span className={styles.factMain}>{whenText}</span>
-                  <span className={styles.factSub}>{clock || "시간 미정"}</span>
-                </span>
-                {dday ? <span className={styles.dday}>{dday}</span> : null}
-              </div>
-            ) : null}
-            {whereText ? (
-              <div className={styles.fact} data-guide-where>
-                <span className={styles.factIcon} aria-hidden="true"><GuideIcon type="venue" /></span>
-                <span className={styles.factText}>
-                  <span className={styles.factMain}>{whereText}</span>
-                  {whereSub ? <span className={styles.factSub}>{whereSub}</span> : null}
-                </span>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        <p className={styles.intro}>{intro}</p>
+        {simple ? (
+          // Tile and photo layouts: one plain summary card (when, where and the one action),
+          // then plain cards. Not the home's floating ticket card and tiles.
+          <section className={styles.summary} aria-label="행사 요약">
+            {facts}
+            <div className={styles.summaryAction}>{registration}</div>
+            <p className={styles.summaryIntro}>{intro}</p>
+          </section>
+        ) : (
+          <>
+            <div className={L.ticketWrap}>{registration}</div>
+            {facts}
+            <p className={styles.intro}>{intro}</p>
+          </>
+        )}
 
         {layout === "poster" && publicSections.length ? (
           <nav className={L.menus} aria-label="행사 안내 바로가기">
@@ -455,8 +472,17 @@ function Anatomy({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   );
 }
 
-// The registration card: the home's ticket card slot, as a link.
-function GuideCard({ href, prefetch, icon, label, sub, go }: { href: string; prefetch?: boolean; icon: GuideIconType; label: string; sub: string; go: string }) {
+// The registration action. In the poster composition it is the home's ticket-card slot,
+// as a link; in the plain composition it is one full-width primary button with its status.
+function GuideCard({ slot, href, prefetch, icon, label, sub, go }: { slot: boolean; href: string; prefetch?: boolean; icon: GuideIconType; label: string; sub: string; go: string }) {
+  if (!slot) {
+    return (
+      <div className={styles.primaryBlock}>
+        <Link className={`button button-primary ${styles.primaryAction}`} href={href} prefetch={prefetch}>{label}</Link>
+        <p className={styles.primarySub}>{sub}</p>
+      </div>
+    );
+  }
   return (
     <Link className={`${L.ticket} ${styles.cardLink}`} href={href} prefetch={prefetch}>
       <Anatomy icon={<GuideIcon type={icon} />}>
