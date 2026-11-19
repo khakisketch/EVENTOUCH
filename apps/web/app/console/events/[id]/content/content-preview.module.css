@@ -1,7 +1,8 @@
-/* Always-on attendee phone. The screen is laid out at a real 390px phone
-   width and scaled down as a whole, so attendee type and spacing read the
-   way they will on the device. The frame is the one bordered object beside
-   the flat ledger; everything inside it comes from the attendee pages. */
+/* Always-on attendee phone. DeviceFrame lays the screen out at a real 390px
+   phone width and scales the whole device down, so attendee type and spacing
+   read the way they will on the device. The classes .phone/.viewport/.screen
+   below are only the bare full-bleed screen a real phone shows in the full
+   view; everything inside comes from the attendee pages. */
 .rail {
   --phone-scale: 0.72;
   --phone-width: 390px;
@@ -10,7 +11,7 @@
   gap: var(--s2);
   align-content: start;
   min-width: 0;
-  width: calc(var(--phone-width) * var(--phone-scale) + var(--s4));
+  width: 300px;
 }
 
 .captionRow {
@@ -110,44 +111,13 @@
   min-height: 100%;
 }
 
+/* The guide page the attendee sees: the event's ground, the published banner,
+   then white cards under quiet section labels. */
 .page {
   min-height: 100%;
   padding-bottom: var(--s5);
-  background: var(--paper);
-}
-
-.hero {
-  position: relative;
-  display: grid;
-  align-items: end;
-  min-height: 132px;
-  overflow: hidden;
-}
-
-.hero img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.hero h2 {
-  position: relative;
-  margin: 0;
-  padding: var(--s4);
-  font-size: var(--h3);
-  line-height: 1.25;
-  letter-spacing: -0.02em;
-  word-break: keep-all;
-  text-shadow: 0 1px 6px rgb(0 0 0 / 20%);
-}
-
-.intro {
-  margin: 0;
-  padding: var(--s3) var(--s4) 0;
-  color: var(--muted);
-  font-size: var(--small);
+  background: var(--home-background-color, var(--paper));
+  color: var(--home-background-ink, var(--ink));
 }
 
 .editing {
@@ -173,39 +143,14 @@
 }
 
 .venue {
-  display: grid;
-  gap: var(--s3);
   margin: 0;
-  padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
 }
 
-.venue > div {
-  display: grid;
-  gap: var(--s1);
-}
-
-.venue dt {
+.venueAddress {
+  margin: 0;
   color: var(--muted);
   font-size: var(--small);
-  font-weight: 700;
-}
-
-.venue dd {
-  margin: 0;
   overflow-wrap: anywhere;
-}
-
-.venue figure {
-  margin: 0;
-}
-
-.venue figure img {
-  display: block;
-  width: 100%;
-  height: auto;
 }
 
 .themeLine {

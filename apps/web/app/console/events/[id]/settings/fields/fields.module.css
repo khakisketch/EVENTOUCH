@@ -40,29 +40,28 @@
 .check input { width: 20px; height: 20px; }
 .recovery { display: grid; gap: var(--s2); margin-bottom: var(--s4); padding: var(--s3); border: 1px solid var(--warning-line); border-radius: var(--radius-small); background: var(--warning-soft); }
 
-/* Phone preview for the public form and the editable draft. */
+/* Phone preview for the public form and the editable draft: the real
+   registration sheet (banner, facts, numbered sections) on the event's ground,
+   drawn at 390px inside DeviceFrame and scaled down. */
 .previewRail { position: sticky; top: var(--s4); display: grid; gap: var(--s2); margin: 0; }
-.previewCaption { color: var(--muted); font-size: var(--small); font-weight: 650; }
+.previewHead { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); }
+.previewCaption { margin: 0; color: var(--muted); font-size: var(--small); font-weight: 650; }
+.phoneStatus { color: var(--muted); font-size: var(--small); font-weight: 700; }
 .previewModes { display: flex; flex-wrap: wrap; gap: var(--s1); }
 .previewModes :global(.product-action) { min-height: 40px; }
-.previewNote { margin: 0; color: var(--muted); font-size: var(--small); }
-.phone { min-width: 0; margin: 0; padding: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 30px; background: var(--paper); }
+.previewNote { margin: 0; color: var(--muted); font-size: var(--small); text-align: center; }
+.phone { min-width: 0; min-height: 100%; margin: 0; padding: var(--s4); border: 0; background: var(--home-background-color, var(--paper)); color: var(--home-background-ink, var(--ink)); }
 .phone legend { padding: 0; }
-.phoneBar { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 0 var(--s4); font-size: 13px; }
-.phoneStatus { color: var(--muted); }
-.phoneBody { display: grid; gap: var(--s3); padding: 0 var(--s4) var(--s4); }
-.phoneTitle { margin: var(--s1) 0 0; font-size: 22px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.2; overflow-wrap: anywhere; }
+.phoneBar { display: flex; align-items: center; justify-content: space-between; min-height: 36px; padding-bottom: var(--s2); border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent); font-size: var(--small); }
+.phoneWordmark { font-size: 15px; font-weight: 800; letter-spacing: 0.04em; }
+.phoneContext { font-weight: 700; }
+.phoneSheet { margin-bottom: var(--s5); }
 .phoneEmpty { margin: 0; color: var(--muted); font-size: var(--small); }
-.phoneField { display: grid; gap: var(--s1); min-width: 0; padding: 0; }
-.phoneLabel, .phoneCheck { color: var(--ink); font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
-.phoneRequirement { margin-inline-start: var(--s1); color: var(--muted); font-weight: 600; }
-.phoneInput { width: 100%; min-height: 44px; padding: 0 var(--s3); border: 1px solid var(--line-strong); border-radius: 14px; color: var(--muted); font-size: 14px; }
-.phoneCheck { display: flex; align-items: center; gap: var(--s2); min-height: 44px; }
-.phoneCheck input { width: 20px; height: 20px; flex: none; }
-.phoneFieldActive .phoneInput { border: 2px solid var(--ink); }
-.phoneFieldActive .phoneCheck input { outline: 2px solid var(--ink); outline-offset: 2px; }
-.phoneFooter { padding: 0 var(--s4) var(--s4); }
-.phoneCta { display: grid; width: 100%; place-items: center; min-height: 48px; border-radius: 14px; background: var(--line); color: var(--muted); font-weight: 750; }
+.phone input:disabled, .phone select:disabled { background-color: var(--paper); color: var(--muted); opacity: 1; }
+.phone .phoneFieldActive input:not([type="checkbox"]), .phone .phoneFieldActive select { border: 2px solid var(--ink); }
+.phone .phoneFieldActive input[type="checkbox"] { outline: 2px solid var(--ink); outline-offset: 2px; }
+.phoneFooter { padding: var(--s3) 0 var(--s4); border-top: 1px solid var(--line); }
+.phoneCta { display: grid; width: 100%; place-items: center; min-height: 56px; border-radius: 16px; background: var(--line); color: var(--muted); font-weight: 750; }
 
 @media (max-width: 1000px) {
   .split { grid-template-columns: minmax(0, 1fr); }

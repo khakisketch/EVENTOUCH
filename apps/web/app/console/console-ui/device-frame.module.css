@@ -1,0 +1,250 @@
+/* Device simulator. Everything inside `.device` is laid out at the device's real
+   CSS size and the whole thing is scaled to its host by DeviceFrame.tsx, so the
+   screen keeps real type and spacing. The bezel greys are local to the device
+   (hardware, not UI chrome) and are written as rgb() so no hex leaks out. */
+.root {
+  --df-steel-hi: rgb(122 125 132);
+  --df-steel: rgb(58 60 65);
+  --df-steel-lo: rgb(30 31 34);
+  --df-glass-edge: rgb(8 8 10);
+  --df-radius-body: 58px;
+  --df-radius-glass: 47px;
+  display: grid;
+  gap: var(--s2);
+  width: 100%;
+  margin: 0 auto;
+  min-width: 0;
+}
+
+.root[data-device="tablet"] { --df-radius-body: 44px; --df-radius-glass: 26px; }
+.root[data-device="screen"] { --df-radius-body: 16px; --df-radius-glass: 5px; }
+
+.fit {
+  position: relative;
+  width: 100%;
+}
+
+.device {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+}
+
+.body {
+  position: relative;
+  box-sizing: border-box;
+  height: calc(100% - var(--df-stand));
+  margin-inline: var(--df-side);
+  padding: var(--df-bezel);
+  border-radius: var(--df-radius-body);
+  background: linear-gradient(145deg, var(--df-steel-hi) 0%, var(--df-steel) 22%, var(--df-steel-lo) 62%, var(--df-steel) 100%);
+  box-shadow:
+    inset 0 0 0 1.5px rgb(255 255 255 / 24%),
+    inset 0 0 0 5px var(--df-glass-edge),
+    0 34px 46px -22px rgb(16 17 20 / 52%),
+    0 6px 14px rgb(16 17 20 / 20%);
+}
+
+.root[data-device="screen"] .body {
+  background: linear-gradient(180deg, rgb(52 53 58), rgb(20 20 23) 18%, rgb(14 14 16));
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 14%),
+    0 30px 44px -22px rgb(16 17 20 / 50%),
+    0 4px 10px rgb(16 17 20 / 20%);
+}
+
+/* Hardware keys on the phone's edges. */
+.buttons i {
+  position: absolute;
+  width: calc(var(--df-side) + 2px);
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgb(26 27 30), rgb(88 90 96) 55%, rgb(40 41 45));
+}
+
+.btnAction, .btnUp, .btnDown { left: calc(var(--df-side) * -1); }
+.btnPower { right: calc(var(--df-side) * -1); background: linear-gradient(270deg, rgb(26 27 30), rgb(88 90 96) 55%, rgb(40 41 45)) !important; }
+.btnAction { top: 104px; height: 30px; }
+.btnUp { top: 166px; height: 56px; }
+.btnDown { top: 236px; height: 56px; }
+.btnPower { top: 196px; height: 92px; }
+
+.glass {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: var(--df-radius-glass);
+  background: var(--df-chrome);
+  color: var(--df-ink);
+  isolation: isolate;
+}
+
+.status {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  height: var(--df-top);
+  padding: 0 28px 0 34px;
+  background: var(--df-chrome);
+  color: var(--df-ink);
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+.root[data-device="tablet"] .status { padding: 0 24px; font-size: 14px; }
+
+.clock { font-variant-numeric: tabular-nums; }
+
+.island {
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 118px;
+  height: 33px;
+  padding-right: 11px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: rgb(4 4 5);
+  transform: translateX(-50%);
+}
+
+.island i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, rgb(58 62 96), rgb(14 15 26) 70%);
+}
+
+.camera {
+  position: absolute;
+  top: 9px;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgb(8 8 10);
+  transform: translateX(-50%);
+}
+
+.glyphs {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.content {
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--df-vh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.content::-webkit-scrollbar { display: none; }
+.content:focus-visible { outline: 3px solid var(--focus, var(--ink)); outline-offset: -3px; }
+.contentFixed { overflow: hidden; }
+
+.home {
+  position: relative;
+  flex: none;
+  height: var(--df-bottom);
+  background: var(--df-chrome);
+}
+
+.root[data-device="tablet"] .home { display: none; }
+.root[data-device="tablet"] .glass { padding-bottom: 0; }
+
+.home i {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  width: 136px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--df-ink);
+  opacity: 0.86;
+  transform: translateX(-50%);
+}
+
+/* Venue screen: thin bezel, a power light, a stand and a soft floor shadow. */
+.led {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgb(120 126 134);
+  transform: translateX(-50%);
+}
+
+.stand {
+  position: absolute;
+  top: calc(100% - var(--df-stand));
+  right: 0;
+  left: 0;
+  height: var(--df-stand);
+}
+
+.neck {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 150px;
+  height: 46px;
+  background: linear-gradient(90deg, rgb(26 27 30), rgb(78 80 86) 50%, rgb(26 27 30));
+  clip-path: polygon(12% 0, 88% 0, 100% 100%, 0 100%);
+  transform: translateX(-50%);
+}
+
+.foot {
+  position: absolute;
+  top: 44px;
+  left: 50%;
+  width: 360px;
+  height: 14px;
+  border-radius: 8px 8px 12px 12px;
+  background: linear-gradient(180deg, rgb(92 94 100), rgb(34 35 38));
+  transform: translateX(-50%);
+}
+
+.floor {
+  position: absolute;
+  right: 8%;
+  bottom: -6px;
+  left: 8%;
+  height: 26px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgb(16 17 20 / 32%), transparent 70%);
+}
+
+.caption {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+  line-height: 1.45;
+  text-align: center;
+  word-break: keep-all;
+}
+
+@media (forced-colors: active) {
+  .body { border: 2px solid CanvasText; }
+}

@@ -12,11 +12,13 @@ import ConsoleFeedback from "../../../../console-ui/ConsoleFeedback";
 import ConsoleConfirm from "../../../../console-ui/ConsoleConfirm";
 import ConsoleChoiceGroup from "../../../../console-ui/ConsoleChoiceGroup";
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon } from "../../../../console-ui/ConsoleIcons";
-import FieldsPhonePreview from "./FieldsPhonePreview";
+import FieldsPhonePreview, { type PreviewSheet } from "./FieldsPhonePreview";
 import ConsoleStatePanel from "../../../../console-ui/ConsoleStatePanel";
 import { useConsoleDraftGuard } from "../../../../console-draft-guard";
 import { consoleFetch } from "../../../../../../lib/console-api";
 import { canWriteEvent } from "../../../../../../lib/event-capabilities";
+import { normalizeHomeImage, normalizeHomeStyle } from "../../../../../../lib/attendee-home";
+import { readPublicEventContext } from "../../../../../../lib/public-event-context";
 import { abandonOperatorAttempt, acknowledgeOperatorReceipt, confirmsFieldCommand, isOrganizationContextBlock } from "../../../../../../lib/operator-context";
 import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../../lib/operator-receipts";
 import { useEventReceipts } from "../../../../../../lib/use-event-receipts";
@@ -25,7 +27,7 @@ import styles from "./fields.module.css";
 
 type Field = { id: string; label: string; type: string; required: boolean; options: string[] };
 type Draft = { id: string; label: string; type: string; required: boolean; optionsText: string; existing: boolean };
-type Ready = { kind: "ready"; name: string; fields: Field[]; publishedFields: Field[] | null; formVersion: number; publishedVersion: number; archived: boolean; canWrite: boolean };
+type Ready = { kind: "ready"; name: string; fields: Field[]; publishedFields: Field[] | null; formVersion: number; publishedVersion: number; archived: boolean; canWrite: boolean; sheet: PreviewSheet };
 type State = { kind: "loading" } | { kind: "failed"; message: string } | Ready;
 type Attempt = { eventId: string; command: "field.save" | "field.move" | "field.delete"; commandId: string; payload: Record<string, unknown> };
 const COMMANDS = new Set(["field.save", "field.move", "field.delete", "form.publish"]);
@@ -40,6 +42,24 @@ function fieldsFrom(value: unknown): Field[] {
     return [{ id: field.id, label: str(field.label), type: str(field.type), required: field.required === true,
       options: Array.isArray(field.options) ? field.options.filter((option): option is string => typeof option === "string") : [] }];
   }) : [];
+}
+// The banner, facts and notices the registration sheet wears, read the way the
+// public page reads them (published design only), so the preview matches it.
+function sheetFrom(eventId: string, event: Record<string, unknown>, workspace: Record<string, unknown>): PreviewSheet {
+  const published = record(record(workspace.pageExperience)?.published) ?? {};
+  const keyvisual = normalizeHomeImage(Object.hasOwn(published, "keyvisual") ? published.keyvisual : record(workspace.branding)?.keyvisual);
+  return {
+    theme: {
+      homeStyle: normalizeHomeStyle(published.homeStyle),
+      keyvisual: keyvisual?.fileId ? `/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(keyvisual.fileId)}` : keyvisual?.data || null,
+      defaultHomeBanner: workspace.defaultHomeBanner === "neutral" ? "neutral" : "legacy",
+    },
+    context: readPublicEventContext(event, workspace),
+    verificationRequired: workspace.verificationRequired === true,
+    approvalRequired: workspace.approvalRequired === true,
+    consentText: str(workspace.consentText),
+    consentVersion: Number(workspace.consentVersion) || 1,
+  };
 }
 function newId(): string { return `field-${typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.floor(Math.random() * 1e9)}`}`; }
 function commandId(): string { return typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `web-${Date.now()}-${Math.floor(Math.random() * 1e9)}`; }
@@ -113,7 +133,7 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
       loadedIdRef.current = selectedEvent;
       setState({ kind: "ready", name: str(event.name) || eventId, fields, publishedFields, formVersion: Number(workspace.formVersion) || 0,
         publishedVersion: Number(workspace.publishedVersion) || 0, archived: str(event.stage).toUpperCase() === "ARCHIVED",
-        canWrite: canWriteEvent({ role: me.role, userId: me.id, memberships, eventId }, "field.save") });
+        canWrite: canWriteEvent({ role: me.role, userId: me.id, memberships, eventId }, "field.save"), sheet: sheetFrom(eventId, event, workspace) });
       return true;
     } catch {
       if (activeIdRef.current !== selectedEvent) return false;
@@ -300,7 +320,7 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
         </section>
         <FieldsPhonePreview eventName={state.name} activeId={draft?.id ?? null}
           publishedFields={state.publishedFields} draftFields={draftPreviewFields}
-          publishedVersion={state.publishedVersion} draftVersion={state.formVersion} />
+          publishedVersion={state.publishedVersion} draftVersion={state.formVersion} sheet={state.sheet} />
       </section>
     </ConsoleSection>
   </ConsolePage>;

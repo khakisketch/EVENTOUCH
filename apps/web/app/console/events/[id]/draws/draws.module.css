@@ -533,22 +533,25 @@
 .previewOn { display: inline-flex; align-items: center; gap: 6px; color: var(--success); }
 .previewOn::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
 
+/* The audience preview sits on a quiet desk; the device inside is drawn at its
+   real size (1280x720 screen, 390px phone) by DeviceFrame and scaled to fit. */
 .stageBox {
   display: grid;
   place-items: center;
-  aspect-ratio: 16 / 9;
-  overflow: hidden;
+  padding: var(--s5) var(--s4) var(--s6);
   border-radius: var(--radius-large);
-  background: color-mix(in srgb, var(--ink) 4%, var(--paper));
+  background: radial-gradient(ellipse 80% 70% at 50% 40%, var(--paper), color-mix(in srgb, var(--ink) 6%, var(--paper)));
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 
+.device { width: 100%; }
+
 .board {
-  container-type: inline-size;
   display: grid;
   grid-template-rows: auto 1fr auto;
   width: 100%;
   height: 100%;
-  padding: 4.5% 6%;
+  padding: 58px 77px;
   position: relative;
   text-align: center;
   color: rgb(255 248 233);
@@ -560,84 +563,77 @@
 .board::after {
   content: "";
   position: absolute;
-  inset: 3.2%;
-  border: 1px solid rgb(232 189 97 / 31%);
+  inset: 41px;
+  border: 2px solid rgb(232 189 97 / 31%);
   pointer-events: none;
 }
 
-.boardHead { display: flex; justify-content: space-between; color: rgb(210 199 223); font-size: 1.4cqw; }
-.boardTitle { margin-top: 1.2cqw; color: rgb(255 232 164); font-size: 2.6cqw; font-weight: 700; letter-spacing: 0.02em; }
-.boardWinner { display: grid; place-content: center; gap: 4px; }
-.boardWinner small { color: rgb(210 199 223); font-size: 1.7cqw; letter-spacing: 0.08em; }
-.boardWinner b { color: rgb(255 248 233); font-size: 9cqw; letter-spacing: -0.02em; text-shadow: 0 5px 28px rgb(5 2 17 / 58%); }
-.boardWinner span { color: rgb(232 189 97); font-size: 2.2cqw; font-weight: 700; }
-.boardFoot { min-height: 1.4cqw; }
+.boardHead { display: flex; justify-content: space-between; color: rgb(210 199 223); font-size: 20px; }
+.boardTitle { margin-top: 16px; color: rgb(255 232 164); font-size: 36px; font-weight: 700; letter-spacing: 0.02em; }
+.boardWinner { display: grid; place-content: center; gap: 12px; }
+.boardWinner small { color: rgb(210 199 223); font-size: 24px; letter-spacing: 0.08em; }
+.boardWinner b { color: rgb(255 248 233); font-size: 120px; line-height: 1.1; letter-spacing: -0.02em; text-shadow: 0 5px 28px rgb(5 2 17 / 58%); }
+.boardWinner span { color: rgb(232 189 97); font-size: 30px; font-weight: 700; }
+.boardFoot { min-height: 20px; }
 
-.phone {
-  height: 92%;
-  aspect-ratio: 9 / 16;
-  padding: 8px;
-  border-radius: 28px;
-  background: var(--stage);
-  box-shadow: var(--shadow-raised);
-}
-
+/* The attendee screen at 390px: event-colored head, a quiet body, one big action. */
 .phoneScreen {
   display: grid;
   grid-template-rows: auto 1fr auto;
   height: 100%;
-  overflow: hidden;
-  border-radius: 21px;
   background: var(--paper);
-  font-size: clamp(10px, 1.1vw, 13px);
+  font-size: 15px;
 }
 
-.phoneHead { padding: 12px 14px 10px; background: var(--ref-navy); color: var(--ref-navy-ink); font-weight: 700; }
-.phoneHead small { display: block; color: inherit; font-size: 0.8em; font-weight: 500; opacity: 0.85; }
-.phoneBody { display: grid; align-content: start; justify-items: center; gap: var(--s2); padding: var(--s3); text-align: center; }
-.phoneBody p { margin: 0; color: var(--muted); }
-.phoneFoot { padding: 10px 12px 14px; }
-.phoneFoot span { display: block; padding: 10px; border-radius: var(--radius-medium); background: var(--ref-yellow); color: var(--ref-yellow-ink); font-weight: 800; text-align: center; }
+.phoneHead { padding: 26px 24px 22px; background: var(--ref-navy); color: var(--ref-navy-ink); font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
+.phoneHead small { display: block; margin-top: 6px; color: inherit; font-size: 15px; font-weight: 500; opacity: 0.85; }
+.phoneBody { display: grid; align-content: start; justify-items: center; gap: 14px; padding: 24px 20px; text-align: center; }
+.phoneBody p { margin: 0; color: var(--muted); font-size: 16px; }
+.phoneFoot { padding: 14px 20px 24px; }
+.phoneFoot span { display: block; padding: 17px; border-radius: 16px; background: var(--ref-yellow); color: var(--ref-yellow-ink); font-size: 18px; font-weight: 800; text-align: center; }
 
 .wheel {
   position: relative;
-  width: 62%;
+  width: 232px;
   aspect-ratio: 1;
-  border: 4px solid var(--paper);
+  margin: 12px 0 6px;
+  border: 6px solid var(--paper);
   border-radius: 50%;
   background: conic-gradient(var(--ref-wheel-blue) 0 16.6%, var(--ref-wheel-deep) 0 33.3%, var(--ref-wheel-blue) 0 50%, var(--ref-wheel-deep) 0 66.6%, var(--ref-wheel-blue) 0 83.3%, var(--ref-wheel-deep) 0);
-  box-shadow: 0 0 0 1px var(--line);
+  box-shadow: 0 0 0 1px var(--line), 0 10px 24px -10px rgb(16 17 20 / 40%);
 }
 
-.wheel::before { content: ""; position: absolute; inset: 50%; width: 16%; height: 16%; margin: -8%; border-radius: 50%; background: var(--paper); box-shadow: 0 0 0 3px var(--ref-navy); }
-.wheel::after { content: ""; position: absolute; top: -9px; left: 50%; margin-left: -7px; border: 7px solid transparent; border-top: 12px solid var(--danger); }
+.wheel::before { content: ""; position: absolute; inset: 50%; width: 16%; height: 16%; margin: -8%; border-radius: 50%; background: var(--paper); box-shadow: 0 0 0 4px var(--ref-navy); }
+.wheel::after { content: ""; position: absolute; top: -16px; left: 50%; margin-left: -10px; border: 10px solid transparent; border-top: 18px solid var(--danger); }
 
 .phonePrize {
   display: grid;
   grid-template-columns: 1fr auto;
   width: 100%;
-  padding: 5px 8px;
-  border-radius: var(--radius-small);
+  padding: 12px 16px;
+  border-radius: var(--radius);
   background: color-mix(in srgb, var(--ink) 4%, var(--paper));
+  font-size: 16px;
   text-align: left;
 }
 
 .phonePick {
   display: grid;
-  grid-template-columns: 22px 1fr;
+  grid-template-columns: 30px 1fr;
   align-items: center;
-  gap: var(--s2);
+  gap: 12px;
   width: 100%;
-  padding: var(--s2) var(--s3);
+  padding: 14px 16px;
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--ink) 4%, var(--paper));
+  font-size: 17px;
   font-weight: 700;
   text-align: left;
 }
 
-.phonePick i { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--ref-navy); color: var(--ref-navy-ink); font-size: 11px; font-style: normal; }
-.phoneDigits { display: flex; gap: 6px; }
-.phoneDigits i { display: grid; place-items: center; width: 40px; height: 54px; border-radius: var(--radius); background: var(--ref-yellow); color: var(--ref-yellow-ink); font-size: 26px; font-style: normal; font-weight: 800; }
+.phonePick i { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--ref-navy); color: var(--ref-navy-ink); font-size: 14px; font-style: normal; }
+.phoneDigits { display: flex; gap: 8px; margin: 12px 0; }
+.phoneDigits i { display: grid; place-items: center; width: 56px; height: 76px; border-radius: 14px; background: var(--ref-yellow); color: var(--ref-yellow-ink); font-size: 36px; font-style: normal; font-weight: 800; }
 
 .stageInfo {
   display: grid;
@@ -721,9 +717,7 @@
   .runRow { grid-template-columns: 1fr; }
   .stepper { justify-content: space-between; }
   .stepper input { flex: 1; }
-  .stageBox { aspect-ratio: auto; background: transparent; }
-  .stageBox .phone { width: 200px; height: auto; }
-  .stageBox .board { aspect-ratio: 16 / 9; height: auto; border-radius: var(--radius-large); }
+  .stageBox { padding: var(--s4) var(--s3) var(--s5); }
   .pickRow { grid-template-columns: 44px minmax(0, 1fr) auto; }
   .pickMeter, .pickSpacer { display: none; }
   .pickCount { white-space: nowrap; }

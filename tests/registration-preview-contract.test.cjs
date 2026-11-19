@@ -21,7 +21,12 @@ test('operator form preview uses the attendee field order and real disabled cont
     require(id) {
       if (id === 'react') return React;
       if (id === 'react/jsx-runtime') return require(path.join(__dirname, '..', 'apps/web/node_modules/react/jsx-runtime'));
-      if (id.endsWith('fields.module.css')) return { default: new Proxy({}, { get: (_target, key) => String(key) }) };
+      if (id.endsWith('fields.module.css') || id.endsWith('register.module.css')) return { default: new Proxy({}, { get: (_target, key) => String(key) }) };
+      if (id.endsWith('/DeviceFrame')) return { default: (props) => React.createElement('div', { 'data-device': props.variant }, props.children) };
+      if (id.endsWith('/AttendeeIcons')) return { default: () => null };
+      if (id.endsWith('/EventBanner')) return { default: (props) => React.createElement('div', { className: props.className, 'data-banner': '' }, props.title, props.kicker) };
+      if (id.endsWith('/EventFacts')) return { default: () => null };
+      if (id.endsWith('/event-theme')) return { attendeeGroundStyle: () => ({}), DEFAULT_ATTENDEE_THEME: { homeStyle: { backgroundColor: '#B9DEF0' } } };
       if (id.endsWith('/ProductInput')) return { default: (props) => React.createElement('input', props) };
       if (id.endsWith('/ProductSelect')) return { default: (props) => React.createElement('select', props) };
       if (id.endsWith('/ProductButton')) return { default: (props) => React.createElement('button', {
@@ -61,6 +66,17 @@ test('operator form preview uses the attendee field order and real disabled cont
 
   const published = renderToStaticMarkup(React.createElement(Preview, { ...props, draftVersion: 2 }));
   assert.match(published, /<small class="phoneStatus">게시 2차<\/small>/);
-  assert.match(published, /<label[^>]*>소속<small[^>]*>\(선택\)<\/small><\/label>/);
+  assert.match(published, /<label[^>]*>소속<span[^>]*> \(선택\)<\/span><\/label>/);
   assert.doesNotMatch(published, /소속 기관/);
+
+  // Reopened 2026-11-20: the phone shows the real registration sheet: the event
+  // banner, then numbered sections in the attendee form's order.
+  const sheet = { theme: { homeStyle: { backgroundColor: '#B9DEF0' } }, context: {}, verificationRequired: true, approvalRequired: false, consentText: '이름과 연락처를 사용합니다.', consentVersion: 3 };
+  const full = renderToStaticMarkup(React.createElement(Preview, { ...props, sheet }));
+  assert.match(full, /data-device="phone"/);
+  assert.match(full, /data-banner=""[^>]*>운영 미리보기 행사/);
+  const sections = ['참가자 정보', '연락처 인증', '정보 수집 동의'].map((title) => full.indexOf(`>${title}</h2>`));
+  assert.ok(sections[0] > 0 && sections[0] < sections[1] && sections[1] < sections[2], 'sections follow the attendee form order');
+  assert.match(full, /동의 버전 3/);
+  assert.doesNotMatch(renderToStaticMarkup(React.createElement(Preview, props)), />연락처 인증<\/h2>|>정보 수집 동의<\/h2>/, 'sections the event does not ask for stay out');
 });

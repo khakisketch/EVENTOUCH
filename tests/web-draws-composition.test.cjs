@@ -34,7 +34,9 @@ test('the preview is decorative, loads nothing, and names the scene in text', ()
   assert.doesNotMatch(preview, /fetch\(|consoleFetch|useEffect|useState/u, 'a pure redraw: no data loading, no state');
   for (const scene of ['board', 'vote', 'roulette', 'lucky']) assert.match(preview, new RegExp(`scene\\.kind === "${scene}"|kind: "${scene}"`, 'u'));
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/u, 'the stage palette uses rgb()/tokens, never hex');
-  assert.match(css, /container-type: inline-size/u, 'the board scales its text with its own width');
+  // Reopened 2026-11-20: the scenes are drawn at real device size inside DeviceFrame and scaled as a whole.
+  assert.match(preview, /<DeviceFrame variant="screen"/u, 'the venue board is a 16:9 screen simulator');
+  assert.match(preview, /<DeviceFrame variant="phone"/u, 'the attendee scenes sit in a phone simulator');
 });
 
 test('every safety rule of the old sections survives inside the stage card', () => {
@@ -67,4 +69,11 @@ test('Reopened 2026-11-19: picker cards lead, wide screens put the preview besid
   assert.match(css, /@media \(min-width: 1200px\) \{\s*\.stageCard \{ grid-template-columns: minmax\(0, 1\.08fr\) minmax\(0, 1fr\);/u);
   assert.match(css, /\.winnerItem::before \{\s*content: counter\(winner\);/u, 'winners carry a rank mark');
   assert.match(css, /\.runBlocker \{[^}]*border: 1px solid var\(--warning-line\)[^}]*background: var\(--warning-soft\)/su, 'run limits read as amber notes, not white buttons');
+});
+
+// Reopened 2026-11-20 (owner: previews should be device simulators)
+test('Reopened 2026-11-20: previews are device simulators drawn at real size', () => {
+  assert.match(preview, /import DeviceFrame from "\.\.\/\.\.\/\.\.\/console-ui\/DeviceFrame"/u);
+  assert.match(css, /\.board \{[^}]*padding: 58px 77px/su, 'the board is laid out at 1280x720 and scaled by the frame');
+  assert.match(css, /\.phoneScreen \{[^}]*font-size: 15px/su, 'the phone scene is laid out at a real 390px width');
 });

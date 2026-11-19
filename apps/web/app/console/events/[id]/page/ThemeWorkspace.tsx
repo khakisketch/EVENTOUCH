@@ -28,6 +28,7 @@ import PublicationReview from "../../../console-ui/PublicationReview";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import ConsoleFormActions from "../../../console-ui/ConsoleFormActions";
 import ConsoleDialog from "../../../console-ui/ConsoleDialog";
+import DeviceFrame from "../../../console-ui/DeviceFrame";
 import { Switch } from "@astryxdesign/core/Switch";
 import ColorField from "./ColorField";
 import LayoutPicker from "./LayoutPicker";
@@ -1313,6 +1314,7 @@ export default function ThemeWorkspace({ eventId, publicBase = null }: { eventId
         }),
   } as CSSProperties;
   const showingPublished = previewSource === "published";
+  const previewBackground = (showingPublished ? state.publishedDesign.homeStyle : state.form.homeStyle).backgroundColor;
   const hasPublished = Boolean(state.publishedAt);
   // Per-group unsaved markers derive from the same saved baselines the
   // save guard compares: no new data, only a group-level reading of the
@@ -1532,12 +1534,13 @@ export default function ThemeWorkspace({ eventId, publicBase = null }: { eventId
           <div className={studio.phoneSlot}>
             <h2 id="home-preview-heading" tabIndex={-1} className="sr-only">홈 디자인 미리보기</h2>
           <div className={styles.phoneStage}>
-            <div
-              className={styles.phoneViewport}
-              role="region"
-              aria-label={`${previewSize.width}×${previewSize.height} 홈 디자인 미리보기`}
-              tabIndex={0}
-              style={{ "--preview-width": `${previewSize.width}px`, "--preview-height": `${previewSize.height}px` } as CSSProperties}
+            <DeviceFrame
+              variant="phone"
+              width={previewSize.width}
+              viewportHeight={previewSize.height}
+              maxDisplayWidth={320}
+              chromeColor={previewBackground}
+              scrollLabel={`${previewSize.width}×${previewSize.height} 홈 디자인 미리보기`}
             >
               {showingPublished && !hasPublished ? (
                 <p className={styles.previewNote}>아직 게시된 화면이 없습니다</p>
@@ -1562,7 +1565,7 @@ export default function ThemeWorkspace({ eventId, publicBase = null }: { eventId
                 />
               </div>
               )}
-            </div>
+            </DeviceFrame>
           </div>
           </div>
           <div className={studio.phoneOptions}>
@@ -1985,12 +1988,13 @@ export default function ThemeWorkspace({ eventId, publicBase = null }: { eventId
               <button type="button" className={studio.stageClose} onClick={() => setStageOpen(false)}>닫기</button>
             </div>
             <div className={studio.stageDialogBody}>          <div className={styles.phoneStage}>
-            <div
-              className={styles.phoneViewport}
-              role="region"
-              aria-label={`${previewSize.width}×${previewSize.height} 홈 디자인 큰 미리보기`}
-              tabIndex={0}
-              style={{ "--preview-width": `${previewSize.width}px`, "--preview-height": `${previewSize.height}px` } as CSSProperties}
+            <DeviceFrame
+              variant="phone"
+              width={previewSize.width}
+              viewportHeight={previewSize.height}
+              maxDisplayWidth={400}
+              chromeColor={previewBackground}
+              scrollLabel={`${previewSize.width}×${previewSize.height} 홈 디자인 큰 미리보기`}
             >
               {showingPublished && !hasPublished ? (
                 <p className={styles.previewNote}>아직 게시된 화면이 없습니다</p>
@@ -2015,7 +2019,7 @@ export default function ThemeWorkspace({ eventId, publicBase = null }: { eventId
                 />
               </div>
               )}
-            </div>
+            </DeviceFrame>
           </div></div>
           </div>
         </ConsoleDialog>
