@@ -1,5 +1,8 @@
 'use strict';
 
+// Reopened 2026-11-19: the composition below (tabs, document card, rail) is
+// unchanged; its presentation moved to shapes (ring, tiles, score gauge, ink
+// tones). See DESIGN.md "Reopened 2026-11-19" under 결과 보고서.
 // Approved 결과 보고서 composition (2026-11-15, option "최종안": tabs + 문서
 // 카드 + PPTX 내보내기 — design-review/reports-option-final.html). One
 // always-visible 보고서 panel: an ink-underline switcher picks a saved
@@ -57,32 +60,26 @@ test('the desk centers the selected report as a bordered document card', () => {
   assert.match(css, /^\.reportDoc \{[\s\S]*?box-shadow: var\(--shadow-raised\);/mu, 'the card is the one shadowed surface, the lone "anchor card" rule');
 });
 
-test('registration composition uses the three reserved series colors only on this chart', () => {
+test('Reopened 2026-11-19: registration groups use ink tones, not hues, and no screen uses the old series colors', () => {
   assert.match(workspace, /function reportGroupChart/u);
-  assert.match(workspace, /SERIES_COLORS\[index % SERIES_COLORS\.length\]/u);
-  assert.match(workspace, /const SERIES_COLORS = \["var\(--series-blue\)", "var\(--series-orange\)", "var\(--series-aqua\)"\];/u);
-  assert.match(tokens, /--series-blue: #2a78d6;/u);
-  assert.match(tokens, /--series-orange: #eb6834;/u);
-  assert.match(tokens, /--series-aqua: #1baf7a;/u);
-  // The dataviz-validated palette is reserved for this one chart: no other
-  // screen in the product may reference these three tokens.
-  const grep = (dir, out = []) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) { if (entry.name !== 'node_modules' && entry.name !== '.next') grep(full, out); }
-      else if (/\.(tsx|css)$/.test(entry.name)) out.push(full);
-    }
-    return out;
-  };
-  const offenders = grep(path.join(ROOT, 'apps/web/app'))
-    .filter((file) => !file.endsWith(path.join('reports', 'ReportsWorkspace.tsx'))
-      && !file.endsWith(path.join('reports', 'reports.module.css'))
-      && !file.endsWith(path.join('apps', 'web', 'app', 'tokens.css')))
-    .filter((file) => /--series-(blue|orange|aqua)/.test(fs.readFileSync(file, 'utf8')));
-  assert.deepEqual(offenders, [], 'series colors stay scoped to the reports screen');
+  assert.match(workspace, /color: inkTone\(index\),/u);
+  assert.doesNotMatch(workspace, /SERIES_COLORS|--series-/u);
+  assert.doesNotMatch(css, /--series-/u);
+  const visuals = read('ReportVisuals.tsx');
+  assert.match(visuals, /color-mix\(in srgb, var\(--ink\)/u, 'categories are told apart by ink density');
   // A chart segment only ever comes from fully verified counts; a missing,
   // non-integer, negative, or all-zero total cancels the whole chart.
   assert.match(workspace, /if \(counts\.some\(\(count\) => typeof count !== "number" \|\| !Number\.isSafeInteger\(count\) \|\| count < 0\)\) return null;/u);
+});
+
+test('Reopened 2026-11-19: attendance shows a ring and number tiles only from verified saved numbers, text stays for assistive tech', () => {
+  assert.match(workspace, /const savedKpi = \(\(\) => \{/u);
+  assert.match(workspace, /Number\.isSafeInteger\(rate\)/u, 'the ring needs an integer rate, like the text line');
+  assert.match(workspace, /<p className=\{savedKpi \? "sr-only" : undefined\}>등록 /u, 'the original sentence is kept when tiles replace it visually');
+  assert.match(workspace, /<RateRing value=\{savedKpi\.rate\}/u);
+  assert.match(css, /^\.kpiRow \{/mu);
+  assert.match(css, /^\.scoreSegments \{/mu);
+  assert.match(workspace, /<StepBar position=\{closeStatus\.position\} \/>/u);
 });
 
 test('report-vs-current attendance renders as a dumbbell, with the exact numbers still in a disclosed table', () => {

@@ -356,6 +356,13 @@ The owner approved this composition on 2026-11-15 (`apps/web/app/console/events/
 - PPTX 내보내기는 `pptxgenjs`를 클라이언트에서 동적 import해 표지(어두운 배경 + 오렌지 킥커 + 큰 제목) + 핵심 숫자 + 참여 콘텐츠 + 만족도 + 사진 슬라이드를 한 번 채워 내려준다(xlsx export와 같은 패턴, 새 서버 커맨드 없음). 사진은 `/api/events/:id/files/:fileId`를 fetch해 base64로 넣고, 한 장이 실패해도 나머지 내보내기는 계속된다. 버튼 옆에 "꾸미기는 파워포인트·키노트·캔바에서" 안내 문구가 있다.
 - 내보내기 묶음(PPTX/JSON/인쇄)은 ghost 역할로 낮췄다(보조 버튼 수를 줄이는 Action role rules 판단); 내용 편집·취소·닫기 같은 실제 대안 행동은 secondary로 남았다.
 
+Reopened 2026-11-19 (owner: 실제 화면이 밋밋하다 — 작은 회색 글씨·얇은 선, 숫자가 글씨로만 있다). 구성(탭·문서 카드·레일, PPTX/JSON/인쇄)은 그대로, 표현만 도형 중심으로 바꿨다. 이 항목이 위 설명과 다르면 이 항목이 우선한다.
+- 보고서 전환기는 보고서 고유색 막대+제목+상태 칩(점+글자, 초안은 앰버·공유 완료는 초록)을 담은 카드 탭이다. 선택된 카드는 잉크 외곽선. 마감 지도 줄에는 7칸 진행 막대(`StepBar`)가 붙고 "행사 마감" 탭에서는 줄 전체 폭으로 펼쳐진다.
+- 문서 표지는 큰 제목, 상태·집계 기준 시각 알약. 섹션 제목 앞에는 보고서 색 세로 막대. 참가·입장은 입장률 링(`RateRing`)+등록·누적 입장·현재 입장 숫자 타일을 먼저 보여 주고, 기존 한 줄 텍스트는 접근성용(`sr-only`)으로 남긴다. 숫자가 검증되지 않으면 타일 없이 기존 문장을 그대로 보인다.
+- 그룹 구성 막대의 전용 3색(series 토큰)은 폐기했다. 범주는 잉크 농도(진함→연함)와 비율(%)로 구분하며, 이 화면의 도형은 잉크+중립 하나의 색조다(`--series-*` 토큰은 tokens.css에 남아 있으나 화면에서 쓰지 않는다).
+- 참여 콘텐츠는 행마다 이름·막대·건수(0건은 흐리게), 만족도는 큰 평균 점수+5칸 게이지, 항목마다 평균 막대. 원래 텍스트 줄은 그대로 있다.
+- 오른쪽 레일의 결과 분석은 입장률 링+큰 숫자, 3칸 숫자 타일(승인 대기만 앰버)이다. 실행 영역은 주 동작 하나(오렌지)+내용 편집(secondary, 연필 아이콘)+닫기(ghost)이고, 내보내기는 구분선 행 목록, A4/발표용 전환은 잉크 세그먼트 컨트롤(오렌지 아님)이다. 긴 안내문은 `<details>`로 접었다(JSON 원본 범위 안내만 항상 보임).
+
 ## 고객사 확정 구성
 
 The owner approved this composition on 2026-11-16 (`apps/web/app/console/clients/ClientsList.tsx`, mockup option A). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-clients-composition.test.cjs` guards it.

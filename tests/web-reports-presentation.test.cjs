@@ -33,7 +33,7 @@ test('report view switch is local presentation only, defaulting to A4', () => {
   assert.match(reports, /reportDocWide|reportDocA4/, 'the frozen article carries the chosen measure');
   assert.match(css, /\.reportDocA4\s*\{/, 'A4 measure exists');
   assert.match(css, /\.reportDocWide\s*\{/, '16:9 measure exists');
-  assert.match(css, /\.reportViewBar > \.pill\s*\{[^}]*min-height:\s*44px/s, 'custom view controller keeps native pressed-button touch targets');
+  assert.match(css, /\.reportViewBar > \.viewPill\s*\{[^}]*min-height:\s*44px/s, 'custom view controller keeps native pressed-button touch targets');
 });
 
 test('report printing keeps the frozen clone path with pagination, no new receipts', () => {

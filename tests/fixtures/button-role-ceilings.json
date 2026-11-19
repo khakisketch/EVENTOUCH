@@ -31,7 +31,7 @@
   "console/events/[id]/programs/ProgramsWorkspace.tsx": 35,
   "console/events/[id]/programs/QuizGrading.tsx": 2,
   "console/events/[id]/reports/EventCloseFlow.tsx": 2,
-  "console/events/[id]/reports/ReportsWorkspace.tsx": 17,
+  "console/events/[id]/reports/ReportsWorkspace.tsx": 16,
   "console/events/[id]/rewards/RewardsWorkspace.tsx": 4,
   "console/events/[id]/settings/SettingsWorkspace.tsx": 16,
   "console/events/[id]/settings/fields/FieldsWorkspace.tsx": 5,
