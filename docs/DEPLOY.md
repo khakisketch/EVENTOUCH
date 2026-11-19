@@ -66,3 +66,8 @@ A release record requires explicit policy review and actual operator-journey, iO
 ## Retention and deletion
 
 Retention periods, deletion authority, exceptions, and backup expiry are not approved. Until they are, do not permanently delete events, accounts, receipts, attendee data, or file bytes. `npm run event:purge:review -- --org-id <organization-id> --event-id <event-id>` reports review information only; it does not purge data.
+
+## 배포 전 점검 (2026-11-20 사고 기록)
+- 호스트 디스크 여유가 5GB 아래이면 `docker build`가 Docker VM 디스크를 늘리지 못해 VM 파일시스템이 읽기 전용이 되고 컨테이너가 멈춘다. 배포 전에 `df -h`로 여유를 확인한다.
+- 서버 이미지는 `Dockerfile`의 COPY 목록에 있는 `apps/web/lib/*.cjs`만 포함한다. 서버가 새로 `require`하는 공용 모듈은 `Dockerfile`과 `.github/workflows/ci.yml`의 복사 목록에 함께 추가한다. 빠지면 API가 `MODULE_NOT_FOUND`로 재시작을 반복한다.
+- 데이터 안전: `docker compose -p <project> up -d --build --no-deps <service>`로 바꾸는 서비스만 교체하고 볼륨은 건드리지 않는다. 교체 전에 `pg_dump` 백업을 받는다.
