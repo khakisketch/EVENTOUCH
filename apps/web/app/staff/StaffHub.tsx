@@ -17,7 +17,8 @@ import {
 import workStyles from "./staff-event-work.module.css";
 import { loginHrefForLocation } from "../auth-redirect";
 import { buildStaffScopes, staffHubGroups, staffScopeLine, staffStartLabel, type StaffScope } from "./staff-scope";
-import { ArrowRightIcon, ChevronRightIcon } from "../console/console-ui/ConsoleIcons";
+import { ArrowRightIcon, BangIcon, ChevronRightIcon, ClockIcon } from "../console/console-ui/ConsoleIcons";
+import StatusPill from "../console/console-ui/StatusPill";
 import { readStaffBootstrap, staffReadErrorMessage } from "./staff-bootstrap";
 
 type HubState =
@@ -135,7 +136,7 @@ export default function StaffHub() {
     return (
       <>
         {chrome}
-        <p className="loading-state" role="status">업무 정보를 불러오고 있습니다.</p>
+        <p className={`loading-state ${workStyles.hubLoading}`} role="status">업무 정보를 불러오고 있습니다.</p>
       </>
     );
   }
@@ -144,7 +145,7 @@ export default function StaffHub() {
       <>
         {chrome}
         <section className={`staff-workspace state-panel ${workStyles.hubState}`}>
-          <span className={workStyles.hubTile} aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16.5h.01" /></svg></span>
+          <span className={workStyles.hubTile} data-tone="danger" aria-hidden="true"><BangIcon /></span>
           <p role="alert" className={workStyles.hubNote}>{state.message}</p>
           <ProductButton type="button" variant="secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
             다시 불러오기
@@ -158,7 +159,7 @@ export default function StaffHub() {
       <>
         {chrome}
         <section className={`staff-workspace state-panel ${workStyles.hubState}`}>
-          <span className={workStyles.hubTile} aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="9" rx="2" /><path d="M7 9V6h10v3M7 21v-3M17 21v-3" /></svg></span>
+          <span className={workStyles.hubTile} data-tone="warn" aria-hidden="true"><ClockIcon /></span>
           <p role="status" className={workStyles.hubNote}>배정된 업무가 없습니다. 운영자에게 문의하세요.</p>
           <p className={workStyles.hubNote}>업무 배정은 운영 콘솔 &gt; 입장·스태프 &gt; 스태프 배정에서 지정됩니다. 아직 배정 전이라면 대기 상태이며, 배정이 올라오면 다시 불러오기 후 목록에 표시됩니다.</p>
           <p className={workStyles.hubNote}>이 화면을 안내한 담당자(초대 메일·행사 안내의 문의처)에게 배정 여부를 확인해 주세요.</p>
@@ -173,7 +174,7 @@ export default function StaffHub() {
     return (
       <>
         {chrome}
-        <p className="loading-state" role="status">배정된 행사로 이동하고 있습니다.</p>
+        <p className={`loading-state ${workStyles.hubLoading}`} role="status">배정된 행사로 이동하고 있습니다.</p>
       </>
     );
   }
@@ -191,7 +192,7 @@ export default function StaffHub() {
         {!live ? <p className={workStyles.hubQuiet}>지금 진행 중인 행사는 없어요.</p> : null}
         {live ? (
           <div className={workStyles.hubLive}>
-            <span className={workStyles.hubLiveChip}>지금 진행 중</span>
+            <StatusPill tone="ok" dot>지금 진행 중</StatusPill>
             <strong className={workStyles.hubLiveName}>{live.eventName}</strong>
             {live.start ? <span className={workStyles.hubLiveTime}>{live.start}{live.end ? <> <i>~</i> {live.end}</> : null}</span> : null}
             <span className={workStyles.hubLiveMine}>내 배정 · {staffScopeLine(live)}</span>
@@ -217,7 +218,7 @@ export default function StaffHub() {
                   <span className={workStyles.hubScope}>{[staffStartLabel(scope, now), staffScopeLine(scope)].filter(Boolean).join(" · ")}</span>
                 </span>
                 <span className={workStyles.hubRowEnd}>
-                  <i className={scope.stage === "LIVE" ? workStyles.dotLive : workStyles.dotReady} role="img" aria-label={scope.stage === "LIVE" ? "진행 중" : "준비 중"} />
+                  {scope.stage === "LIVE" ? <StatusPill tone="ok" size="sm" dot>진행 중</StatusPill> : <StatusPill tone="wait" size="sm" dot>준비 중</StatusPill>}
                   <ChevronRightIcon />
                 </span>
               </>

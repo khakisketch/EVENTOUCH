@@ -1,3 +1,345 @@
+/* Staff field screen and assignment hub (DESIGN.md "스태프 현장 화면 확정 구성",
+   "스태프 목록과 로그인 확정 구성"). Reopened 2026-11-20 (design-system
+   application): the dark column, the white bottom bar and the colored result
+   face are unchanged; type sizes, weights and radii now come from tokens.css,
+   states use StaffStatus (icon + words + tone), and the three stacked redesign
+   layers of the old file are merged into one cascade.
+
+   Stage variables: the column sits on --ink and reads on that ink, so every
+   "paper on ink" tint is named once here. They are local on purpose: the
+   shared tokens have no dark-surface scale yet (공용 부품에 어두운 면 필요). */
+.eventWorkPage,
+.hubPage {
+  --fld-fg: var(--paper);
+  /* Secondary text on ink: 72% paper is about 9:1, 88% is about 13:1. */
+  --fld-soft: color-mix(in srgb, var(--paper) 72%, transparent);
+  --fld-strong: color-mix(in srgb, var(--paper) 88%, transparent);
+  --fld-edge: color-mix(in srgb, var(--paper) 22%, transparent);
+  --fld-hair: color-mix(in srgb, var(--paper) 14%, transparent);
+  --fld-wash: color-mix(in srgb, var(--paper) 12%, transparent);
+  --fld-lift: color-mix(in srgb, var(--paper) 8%, var(--ink));
+  /* Bottom sheet corner: the one shape the column is recognised by. The
+     shared radii stop at --r-card (16), too tight for a full-width sheet. */
+  --fld-sheet-r: 28px;
+  /* Idle viewfinder corner: a card radius plus one step. */
+  --fld-corner: calc(var(--r-card) + var(--s2));
+  /* Read at arm's length while a queue moves: the scanned name and the
+     verdict line are deliberately larger than --text-num (34). */
+  --fld-name: 2.5rem;
+  --fld-verdict: 1.5rem;
+  --fld-sheet-shadow: 0 -8px 24px color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
+.hubPage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: none;
+  min-height: 100svh;
+  padding: 0 0 var(--s6);
+  background: var(--ink);
+  color: var(--fld-fg);
+}
+
+.eventWorkPage {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  min-height: 100svh;
+  padding: 0;
+  background: var(--ink);
+}
+
+/* The page heading stays for assistive technology only. */
+.eventWorkPage > :global(.staff-header),
+.hubPage > :global(.staff-header),
+.backLabel,
+.fieldContext :global(.staff-select-field) label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------
+   Field screen: a dark column. A quiet top bar, the station title, the
+   camera (or the result) as the stage, and a short white bar for the
+   three things an operator reaches for. Lists, forms and corrections
+   open only on demand, as sheets. Nothing is fixed or sticky.
+   ------------------------------------------------------------------ */
+.eventWorkPage .fieldApp {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  max-width: 640px;
+  min-height: 100svh;
+  margin: 0 auto;
+  padding: 0;
+  background: var(--ink);
+  color: var(--fld-fg);
+}
+
+/* Top bar: back, event name, more. */
+.eventContext {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s1) 0;
+  border: 0;
+  color: var(--fld-fg);
+}
+
+.eventContext > span {
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: keep-all;
+}
+
+.eventContext :global(.staff-back-link) {
+  justify-content: center;
+  min-width: var(--control-min-size);
+  padding-inline: 0;
+  color: var(--fld-fg);
+}
+
+.eventContext :global(.staff-back-link):hover {
+  border-color: transparent;
+  background: var(--fld-wash);
+}
+
+.eventWorkTitle {
+  color: var(--fld-soft);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-tight);
+  text-align: center;
+}
+
+.moreMenu { position: relative; color: var(--fld-fg); }
+
+.moreSummary {
+  display: grid;
+  place-items: center;
+  width: var(--control-min-size);
+  height: var(--control-min-size);
+  border-radius: var(--r-ctl);
+  color: var(--fld-fg);
+  cursor: pointer;
+  list-style: none;
+}
+
+.moreSummary::-webkit-details-marker { display: none; }
+
+/* Hover sticks after a tap on touch screens: it must stay a light wash on
+   ink, never a light face under light dots. */
+.moreSummary:hover,
+.moreMenu[open] > .moreSummary { background: var(--fld-wash); }
+
+.moreSummary :global(.action-icon) { width: 24px; height: 24px; fill: currentColor; stroke: none; }
+
+.moreBody {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 8;
+  display: grid;
+  gap: var(--s2);
+  width: min(320px, calc(100vw - var(--s6)));
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow-raised);
+}
+
+.moreBody > div { max-width: none; }
+.moreBody .kioskSwitch { justify-content: flex-start; width: 100%; padding-inline: 0; }
+
+/* Organization identity stays readable beside the account switcher. */
+.orgLine {
+  margin: 0;
+  padding: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-body);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.orgLine strong { font-weight: var(--fw-heavy); }
+
+/* Kiosk and auto-advance switches: track + thumb read as device state, not
+   as one more action. The label never flips; the track shows on/off. */
+.kioskSwitch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--control-min-size);
+  padding: var(--s1) var(--s3);
+  border: 1px solid transparent;
+  border-radius: var(--r-ctl);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
+  cursor: pointer;
+}
+
+.kioskSwitch:hover:not(:disabled) {
+  border-color: var(--line);
+  background: var(--surface-muted);
+}
+
+.kioskSwitch:disabled { opacity: 0.55; cursor: default; }
+
+.kioskSwitchTrack {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 32px;
+  height: 20px;
+  margin-right: var(--s2);
+  border-radius: var(--r-pill);
+  background: var(--line-strong);
+  vertical-align: middle;
+  transition: background-color 160ms ease-out;
+}
+
+.kioskSwitchThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow: 0 1px 3px var(--shadow-color);
+  transition: left 160ms ease-out;
+}
+
+.kioskSwitchOn { color: var(--ink); }
+.kioskSwitchOn .kioskSwitchTrack { background: var(--ink); }
+.kioskSwitchOn .kioskSwitchThumb { left: 14px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .kioskSwitchTrack,
+  .kioskSwitchThumb { transition: none; }
+}
+
+/* Where the operator works: the select reads as the screen title. */
+.fieldContext {
+  display: grid;
+  gap: var(--s1);
+  padding: 0 var(--s3) var(--s2);
+  color: var(--fld-fg);
+}
+
+.fieldContext :global(.staff-select-field) { display: grid; gap: 0; }
+
+.fieldContext :global(.staff-select-field) select {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 var(--s7) 0 var(--s5);
+  border: 1px solid var(--fld-edge);
+  border-radius: var(--r-pill);
+  appearance: none;
+  background-color: color-mix(in srgb, var(--paper) 8%, transparent);
+  /* A data URI cannot read a custom property: the caret is paper-white. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 18px center;
+  background-size: 20px;
+  color: var(--fld-fg);
+  font: inherit;
+  font-size: var(--text-lg);
+  font-weight: var(--fw-heavy);
+  letter-spacing: -0.01em;
+  text-align: center;
+  text-align-last: center;
+  word-break: keep-all;
+}
+
+.fieldContext :global(.staff-select-field) select option { color: var(--ink); }
+.fieldContext :global(.staff-select-field) select:disabled { opacity: 0.7; }
+.fieldContext :global(.staff-select-field) select:focus-visible { outline: 3px solid var(--fld-fg); outline-offset: 2px; }
+
+.fieldContext :global(.staff-direction-hint) {
+  margin: var(--s2) 0 0;
+  color: var(--fld-soft);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+/* Desk/booth switch: a segmented control on ink. The dark face needs its own
+   recolouring of the product button (the shared button has no dark variant). */
+.eventWorkPage .fieldApp .fieldContext .taskSwitch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s1);
+  width: min(100%, 360px);
+  margin: var(--s1) auto var(--s2);
+  padding: var(--s1);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--fld-wash);
+}
+
+.eventWorkPage .fieldApp .fieldContext .taskSwitch [data-product-action] {
+  flex: none;
+  min-width: 0;
+  min-height: var(--control-min-size);
+  padding: 0 var(--s3);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  box-shadow: none;
+  color: color-mix(in srgb, var(--paper) 78%, transparent);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
+  word-break: keep-all;
+}
+
+.eventWorkPage .fieldApp .fieldContext .taskSwitch [data-product-action][aria-pressed="true"] {
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: var(--fw-heavy);
+}
+
+.eventWorkPage .fieldApp .fieldContext .taskSwitch [data-product-action]:disabled { opacity: 0.55; }
+
+/* Recovery buttons under the station select sit on the dark column: a white
+   face with ink text. The Astryx button paints its own face, so this needs
+   !important until the shared button gains a dark-surface variant. */
+.fieldContext :global(.staff-select-field) [data-product-action] {
+  border-color: transparent !important;
+  background: var(--paper) !important;
+  color: var(--ink) !important;
+}
+
+/* The direction check is the one thing to press in the desk field, so it
+   stays an ink button on its tinted warning card. */
+.fieldContext :global(.staff-select-field) .directionReview > [data-product-action] {
+  padding-inline: var(--s4);
+  border-radius: var(--r-ctl);
+  background: var(--ink) !important;
+  color: var(--paper) !important;
+  font-weight: var(--fw-strong);
+}
+
+.fieldContext :global(.staff-select-field) .directionReview > [data-product-action]:disabled { opacity: 0.55; }
+
+.fieldContext .workSection { padding: 0; border: 0; background: transparent; }
+
+/* Needs-a-look card (desk direction, sources missing): warning tint, bang
+   icon in the heading, one action. Same face as StaffNote tone="warn". */
 .directionReview {
   display: grid;
   justify-items: start;
@@ -5,21 +347,676 @@
   margin-top: var(--s3);
   padding: var(--s3);
   border: 1px solid var(--warning-line);
-  border-radius: var(--radius-medium);
+  border-radius: var(--r-card);
   background: var(--warning-soft);
   color: var(--ink);
 }
 
 .directionReview p {
   margin: var(--s1) 0 0;
-  line-height: 1.5;
+  line-height: var(--lh-body);
   overflow-wrap: anywhere;
 }
 
-.directionReview button {
-  min-height: 44px;
+.directionReview button { min-height: var(--control-min-size); }
+
+.directionTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-weight: var(--fw-heavy);
 }
 
+.directionLine {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s2);
+}
+
+.directionMark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--warning);
+  color: var(--paper);
+}
+
+.directionMark svg:global(.action-icon) { width: 16px; height: 16px; stroke-width: 3; }
+
+/* Messages above the stage: StaffNote on the column's side margins. */
+.fieldApp > :global([data-staff-note]) {
+  margin: 0 var(--s3) var(--s2);
+}
+
+.fieldReceipts:empty { display: none; }
+.fieldReceipts { padding: 0 var(--s3) var(--s2); }
+
+/* The shared recovery panel (another window's unconfirmed request) reads on
+   its own paper above the stage. */
+.fieldReceipts > section {
+  padding: var(--s3);
+  border-radius: var(--r-card);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* Stage: the camera or a result fills everything between the bars. */
+.fieldStage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 320px;
+  overflow: hidden;
+  background: radial-gradient(65% 55% at 50% 48%, color-mix(in srgb, var(--paper) 10%, var(--ink)) 0%, var(--ink) 100%);
+  color: var(--fld-fg);
+}
+
+.fieldStage[data-tone] { background-color: var(--ink); }
+
+.stageIdle {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--s4);
+  padding: var(--s4);
+  text-align: center;
+}
+
+/* Idle: a lit viewfinder with a slow scan line. */
+.idleFrame {
+  position: relative;
+  width: min(236px, 62vw);
+  aspect-ratio: 1;
+  opacity: 0.85;
+}
+
+.idleFrame i {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--fld-fg);
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--paper) 35%, transparent));
+}
+
+.idleFrame i:nth-child(1) { top: 0; left: 0; border-right: 0; border-bottom: 0; border-radius: var(--fld-corner) 0 0 0; }
+.idleFrame i:nth-child(2) { top: 0; right: 0; border-left: 0; border-bottom: 0; border-radius: 0 var(--fld-corner) 0 0; }
+.idleFrame i:nth-child(3) { bottom: 0; left: 0; border-right: 0; border-top: 0; border-radius: 0 0 0 var(--fld-corner); }
+.idleFrame i:nth-child(4) { right: 0; bottom: 0; border-left: 0; border-top: 0; border-radius: 0 0 var(--fld-corner) 0; }
+
+.idleFrame::after {
+  content: "";
+  position: absolute;
+  inset-inline: 10px;
+  top: 12%;
+  height: 2px;
+  border-radius: var(--r-pill);
+  background: linear-gradient(90deg, transparent, var(--brand), transparent);
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .idleFrame::after { animation: idleScan 2.8s ease-in-out infinite alternate; }
+  @keyframes idleScan { from { top: 12%; } to { top: 86%; } }
+}
+
+.idleText {
+  max-width: 30ch;
+  margin: 0;
+  color: color-mix(in srgb, var(--paper) 82%, transparent);
+  font-size: var(--text-md);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-body);
+  word-break: keep-all;
+}
+
+.cameraLoading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--fld-soft);
+}
+
+/* The SELF booth: a big code for the participant's own camera. */
+.selfStage {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: var(--s3);
+  overflow: auto;
+  padding: var(--s4);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: center;
+}
+
+/* Booth QR: the QR standard asks for four clear modules around the code.
+   A participant scans this with a phone camera, and without the quiet zone
+   the camera has no clean edge to lock onto, so the code is framed in white
+   with a margin on every side. The visible caption names the booth so the
+   wrong code cannot be shown by habit when several booths share a screen. */
+.boothQrCaption {
+  margin: 0 0 var(--s2);
+  font-weight: var(--fw-heavy);
+}
+
+.boothQr {
+  display: inline-block;
+  padding: var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--paper);
+  line-height: 0;
+}
+
+.boothQr svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* ------------------------------------------------------------------
+   Result overlay. The tone sets the ground (green done, blue already, amber
+   needs a look, red failed) and the round badge repeats it by shape, so the
+   verdict never depends on colour alone.
+   ------------------------------------------------------------------ */
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  background: var(--success-soft);
+  color: var(--ink);
+}
+
+.overlay[data-tone="info"] { background: var(--info-soft); }
+.overlay[data-tone="warn"] { background: var(--warning-soft); }
+.overlay[data-tone="bad"] { background: var(--danger-soft); }
+
+.overlayTap {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.overlayBody {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  padding: var(--s5) var(--s4) var(--s3);
+  text-align: center;
+}
+
+.badge {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin-bottom: var(--s1);
+  border-radius: 50%;
+  background: var(--success);
+  color: var(--paper);
+}
+
+.badge[data-tone="info"] { background: var(--info); }
+.badge[data-tone="warn"] { background: var(--warning); }
+.badge[data-tone="bad"] { background: var(--danger); }
+
+.badge svg { width: 36px; height: 36px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+
+.kicker {
+  margin: 0;
+  color: var(--success);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-heavy);
+  letter-spacing: 0.02em;
+}
+
+.overlay[data-tone="info"] .kicker { color: var(--info); }
+.overlay[data-tone="warn"] .kicker { color: var(--warning); }
+.overlay[data-tone="bad"] .kicker { color: var(--danger); }
+
+.bigName {
+  margin: 0;
+  font-size: var(--fld-name);
+  font-weight: var(--fw-heavy);
+  letter-spacing: var(--ls-heading);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.bigMessage {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--fld-verdict);
+  font-weight: var(--fw-heavy);
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.subLine {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-md);
+  overflow-wrap: anywhere;
+}
+
+.reason {
+  max-width: 32ch;
+  margin: var(--s1) 0 0;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-card);
+  background: color-mix(in srgb, var(--paper) 70%, transparent);
+  font-size: var(--text-sm);
+  line-height: var(--lh-body);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.overlayFoot {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  gap: var(--s1);
+  padding: 0 var(--s4) var(--s4);
+}
+
+.overlayInner {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  scroll-padding-block: var(--s2);
+}
+
+/* A result that hands itself back is one big tap target (the button behind
+   the text): its text and timer let the tap through; its quiet links stay
+   tappable. */
+.overlayInner[data-tap] { pointer-events: none; }
+.overlayInner[data-tap] > * { pointer-events: auto; }
+.overlayInner[data-tap] > .overlayBody,
+.overlayInner[data-tap] > .overlayBody > *,
+.overlayInner[data-tap] > .overlayFoot { pointer-events: none; }
+.overlayInner[data-tap] .overlayFoot button,
+.overlayInner[data-tap] .overlayFoot a { pointer-events: auto; }
+
+/* Result buttons: the same white bar the scan buttons use, inside the result region. */
+.overlayPanel {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  gap: var(--s2);
+  margin-top: auto;
+  padding: var(--s3) var(--s3) var(--s4);
+  border-radius: var(--fld-sheet-r) var(--fld-sheet-r) 0 0;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--fld-sheet-shadow);
+}
+
+.overlayPanel .nextActions { display: grid; gap: var(--s2); }
+.overlayPanel .prizeWorkspace { max-height: 45svh; overflow: auto; }
+
+.timer {
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
+.timer i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--success);
+  transform-origin: left;
+  animation: timerRun linear forwards;
+}
+
+@keyframes timerRun { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .timer i { animation: none; } }
+
+.tapHint { margin: 0; color: var(--muted); font-size: var(--text-sm); }
+.linkRow { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s2); }
+.dangerLink { color: var(--danger); }
+
+/* ------------------------------------------------------------------
+   Bottom bar: a wide camera button and icon tiles, or the one thing the
+   result needs. Orange stays on the one thing to press.
+   ------------------------------------------------------------------ */
+.fieldBar {
+  position: relative;
+  z-index: 4;
+  display: grid;
+  gap: var(--s2);
+  margin-top: calc(var(--fld-sheet-r) * -1);
+  padding: var(--s3) var(--s3) var(--s4);
+  border-radius: var(--fld-sheet-r) var(--fld-sheet-r) 0 0;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--fld-sheet-shadow);
+}
+
+.fieldBar:empty { display: none; }
+.fieldBar [data-product-action]:not([data-product-variant="ghost"]) { justify-content: center; }
+.fieldBar .prizeWorkspace { max-height: 55svh; overflow: auto; }
+.fieldBar .nextActions { display: grid; gap: var(--s2); }
+
+/* Scan hierarchy: the camera is the unmissable primary; every other entry is
+   an icon tile below it. The bar stays in normal flow on every viewport (no
+   sticky, no fixed): at 320x568 a riding dock would cover the selector, org
+   line or SELF QR the operator needs. */
+.scanPrimary {
+  gap: var(--s3);
+  min-height: 60px;
+  border-radius: var(--r-card);
+  font-size: var(--text-lg);
+  font-weight: var(--fw-heavy);
+}
+
+.scanPrimary svg { width: 24px; height: 24px; }
+
+.bar3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: var(--s2);
+}
+
+.bar3 button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--s1) * 1.5);
+  min-height: 72px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
+  word-break: keep-all;
+  cursor: pointer;
+}
+
+.bar3 button:hover:not(:disabled) { border-color: var(--ink); background: var(--surface-muted); }
+.bar3 button:disabled { opacity: 0.5; cursor: default; }
+.bar3 button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.bar3 button[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.bar3 svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; color: var(--ink); }
+.bar3 button[aria-pressed="true"] svg { color: var(--paper); }
+
+/* ------------------------------------------------------------------
+   Sheets (code, roster, recent, correction, rewards): they sit inside the
+   dark column but read on their own paper.
+   ------------------------------------------------------------------ */
+.fieldApp :global(.dialog) { color: var(--ink); }
+
+.workSection {
+  display: grid;
+  gap: var(--s3);
+  margin: 0;
+  padding: var(--s4) 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.workSection:first-of-type { padding-top: 0; border-top: 0; }
+
+.sheetForm { display: grid; gap: var(--s3); }
+
+.reasonChips { display: flex; flex-wrap: wrap; gap: var(--s2); margin-bottom: var(--s2); }
+
+.reasonChips button {
+  min-height: var(--control-min-size);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-weight: var(--fw-strong);
+  cursor: pointer;
+}
+
+.reasonChips button[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.reasonChips button:disabled { opacity: 0.5; cursor: default; }
+
+.lastScan {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-bottom: var(--s3);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-card);
+  background: var(--surface-muted);
+}
+
+.lastScan p { margin: 0; }
+
+.nextStep {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--lh-body);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.nextActions { display: grid; gap: var(--s2); }
+.nextActions button { min-height: var(--control-min-size); }
+
+.correctSubmit { min-height: 48px; font-weight: var(--fw-strong); }
+
+/* Recent: time, name, detail. Plain rows, no per-row button. */
+.recentRow {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2) var(--s3);
+  min-height: 56px;
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+}
+
+.recentRow .recentName { display: grid; flex: 1 1 auto; gap: 2px; min-width: 0; }
+.recentRow .recentName strong { font-weight: var(--fw-strong); }
+.recentRow .recentName span { flex: none; color: var(--muted); font-size: var(--text-sm); }
+.recentRow time { flex: none; color: var(--muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+
+/* Booth ticket helpers: a long ET:BOOTH code truncates inside the
+   single-line input, so the full value stays readable in a wrapping
+   read-only line and travels through a copy button (client-side only). */
+.ticketFullCode {
+  display: grid;
+  gap: var(--s1);
+  margin: 0;
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--paper);
+  font-size: var(--text-sm);
+}
+
+.ticketFullCodeLabel { color: var(--muted); }
+.ticketFullCode code { overflow-wrap: anywhere; }
+
+.codeFallback summary {
+  display: list-item;
+  min-height: var(--control-min-size);
+  padding: var(--s3) 0;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.codeFallback summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.codeFallback code { overflow-wrap: anywhere; }
+
+/* Roster sheet */
+.manualSearch { margin: 0; padding-top: var(--s2); }
+
+.manualSearchBody { display: grid; gap: var(--s2); padding-bottom: var(--s4); }
+
+.manualSearchBody p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--lh-body);
+}
+
+.manualSearchBody input[type="search"] { width: 100%; }
+
+.manualSearchHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
+}
+
+.manualRefresh {
+  width: var(--control-min-size);
+  min-width: var(--control-min-size);
+  min-height: var(--control-min-size);
+  padding: var(--s2);
+}
+
+.manualRefresh svg { width: 20px; height: 20px; }
+
+.manualResults {
+  display: grid;
+  margin: var(--s2) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.manualResults li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2) var(--s3);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+
+.manualResults li:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+
+.manualResults li > div { display: grid; flex: 1 1 180px; gap: var(--s1); min-width: 0; }
+.manualResults li strong { font-size: var(--text-lg); font-weight: var(--fw-heavy); line-height: var(--lh-tight); overflow-wrap: anywhere; }
+.manualResults li .manualCompany { color: var(--ink); font-size: var(--text-sm); line-height: var(--lh-body); overflow-wrap: anywhere; }
+.manualResults li .manualPills { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s2); }
+.manualResults li .manualWarning { color: var(--warning); font-size: var(--text-sm); font-weight: var(--fw-strong); line-height: var(--lh-body); overflow-wrap: anywhere; }
+.manualResults button { flex: none; min-height: var(--control-min-size); }
+
+.manualHandoff {
+  display: grid;
+  gap: var(--s2);
+  margin: var(--s2) 0;
+  padding: var(--s3) 0;
+  border-block: 1px solid var(--line);
+}
+
+.manualHandoff h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-lg);
+  font-weight: var(--fw-heavy);
+}
+
+.manualHandoffCandidate {
+  display: grid;
+  justify-items: start;
+  gap: var(--s2);
+  padding: var(--s2) 0;
+  border-top: 1px solid var(--line);
+}
+
+.manualHandoffCandidate p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+
+.manualHandoffCandidate p strong { color: var(--ink); }
+.manualHandoffCandidate button,
+.manualHandoffReturn { min-height: var(--control-min-size); }
+
+.manualHandoffFallback {
+  display: grid;
+  gap: var(--s1);
+  width: 100%;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
+}
+
+.manualHandoffFallback textarea {
+  width: 100%;
+  min-height: 11rem;
+  padding: var(--s2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-ctl);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  line-height: var(--lh-body);
+  resize: vertical;
+}
+
+.manualConfirm {
+  display: grid;
+  flex: 0 0 100%;
+  gap: var(--s3);
+  scroll-margin-block: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-card);
+}
+
+.manualConfirm label { display: flex; align-items: center; gap: var(--s2); min-height: var(--control-min-size); }
+.manualConfirm button { min-height: var(--control-min-size); }
+
+/* Reward sheet */
 .prizeWorkspace {
   display: grid;
   gap: var(--s3);
@@ -38,24 +1035,19 @@
 }
 
 .prizeHeader h2,
-.prizeHeader h3 {
-  margin: 0 0 var(--s1);
-  font-size: var(--h3);
-}
+.prizeHeader h3 { margin: 0 0 var(--s1); font-size: var(--text-lg); }
 
 .prizeHeader p,
 .prizeNote {
   margin: 0;
   color: var(--muted);
-  font-size: var(--small);
-  line-height: 1.5;
+  font-size: var(--text-sm);
+  line-height: var(--lh-body);
 }
 
 .prizeTargetHead button,
 .lookupForm button,
-.rewardItem button {
-  min-height: 44px;
-}
+.rewardItem button { min-height: var(--control-min-size); }
 
 .lookupForm {
   display: grid;
@@ -82,31 +1074,11 @@
   gap: var(--s2) var(--s3);
 }
 
-.targetIdentity {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--s1) var(--s3);
-}
+.targetIdentity { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s3); }
+.targetIdentity strong { font-size: var(--text-lg); overflow-wrap: anywhere; }
+.targetIdentity span { color: var(--muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
 
-.targetIdentity strong {
-  font-size: var(--h3);
-  overflow-wrap: anywhere;
-}
-
-.targetIdentity span {
-  color: var(--muted);
-  font-size: var(--small);
-  overflow-wrap: anywhere;
-}
-
-.rewardList {
-  display: grid;
-  gap: var(--s2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
+.rewardList { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
 
 .rewardItem {
   display: flex;
@@ -119,1335 +1091,49 @@
   font-variant-numeric: tabular-nums;
 }
 
-.rewardInfo {
-  display: grid;
-  gap: var(--s1);
-  min-width: min(100%, 180px);
-}
-
-.rewardInfo strong {
-  overflow-wrap: anywhere;
-}
-
-.rewardStatus {
-  display: inline-flex;
-  width: fit-content;
-  align-items: center;
-  min-height: 28px;
-  padding: 2px 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: var(--paper);
-  color: var(--muted);
-  font-size: var(--small);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  word-break: keep-all;
-}
-
-.rewardReady { border-color: var(--warning-line); background: var(--warning-soft); color: var(--warning); }
-.rewardReceived { border-color: var(--success-line); background: var(--success-soft); color: var(--success); }
-
-.prizeEmpty {
-  margin: 0;
-  padding: var(--s3);
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--radius-medium);
-  color: var(--muted);
-  font-size: var(--small);
-}
-
-.prizeNotice,
-.prizeError {
-  margin: 0;
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--success-line);
-  border-radius: var(--radius-medium);
-  background: var(--success-soft);
-  color: var(--success);
-  font-size: var(--small);
-  font-weight: 700;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-}
-
-.prizeError {
-  border-color: var(--danger-line);
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.codeFallback summary {
-  display: list-item;
-  min-height: 44px;
-  padding: var(--s3) 0;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.manualSearch {
-  margin: 0;
-  padding-top: var(--s2);
-}
-
-/* Mode selection stays neutral; orange is reserved for the current execution. */
-.entryModeSwitch,
-.taskSwitch {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s1);
-  margin: 0;
-  padding: var(--s1);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-medium);
-  background: var(--surface-muted);
-}
-
-.entryModeSwitch :global(.astryx-button),
-.taskSwitch :global(.astryx-button) {
-  min-width: 0;
-  min-height: 44px;
-  padding: var(--s2);
-  border-color: transparent;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--muted);
-  font-size: var(--small);
-  font-weight: 600;
-}
-
-.entryModeSwitch :global(.astryx-button[aria-pressed="true"]),
-.taskSwitch :global(.astryx-button[aria-pressed="true"]) {
-  border-color: var(--line);
-  background: var(--paper);
-  color: var(--ink);
-  font-weight: 750;
-}
-
-@media (hover: hover) {
-  .entryModeSwitch :global(.astryx-button:not(:disabled):hover),
-  .taskSwitch :global(.astryx-button:not(:disabled):hover) {
-    border-color: var(--line);
-    background: var(--paper);
-    color: var(--ink);
-  }
-}
-
-.manualSearchBody {
-  display: grid;
-  gap: var(--s2);
-  padding-bottom: var(--s4);
-}
-
-.manualSearchBody p {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--small);
-  line-height: 1.5;
-}
-
-.manualSearchBody input[type="search"] { width: 100%; }
-
-.manualSearchHeading {
-  font-size: var(--small);
-  font-weight: 650;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2);
-}
-
-.manualRefresh {
-  width: 44px;
-  min-width: 44px;
-  min-height: 44px;
-  padding: var(--s2);
-}
-
-.manualRefresh svg { width: 20px; height: 20px; }
-
-.manualResults {
-  display: grid;
-  margin: var(--s2) 0 0;
-  padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--line);
-}
-
-.manualResults li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2) var(--s3);
-  padding: var(--s2) 0;
-  border-bottom: 1px solid var(--line);
-  font-variant-numeric: tabular-nums;
-}
-
-.manualResults li:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 3px;
-}
-
-.manualResults li > div { display: grid; flex: 1 1 180px; min-width: 0; gap: var(--s1); }
-.manualResults li strong { font-size: var(--h3); font-weight: 750; line-height: 1.4; overflow-wrap: anywhere; }
-.manualResults li span { color: var(--muted); font-size: var(--small); line-height: 1.5; overflow-wrap: anywhere; }
-.manualResults li .manualCompany { color: var(--ink); }
-.manualResults li .manualWarning { color: var(--warning); font-weight: 650; }
-.manualResults li .manualPresence { color: var(--muted); font-weight: 500; }
-.manualResults li .manualPresence[data-state="inside"] { color: var(--success); font-weight: 700; }
-.manualResults li .manualPresence[data-state="review"] { color: var(--warning); font-weight: 700; }
-.manualResults button { flex: none; min-height: 44px; }
-
-.manualHandoff {
-  display: grid;
-  gap: var(--s2);
-  margin: var(--s2) 0;
-  padding: var(--s3) 0;
-  border-block: 1px solid var(--line);
-}
-
-.manualHandoff h3 {
-  margin: 0;
-  color: var(--ink);
-  font-size: var(--h3);
-  font-weight: 750;
-}
-
-.manualHandoffCandidate {
-  display: grid;
-  justify-items: start;
-  gap: var(--s2);
-  padding: var(--s2) 0;
-  border-top: 1px solid var(--line);
-}
-
-.manualHandoffCandidate p {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--small);
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
-.manualHandoffCandidate p strong { color: var(--ink); }
-.manualHandoffCandidate button,
-.manualHandoffReturn { min-height: 44px; }
-
-.manualHandoffFallback {
-  display: grid;
-  width: 100%;
-  gap: var(--s1);
-  color: var(--ink);
-  font-size: var(--small);
-  font-weight: 650;
-}
-
-.manualHandoffFallback textarea {
-  width: 100%;
-  min-height: 11rem;
-  padding: var(--s2);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-small);
-  background: var(--paper);
-  color: var(--ink);
-  font: inherit;
-  line-height: 1.5;
-  resize: vertical;
-}
-
-.manualConfirm {
-  display: grid;
-  flex: 0 0 100%;
-  gap: var(--s3);
-  scroll-margin-block: var(--s2);
-  padding: var(--s3);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-medium);
-}
-
-.manualConfirm label { display: flex; align-items: center; gap: var(--s2); min-height: 44px; }
-.manualConfirm button { min-height: 44px; }
-
-.resultBlock {
-  display: grid;
-  gap: var(--s3);
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.resultBlock .scan-result {
-  border-radius: var(--radius-medium);
-  word-break: keep-all;
-  overflow-wrap: break-word;
-}
-
-.nextStep {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--small);
-  line-height: 1.5;
-  word-break: keep-all;
-  overflow-wrap: break-word;
-}
-
-/* Organization identity remains readable beside the account switcher. */
-.orgLine {
-  margin: 0;
-  padding: 0;
-  color: var(--muted);
-  font-size: var(--small);
-  font-weight: 650;
-  line-height: 1.55;
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
-
-.orgLine strong {
-  font-weight: 800;
-}
-
-.nextActions {
-  display: grid;
-  gap: var(--s2);
-}
-
-.nextActions button {
-  min-height: 44px;
-}
-
-.nextActions :global(.astryx-button) {
-  min-height: 44px;
-}
-
-/* Booth ticket helpers: a long ET:BOOTH code truncates inside the
-   single-line input, so the full value stays readable in a wrapping
-   read-only line and travels through a copy button (client-side only). */
-.ticketFullCode {
-  display: grid;
-  gap: var(--s1);
-  margin: 0;
-  padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
-  font-size: var(--small);
-}
-
-.ticketFullCodeLabel {
-  color: var(--muted);
-}
-
-.ticketFullCode code {
-  overflow-wrap: anywhere;
-}
-
-.ticketCopy {
-  min-height: 44px;
-}
-
-.auxAction {
-  justify-self: start;
-}
-
-.scanInput {
-  display: grid;
-  gap: var(--s3);
-  padding-top: var(--s4);
-  border-top: 1px solid var(--line);
-}
-
-/* Booth QR: the QR standard asks for four clear modules around the code.
-   A participant scans this with a phone camera, and without the quiet zone
-   the camera has no clean edge to lock onto, so the code is framed in white
-   with a margin on every side. The visible caption names the booth so the
-   wrong code cannot be shown by habit when several booths share a screen. */
-.boothQrCaption {
-  margin: 0 0 var(--s2);
-  font-weight: 800;
-}
-
-.boothQr {
-  display: inline-block;
-  padding: var(--s5);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-large);
-  background: var(--paper);
-  line-height: 0;
-}
-
-.boothQr svg {
-  display: block;
-  max-width: 100%;
-  height: auto;
-}
-
-.recentRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2) var(--s3);
-}
-
-/* Field rhythm: keep the selected location, scan, result and recent work
-   distinct without adding artificial numbered steps or nested cards. */
-.workSection {
-  display: grid;
-  gap: var(--s3);
-  margin: 0;
-  padding: var(--s4) 0 0;
-  border-top: 1px solid var(--line);
-}
-
-.workSection:first-of-type {
-  border-top: 0;
-  padding-top: 0;
-}
-
-.sectionTitle {
-  margin: 0;
-  font-size: var(--h3);
-  font-weight: 800;
-  line-height: 1.35;
-  letter-spacing: -0.01em;
-  word-break: keep-all;
-  overflow-wrap: break-word;
-}
-
-/* Scan hierarchy: camera first as the unmissable primary, the typed code
-   as an explicit fallback group below the same hairline — never a competing
-   twin. The bar stays in normal flow on every viewport (no sticky, no
-   fixed): at 320×568 a riding dock would cover the very selector, org line,
-   ledger, or SELF QR the operator needs, so reachability comes from scroll
-   order plus focus scroll, never from an overlay. */
-.scanPrimary {
-  min-height: 56px;
-  font-size: 17px;
-  font-weight: 800;
-}
-
-/* Operating context at the action: after any scroll the operator still sees
-   which desk/booth and action the scan below will commit to. One ink line,
-   not a panel; the select, direction hint, and scan hint stay authoritative. */
-.scanContext {
-  margin: 0;
-  color: var(--ink);
-  font-size: var(--small);
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  line-height: 1.55;
-  font-variant-numeric: tabular-nums;
-  word-break: keep-all;
-  overflow-wrap: break-word;
-}
-
-.fallbackBlock {
-  display: grid;
-  gap: var(--s2);
-  padding-top: var(--s3);
-  border-top: 1px dashed var(--line-strong);
-}
-
-.fallbackLabel {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--label);
-  font-weight: 800;
-  letter-spacing: 0.02em;
-}
-
-.fallbackBlock button[type="submit"] {
-  min-height: 48px;
-  font-weight: 750;
-}
-
-/* Assignment hub: one open row per event with the scope summary up front and
-   the single opening action right-aligned (stacked on narrow phones). */
-.hubHeading {
-  margin: 0;
-  font-size: var(--h3);
-  font-weight: 800;
-  line-height: 1.35;
-}
-
-/* Hub empty/error guidance: Korean reads by word (eojeol), never split
-   mid-syllable. keep-all preserves 문의/스태프 units at 320px; break-word
-   still breaks long codes/paths when the viewport demands it. */
-.hubNote {
-  margin: 0;
-  word-break: keep-all;
-  overflow-wrap: break-word;
-}
-
-.hubCount {
-  color: var(--brand-text);
-  font-variant-numeric: tabular-nums;
-}
-
-.hubRow {
-  align-items: start;
-}
-
-.hubEventName {
-  font-size: var(--body-work);
-  font-weight: 800;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
-.hubScope {
-  color: var(--muted);
-  font-size: var(--small);
-  line-height: 1.55;
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
-
-@media (max-width: 560px) {
-  .hubRow {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .hubRow :global(.astryx-button) {
-    width: 100%;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .scanInput {
-    scroll-behavior: auto;
-  }
-}
-
-.nextActions :global(.astryx-button):focus-visible,
-.ticketCopy:focus-visible,
-.resultBlock:focus-visible,
-.resultBlock [tabindex="-1"]:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 3px;
-}
-
-.codeFallback summary:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 3px;
-}
-
-.codeFallback code {
-  overflow-wrap: anywhere;
-}
-
-@media (max-width: 560px) {
-  .lookupForm {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .workSection {
-    padding-top: var(--s2);
-  }
-
-  .scanInput {
-    gap: var(--s2);
-    padding: var(--s3) 0;
-    border-top: 1px solid var(--line);
-    background: var(--paper);
-  }
-
-  .fallbackBlock {
-    padding-top: var(--s2);
-  }
-
-  .lookupForm button,
-  .rewardItem button,
-  .nextActions button,
-  .nextActions :global(.astryx-button) {
-    width: 100%;
-  }
-
-  .auxAction {
-    justify-self: stretch;
-  }
-
-  .rewardItem {
-    align-items: stretch;
-    flex-direction: column;
-  }
-}
-
-/* Local scope preserves the shared staff shell and its other routes. */
-.eventWorkPage {
-  min-width: 0;
-}
-
-.eventWorkPage :global(.staff-workspace) {
-  gap: var(--s3);
-}
-
-/* Event/account context ends before the selected location and execution. */
-.eventContext {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--s2);
-  padding: 0;
+.rewardInfo { display: grid; gap: var(--s1); min-width: min(100%, 180px); }
+.rewardInfo strong { overflow-wrap: anywhere; }
+
+/* ------------------------------------------------------------------
+   Assignment hub: the same dark column. The live event is one card with
+   the only orange; the rest are flat rows that open as a whole.
+   ------------------------------------------------------------------ */
+.hubPage > :not(:global(.staff-header)) { width: min(100%, 640px); padding-inline: var(--s4); }
+
+/* The field page's own loading, missing-assignment and empty states are
+   direct children of the ink page (the field column is not): give them the
+   hub's width, margin and ink-side colours so no white card lands on ink. */
+.eventWorkPage > :not(.fieldApp):not(:global(.staff-header)) { width: min(100%, 640px); margin-inline: auto; padding-inline: var(--s4); color: var(--fld-fg); }
+.eventWorkPage > .orgLine { color: var(--fld-soft); }
+
+.hubPage :global(.staff-workspace) {
+  gap: 0;
+  padding-block: var(--s2) 0;
   border: 0;
-}
-.eventContext > span {
-  min-width: 0;
-  overflow-wrap: break-word;
-  word-break: keep-all;
-}
-
-.eventWorkTitle {
-  min-width: 0;
-  font-size: var(--body);
-  font-weight: 700;
-  line-height: 1.4;
-  overflow-wrap: break-word;
-  word-break: keep-all;
-}
-
-/* Kiosk mode switch: track + thumb read as device state, not as one more
-   action button. The label never flips; the track shows on/off. */
-.kioskSwitch {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  min-height: 44px;
-  padding: var(--s1) var(--s3);
-  border: 1px solid transparent;
-  border-radius: var(--radius-medium);
-  background: transparent;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.kioskSwitch:hover:not(:disabled) {
-  border-color: var(--line);
-  background: var(--surface-muted);
-}
-
-.kioskSwitch:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-.kioskSwitchTrack {
-  position: relative;
-  display: inline-block;
-  vertical-align: middle;
-  margin-right: var(--s2);
-  flex: none;
-  width: 32px;
-  height: 20px;
-  border-radius: 999px;
-  background: var(--line-strong);
-  transition: background-color 160ms ease-out;
-}
-
-.kioskSwitchThumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--paper);
-  box-shadow: 0 1px 3px var(--shadow-color);
-  transition: left 160ms ease-out;
-}
-
-.kioskSwitchOn {
-  color: var(--ink);
-}
-
-.kioskSwitchOn .kioskSwitchTrack {
-  background: var(--ink);
-}
-
-.kioskSwitchOn .kioskSwitchThumb {
-  left: 14px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .kioskSwitchTrack,
-  .kioskSwitchThumb {
-    transition: none;
-  }
-}
-
-/* Correction submit: the global .correction-form is ungridded flow, so the
-   button renders content-width while every sibling action (camera primary,
-   code submit, retry) spans full width on phones. Same 48px commitment as
-   the code submit, full row on narrow screens. */
-.correctSubmit {
-  min-height: 48px;
-  font-weight: 750;
-}
-
-@media (max-width: 560px) {
-  .correctSubmit {
-    width: 100%;
-  }
-}
-
-/* 320px-class phones: recover the ~60px the primary needs to sit fully
-   inside the first 568px viewport, plus the fallback label peek. Only
-   unnecessary space is cut — control heights (44px+), text sizes, wrapping,
-   and every block stay intact, and nothing is positioned, so no overlay can
-   ever cover the selector, the org line, the ledger, or the SELF-booth QR.
-   The duplicated form hairline is collapsed in globals (staff-workspace
-   scope); here only rhythm is tightened and the fallback keeps a scroll
-   margin so keyboard focus never lands it under an edge. */
-@media (max-width: 360px) {
-  .eventWorkPage :global(.staff-header) {
-    margin-bottom: var(--s2);
-    padding-bottom: var(--s1);
-  }
-
-  .eventWorkPage :global(.staff-workspace) {
-    gap: var(--s2);
-  }
-
-  .eventWorkPage :global(.staff-event-context) {
-    padding-bottom: var(--s1);
-  }
-
-  .orgLine {
-    margin-bottom: var(--s1);
-    padding-block: var(--s1);
-  }
-
-  .workSection {
-    padding-top: var(--s1);
-  }
-
-  .scanInput {
-    padding: var(--s1) 0;
-  }
-
-  .fallbackBlock {
-    padding-top: var(--s2);
-    scroll-margin-top: var(--s3);
-  }
-}
-
-.accountContext {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--s2);
-  min-width: 0;
-  padding-bottom: var(--s3);
-  border-bottom: 1px solid var(--line);
-}
-
-.accountContext > div { margin: 0; min-width: 0; max-width: 180px; }
-.accountContext > section { grid-column: 1 / -1; min-width: 0; }
-
-/* ── Staff field screen, stage 1 ────────────────────────────────────────────
-   One header line (back · event · menu) instead of four, the station name as
-   the page's title line (the native select reads as text, so the OS picker
-   is the sheet), underline tabs, one wide primary, a plain recent list.
-   Everything stays in normal flow; nothing is fixed or sticky. */
-.eventWorkPage :global(.staff-header) {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
-.backLabel {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-.eventContext :global(.staff-back-link) { padding-inline: 0; min-width: 44px; justify-content: center; }
-.eventContext .eventWorkTitle { text-align: center; color: var(--muted); font-size: var(--small); font-weight: 650; }
-
-.moreMenu { position: relative; }
-.moreSummary {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius-medium);
-  color: var(--muted);
-  cursor: pointer;
-  list-style: none;
-}
-.moreSummary::-webkit-details-marker { display: none; }
-.moreSummary:hover, .moreMenu[open] > .moreSummary { background: var(--surface-muted); color: var(--ink); }
-.moreSummary :global(.action-icon) { width: 24px; height: 24px; fill: currentColor; stroke: none; }
-.moreBody {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  z-index: 5;
-  display: grid;
-  gap: var(--s2);
-  width: min(320px, calc(100vw - var(--s5)));
-  padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-large);
-  background: var(--paper);
-  box-shadow: 0 12px 32px var(--shadow-color);
-}
-.moreBody > div { max-width: none; }
-.moreBody .kioskSwitch { width: 100%; justify-content: flex-start; padding-inline: 0; }
-
-/* Station: the selected desk/booth reads as the title line. */
-.eventWorkPage :global(.staff-select-field) > label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-.eventWorkPage :global(.staff-select-field) > select {
-  width: 100%;
-  min-height: 52px;
-  padding: var(--s2) var(--s6) var(--s2) 0;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  background-color: transparent;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2361656C' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0 center;
-  background-size: 20px;
-  -webkit-appearance: none;
-  appearance: none;
-  color: var(--ink);
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-/* Task and entry tabs: ink underline, not boxed buttons. */
-.eventWorkPage .taskSwitch, .eventWorkPage .entryModeSwitch { display: flex; gap: var(--s5); margin: 0; padding: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
-.eventWorkPage .taskSwitch :global(.astryx-button), .eventWorkPage .entryModeSwitch :global(.astryx-button) {
-  flex: 0 0 auto;
-  min-height: 48px;
-  padding: 0;
-  border: 0;
-  border-bottom: 2px solid transparent;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  color: var(--muted);
-  font-weight: 700;
-}
-.eventWorkPage .taskSwitch :global(.astryx-button)[aria-pressed="true"], .eventWorkPage .entryModeSwitch :global(.astryx-button)[aria-pressed="true"] {
-  border-bottom-color: var(--ink);
-  background: transparent;
-  color: var(--ink);
-}
-.scanInput > .sectionTitle {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
+  color: var(--fld-fg);
 }
 
-.scanPrimary { min-height: 60px; border-radius: 16px; font-size: 18px; }
-
-/* Recent: time, name, detail. Plain rows, no per-row button. */
-.eventWorkPage .recentRow { flex-direction: row; flex-wrap: nowrap; align-items: center; min-height: 56px; padding: var(--s2) 0; border-bottom: 1px solid var(--line); background: transparent; }
-.eventWorkPage .recentRow .recentName { display: grid; gap: 2px; flex: 1 1 auto; min-width: 0; }
-.eventWorkPage .recentRow .recentName strong { font-weight: 750; }
-.eventWorkPage .recentRow .recentName span { flex: none; color: var(--muted); font-size: var(--small); }
-.eventWorkPage .recentRow time { flex: none; color: var(--muted); font-size: var(--small); font-variant-numeric: tabular-nums; }
-
-/* ── Staff field screen, stage 2: the result is a colored face ──────────────
-   The verdict fills its own face (green done, amber needs a look, red failed)
-   with a round mark, the name large, and one wide next action. The camera is
-   a dark viewfinder with corner marks. Normal flow throughout. */
-.eventWorkPage .resultStage {
-  justify-items: center;
-  gap: var(--s3);
-  padding: var(--s5) var(--s4);
-  border: 0;
-  border-radius: var(--radius-card);
-  text-align: center;
-}
-.eventWorkPage .resultStage[data-tone="ok"] { background: var(--success-soft); }
-.eventWorkPage .resultStage[data-tone="warn"] { background: var(--warning-soft); }
-.eventWorkPage .resultStage[data-tone="bad"] { background: var(--danger-soft); }
-.eventWorkPage .resultStage > .sectionTitle { font-size: var(--small); font-weight: 800; letter-spacing: 0.02em; }
-.eventWorkPage .resultStage[data-tone="ok"] > .sectionTitle { color: var(--success); }
-.eventWorkPage .resultStage[data-tone="warn"] > .sectionTitle { color: var(--warning); }
-.eventWorkPage .resultStage[data-tone="bad"] > .sectionTitle { color: var(--danger); }
-.eventWorkPage .resultStage .resultBlock { justify-items: center; width: 100%; }
-.eventWorkPage .resultStage .resultBlock::before {
-  display: grid;
-  place-items: center;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  color: var(--paper);
-  font-size: 32px;
-  font-weight: 800;
-  line-height: 1;
-}
-.eventWorkPage .resultStage[data-tone="ok"] .resultBlock::before { content: "✓" / ""; background: var(--success); }
-.eventWorkPage .resultStage[data-tone="warn"] .resultBlock::before { content: "!" / ""; background: var(--warning); }
-.eventWorkPage .resultStage[data-tone="bad"] .resultBlock::before { content: "!" / ""; background: var(--danger); }
-.eventWorkPage .resultStage :global(.scan-result) {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
-}
-.eventWorkPage .resultStage[data-tone="warn"] :global(.scan-result), .eventWorkPage .resultStage[data-tone="bad"] :global(.scan-result) { font-size: 22px; letter-spacing: -0.02em; }
-.eventWorkPage .resultStage .nextStep { color: var(--muted); }
-.eventWorkPage .resultStage .nextActions { width: 100%; justify-items: stretch; }
-.eventWorkPage .resultStage .nextActions :global(.astryx-button) { min-height: 60px; border-radius: 16px; font-size: 18px; }
-.eventWorkPage .resultStage .nextActions :global(.button-quiet) { min-height: 48px; font-size: var(--body); }
-
-/* Viewfinder (staff only; the attendee camera keeps the shared look). */
-.eventWorkPage :global(.camera-panel) {
-  position: relative;
-  gap: var(--s3);
-  padding: 0 0 var(--s4);
-  overflow: hidden;
-  border: 0;
-  border-radius: var(--radius-card);
-  background: var(--side);
-  color: var(--paper);
-}
-.eventWorkPage :global(.camera-panel) > h2 {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-.eventWorkPage :global(.camera-panel) video { aspect-ratio: 1 / 1; border-radius: 0; background: var(--side); }
-.eventWorkPage :global(.camera-panel):not(:has(video)) { padding-top: var(--s4); }
-.eventWorkPage :global(.camera-panel):has(video)::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  aspect-ratio: 1 / 1;
-  pointer-events: none;
-  background:
-    linear-gradient(var(--paper), var(--paper)) left 20% top 20% / 40px 4px no-repeat,
-    linear-gradient(var(--paper), var(--paper)) left 20% top 20% / 4px 40px no-repeat,
-    linear-gradient(var(--paper), var(--paper)) right 20% top 20% / 40px 4px no-repeat,
-    linear-gradient(var(--paper), var(--paper)) right 20% top 20% / 4px 40px no-repeat,
-    linear-gradient(var(--paper), var(--paper)) left 20% bottom 20% / 40px 4px no-repeat,
-    linear-gradient(var(--paper), var(--paper)) left 20% bottom 20% / 4px 40px no-repeat,
-    linear-gradient(var(--paper), var(--paper)) right 20% bottom 20% / 40px 4px no-repeat,
-    linear-gradient(var(--paper), var(--paper)) right 20% bottom 20% / 4px 40px no-repeat;
-}
-.eventWorkPage :global(.camera-panel) > p, .eventWorkPage :global(.camera-panel) > :global(.astryx-button) { margin-inline: var(--s4); width: auto; }
-.eventWorkPage :global(.camera-panel) > p { margin-block: 0; color: var(--line-strong); }
-.eventWorkPage :global(.camera-panel) > button[data-variant="secondary"] { border-color: transparent; background: var(--paper); color: var(--ink); }
-.eventWorkPage .resultStage .nextActions :global(.button-quiet) { background: transparent; }
-
-/* ------------------------------------------------------------------
-   Field screen. A dark column: a quiet top bar, the camera (or the result)
-   as the stage, and a short white bar for the three things an operator
-   reaches for. Lists, forms and corrections open only on demand, as sheets.
-   The page heading stays for assistive technology only.
-   ------------------------------------------------------------------ */
-.eventWorkPage {
-  width: 100%;
-  max-width: none;
-  min-height: 100svh;
-  padding: 0;
-  background: var(--ink);
-}
-.eventWorkPage > :global(.staff-header) {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
-.eventWorkPage .fieldApp {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  width: 100%;
-  max-width: 640px;
-  min-height: 100svh;
-  margin: 0 auto;
-  padding: 0;
-  background: var(--ink);
-  color: var(--paper);
-}
-.fieldApp .eventContext {
-  padding: var(--s2) var(--s1) 0;
-  border: 0;
-  color: var(--paper);
-}
-.fieldApp .eventContext :global(.staff-back-link) { color: var(--paper); }
-.fieldApp .eventContext :global(.staff-back-link):hover { background: color-mix(in srgb, var(--paper) 12%, transparent); border-color: transparent; }
-.fieldApp .backLabel { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.fieldApp .eventWorkTitle {
-  text-align: center;
-  color: color-mix(in srgb, var(--paper) 72%, transparent);
-  font-size: var(--small);
-  font-weight: 650;
-}
-.fieldApp .moreMenu { position: relative; color: var(--paper); }
-.fieldApp .moreSummary { color: var(--paper); }
-.fieldApp .moreBody {
-  position: absolute;
-  right: 0;
-  z-index: 8;
-  width: min(320px, calc(100vw - 32px));
-  padding: var(--s3);
-  border-radius: 16px;
-  background: var(--paper);
-  color: var(--ink);
-  box-shadow: var(--shadow-raised);
-}
-
-/* Where the operator works: the select reads as the screen title. */
-.fieldContext {
-  display: grid;
-  gap: var(--s1);
-  padding: 0 var(--s3) var(--s2);
-  color: var(--paper);
-}
-.fieldContext :global(.staff-task-switch) {
-  display: flex;
-  justify-content: center;
-  gap: var(--s2);
-  margin: 0;
-}
-.fieldContext :global(.staff-task-switch) :global(.astryx-button) {
-  min-height: 36px;
-  border-color: color-mix(in srgb, var(--paper) 28%, transparent);
-  background: transparent;
-  color: var(--paper);
-  font-size: var(--small);
-}
-.fieldContext :global(.staff-task-switch) :global(.astryx-button[aria-pressed="true"]) {
-  border-color: var(--paper);
-  background: var(--paper);
-  color: var(--ink);
-}
-.fieldContext :global(.staff-select-field) { display: grid; gap: 0; }
-.fieldContext :global(.staff-select-field) label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-.fieldContext :global(.staff-select-field) select {
-  width: 100%;
-  min-height: 44px;
-  padding: 0 var(--s5);
-  border: 0;
-  border-radius: 12px;
-  appearance: none;
-  background-color: transparent;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  background-size: 18px;
-  color: var(--paper);
-  font: inherit;
-  font-size: 1.0625rem;
-  font-weight: 800;
-  text-align: center;
-  text-align-last: center;
-}
-.fieldContext :global(.staff-select-field) select option { color: var(--ink); }
-.fieldContext :global(.staff-select-field) select:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
-.fieldContext :global(.staff-direction-hint) {
-  margin: var(--s2) 0 0;
-  color: color-mix(in srgb, var(--paper) 72%, transparent);
-  font-size: var(--small);
-  text-align: center;
-}
-/* Inside the desk field the select-field rule paints every Astryx button as
-   paper with !important; the direction check is the one thing to press here,
-   so it stays an ink button. */
-.fieldContext :global(.staff-select-field) .directionReview > :global(.astryx-button) {
-  padding-inline: var(--s4);
-  border-radius: 12px;
-  background: var(--ink) !important;
-  color: var(--paper) !important;
-  font-weight: 700;
-}
-.fieldContext :global(.staff-select-field) .directionReview > :global(.astryx-button):disabled { opacity: 0.55; }
-.fieldContext .directionReview,
-.fieldContext :global(.notice) {
-  background: var(--paper);
-  color: var(--ink);
-  border-radius: 14px;
-}
-.fieldContext .workSection { padding: 0; border: 0; background: transparent; }
-
-.fieldApp > :global(.notice),
-.fieldNotice {
-  margin: 0 var(--s3) var(--s2);
-  padding: var(--s3);
-  border-radius: 14px;
-  background: var(--paper);
-  color: var(--ink);
-  font-size: var(--small);
-}
-
-/* Stage: the camera or a result fills everything between the bars. */
-.fieldStage {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 320px;
-  overflow: hidden;
-  background: var(--ink);
-  color: var(--paper);
-}
-.stageIdle { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: var(--s4); padding: var(--s4); text-align: center; }
-.idleFrame { position: relative; width: min(236px, 62vw); aspect-ratio: 1; opacity: 0.35; }
-.idleFrame i { position: absolute; width: 40px; height: 40px; border: 4px solid var(--paper); }
-.idleFrame i:nth-child(1) { top: 0; left: 0; border-right: 0; border-bottom: 0; border-radius: 24px 0 0 0; }
-.idleFrame i:nth-child(2) { top: 0; right: 0; border-left: 0; border-bottom: 0; border-radius: 0 24px 0 0; }
-.idleFrame i:nth-child(3) { bottom: 0; left: 0; border-right: 0; border-top: 0; border-radius: 0 0 0 24px; }
-.idleFrame i:nth-child(4) { bottom: 0; right: 0; border-left: 0; border-top: 0; border-radius: 0 0 24px 0; }
-.idleText { max-width: 28ch; margin: 0; color: color-mix(in srgb, var(--paper) 72%, transparent); font-size: var(--small); line-height: 1.5; }
-.cameraLoading { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: color-mix(in srgb, var(--paper) 72%, transparent); }
-
-/* The SELF booth: a big code for the participant's own camera. */
-.selfStage {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  display: grid;
-  align-content: start;
-  justify-items: center;
-  gap: var(--s3);
-  overflow: auto;
-  padding: var(--s4);
-  background: var(--paper);
-  color: var(--ink);
-  text-align: center;
-}
-.selfStage :global(.notice) { background: var(--surface-muted); }
-
-/* Result overlay. Tone sets the ground; the badge repeats it by shape. */
-.overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  display: flex;
-  flex-direction: column;
-  background: var(--success-soft);
-  color: var(--ink);
-}
-.overlay[data-tone="info"] { background: var(--info-soft); }
-.overlay[data-tone="warn"] { background: var(--warning-soft); }
-.overlay[data-tone="bad"] { background: var(--danger-soft); }
-.overlayTap { position: absolute; inset: 0; z-index: 0; width: 100%; border: 0; background: transparent; cursor: pointer; }
-.overlayBody {
-  position: relative;
-  z-index: 2;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s2);
-  padding: var(--s5) var(--s4) var(--s3);
-  text-align: center;
-}
-
-.badge {
-  display: grid;
-  place-items: center;
-  width: 72px;
-  height: 72px;
-  margin-bottom: var(--s1);
-  border-radius: 50%;
-  background: var(--success);
-  color: var(--paper);
-}
-.badge[data-tone="info"] { background: var(--info); }
-.badge[data-tone="warn"] { background: var(--warning); }
-.badge[data-tone="bad"] { background: var(--danger); }
-.badge svg { width: 36px; height: 36px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-.kicker { margin: 0; color: var(--success); font-size: var(--small); font-weight: 800; letter-spacing: 0.02em; }
-.overlay[data-tone="info"] .kicker { color: var(--info); }
-.overlay[data-tone="warn"] .kicker { color: var(--warning); }
-.overlay[data-tone="bad"] .kicker { color: var(--danger); }
-.bigName { margin: 0; font-size: 2.5rem; font-weight: 800; letter-spacing: -0.035em; line-height: 1.1; overflow-wrap: anywhere; word-break: keep-all; }
-.bigMessage { margin: 0; padding: 0; border: 0; background: transparent; color: var(--ink); font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.3; word-break: keep-all; overflow-wrap: break-word; }
-.subLine { margin: 0; color: var(--muted); font-size: 0.9375rem; overflow-wrap: anywhere; }
-.reason { max-width: 32ch; margin: var(--s1) 0 0; padding: var(--s2) var(--s3); border-radius: 14px; background: color-mix(in srgb, var(--paper) 70%, transparent); font-size: var(--small); line-height: 1.5; word-break: keep-all; overflow-wrap: break-word; }
-.overlayFoot { position: relative; z-index: 2; padding: 0 var(--s4) var(--s4); display: grid; gap: var(--s1); justify-items: center; }
-.overlayInner { position: relative; z-index: 2; flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: auto; scroll-padding-block: var(--s2); }
-/* A result that hands itself back is one big tap target (the button behind the text):
-   its text and timer let the tap through; its quiet links stay tappable. */
-.overlayInner[data-tap] { pointer-events: none; }
-.overlayInner[data-tap] > * { pointer-events: auto; }
-.overlayInner[data-tap] > .overlayBody, .overlayInner[data-tap] > .overlayBody > *, .overlayInner[data-tap] > .overlayFoot { pointer-events: none; }
-.overlayInner[data-tap] .overlayFoot button, .overlayInner[data-tap] .overlayFoot a { pointer-events: auto; }
-/* Result buttons: the same white bar the scan buttons use, inside the result region. */
-.overlayPanel {
-  position: relative;
-  z-index: 3;
-  display: grid;
-  gap: var(--s2);
-  margin-top: auto;
-  padding: var(--s3) var(--s3) var(--s4);
-  border-radius: 28px 28px 0 0;
-  background: var(--paper);
-  color: var(--ink);
-  box-shadow: 0 -8px 24px color-mix(in srgb, var(--ink) 12%, transparent);
-}
-.overlayPanel .nextActions { display: grid; gap: var(--s2); }
-.overlayPanel .prizeWorkspace { max-height: 45svh; overflow: auto; }
-.timer { width: 100%; height: 6px; overflow: hidden; border-radius: 6px; background: color-mix(in srgb, var(--ink) 12%, transparent); }
-.timer i { display: block; width: 100%; height: 100%; border-radius: 6px; background: var(--success); transform-origin: left; animation: timerRun linear forwards; }
-@keyframes timerRun { from { transform: scaleX(1); } to { transform: scaleX(0); } }
-@media (prefers-reduced-motion: reduce) { .timer i { animation: none; } }
-.tapHint { margin: 0; color: var(--muted); font-size: var(--small); }
-.linkRow { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s2); }
-.dangerLink { color: var(--danger); }
-
-/* Bottom bar: three quiet buttons, or the one thing the result needs. */
-.fieldBar {
-  position: relative;
-  z-index: 4;
-  display: grid;
-  gap: var(--s2);
-  margin-top: -28px;
-  padding: var(--s3) var(--s3) var(--s4);
-  border-radius: 28px 28px 0 0;
-  background: var(--paper);
-  color: var(--ink);
-  box-shadow: 0 -8px 24px color-mix(in srgb, var(--ink) 12%, transparent);
-}
-.fieldBar:empty { display: none; }
-.fieldBar :global(.astryx-button):not([data-action-variant="ghost"]) { justify-content: center; }
-.scanPrimary { min-height: 60px; font-size: 1.125rem; font-weight: 750; }
-.bar3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: var(--s1); }
-.bar3 button {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-height: 64px;
-  border: 0;
-  border-radius: 16px;
-  background: var(--surface-muted);
-  color: var(--ink);
-  font: inherit;
-  font-size: 0.84375rem;
-  font-weight: 650;
-  cursor: pointer;
-}
-.bar3 button:disabled { opacity: 0.5; cursor: default; }
-.bar3 button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.bar3 button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
-.bar3 svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; color: var(--muted); }
-.bar3 button[aria-pressed="true"] svg { color: var(--paper); }
-.fieldBar .prizeWorkspace { max-height: 55svh; overflow: auto; }
-.fieldBar .nextActions { display: grid; gap: var(--s2); }
-
-.sheetForm { display: grid; gap: var(--s3); }
-.reasonChips { display: flex; flex-wrap: wrap; gap: var(--s2); margin-bottom: var(--s2); }
-.reasonChips button {
-  min-height: 44px;
-  padding: 0 var(--s3);
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: var(--paper);
-  color: var(--ink);
-  font: inherit;
-  font-weight: 650;
-  cursor: pointer;
-}
-.reasonChips button[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--paper); }
-.reasonChips button:disabled { opacity: 0.5; cursor: default; }
-
-/* Sheets sit inside the dark column but read on their own paper. */
-.fieldApp :global(.dialog) { color: var(--ink); }
-.lastScan { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin-bottom: var(--s3); padding: var(--s2) var(--s3); border-radius: 14px; background: var(--surface-muted); }
-.lastScan p { margin: 0; }
-
-/* Recovery buttons under the station select sit on the dark column: a white face with ink text. */
-.fieldContext :global(.staff-select-field) :global(.astryx-button) {
-  background: var(--paper) !important;
-  border-color: transparent !important;
-  color: var(--ink) !important;
-}
-
-/* The shared recovery panel (another window's unconfirmed request) reads on its own paper above the stage. */
-.fieldReceipts:empty { display: none; }
-.fieldReceipts { padding: 0 var(--s3) var(--s2); }
-.fieldReceipts > section { padding: var(--s3); border-radius: 14px; background: var(--paper); color: var(--ink); }
-
-/* ------------------------------------------------------------------
-   Assignment hub (DESIGN.md "스태프 목록과 로그인 확정 구성"): the same dark
-   column as the field screen. The live event is one card with the only
-   orange; the rest are flat rows that open as a whole. The page heading
-   stays for assistive technology only.
-   ------------------------------------------------------------------ */
-.hubPage {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-  max-width: none;
-  min-height: 100svh;
-  padding: 0 0 var(--s6);
-  background: var(--ink);
-  color: var(--paper);
-}
-.hubPage > :global(.staff-header) {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-.hubPage > :not(:global(.staff-header)) { width: min(100%, 640px); padding-inline: var(--s4); }
-
-.hubPage :global(.staff-workspace) { gap: 0; padding-block: var(--s2) 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: var(--paper); }
 .hubBar { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 64px; }
 .hubBar > :global(*:last-child) { margin-bottom: 0; }
-.hubWordmark { font-family: var(--display-font); font-size: 19px; font-weight: 800; letter-spacing: -0.03em; }
+.hubWordmark { font-family: var(--display-font); font-size: var(--text-lg); font-weight: var(--fw-heavy); letter-spacing: var(--ls-heading); }
 .hubWordmark::first-letter { color: var(--brand); }
-.hubPage .orgLine { margin-top: var(--s2); color: color-mix(in srgb, var(--paper) 72%, transparent); }
 
-.hubPage .hubHeading { margin: var(--s4) 0 var(--s4); font-size: 32px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.15; color: var(--paper); }
-.hubPage .hubCount { color: var(--brand); }
-.hubQuiet { margin: calc(var(--s2) * -1) 0 var(--s4); color: color-mix(in srgb, var(--paper) 72%, transparent); font-size: var(--small); }
+.hubPage .orgLine { margin-top: var(--s2); color: var(--fld-soft); }
+
+.hubHeading {
+  margin: var(--s4) 0;
+  color: var(--fld-fg);
+  font-size: var(--text-2xl);
+  font-weight: var(--fw-heavy);
+  letter-spacing: var(--ls-heading);
+  line-height: var(--lh-tight);
+}
+
+.hubCount { color: var(--brand); font-variant-numeric: tabular-nums; }
+.hubQuiet { margin: calc(var(--s2) * -1) 0 var(--s4); color: var(--fld-soft); font-size: var(--text-sm); }
 
 .hubLive {
   position: relative;
@@ -1457,131 +1143,175 @@
   padding: var(--s4);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--brand) 34%, transparent);
-  border-radius: 24px;
+  border-radius: var(--r-card);
   background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 16%, var(--ink)) 0%, color-mix(in srgb, var(--paper) 8%, var(--ink)) 62%);
 }
+
 .hubLive > * { position: relative; }
-.hubLiveChip { justify-self: start; display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 10px; border-radius: 999px; background: var(--success-soft); color: var(--success); font-size: 12.5px; font-weight: 750; }
-.hubLiveChip::before { width: 7px; height: 7px; border-radius: 50%; background: currentColor; content: ""; }
-.hubLiveName { font-size: 28px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.2; overflow-wrap: anywhere; word-break: keep-all; }
-.hubLiveTime { font-size: 38px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
-.hubLiveTime i { color: color-mix(in srgb, var(--paper) 72%, transparent); font-style: normal; font-weight: 600; }
-.hubLiveMine { color: color-mix(in srgb, var(--paper) 88%, transparent); font-size: 14.5px; font-weight: 650; }
-.hubGo {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  min-height: 56px; margin-top: var(--s3); border-radius: 16px;
-  background: var(--brand); color: var(--on-brand);
-  font-size: 17px; font-weight: 800; text-decoration: none;
+.hubLive > :first-child { justify-self: start; }
+
+.hubLiveName {
+  font-size: var(--text-2xl);
+  font-weight: var(--fw-heavy);
+  letter-spacing: var(--ls-heading);
+  line-height: var(--lh-tight);
+  overflow-wrap: anywhere;
+  word-break: keep-all;
 }
+
+.hubLiveTime { font-size: var(--text-num); font-weight: var(--fw-heavy); letter-spacing: var(--ls-num); font-variant-numeric: tabular-nums; }
+.hubLiveTime i { color: var(--fld-soft); font-style: normal; font-weight: var(--fw-strong); }
+.hubLiveMine { color: var(--fld-strong); font-size: var(--text-sm); font-weight: var(--fw-strong); }
+
+.hubGo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s3);
+  min-height: 56px;
+  margin-top: var(--s3);
+  border-radius: var(--r-card);
+  background: var(--brand);
+  color: var(--on-brand);
+  font-size: var(--text-lg);
+  font-weight: var(--fw-heavy);
+  text-decoration: none;
+}
+
 .hubGo:hover { background: var(--brand-hover); color: var(--on-brand-hover); }
-.hubGo:focus-visible, .hubRowLink:focus-visible { outline: 3px solid var(--paper); outline-offset: 3px; }
+.hubGo:focus-visible,
+.hubRowLink:focus-visible { outline: 3px solid var(--fld-fg); outline-offset: 3px; }
 .hubGo svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-.hubSub { margin: 0 0 var(--s2); color: color-mix(in srgb, var(--paper) 72%, transparent); font-size: 13px; font-weight: 750; }
-.hubPage :global(.staff-assignment-list) { margin: 0 calc(var(--s4) * -1); padding: 0; list-style: none; border-top: 1px solid color-mix(in srgb, var(--paper) 14%, transparent); }
-.hubPage .hubRow { display: block; padding: 0; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--paper) 14%, transparent); }
-.hubRowLink { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 14px; min-height: 76px; padding: var(--s3) var(--s4); color: var(--paper); text-decoration: none; }
-.hubRowLink:hover, .hubRowLink:active { background: color-mix(in srgb, var(--paper) 12%, transparent); color: var(--paper); }
-.hubRowOff { opacity: 0.55; cursor: not-allowed; }
-.hubInitial { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: color-mix(in srgb, var(--paper) 8%, var(--ink)); font-size: 17px; font-weight: 800; }
-.hubRowText { display: grid; gap: 2px; min-width: 0; }
-.hubPage .hubEventName { font-size: 17px; font-weight: 750; letter-spacing: -0.02em; line-height: 1.3; }
-.hubPage .hubScope { color: color-mix(in srgb, var(--paper) 72%, transparent); font-size: 13px; }
-.hubRowEnd { display: flex; align-items: center; gap: 12px; }
-.hubRowEnd svg { width: 22px; height: 22px; fill: none; stroke: color-mix(in srgb, var(--paper) 72%, transparent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.dotLive, .dotReady { display: block; width: 10px; height: 10px; border-radius: 50%; }
-.dotLive { background: var(--success-line); }
-.dotReady { background: var(--warning-line); }
+.hubSub { margin: 0 0 var(--s2); color: var(--fld-soft); font-size: var(--text-sm); font-weight: var(--fw-heavy); }
 
-.hubState { display: grid; gap: var(--s3); justify-items: start; padding: var(--s4) 0; border: 0; background: transparent; color: var(--paper); }
-.hubTile { display: grid; place-items: center; width: 64px; height: 64px; border: 1px solid color-mix(in srgb, var(--paper) 18%, transparent); border-radius: 20px; background: color-mix(in srgb, var(--paper) 8%, var(--ink)); color: color-mix(in srgb, var(--paper) 72%, transparent); }
+.hubPage :global(.staff-assignment-list) {
+  margin: 0 calc(var(--s4) * -1);
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--fld-hair);
+}
+
+.hubRow { display: block; padding: 0; border: 0; border-bottom: 1px solid var(--fld-hair); }
+
+.hubRowLink {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 76px;
+  padding: var(--s3) var(--s4);
+  color: var(--fld-fg);
+  text-decoration: none;
+}
+
+.hubRowLink:hover,
+.hubRowLink:active { background: var(--fld-wash); color: var(--fld-fg); }
+.hubRowOff { opacity: 0.55; cursor: not-allowed; }
+
+.hubInitial {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-ctl);
+  background: var(--fld-lift);
+  font-size: var(--text-lg);
+  font-weight: var(--fw-heavy);
+}
+
+.hubRowText { display: grid; gap: 2px; min-width: 0; }
+.hubEventName { font-size: var(--text-lg); font-weight: var(--fw-strong); letter-spacing: -0.02em; line-height: var(--lh-tight); overflow-wrap: anywhere; }
+.hubScope { color: var(--fld-soft); font-size: var(--text-sm); line-height: var(--lh-body); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.hubRowEnd { display: flex; align-items: center; gap: var(--s3); }
+.hubRowEnd svg { width: 22px; height: 22px; fill: none; stroke: var(--fld-soft); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Hub empty/error guidance: Korean reads by word (eojeol), never split
+   mid-syllable. keep-all preserves 문의/스태프 units at 320px; break-word
+   still breaks long codes/paths when the viewport demands it. */
+.hubPage .hubState,
+.eventWorkPage .hubState { display: grid; gap: var(--s3); justify-items: start; padding-block: var(--s4); border: 0; background: transparent; color: var(--fld-fg); }
+
+.hubTile {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border: 1px solid var(--fld-edge);
+  border-radius: var(--r-card);
+  background: var(--fld-lift);
+  color: var(--fld-soft);
+}
+
+/* State tone on ink: the tile carries the colour, the words carry the meaning. */
+.hubTile[data-tone="danger"] { border-color: var(--danger-line); color: var(--danger-line); }
+.hubTile[data-tone="warn"] { border-color: var(--warning-line); color: var(--warning-line); }
+
 .hubTile svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.hubState .hubNote { color: color-mix(in srgb, var(--paper) 88%, transparent); line-height: 1.6; }
-.hubState :global(.product-action) { min-height: 56px; border-color: color-mix(in srgb, var(--paper) 22%, transparent); border-radius: 16px; background: transparent; color: var(--paper); font-weight: 750; }
-.hubPage :global(.loading-state) { color: color-mix(in srgb, var(--paper) 72%, transparent); }
+
+.hubNote { margin: 0; word-break: keep-all; overflow-wrap: break-word; }
+.hubState .hubNote { color: var(--fld-strong); line-height: var(--lh-body); }
+
+.hubActions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+
+.hubState [data-product-action],
+.hubState [data-product-link] {
+  min-height: 56px;
+  border: 1px solid var(--fld-edge);
+  border-radius: var(--r-card);
+  background: transparent;
+  color: var(--fld-fg);
+  font-weight: var(--fw-heavy);
+}
+
+/* Loading on ink: a quiet ring and words, no white card. */
+.hubPage .hubLoading,
+.eventWorkPage .hubLoading {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s4) 0;
+  border: 0;
+  background: transparent;
+  color: var(--fld-soft);
+  font-size: var(--text-md);
+}
+
+.hubLoading::before {
+  content: "";
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--fld-edge);
+  border-top-color: var(--fld-fg);
+  border-radius: 50%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hubLoading::before { animation: hubSpin 900ms linear infinite; }
+  @keyframes hubSpin { to { transform: rotate(1turn); } }
+}
 
 @media (prefers-reduced-motion: no-preference) {
   .hubRowLink { transition: background-color 120ms ease-out; }
 }
 
 /* ------------------------------------------------------------------
-   Redesign 2026-11-19: the dark field column gets presence. The desk/booth
-   switch is a segmented control, the station select is a pill title, the idle
-   stage is a lit viewfinder with a slow scan line, and the bar's entries are
-   icon tiles. Orange stays on the one thing to press.
+   Narrow phones. 320px-class phones need the first 568px for the camera
+   primary: only unnecessary space is cut — control heights (44px+), text
+   sizes, wrapping and every block stay intact.
    ------------------------------------------------------------------ */
-.eventWorkPage .fieldApp .fieldContext .taskSwitch {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
-  width: min(100%, 360px);
-  margin: var(--s1) auto var(--s2);
-  padding: 4px;
-  border: 0;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--paper) 12%, transparent);
+@media (max-width: 560px) {
+  .lookupForm { grid-template-columns: minmax(0, 1fr); }
+  .workSection { padding-top: var(--s2); }
+  .nextActions button,
+  .lookupForm button,
+  .rewardItem button { width: 100%; }
+  .rewardItem { align-items: stretch; flex-direction: column; }
+  .correctSubmit { width: 100%; }
 }
-.eventWorkPage .fieldApp .fieldContext .taskSwitch :global(.astryx-button) {
-  flex: none;
-  min-width: 0;
-  min-height: 44px;
-  padding: 0 var(--s3);
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: color-mix(in srgb, var(--paper) 78%, transparent);
-  font-size: var(--small);
-  font-weight: 700;
-  word-break: keep-all;
-}
-.eventWorkPage .fieldApp .fieldContext .taskSwitch :global(.astryx-button)[aria-pressed="true"] {
-  background: var(--paper);
-  color: var(--ink);
-  font-weight: 800;
-}
-.eventWorkPage .fieldApp .fieldContext .taskSwitch :global(.astryx-button):disabled { opacity: 0.55; }
 
-/* The station select reads as the screen title, in a pill that says it can be changed. */
-.fieldContext :global(.staff-select-field) select {
-  min-height: 52px;
-  padding: 0 var(--s7) 0 var(--s5);
-  border: 1px solid color-mix(in srgb, var(--paper) 22%, transparent);
-  border-radius: 999px;
-  background-color: color-mix(in srgb, var(--paper) 8%, transparent);
-  background-position: right 18px center;
-  background-size: 20px;
-  font-size: 1.125rem;
-  letter-spacing: -0.01em;
-  word-break: keep-all;
+@media (max-width: 360px) {
+  .orgLine { margin-bottom: var(--s1); padding-block: var(--s1); }
+  .workSection { padding-top: var(--s1); }
 }
-.fieldContext :global(.staff-select-field) select:disabled { opacity: 0.7; }
-
-/* Idle stage: a lit viewfinder, not a dead grey frame. */
-.fieldStage { background: radial-gradient(65% 55% at 50% 48%, color-mix(in srgb, var(--paper) 10%, var(--ink)) 0%, var(--ink) 100%); }
-.fieldStage[data-tone] { background-color: var(--ink); }
-.idleFrame { opacity: 0.85; }
-.idleFrame i { border-color: var(--paper); filter: drop-shadow(0 0 10px color-mix(in srgb, var(--paper) 35%, transparent)); }
-.idleFrame::after {
-  content: "";
-  position: absolute;
-  inset-inline: 10px;
-  top: 12%;
-  height: 2px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, transparent, var(--brand), transparent);
-  opacity: 0.85;
-}
-@media (prefers-reduced-motion: no-preference) {
-  .idleFrame::after { animation: idleScan 2.8s ease-in-out infinite alternate; }
-  @keyframes idleScan { from { top: 12%; } to { top: 86%; } }
-}
-.idleText { max-width: 30ch; color: color-mix(in srgb, var(--paper) 82%, transparent); font-size: 1rem; font-weight: 600; word-break: keep-all; }
-
-/* Bottom bar: a wide camera button and icon tiles. */
-.scanPrimary { gap: var(--s3); border-radius: 18px; }
-.scanPrimary svg { width: 24px; height: 24px; }
-.bar3 { gap: var(--s2); }
-.bar3 button { min-height: 72px; gap: 6px; border: 1px solid var(--line); border-radius: 18px; background: var(--paper); font-size: var(--small); font-weight: 700; word-break: keep-all; }
-.bar3 button:hover:not(:disabled) { border-color: var(--ink); background: var(--surface-muted); }
-.bar3 svg { width: 24px; height: 24px; color: var(--ink); }
-.bar3 button[aria-pressed="true"] { border-color: var(--ink); }

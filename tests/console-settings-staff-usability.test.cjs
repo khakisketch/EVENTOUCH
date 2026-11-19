@@ -104,8 +104,9 @@ test("staff booth codes stay fully readable with a client-side copy path", () =>
   // Touch size, keyboard focus, and tokens for the new affordances.
   assert.match(staffCss, /\.ticketFullCode \{/u);
   assert.match(staffCss, /\.ticketFullCode code \{\s*overflow-wrap: anywhere;/u);
-  assert.match(staffCss, /\.ticketCopy \{\s*min-height: 44px;/u);
-  assert.match(staffCss, /\.ticketCopy:focus-visible,/u);
+  // Reopened 2026-11-20 (design-system application): .ticketCopy styled a class nothing rendered. The copy
+  // button is a ProductButton (shared 44px+ target and focus ring), so the contract is asserted on the markup.
+  assert.match(staff, /<ProductButton type="button" variant="ghost" disabled=\{!ticket\.trim\(\) \|\| submitting\} onClick=\{copyTicketCode\} icon=\{<CopyIcon \/>\}>코드 복사<\/ProductButton>/u);
   assert.doesNotMatch(staffCss, /#[0-9a-fA-F]{3,8}/u);
   assert.doesNotMatch(staffCss, /rgb\(/u);
 });
