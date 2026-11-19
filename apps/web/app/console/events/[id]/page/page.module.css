@@ -538,22 +538,6 @@
   display: flex;
   justify-content: center;
   min-width: 0;
-  padding: var(--s3);
-  border-radius: var(--radius);
-  background: var(--surface-muted);
-}
-
-.phoneViewport {
-  width: min(100%, var(--preview-width));
-  height: var(--preview-height);
-  overflow: auto;
-  overscroll-behavior: contain;
-  border: 1px solid #243943;
-  border-radius: 16px;
-  background: #B9DEF0;
-  box-shadow: 0 5px 18px rgb(23 37 43 / 16%);
-  scrollbar-color: #687b83 #e7eef0;
-  scrollbar-width: thin;
 }
 
 .previewHome {
@@ -583,7 +567,6 @@
   .toggleGrid { grid-template-columns: minmax(0, 1fr); }
   .controlGroup { padding: var(--s4) 0 var(--s3); }
   .previewPanel { padding: var(--s3) 0 0; }
-  .phoneStage { padding: var(--s2); }
   .saveBar { padding: var(--s3); gap: var(--s2); }
 }
 

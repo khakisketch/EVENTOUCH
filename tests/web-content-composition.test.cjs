@@ -141,3 +141,11 @@ test("content tabs follow the tab keyboard pattern: arrows wrap, Home and End ju
   assert.match(workspace, /event\.key === "Home" \? tabs\[0\] : event\.key === "End" \? tabs\[tabs\.length - 1\]/u);
   assert.match(workspace, /event\.key === "ArrowRight" \? tabs\[\(index \+ 1\) % tabs\.length\]/u);
 });
+
+// Reopened 2026-11-20 (owner: previews should be device simulators)
+test('Reopened 2026-11-20: the phone is the shared DeviceFrame and the guide screens wear the real page structure', () => {
+  assert.match(preview, /<DeviceFrame\s+variant="phone"/u);
+  assert.match(preview, /scrollLabel=\{screenLabel\}/u, 'the scrolling screen keeps its labelled region');
+  assert.match(preview, /<HomeHero/u, 'notice, schedule and venue screens start with the real banner');
+  assert.match(preview, /publicStyles\.card/u, 'sections are the guide page cards');
+});

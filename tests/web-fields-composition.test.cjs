@@ -56,3 +56,11 @@ test('write, recovery and conflict contracts are unchanged', () => {
   }
   assert.match(work, /attempt\.command === "field\.save" \|\| attempt\.command === "field\.delete"/u, 'a finished exclusion closes its editor');
 });
+
+// Reopened 2026-11-20 (owner: previews should be device simulators that follow the real form)
+test('Reopened 2026-11-20: the preview is the real registration sheet inside a phone simulator', () => {
+  assert.match(preview, /<DeviceFrame variant="phone"/u);
+  assert.match(preview, /<EventBanner theme=\{theme\}/u, 'the published event banner leads the sheet');
+  for (const title of ['참가자 정보', '연락처 인증', '정보 수집 동의']) assert.match(preview, new RegExp(title, 'u'));
+  assert.match(work, /sheet=\{state\.sheet\}/u);
+});

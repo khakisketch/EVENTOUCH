@@ -8,9 +8,11 @@ test('embedded content preview does not skip heading levels and retains the appr
   const directory = path.join(__dirname, '../apps/web/app/console/events/[id]/content');
   const preview = fs.readFileSync(path.join(directory, 'ContentPhonePreview.tsx'), 'utf8');
   const css = fs.readFileSync(path.join(directory, 'content-preview.module.css'), 'utf8');
-  assert.match(preview, /<h2 style=\{\{ color: readableInk\(background\) \}\}>\{eventName\}<\/h2>/);
-  assert.doesNotMatch(preview, /<h3 style=\{\{ color: readableInk\(background\) \}\}>\{eventName\}/);
-  assert.match(css, /\.hero h2\s*\{[^}]*font-size: var\(--h3\)/s);
+  // Reopened 2026-11-20: the banner is the real HomeHero in preview mode (an h3, never a second h1)
+  // under an sr-only h2 for the phone, so heading levels still do not skip.
+  assert.match(preview, /<HomeHero[\s\S]*?preview\s*\/>/);
+  assert.match(preview, /<h2 className="sr-only">참가자 폰 미리보기<\/h2>/);
+  assert.doesNotMatch(preview, /<h1/);
   assert.doesNotMatch(css, /\.hero h3/);
 });
 

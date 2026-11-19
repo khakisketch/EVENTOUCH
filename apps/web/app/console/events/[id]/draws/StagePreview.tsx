@@ -1,3 +1,4 @@
+import DeviceFrame from "../../../console-ui/DeviceFrame";
 import styles from "./draws.module.css";
 
 // A small, faithful redraw of what the audience actually sees, so the operator
@@ -5,7 +6,9 @@ import styles from "./draws.module.css";
 // venue-screen scene (/screen), roulette, vote and lucky numbers show the
 // attendee phone card. It loads nothing and runs no commands; the real screens
 // stay the source of truth, and the whole preview is decorative for assistive
-// technology (the card beside it states the same facts in text).
+// technology (the card beside it states the same facts in text). Each scene is
+// drawn at the real device size inside a device simulator (a 1280x720 venue
+// screen, a 390px phone) and scaled down as a whole.
 
 export type StageScene =
   | { kind: "board"; event: string; program: string; winner: { name: string; sub: string; tier: string } | null; more: number }
@@ -15,13 +18,13 @@ export type StageScene =
 
 function Phone({ title, event, action, children }: { title: string; event: string; action: string; children: React.ReactNode }) {
   return (
-    <div className={styles.phone}>
+    <DeviceFrame variant="phone" fixed maxDisplayWidth={300} className={styles.device}>
       <div className={styles.phoneScreen}>
         <div className={styles.phoneHead}>{title}<small>{event}</small></div>
         <div className={styles.phoneBody}>{children}</div>
         <div className={styles.phoneFoot}><span>{action}</span></div>
       </div>
-    </div>
+    </DeviceFrame>
   );
 }
 
@@ -29,6 +32,7 @@ export default function StagePreview({ scene, label, event }: { scene: StageScen
   return (
     <div className={styles.stageBox} role="img" aria-label={label} data-scene={scene.kind}>
       {scene.kind === "board" ? (
+        <DeviceFrame variant="screen" fixed maxDisplayWidth={640} className={styles.device}>
         <div className={styles.board} aria-hidden="true">
           <div>
             <div className={styles.boardHead}><span>{scene.event}</span></div>
@@ -45,17 +49,18 @@ export default function StagePreview({ scene, label, event }: { scene: StageScen
           </div>
           <div className={styles.boardFoot} />
         </div>
+        </DeviceFrame>
       ) : scene.kind === "vote" ? (
         <Phone title="순위 투표" event={event} action="투표하기">
           <p>좋아하는 팀 {scene.pickCount}개를 순서대로</p>
-          {scene.teams.slice(0, 3).map((team, index) => (
+          {scene.teams.slice(0, 5).map((team, index) => (
             <div className={styles.phonePick} key={`${team}-${index}`}><i>{index + 1}</i>{team}</div>
           ))}
         </Phone>
       ) : scene.kind === "roulette" ? (
         <Phone title="모바일 룰렛" event={event} action="돌리기">
           <div className={styles.wheel} />
-          {scene.prizes.slice(0, 2).map((prize) => (
+          {scene.prizes.slice(0, 3).map((prize) => (
             <div className={styles.phonePrize} key={prize.label}><b>{prize.label}</b><span>{prize.left}</span></div>
           ))}
         </Phone>

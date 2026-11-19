@@ -282,6 +282,9 @@ Reopened 2026-11-19 (owner: 같은 흰 버튼·얇은 선, 무대 선택이 화�
 - 1200px 이상에서는 무대 카드가 왼쪽 청중 화면 미리보기(스크롤 시 고정)와 오른쪽 "지금 할 일"로 나뉜다. 실행 영역은 옅은 회색 패널 안에 있고 실행 버튼이 유일한 오렌지다.
 - 실행 전제·무대 터치 전제는 흰 버튼 모양이 아니라 앰버 왼쪽 띠 알림이고, 연결 링크는 밑줄 텍스트다. 당첨자는 잉크 원 순번과 함께 카드 행으로 보인다.
 
+Reopened 2026-11-20 (owner: 미리보기가 평평한 상자라 별로, 모바일 껍데기 시뮬레이션으로). 이 항목이 위 설명과 다르면 이 항목이 우선한다.
+- Every console preview is drawn inside one shared device simulator (`console-ui/DeviceFrame.tsx`): a phone (bezel, side keys, dynamic island, status bar, home indicator), a venue screen (thin bezel, stand, floor shadow) or a tablet. The content is laid out at the device's real CSS size (390px, 1280x720) and the whole device is scaled to its host, so the preview reads like the real page. Chrome is `aria-hidden`; the content keeps its own semantics. Here the board scene is the 16:9 screen and vote, roulette and lucky are the phone, on a quiet desk behind the device.
+
 ## 참여 콘텐츠 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/programs/`, review drawer with the merged answer card). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-programs-composition.test.cjs` guards it.
@@ -315,6 +318,9 @@ Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behav
 - The 공지 / 일정 / 장소 안내 tabs are a segmented pill control (the chosen tab is ink-filled) with the count as a chip, not an underline.
 - A ledger row keeps hairlines and the whole-row hit target, but its state dot sits in a 36px tinted circle (green published, amber edited draft, hollow private) and the state word is a tinted pill. 고정 and PDF are small chips. The phone rail is unchanged.
 
+Reopened 2026-11-20 (owner: 미리보기를 모바일 껍데기 시뮬레이션으로):
+- The phone is the shared `DeviceFrame` (390px layout scaled to its host; the scrolling screen stays a labelled region). 공지·일정·장소 screens now start with the real `HomeHero` banner and show white cards under quiet section labels like the real event guide; a real phone's full view is still the bare screen with no frame.
+
 ## 참가자 페이지 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/page/`, the studio; `apps/web/app/event/[slug]/home/`, the compositions). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-home-layouts.test.cjs` guards it. This is the core product screen for event agencies: they pick how the attendee home looks.
@@ -324,6 +330,9 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 - The banner is a picture, a gradient or a solid color (`bannerKind`, `bannerColor`, `bannerColor2`, `bannerAngle`). A color banner picks its own text tone from its colors; a picture follows the chosen tone, focus and readability wash. Existing events read as 타일형 with the picture banner, so their pages change shape (square tiles) when this ships.
 - The studio is a live phone (sticky, "크게 보기" opens a full view; on narrow screens the inline phone yields to that view) beside a short flat list: 레이아웃 cards (the real home, scaled, in the event's own colors), 배경 (curated swatches, then a real picker: saturation/brightness field, hue bar, hex, eyedropper where the browser has one, recent colors and colors taken from the banner picture), then four rows (배너, 제목과 문구, 홈 메뉴, 소개와 공개 범위). A row opens in place with a ‹ settings crumb, never a modal, so the phone stays live. Choices that used to be selects are picture cards or segmented controls; public visibility is four switches.
 - The one orange action follows the next step: 초안 저장 while there are unsaved changes, 게시 검토 once saved. Save, publish review, conflict recovery, uploads, reset/discard confirmations and permission locks are unchanged. The old jump nav (편집 · 저장·게시 · 미리보기) and the in-form skip link are gone.
+
+Reopened 2026-11-20 (owner: 미리보기를 모바일 껍데기 시뮬레이션으로):
+- The editor's home preview (and its "크게 보기" stage) is the shared `DeviceFrame` phone: the home renders at the chosen screen size (320×568, 390×700, 390×844) with a status bar and home indicator, scaled to the column, instead of a squeezed 340px box.
 
 ## 행사 설정 확정 구성
 
@@ -520,6 +529,9 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/console/events/
 - A row is its name as the one button (its hit area covers the row, so its accessible name still contains its visible text), a quiet type line, a 필수/선택 dot and two icon-only move buttons. Exclusion no longer repeats on every row: it is "이 항목 제외" inside the editor, with its confirm directly under the editor. 이름 and 연락처 stay required and cannot be excluded.
 - One orange at a time: "항목 추가" while idle, "항목 저장" while editing (add is blocked then); the preview's button is grey. The draft state is one pill ("게시 안 된 변경 있음", "아직 게시 전", "게시된 양식과 같음"); publishing stays in 참가 접수. The input type is a choice group, not a select.
 - Moves stay one step at a time and every save, move and exclusion is its own command, as before. The same-request recovery, conflict notice, receipt check and abandon flow, and their copy, are unchanged.
+
+Reopened 2026-11-20 (owner: 미리보기를 모바일 껍데기 시뮬레이션으로, 실제 신청서를 따를 것):
+- The preview is the real registration sheet inside the shared `DeviceFrame` phone: the published event banner (`EventBanner`), when and where (`EventFacts`), then numbered sections 참가자 정보, 연락처 인증 (only when the event asks for a phone check) and 정보 수집 동의 (only when a consent notice exists), on the event's ground color. The field being edited scrolls into view and stays outlined. Still decorative (`aria-hidden`, `inert`), still no second orange.
 
 ## 참여하기 확정 구성
 
