@@ -7,11 +7,13 @@ import ConsoleDialog from "../../../console-ui/ConsoleDialog";
 import ProductButton from "../../../../ui/ProductButton";
 import styles from "./attendee-guide-qr.module.css";
 
-export default function AttendeeGuideQr({ eventName, slug }: { eventName: string; slug: string }) {
+// publicBase is the configured attendee-facing address. Without it the QR uses
+// the address this console is open on, which is only right when both match.
+export default function AttendeeGuideQr({ eventName, slug, publicBase = null }: { eventName: string; slug: string; publicBase?: string | null }) {
   const [origin, setOrigin] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
   const addressRef = useRef<HTMLInputElement>(null);
-  const publicUrl = origin ? new URL(`/event/${encodeURIComponent(slug)}`, origin).href : "";
+  const publicUrl = origin ? new URL(`${origin}/event/${encodeURIComponent(slug)}`).href : "";
 
   async function copyAddress() {
     if (!publicUrl) return;
@@ -42,7 +44,7 @@ export default function AttendeeGuideQr({ eventName, slug }: { eventName: string
         variant="ghost"
         onClick={() => {
           setCopyMessage("");
-          setOrigin(window.location.origin);
+          setOrigin(publicBase ?? window.location.origin);
         }}
         aria-haspopup="dialog"
         aria-expanded={Boolean(publicUrl)}

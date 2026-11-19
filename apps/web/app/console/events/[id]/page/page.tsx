@@ -1,4 +1,5 @@
 import ThemeWorkspace from "./ThemeWorkspace";
+import { configuredPublicBase } from "../../../../../lib/public-origin";
 
 export default async function ConsoleAttendeePage({
   params,
@@ -8,7 +9,7 @@ export default async function ConsoleAttendeePage({
   const { id } = await params;
   return (
     <section className="console-page">
-      <ThemeWorkspace eventId={id} />
+      <ThemeWorkspace eventId={id} publicBase={configuredPublicBase()} />
     </section>
   );
 }

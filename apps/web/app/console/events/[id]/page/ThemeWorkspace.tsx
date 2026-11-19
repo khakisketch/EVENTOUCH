@@ -426,7 +426,7 @@ async function loadSnapshot(eventId: string, afterWrite = false): Promise<Snapsh
   }
 }
 
-export default function ThemeWorkspace({ eventId }: { eventId: string }) {
+export default function ThemeWorkspace({ eventId, publicBase = null }: { eventId: string; publicBase?: string | null }) {
   const router = useRouter();
   const [state, setState] = useState<EditorState>({ kind: "loading" });
   // Which sub-panel replaces the settings list (null = the list), and the
@@ -1438,7 +1438,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
       eventId={eventId}
       eventName={state.eventName}
       meta={state.eventMeta}
-      headerActions={publicAvailable ? <AttendeeGuideQr eventName={state.eventName} slug={state.slug} /> : undefined}
+      headerActions={publicAvailable ? <AttendeeGuideQr eventName={state.eventName} slug={state.slug} publicBase={publicBase} /> : undefined}
       feedback={
         <>
           {failure ? <div id="theme-error" tabIndex={-1}><ConsoleFeedback kind="error">{failure.message}</ConsoleFeedback></div> : null}
