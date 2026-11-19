@@ -148,7 +148,8 @@ test('the landing renders one of three compositions with the same entries; the f
   // The ticket's "열기" pill sits on the brand color, so its text uses the
   // on-brand ink token (white fails contrast on the default brand), and the
   // visible word stays in the accessible name (no aria-hidden on visible text).
-  assert.match(css, /\.ticketGo \{[^}]*background: var\(--brand[^}]*color: var\(--on-brand/su);
+  // Reopened 2026-11-20: the pill is the event color and its ink (--ev-accent, falling back to the brand).
+  assert.match(css, /\.ticketGo \{[^}]*background: var\(--ev-accent, var\(--brand\)\)[^}]*color: var\(--ev-on-accent, var\(--on-brand\)\)/su);
   assert.match(landing, /<span className=\{L\.ticketGo\}>열기<\/span>/u);
   assert.doesNotMatch(landing, /ticketGo\} aria-hidden/u);
 });

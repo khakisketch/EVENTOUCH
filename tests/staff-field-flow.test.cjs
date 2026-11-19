@@ -206,10 +206,11 @@ test('field-flow-keeps-touch-size-unobscured-scan-and-kiosk-distinction', () => 
   // 2026-11-10: 토글이 버튼 문구 전환식이 아닌 role=switch 트랙형으로 바뀌었다. 라벨은 고정 '키오스크'.
   assert.match(work, /role="switch"/);
   assert.match(work, /키오스크/);
-  assert.match(styles, /\.nextActions button\s*\{[^}]*min-height:\s*44px/s);
+  // Reopened 2026-11-20: 44px literals became --control-min-size (44px).
+  assert.match(styles, /\.nextActions button\s*\{[^}]*min-height:\s*var\(--control-min-size\)/s);
   assert.doesNotMatch(styles, /\.recentRow button/, 'recent rows carry no buttons');
   assert.match(styles, /\.scanPrimary\s*\{[^}]*min-height:\s*60px/s);
-  assert.match(styles, /\.bar3 button\s*\{[^}]*min-height:\s*64px/s, 'the three bottom buttons are thumb-sized');
+  assert.match(styles, /\.bar3 button\s*\{[^}]*min-height:\s*72px/s, 'the bottom icon tiles are thumb-sized (72px since the 2026-11-19 redesign)');
   // The bottom bar sits in normal flow under the stage: it never covers the desk or the result.
   assert.doesNotMatch(styles, /\.fieldBar\s*\{[^}]*position:\s*(?:sticky|fixed)/s);
   const audit = fs.readFileSync(path.join(__dirname, '../scripts/web-crossrole-journey-audit.cjs'), 'utf8');
@@ -309,12 +310,15 @@ test('hub-empty-and-error-wrap-by-word-and-keep-next-action-findable', () => {
 test('staff-warnings-wrap-by-word-without-mid-syllable-split', () => {
   // 390 미확인 티/켓 + 320 실패 끊김 회귀 방지. 스태프 한정, 임의 데이터는
   // 넘치지 않게. 문구·상태·스냅샷·가드·포커스 불변.
-  assert.match(styles, /\.resultBlock\s+\.scan-result\s*\{[^}]*word-break:\s*keep-all/s);
-  assert.match(styles, /\.resultBlock\s+\.scan-result\s*\{[^}]*overflow-wrap:\s*break-word/s);
+  // Reopened 2026-11-20: .resultBlock/.sectionTitle/.scanContext styled markup that is no longer rendered; the
+  // wrapping contract now lives on the classes that are (.bigMessage, .nextStep, StaffNote).
+  assert.match(styles, /\.bigMessage\s*\{[^}]*word-break:\s*keep-all/s);
+  assert.match(styles, /\.bigMessage\s*\{[^}]*overflow-wrap:\s*break-word/s);
   assert.match(styles, /\.nextStep\s*\{[^}]*word-break:\s*keep-all/s);
   assert.match(styles, /\.nextStep\s*\{[^}]*overflow-wrap:\s*break-word/s);
-  assert.match(styles, /\.sectionTitle\s*\{[^}]*word-break:\s*keep-all/s);
-  assert.match(styles, /\.scanContext\s*\{[^}]*word-break:\s*keep-all/s);
+  const status = fs.readFileSync(path.join(__dirname, '../apps/web/app/staff/staff-status.module.css'), 'utf8');
+  assert.match(status, /\.note\s*\{[^}]*word-break:\s*keep-all/s);
+  assert.match(status, /\.note\s*\{[^}]*overflow-wrap:\s*break-word/s);
   const globals = fs.readFileSync(path.join(__dirname, '../apps/web/app/globals.css'), 'utf8');
   assert.match(globals, /\.staff-workspace\s+\.scan-result\s*\{[^}]*word-break:\s*keep-all/s);
   assert.match(globals, /\.staff-workspace\s+\.scan-result\s*\{[^}]*overflow-wrap:\s*break-word/s);

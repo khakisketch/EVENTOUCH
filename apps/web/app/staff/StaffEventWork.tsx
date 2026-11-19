@@ -34,6 +34,7 @@ import { OrganizationContextNotice } from "../OrganizationSwitcher";
 import StaffAccountMenu from "./StaffAccountMenu";
 import { BackIcon, BangIcon, CheckIcon, ClockIcon, CopyIcon, GiftIcon, InfoIcon, KeyIcon, ListIcon, MoreIcon, RefreshIcon, XIcon } from "../console/console-ui/ConsoleIcons";
 import { CameraIcon } from "./StaffIcons";
+import { StaffNote, StaffPill, type StaffPillTone } from "./StaffStatus";
 import { useOperatorContextSnapshot } from "./use-operator-context";
 import { useEventReceipts } from "../../lib/use-event-receipts";
 import { forgetOperatorReceipt } from "../../lib/operator-receipts";
@@ -43,6 +44,7 @@ import { readServerClock, type ServerClock } from "../../lib/server-clock";
 import prizeStyles from "./staff-event-work.module.css";
 import cameraStyles from "../camera-scan.module.css";
 import ConsoleDialog from "../console/console-ui/ConsoleDialog";
+import ConsoleEmptyState from "../console/console-ui/ConsoleEmptyState";
 import { playScanFeedback, primeScanFeedback, type ScanTone } from "./scan-feedback";
 
 // The scanner (and its decoder) loads only when the operator opens it: the
@@ -994,27 +996,28 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   if (loading || (scope && scope.eventId !== targetEventId)) {
     return (
       <>
-        <StaffAccountMenu confirmLeave={confirmLeaveStaff} confirmLeaveAccount={confirmLeaveAccountPage} />
-        <p className="loading-state" role="status">업무 정보를 불러오고 있습니다.</p>
+        <StaffAccountMenu tone="dark" confirmLeave={confirmLeaveStaff} confirmLeaveAccount={confirmLeaveAccountPage} />
+        <p className={`loading-state ${prizeStyles.hubLoading}`} role="status">업무 정보를 불러오고 있습니다.</p>
       </>
     );
   }
   if (missingAssignment || (!scope && loadError)) {
     return (
       <>
-        <StaffAccountMenu confirmLeave={confirmLeaveStaff} confirmLeaveAccount={confirmLeaveAccountPage} />
+        <StaffAccountMenu tone="dark" confirmLeave={confirmLeaveStaff} confirmLeaveAccount={confirmLeaveAccountPage} />
         <p className={prizeStyles.orgLine}>{orgLineText()}</p>
         {orgChanged ? <OrganizationContextNotice confirmLeave={confirmLeaveStaff} /> : null}
-        <section className="staff-workspace state-panel">
-          <p role="alert">{loadError ?? "이 행사에 대한 업무 배정이 없습니다. 운영자에게 문의하세요."}</p>
-          <p>
+        <section className={`staff-workspace state-panel ${prizeStyles.hubState}`}>
+          <span className={prizeStyles.hubTile} data-tone="danger" aria-hidden="true"><BangIcon /></span>
+          <p role="alert" className={prizeStyles.hubNote}>{loadError ?? "이 행사에 대한 업무 배정이 없습니다. 운영자에게 문의하세요."}</p>
+          <div className={prizeStyles.hubActions}>
             <ProductButton type="button" className="button button-secondary" onClick={() => load()}>
               다시 불러오기
-            </ProductButton>{" "}
+            </ProductButton>
             <ProductLink className="button button-secondary" href="/staff">
               내 업무로
             </ProductLink>
-          </p>
+          </div>
         </section>
       </>
     );
@@ -1022,9 +1025,14 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   if (!scope) {
     return (
       <>
-        <StaffAccountMenu confirmLeave={confirmLeaveStaff} confirmLeaveAccount={confirmLeaveAccountPage} />
-        <p className="loading-state">배정된 업무가 없습니다. 내 업무 목록에서 배정을 확인하거나, 현장 책임자에게 배정을 요청하세요.</p>
-        <p><ProductLink className="button button-secondary" href="/staff">내 업무 보기</ProductLink></p>
+        <StaffAccountMenu tone="dark" confirmLeave={confirmLeaveStaff} confirmLeaveAccount={confirmLeaveAccountPage} />
+        <section className={`staff-workspace state-panel ${prizeStyles.hubState}`}>
+          <span className={prizeStyles.hubTile} data-tone="warn" aria-hidden="true"><ClockIcon /></span>
+          <p role="status" className={prizeStyles.hubNote}>배정된 업무가 없습니다. 내 업무 목록에서 배정을 확인하거나, 현장 책임자에게 배정을 요청하세요.</p>
+          <div className={prizeStyles.hubActions}>
+            <ProductLink className="button button-secondary" href="/staff">내 업무 보기</ProductLink>
+          </div>
+        </section>
       </>
     );
   }
@@ -1779,7 +1787,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               </ProductButton>
             ) : null}
           </ValidatedForm>
-          {pendingLookup ? <div className={prizeStyles.prizeNote} role="status">
+          {pendingLookup ? <StaffNote tone="warn" role="status">
             <p>이전 경품 조회의 결과를 확인하지 못했습니다. 같은 요청으로 다시 확인하거나 조회 확인을 중단할 수 있습니다.</p>
             <ProductButton type="button" className="button button-secondary" disabled={rewardLookupLoading || rewardCollectingId !== null} onClick={() => {
               const entry = [...pendingRewardCommandsRef.current.entries()].find(([, item]) => item.command === "reward.lookup" && item.uncertain);
@@ -1791,8 +1799,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               setRewardError(null);
               setRewardNotice("이전 조회 확인을 중단했습니다. 티켓으로 다시 조회하세요. 조회 중단은 경품 지급을 기록하지 않습니다.");
             }}>이전 조회 확인 중단</ProductButton>
-          </div> : null}
-          {rewardError && !rewardTarget ? <p className={prizeStyles.prizeError} role="alert">{rewardError}</p> : null}
+          </StaffNote> : null}
+          {rewardError && !rewardTarget ? <StaffNote tone="danger" role="alert">{rewardError}</StaffNote> : null}
           {rewardTarget ? (
             <div className={prizeStyles.prizeTarget}>
               <div className={prizeStyles.prizeTargetHead}>
@@ -1805,8 +1813,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                 </ProductButton>
               </div>
               {!rewardDataLoaded && !rewardLookupLoading ? (
-                rewardError ? <p className={prizeStyles.prizeError} role="alert">{rewardError}</p>
-                  : <p className={prizeStyles.prizeEmpty}>최신 수령 상태를 확인하려면 ‘경품 다시 확인’을 누르세요.</p>
+                rewardError ? <StaffNote tone="danger" role="alert">{rewardError}</StaffNote>
+                  : <ConsoleEmptyState kind="empty" title="최신 수령 상태를 확인하려면 ‘경품 다시 확인’을 누르세요." />
               ) : null}
               {targetRewards.length ? (
                 <ul className={prizeStyles.rewardList}>
@@ -1821,7 +1829,11 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                       : pending ? "운영자 수령자 지정 필요"
                       : reward.status === "CANCELLED" ? "취소"
                       : "상태 확인 필요";
-                    const statusTone = received && !reward.issue ? prizeStyles.rewardReceived : readyReward ? prizeStyles.rewardReady : "";
+                    const pillTone: StaffPillTone = !rewardSnapshotCurrent ? "neutral"
+                      : received && !reward.issue ? "ok"
+                      : readyReward || pending ? "wait"
+                      : reward.status === "CANCELLED" || !onsite ? "neutral"
+                      : "wait";
                     const retrying = pendingRewardCommandsRef.current.has(JSON.stringify([
                       activeScope.eventId,
                       assignment.id,
@@ -1832,10 +1844,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                       <li key={reward.id} className={prizeStyles.rewardItem}>
                         <div className={prizeStyles.rewardInfo}>
                           <strong>{reward.name}</strong>
-                          <span className={`${prizeStyles.rewardStatus} ${rewardSnapshotCurrent ? statusTone : ""}`}>
+                          <StaffPill tone={pillTone}>
                             {rewardSnapshotCurrent ? statusLabel : `이전 조회 · ${statusLabel}`}
-                          </span>
-                          {reward.issue && rewardSnapshotCurrent ? <p className={prizeStyles.prizeError} role="alert">{reward.issue}</p> : null}
+                          </StaffPill>
+                          {reward.issue && rewardSnapshotCurrent ? <StaffNote tone="danger" role="alert">{reward.issue}</StaffNote> : null}
                         </div>
                         {readyReward ? (
                           <ProductButton type="button" className="button button-primary" disabled={!ready || !rewardSnapshotCurrent || scanUnknown || orgChanged || assignmentStale || receiptLock || receiptRefreshing || (rewardCollectUncertain && pendingCollection?.payload.id !== reward.id) || rewardCollectingId !== null} onClick={() => collectReward(reward)}>
@@ -1847,17 +1859,17 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                   })}
                 </ul>
               ) : rewardDataLoaded ? (
-                <p className={prizeStyles.prizeEmpty}>이 참가자에게 등록된 경품이 없습니다.</p>
+                <ConsoleEmptyState kind="empty" title="이 참가자에게 등록된 경품이 없습니다." />
               ) : null}
               {rewardDataLoaded && targetRewards.some((reward) => reward.status === "PENDING") ? <p className={prizeStyles.prizeNote}>수령자를 먼저 지정해야 합니다. 운영자에게 확인을 요청하세요.</p> : null}
             </div>
           ) : rewardError || rewardDeskError ? null : result.kind === "ok" && result.action === "OUT" && !historicalScan ? (
-            <p className={prizeStyles.prizeEmpty}>퇴장 스캔 결과의 경품을 불러오지 못했습니다. 티켓으로 다시 조회하세요.</p>
+            <ConsoleEmptyState kind="empty" title="퇴장 스캔 결과의 경품을 불러오지 못했습니다. 티켓으로 다시 조회하세요." />
           ) : (
-            <p className={prizeStyles.prizeEmpty}>경품 확인은 티켓 스캔 또는 퇴장 처리 후 시작할 수 있습니다.</p>
+            <ConsoleEmptyState kind="empty" title="경품 확인은 티켓 스캔 또는 퇴장 처리 후 시작할 수 있습니다." />
           )}
-          {rewardNotice ? <p className={prizeStyles.prizeNotice} role="status">{rewardNotice}</p> : null}
-          {rewardError && rewardTarget && rewardDataLoaded ? <p className={prizeStyles.prizeError} role="alert">{rewardError}</p> : null}
+          {rewardNotice ? <StaffNote tone="ok" role="status">{rewardNotice}</StaffNote> : null}
+          {rewardError && rewardTarget && rewardDataLoaded ? <StaffNote tone="danger" role="alert">{rewardError}</StaffNote> : null}
           <p className={prizeStyles.prizeNote}>이번 요청의 수령 완료 안내를 확인한 뒤 경품을 전달하세요.</p>
         </section>
   ) : null;
@@ -2018,16 +2030,16 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       {/* The shared 처리 결과 확인 panel stays in the page flow: the notices say "위의 처리 결과 확인". */}
       <div className={prizeStyles.fieldReceipts}><OperatorReceiptRecovery excludeCommandId={inlineScanReceiptId} /></div>
       {orgChanged ? <OrganizationContextNotice confirmLeave={confirmLeaveStaff} /> : null}
-      {otherReceipt ? <p className="notice" role="alert">이전 현장 처리의 결과를 위의 처리 결과 확인에서 확인한 뒤 새 업무를 진행하세요.</p> : null}
-      {receiptRefreshNeeded ? <p className="notice" role="alert">최신 업무 정보를 불러온 뒤 다시 진행할 수 있습니다. <ProductButton type="button" className="button button-secondary" disabled={receiptRefreshing} onClick={() => {
+      {otherReceipt ? <StaffNote tone="warn" role="alert">이전 현장 처리의 결과를 위의 처리 결과 확인에서 확인한 뒤 새 업무를 진행하세요.</StaffNote> : null}
+      {receiptRefreshNeeded ? <StaffNote tone="warn" role="alert">최신 업무 정보를 불러온 뒤 다시 진행할 수 있습니다. <ProductButton type="button" className="button button-secondary" disabled={receiptRefreshing} onClick={() => {
         if (receiptRefreshRef.current) return; const selectedEvent = targetEventId;
         receiptRefreshRef.current = true; setReceiptRefreshing(true);
         let refreshed = false;
         void load(true).then((ok) => { refreshed = ok; if (currentEventRef.current === selectedEvent && ok) { setReceiptRefreshNeeded(false); setReceiptNotice("최신 업무 정보를 불러왔습니다. 미확인 요청이 남았다면 같은 요청을 확인하세요."); } })
           .finally(() => { if (currentEventRef.current === selectedEvent) { receiptRefreshRef.current = false; setReceiptRefreshing(false); if (refreshed) drainAppliedReceipts(); } });
-      }}>업무 정보 다시 확인</ProductButton></p> : null}
-      {receiptNotice ? <p className="notice" role="status">{receiptNotice}</p> : null}
-      {rewardCollectUncertain ? <div className="notice" role="alert">
+      }}>업무 정보 다시 확인</ProductButton></StaffNote> : null}
+      {receiptNotice ? <StaffNote tone="info" role="status">{receiptNotice}</StaffNote> : null}
+      {rewardCollectUncertain ? <StaffNote tone="warn" role="alert">
         <p>경품 수령 결과를 확인할 때까지 다른 현장 업무를 잠급니다. 아래에서 같은 요청을 다시 확인하세요. 서버 처리 확인만으로는 대상을 확인할 수 없습니다.</p>
         <ProductButton type="button" className="button button-secondary" disabled={rewardCollectingId !== null || receiptRefreshing} onClick={() => {
           const entry = [...pendingRewardCommandsRef.current.entries()].find(([, item]) => item.command === "reward.collect" && item.uncertain);
@@ -2039,12 +2051,12 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           setRewardNotice(null);
           setRewardError("확인을 중단했습니다. 이미 처리됐을 수 있으니 운영자에게 경품 내역을 확인하세요.");
         }}>확인 중단하고 내역 확인</ProductButton>
-      </div> : null}
-      {assignmentStale ? <p className="notice" role="alert">{loadError || "현재 업무 배정을 확인할 수 없습니다."} 새 현장 처리는 잠겼으며 입력과 마지막 결과는 유지됩니다. {!receiptRefreshNeeded ? <ProductButton type="button" className="button button-secondary" disabled={refreshing} onClick={() => void load(true)}>{refreshing ? "배정 확인 중" : "배정 다시 확인"}</ProductButton> : null}</p> : null}
+      </StaffNote> : null}
+      {assignmentStale ? <StaffNote tone="warn" role="alert">{loadError || "현재 업무 배정을 확인할 수 없습니다."} 새 현장 처리는 잠겼으며 입력과 마지막 결과는 유지됩니다. {!receiptRefreshNeeded ? <ProductButton type="button" className="button button-secondary" disabled={refreshing} onClick={() => void load(true)}>{refreshing ? "배정 확인 중" : "배정 다시 확인"}</ProductButton> : null}</StaffNote> : null}
       {kiosk ? (
-        <p className="notice" role="status">
+        <StaffNote tone="info" role="status">
           공용 태블릿용 큰 화면입니다. 무인 셀프 체크인은 지원하지 않습니다.
-        </p>
+        </StaffNote>
       ) : null}
       <div className={prizeStyles.fieldContext}>
       {hasDeskWork && hasBoothWork ? (
@@ -2107,7 +2119,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           {directionReview ? (
             <section className={prizeStyles.directionReview} aria-labelledby="staff-direction-review-title">
               <div role="alert">
-                <strong id="staff-direction-review-title">데스크 업무 방향을 확인해 주세요</strong>
+                <strong id="staff-direction-review-title" className={prizeStyles.directionTitle}><span className={prizeStyles.directionMark} aria-hidden="true"><BangIcon /></span>데스크 업무 방향을 확인해 주세요</strong>
                 <p>{directionReview.from === null ? "시작하기 전에 업무 방향을 확인해 주세요." : directionReview.from === directionReview.to ? `방향은 그대로 ${directionReview.to === "IN" ? "입장" : "퇴장"}입니다. 계속하려면 확인해 주세요.` : `이전에 확인한 방향은 ${directionReview.from === "IN" ? "입장" : "퇴장"}입니다. ${directionReview.to ? `현재 방향은 ${directionReview.to === "IN" ? "입장" : "퇴장"}입니다.` : "현재 데스크 방향이나 배정을 확인할 수 없습니다."}`}</p>
                 <p>업무 방향을 확인하기 전까지 다음 참가자 처리는 잠깁니다. {result.kind === "ok" ? "마지막 처리 결과는 유지됩니다." : "입력한 내용은 유지됩니다."}</p>
                 {deskClosed ? <p>현재 데스크는 가동 중지 상태입니다. 운영자에게 확인하세요.</p> : null}
@@ -2191,42 +2203,42 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       )}
       </div>
       {correctionLocked ? (
-        <p className="notice" role="status">정정 응답을 확인하는 중입니다. 데스크·스캔 전환은 잠겨 있습니다.</p>
+        <StaffNote tone="info" role="status">정정 응답을 확인하는 중입니다. 데스크·스캔 전환은 잠겨 있습니다.</StaffNote>
       ) : null}
       {orgChanged ? (
-        <p className="notice" role="status">다른 탭에서 조직이 전환됐습니다. 입력한 티켓·사유와 선택·기록은 그대로 유지됩니다. 스캔·정정·경품 쓰기는 잠시 잠겨 있습니다. 위 안내에서 전환을 먼저 확인하세요. 정정 응답 확인이 남아 있다면 같은 요청으로 다시 시도할 수 있습니다.</p>
+        <StaffNote tone="warn" role="status">다른 탭에서 조직이 전환됐습니다. 입력한 티켓·사유와 선택·기록은 그대로 유지됩니다. 스캔·정정·경품 쓰기는 잠시 잠겨 있습니다. 위 안내에서 전환을 먼저 확인하세요. 정정 응답 확인이 남아 있다면 같은 요청으로 다시 시도할 수 있습니다.</StaffNote>
       ) : null}
       {activeTask === "desk" && !deskSourcesAvailable ? (
         <div className={prizeStyles.directionReview} role="alert">
-          <p>{[!activeScope.participantsAvailable ? "참가자 명단" : "", !activeScope.checksAvailable ? "출입 기록" : ""].filter(Boolean).join(" · ")}을 확인할 수 없어 입퇴장을 잠시 멈췄습니다. 다시 확인해도 계속되면 현장 책임자에게 문의하세요.</p>
+          <p className={prizeStyles.directionLine}><span className={prizeStyles.directionMark} aria-hidden="true"><BangIcon /></span><span>{[!activeScope.participantsAvailable ? "참가자 명단" : "", !activeScope.checksAvailable ? "출입 기록" : ""].filter(Boolean).join(" · ")}을 확인할 수 없어 입퇴장을 잠시 멈췄습니다. 다시 확인해도 계속되면 현장 책임자에게 문의하세요.</span></p>
           <ProductButton type="button" className="button button-secondary" disabled={refreshing || submitting || writeLocked || scanUnknown} onClick={() => void load(true)}>
             {refreshing ? "확인 중" : "업무 정보 다시 확인"}
           </ProductButton>
         </div>
       ) : null}
       {loadError && activeTask === "desk" && !assignmentStale && !receiptRefreshNeeded && !deskClosed && !deskRefreshRequired ? (
-        <p className="notice" role="status">
+        <StaffNote tone="warn" role="status">
           {loadError}{" "}
           <ProductButton type="button" className="button button-secondary" disabled={refreshing} onClick={() => void load(true)}>
             {refreshing ? "불러오는 중" : "다시 불러오기"}
           </ProductButton>
-        </p>
+        </StaffNote>
       ) : null}
       {rewardEnabled === false && result.kind === "ok" && result.action === "OUT" && !historicalScan ? (
-        <p className="notice" role="status">이 행사에서 경품 기능이 꺼져 있어 현장 경품 조회·수령 처리를 사용할 수 없습니다.</p>
+        <StaffNote tone="info" role="status">이 행사에서 경품 기능이 꺼져 있어 현장 경품 조회·수령 처리를 사용할 수 없습니다.</StaffNote>
       ) : null}
-      {correctNotice ? <p className={`scan-result ${prizeStyles.fieldNotice}`} role={correctUnknown ? "alert" : "status"}>{correctNotice}</p> : null}
+      {correctNotice ? <StaffNote tone={correctUnknown ? "warn" : "info"} role={correctUnknown ? "alert" : "status"}>{correctNotice}</StaffNote> : null}
       {scanLine ? <p id="staff-scan-hint" className="sr-only" role="status">{scanLine}</p> : null}
-      {submitting ? <p id="staff-scan-wait" className={prizeStyles.fieldNotice} role="status">처리 결과를 확인하고 있습니다. 확인이 끝나면 티켓과 업무를 다시 바꿀 수 있습니다.</p> : null}
+      {submitting ? <StaffNote id="staff-scan-wait" tone="info" role="status">처리 결과를 확인하고 있습니다. 확인이 끝나면 티켓과 업무를 다시 바꿀 수 있습니다.</StaffNote> : null}
 
       <div className={prizeStyles.fieldStage} data-tone={stageTone}>
         {selfBooth && activeScope.stampAvailable ? (
           <div className={prizeStyles.selfStage}>
       {activeTask === "booth" && activeScope.stampAvailable && activeScope.stampMode === "SELF" && (!selectedBooth || ready) ? (
-        <p className="notice" role="status">
+        <StaffNote tone="info" role="status">
           참가자가 직접 인증하는 방식입니다. QR을 보여주고 참가자 홈 &gt; 부스 인증에서 카메라로 바로 인증하도록 안내하세요.
           이 화면에서 티켓을 대신 처리하지 않습니다.
-        </p>
+        </StaffNote>
       ) : null}
       {activeTask === "booth" && activeScope.stampMode === "SELF" && ready && !writeLocked ? (
         <div className="staff-booth-code">
@@ -2508,8 +2520,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                       <div>
                         <strong>{person.name}</strong>
                         <span className={prizeStyles.manualCompany}>{person.company || "소속 미입력"}{person.group ? ` · ${person.group}` : ""}</span>
-                        <span>{person.status === "APPROVED" ? "참가 확정" : person.status === "PENDING" ? "승인 대기" : person.status === "WAITLIST" ? "대기 명단" : person.status === "CANCELLED" ? "신청 취소" : "상태 확인 필요"}</span>
-                        <span className={prizeStyles.manualPresence} data-state={presenceTone}>{presenceLabel}</span>
+                        <span className={prizeStyles.manualPills}>
+                          <StaffPill tone={person.status === "APPROVED" ? "ok" : person.status === "CANCELLED" ? "danger" : "wait"}>{person.status === "APPROVED" ? "참가 확정" : person.status === "PENDING" ? "승인 대기" : person.status === "WAITLIST" ? "대기 명단" : person.status === "CANCELLED" ? "신청 취소" : "상태 확인 필요"}</StaffPill>
+                          <StaffPill tone={presenceTone === "inside" ? "ok" : presenceTone === "review" ? "wait" : "neutral"}>{presenceLabel}</StaffPill>
+                        </span>
                         {needsAssistance ? <span className={prizeStyles.manualWarning}>{ambiguous ? "같은 이름·소속이 있습니다." : "소속 정보가 없습니다."} 책임자에게 확인하세요.</span> : null}
                       </div>
                       <ProductButton type="button" className="button button-secondary" disabled={!ready || writeLocked || submitting || manualRefreshRequired || needsAssistance || person.status !== "APPROVED"}
@@ -2567,7 +2581,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           ))}
         </ul>
       ) : activeTask === "desk" && !activeScope.checksAvailable ? (
-        <p>출입 기록을 확인할 수 없습니다. 업무 정보를 다시 확인하세요.</p>
+        <ConsoleEmptyState kind="error-soft" icon={<BangIcon />} title="출입 기록을 확인할 수 없습니다. 업무 정보를 다시 확인하세요." />
       ) : taskChecks.length ? (
         <ul className="activity-list">
           {taskChecks.slice(0, 10).map((check) => {
@@ -2587,7 +2601,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           })}
         </ul>
       ) : (
-        <p>아직 처리 기록이 없습니다.</p>
+        <ConsoleEmptyState kind="empty" icon={<ClockIcon />} title="아직 처리 기록이 없습니다." />
       )}
           </section>
         </ConsoleDialog>

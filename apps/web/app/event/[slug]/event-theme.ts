@@ -10,12 +10,15 @@ export type AttendeeTheme = {
   homeStyle: HomeStyle;
   keyvisual: string | null;
   defaultHomeBanner: "legacy" | "neutral";
+  /** The published 강조색 (the event color of the attendee design system), or null. */
+  accent?: string | null;
 };
 
 export const DEFAULT_ATTENDEE_THEME: AttendeeTheme = {
   homeStyle: { ...DEFAULT_HOME_STYLE },
   keyvisual: null,
   defaultHomeBanner: "legacy",
+  accent: null,
 };
 
 function record(value: unknown): Record<string, unknown> {
@@ -38,6 +41,7 @@ export function readAttendeeTheme(slug: string, workspace: unknown): AttendeeThe
     homeStyle: normalizeHomeStyle(published.homeStyle),
     keyvisual: keyvisualSource(slug, published.keyvisual),
     defaultHomeBanner: published.defaultHomeBanner === "neutral" ? "neutral" : "legacy",
+    accent: typeof published.accent === "string" && /^#[0-9a-f]{6}$/i.test(published.accent) ? published.accent.toUpperCase() : null,
   };
 }
 

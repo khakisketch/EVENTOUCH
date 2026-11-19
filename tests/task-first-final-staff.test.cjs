@@ -25,7 +25,9 @@ test('single desk shortcut keeps explicit scan, direction, server permission and
 test('mobile recent activity text uses its content height, not the desktop width basis', () => {
   const css = fs.readFileSync('apps/web/app/staff/staff-event-work.module.css', 'utf8');
   // Recent rows are one line: name and detail grow, the time keeps its own width.
-  assert.match(css, /\.eventWorkPage \.recentRow\s*\{[^}]*flex-direction: row/s);
-  assert.match(css, /\.eventWorkPage \.recentRow \.recentName span\s*\{[^}]*flex: none/s);
-  assert.match(css, /\.eventWorkPage \.recentRow time\s*\{[^}]*flex: none/s);
+  // Reopened 2026-11-20 (design-system application): the stacked redesign layers were merged, so the
+  // rows no longer need the .eventWorkPage prefix to win; the one-line contract is unchanged.
+  assert.match(css, /\.recentRow\s*\{[^}]*flex-wrap: nowrap/s);
+  assert.match(css, /\.recentRow \.recentName span\s*\{[^}]*flex: none/s);
+  assert.match(css, /\.recentRow time\s*\{[^}]*flex: none/s);
 });

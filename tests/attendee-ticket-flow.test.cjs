@@ -19,8 +19,12 @@ test("the ticket screen points at what the attendee has to do", () => {
   // event's content, so it is the one primary below the QR and the facts; the
   // recheck beside it is a quiet utility. A ticket that cannot show a QR keeps
   // the recheck as its primary.
-  assert.match(ticket, /className=\{styles\.buttonPrimary\} href=\{`\/event\/\$\{encodeURIComponent\(slug\)\}\/engage`\}/u);
-  assert.match(ticket, /mode === "ticket" \? \(usable \? styles\.buttonGhost : styles\.buttonPrimary\)/u);
+  // Reopened 2026-11-20: the next step is the BottomAction fixed to the bottom of the phone column
+  // (alone, so it never covers the QR; see web-attendee-entry-composition); the recheck is a quiet ghost
+  // button in the page; without a QR the recheck is the primary.
+  assert.match(ticket, /<BottomAction label="다음 행동" primary=\{\{ label: "참여 콘텐츠 보기", href: `\/event\/\$\{encodeURIComponent\(slug\)\}\/engage` \}\} \/>/u);
+  assert.match(ticket, /<ProductButton type="button" variant="ghost" disabled=\{rechecking\} onClick=\{\(\) => void recheckTicket\(\)\}>/u);
+  assert.match(ticket, /<BottomAction label="다음 행동" primary=\{recheckAction\} \/>/u);
 });
 
 test("a missing or failed ticket always offers a way forward", () => {
@@ -47,7 +51,8 @@ test("a fresh registration reads as a one-time completion receipt", () => {
 // 복구 가능 행사에서는 missing 상태도 복구 primary + 신청 secondary를 함께
 // 준다. 차단 행사 분기는 그대로(복구 링크 없음·기기+운영자 안내).
 test("a missing ticket offers recovery where recovery exists", () => {
-  assert.match(ticket, /!recoveryBlocked \? \(/u);
+  // Reopened 2026-11-20: the actions are one list; recovery leads where it exists.
+  assert.match(ticket, /if \(recoveryBlocked\) actions\.push\(\{ label: "처음 신청하기"/u);
   assert.match(ticket, /연락처 인증으로 티켓 다시 찾기/u);
 });
 

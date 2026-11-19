@@ -9,6 +9,7 @@ import { useOperatorContextSnapshot } from "./use-operator-context";
 import { isSelectionRequiredError, staffRoleLabel } from "./staff-org-guard";
 import styles from "./staff-account-menu.module.css";
 import OperatorReceiptRecovery from "../ui/OperatorReceiptRecovery";
+import { ChevronRightIcon } from "../console/console-ui/ConsoleIcons";
 
 // Staff account access: who is signed in, which organization is operating,
 // and with what role — plus the holder's own email-verification entry and
@@ -130,8 +131,10 @@ export default function StaffAccountMenu({
           setOpen((value) => !value);
         }}
       >
-        <span className={styles.menuLabel}>{compact && context ? context.userName : summary}</span>
-        <span className={styles.menuCaret} aria-hidden="true" />
+        <span className={styles.menuContent}>
+          <span className={styles.menuLabel}>{compact && context ? context.userName : summary}</span>
+          <ChevronRightIcon className={styles.menuCaret} />
+        </span>
       </ProductButton>
       <div ref={panelRef} className={styles.menuPanel} role="dialog" aria-label="계정 및 조직 전환" hidden={!open}>
         {context ? (

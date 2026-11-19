@@ -23,9 +23,11 @@ test("staff header is one line: back, event, one menu", () => {
 });
 
 test("the station reads as the title line and nothing is fixed or sticky", () => {
-  assert.match(css, /\.staff-select-field\) > select\s*\{[^}]*font-size:\s*22px/su);
-  assert.match(css, /\.staff-select-field\) > select\s*\{[^}]*appearance:\s*none/su);
-  assert.match(css, /\.eventWorkPage \.taskSwitch :global\(\.astryx-button\)\[aria-pressed="true"\][^{]*\{[^}]*border-bottom-color:\s*var\(--ink\)/su, "task tabs mark the current one with an ink underline");
+  // Reopened 2026-11-20 (design-system application): the title select reads at --text-lg (it was 22px before the
+  // 2026-11-19 pill title already shrank it to 18px) and the desk/booth switch is the segmented pill, not tabs.
+  assert.match(css, /\.staff-select-field\) select\s*\{[^}]*font-size:\s*var\(--text-lg\)/su);
+  assert.match(css, /\.staff-select-field\) select\s*\{[^}]*appearance:\s*none/su);
+  assert.match(css, /\.taskSwitch \[data-product-action\]\[aria-pressed="true"\]\s*\{[^}]*background:\s*var\(--paper\)/su, "the current task is the lit segment");
   assert.doesNotMatch(css, /\.(?:moreBody|scanInput|scanPrimary|resultBlock)\s*\{[^}]*position:\s*(?:sticky|fixed)/su);
 });
 
@@ -42,14 +44,30 @@ test("field result: a colored face over the camera, a plain success hands itself
   assert.match(css, /\.overlay\[data-tone="info"\]\s*\{[^}]*var\(--info-soft\)/su);
   assert.match(css, /\.overlay\[data-tone="warn"\]\s*\{[^}]*var\(--warning-soft\)/su);
   assert.match(css, /\.overlay\[data-tone="bad"\]\s*\{[^}]*var\(--danger-soft\)/su);
-  assert.match(css, /\.bigName\s*\{[^}]*font-size:\s*2\.5rem/su, "the name reads large");
+  assert.match(css, /--fld-name:\s*2\.5rem/u, "the name reads large: the one stage size above --text-num, named once");
+  assert.match(css, /\.bigName\s*\{[^}]*font-size:\s*var\(--fld-name\)/su, "the name reads large");
   assert.match(work, /const autoMs = autoNext \? \(plainSuccess \? 1500 : infoAuto \? 3000 : 0\) : 0/u);
   assert.match(work, /variant="ghost" disabled=\{writeLocked\} aria-expanded=\{nametagOpen\}/u, "the nametag is a quiet action, not a second button");
 });
 
-test("stage 2: the staff viewfinder is scoped and never touches the attendee camera", () => {
-  assert.match(css, /\.eventWorkPage :global\(\.camera-panel\):has\(video\)::before/u, "corner marks only over a live video");
-  assert.match(css, /\.eventWorkPage :global\(\.camera-panel\) > button\[data-variant="secondary"\]/u, "buttons stay readable on the dark panel");
+// Reopened 2026-11-20 (design-system application): the old .camera-panel viewfinder rules styled markup that no
+// component renders any more (the field camera lives in camera-scan.module.css), so they were removed.
+test("the staff module is scoped, token-only and carries no dead camera-panel rules", () => {
+  assert.doesNotMatch(css, /camera-panel/u, "no rule for markup nobody renders");
   assert.doesNotMatch(css, /(^|\n)\.camera-panel\b/u, "no unscoped camera rule in the staff module");
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b|rgb\(/u, "tokens only");
+  assert.doesNotMatch(css, /font-size:\s*[0-9.]+px/u, "type comes from --text-* or the named stage sizes");
+  assert.doesNotMatch(css, /border-radius:\s*[0-9.]+px/u, "radii come from --r-* or the named sheet corner");
+  assert.doesNotMatch(css, /font-weight:\s*(?:[0-9]{3})\b/u, "weights are the three tokens");
+});
+
+test("states on the field screen share one vocabulary: icon, words and tone", () => {
+  const status = fs.readFileSync(path.join(DIR, "StaffStatus.tsx"), "utf8");
+  assert.match(status, /export function StaffNote/u);
+  assert.match(status, /export function StaffPill/u);
+  assert.match(status, /import StatusPill/u, "the pill is the shared console StatusPill");
+  assert.doesNotMatch(work, /className="notice"/u, "no bare global .notice paragraph on the field screen");
+  assert.match(work, /<StaffNote tone="warn" role="alert">/u, "a needs-a-look message is warn + alert");
+  assert.match(work, /<StaffPill tone=/u, "row states are pills with icons");
+  assert.match(work, /prizeStyles\.hubState/u, "loading/missing states stay on ink");
 });

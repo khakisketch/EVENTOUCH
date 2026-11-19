@@ -21,7 +21,7 @@
 
 .place {
   color: var(--ink);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .guideLink {
@@ -29,13 +29,13 @@
   align-items: center;
   min-height: 44px;
   margin: calc(var(--s1) * -1) 0;
-  color: var(--brand-text);
-  font-weight: 700;
+  color: var(--ev-accent-ink, var(--brand-text));
+  font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
 .guideLink:focus-visible {
-  outline: 2px solid var(--focus, #2453a6);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }

@@ -6,10 +6,10 @@
   width: 100%;
   max-width: 520px;
   padding: var(--s4) var(--s4) max(var(--s7), env(safe-area-inset-bottom, 0px));
-  background: var(--home-background-color, #b9def0);
-  color: var(--home-background-ink, var(--ink));
+  background: var(--ev-ground, var(--home-background-color));
+  color: var(--ev-ground-ink, var(--home-background-ink, var(--ink)));
   /* On a wide screen the column sits on the event's color, not a white page. */
-  box-shadow: 0 0 0 100vmax var(--home-background-color, #b9def0);
+  box-shadow: 0 0 0 100vmax var(--ev-ground, var(--home-background-color));
   clip-path: inset(0 -100vmax);
 }
 
@@ -26,7 +26,7 @@
   margin: 0 0 0 auto;
   color: inherit;
   font-size: var(--small);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .backLink {
@@ -44,7 +44,7 @@
   background: transparent;
   color: inherit;
   font-size: var(--small);
-  font-weight: 700;
+  font-weight: 600;
   text-decoration: none;
 }
 
@@ -54,10 +54,11 @@
   text-decoration: underline;
 }
 
-/* No overflow clip on the sheet: the submit bar sticks to the viewport. */
+/* No overflow clip on the sheet. */
 .sheet {
+  --sheet-radius: calc(var(--radius-card) + var(--s2) + var(--s1));
   margin-top: var(--s3);
-  border-radius: 28px;
+  border-radius: var(--sheet-radius);
   background: var(--paper);
   color: var(--ink);
   box-shadow: 0 22px 44px -26px rgb(16 17 20 / 58%), 0 2px 8px rgb(16 17 20 / 12%);
@@ -65,7 +66,7 @@
 
 .sheetBanner {
   min-height: 148px;
-  border-radius: 28px 28px 0 0;
+  border-radius: var(--sheet-radius) var(--sheet-radius) 0 0;
 }
 
 .sheetBody {
@@ -79,15 +80,6 @@
   padding-bottom: var(--s5);
 }
 
-.stateNote {
-  margin: 0;
-  color: var(--ink);
-  font-size: var(--h3);
-  font-weight: 750;
-  line-height: 1.4;
-  word-break: keep-all;
-}
-
 .stateActions {
   margin-top: var(--s1);
   display: grid;
@@ -96,7 +88,7 @@
 
 .stateActions :global(.button) {
   min-height: 56px;
-  border-radius: 16px;
+  border-radius: var(--radius-large);
   font-size: var(--body);
 }
 
@@ -129,7 +121,7 @@
 }
 
 .form :global(.form-validation) {
-  border-radius: 14px;
+  border-radius: var(--radius-medium);
   font-size: var(--small);
 }
 
@@ -174,8 +166,8 @@
   height: 26px;
   border-radius: 50%;
   background: var(--ink);
-  color: #fff;
-  font-size: 13px;
+  color: var(--paper);
+  font-size: var(--text-sm);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   content: counter(step);
@@ -189,7 +181,7 @@
 .stepSection :global(.form-field) > label {
   margin: 0;
   font-size: var(--small);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .req {
@@ -201,11 +193,11 @@
    red, with its message right under it. */
 .stepSection :global(.form-field) input:not([type="checkbox"]),
 .stepSection :global(.form-field) select {
-  min-height: 52px;
+  min-height: calc(var(--s7) + var(--s2));
   padding-inline: var(--s4);
   border-color: var(--line-strong);
-  border-radius: 14px;
-  background-color: var(--paper);
+  border-radius: var(--radius-large);
+  background-color: color-mix(in srgb, var(--ink) 4%, var(--paper));
   font-size: var(--body);
 }
 
@@ -223,10 +215,10 @@
   min-height: 52px;
   padding: var(--s2) var(--s4);
   border: 1px solid var(--line-strong);
-  border-radius: 14px;
+  border-radius: var(--radius-medium);
   background: var(--paper);
   font-size: var(--body);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .stepSection :global(.checkbox-field) input[type="checkbox"],
@@ -234,7 +226,7 @@
   width: 22px;
   height: 22px;
   flex: none;
-  accent-color: var(--brand);
+  accent-color: var(--ev-accent, var(--brand));
 }
 
 /* What happens next, as one soft line with its icon. */
@@ -244,7 +236,7 @@
   gap: var(--s3);
   margin: 0;
   padding: var(--s3) var(--s4);
-  border-radius: 14px;
+  border-radius: var(--radius-medium);
   background: var(--info-soft);
   color: var(--ink);
   font-size: var(--small);
@@ -271,7 +263,7 @@
 .stepSection :global(.verification-panel) > :global(.button) {
   width: 100%;
   min-height: 48px;
-  border-radius: 14px;
+  border-radius: var(--radius-medium);
   font-size: var(--small);
 }
 
@@ -286,7 +278,7 @@
   gap: var(--s3);
   padding: var(--s4);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius-large);
   background: var(--surface-muted);
 }
 
@@ -294,10 +286,10 @@
   min-height: 52px;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--line-strong);
-  border-radius: 14px;
+  border-radius: var(--radius-medium);
   background: var(--paper);
   font-size: var(--small);
-  font-weight: 750;
+  font-weight: 800;
 }
 
 .consentPanel :global(.preserve-lines) {
@@ -309,26 +301,13 @@
 
 .consentPanel :global(.consent-meta) {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   line-height: 1.6;
   word-break: keep-all;
 }
 
 .phoneHint {
   margin: 0;
-}
-
-/* The submit stays in reach while the keyboard is up and the form scrolls. */
-.submitBlock {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  display: grid;
-  gap: var(--s2);
-  padding: var(--s3) 0 max(var(--s4), env(safe-area-inset-bottom));
-  border-top: 1px solid var(--line);
-  border-radius: 0 0 28px 28px;
-  background: var(--paper);
 }
 
 .progressLine {
@@ -346,7 +325,7 @@
   margin: 0;
   color: var(--muted);
   font-size: var(--small);
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
@@ -372,24 +351,29 @@
   white-space: nowrap;
 }
 
-.submitBlock button[type="submit"] {
-  min-height: 56px;
-  border-radius: 16px;
-  font-size: var(--body);
-}
-
 @media (max-width: 480px) {
   .page:global(.registration-page) {
-    padding-inline: var(--s3);
-  }
+      padding-inline: var(--s3);
+    }
 
-  .sheetBody {
-    padding-inline: var(--s4);
-  }
+    .sheetBody {
+      padding-inline: var(--s4);
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .form {
-    scroll-behavior: auto;
-  }
+      scroll-behavior: auto;
+    }
+}
+
+/* The step bar reads as the form's progress, right under the sheet's banner. */
+.step {
+  margin: 0;
+}
+
+/* a1: the white sheet sits on a white ground, so a hairline draws it. */
+[data-attendee-mode="a1"] .sheet {
+  border: 1px solid var(--line);
+  box-shadow: none;
 }

@@ -48,7 +48,8 @@ test('every page main region can take focus', () => {
   ];
   for (const file of files) {
     const source = read(file);
-    const mains = source.match(/<main[^>]*id="main-content"[^>]*>/gu) ?? [];
+    // Reopened 2026-11-20: attendee pages wear <AttendeeSurface as="main">, which forwards id and tabIndex.
+    const mains = source.match(/<main[^>]*id="main-content"[^>]*>|<AttendeeSurface[^>]*as="main"[^>]*id="main-content"[^>]*>/gu) ?? [];
     assert.ok(mains.length > 0, `${file} has a main region`);
     for (const tag of mains) {
       assert.ok(tag.includes("tabIndex={-1}"), `${file} main region can take focus`);

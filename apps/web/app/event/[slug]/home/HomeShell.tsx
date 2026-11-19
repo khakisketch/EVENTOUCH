@@ -13,6 +13,11 @@ import styles from "./home.module.css";
 import AttendeeHomeLanding, { HOME_MENUS, type HomeMenuKey } from "./AttendeeHomeLanding";
 import { normalizeHomeStyle, parseHomePhotos, type HomePhoto, type HomeStyle } from "../../../../lib/attendee-home";
 import { homeSurfaceStyle } from "../../../../lib/home-surface";
+import AttendeeSurface from "../ui/AttendeeSurface";
+import AttendeeStateMessage from "../ui/AttendeeStateMessage";
+import BottomAction from "../ui/BottomAction";
+import AttendeeIcon from "../ui/AttendeeIcon";
+import { attendeeLook } from "../attendee-look";
 import { normalizeHomeMenus, type HomeMenus, type HomeProgram } from "../../../../lib/attendee-home-menus";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
 import { useUnsavedNavigationGuard } from "../../../../lib/use-unsaved-navigation-guard";
@@ -152,6 +157,7 @@ type LoadState =
       keyvisual: string | null;
       defaultHomeBanner: "legacy" | "neutral";
       homeStyle: HomeStyle;
+      accent: string | null;
       homeMenus: HomeMenus;
       programs: HomeProgram[];
       photos: HomePhoto[];
@@ -563,7 +569,7 @@ export default function HomeShell({ slug }: { slug: string }) {
               notices?: unknown;
               modules?: unknown;
               photos?: unknown;
-              pageExperience?: { published?: { keyvisual?: unknown; defaultHomeBanner?: unknown; homeStyle?: unknown; homeMenus?: unknown; showAnnouncements?: unknown } } | null;
+              pageExperience?: { published?: { keyvisual?: unknown; accent?: unknown; defaultHomeBanner?: unknown; homeStyle?: unknown; homeMenus?: unknown; showAnnouncements?: unknown } } | null;
           } | null;
         } | null;
         const eventName = text(publicData?.event?.name);
@@ -597,6 +603,7 @@ export default function HomeShell({ slug }: { slug: string }) {
         const keyvisual = publicKeyvisualSource(slug, publishedPage?.keyvisual);
         const defaultHomeBanner = publishedPage?.defaultHomeBanner === "neutral" ? "neutral" : "legacy";
         const homeStyle = normalizeHomeStyle(publishedPage?.homeStyle);
+        const accent = typeof publishedPage?.accent === "string" && /^#[0-9a-f]{6}$/i.test(publishedPage.accent) ? publishedPage.accent : null;
         const homeMenus = normalizeHomeMenus(publishedPage?.homeMenus);
         // The photo-first home lists approved participant photos only, and only
         // while the 사진 feature is on. The public projection also carries an
@@ -642,6 +649,7 @@ export default function HomeShell({ slug }: { slug: string }) {
               keyvisual,
               defaultHomeBanner,
               homeStyle,
+              accent,
               homeMenus,
               programs,
               photos,
@@ -864,6 +872,7 @@ export default function HomeShell({ slug }: { slug: string }) {
             keyvisual,
             defaultHomeBanner,
             homeStyle,
+            accent,
             homeMenus,
             programs,
             photos,
@@ -1160,10 +1169,10 @@ export default function HomeShell({ slug }: { slug: string }) {
 
   if (state.kind === "loading") {
     return (
-      <main id="main-content" tabIndex={-1} className={styles.homePage}>
-        <p className={styles.loading} role="status">행사를 불러오는 중입니다.</p>
+      <AttendeeSurface as="main" id="main-content" tabIndex={-1} className={styles.homePage}>
+        <AttendeeStateMessage kind="info" icon="clock" title="행사를 불러오는 중입니다." className={styles.loading} />
         {recovery}
-      </main>
+      </AttendeeSurface>
     );
   }
   if (state.kind === "failed") {
@@ -1182,53 +1191,38 @@ export default function HomeShell({ slug }: { slug: string }) {
         : state.reason === "ticket-invalid"
           ? "티켓을 확인할 수 없습니다"
           : "행사를 불러올 수 없습니다";
+    const guideHref = `/event/${encodeURIComponent(slug)}`;
+    // One strong action at the bottom, the way back to the guide beside it.
+    const primary = state.reason === "transient"
+      ? { label: "다시 시도", onClick: retrySameTab }
+      : state.reason === "ticket-invalid" && !recoveryBlocked
+        ? { label: "내 티켓 찾기", href: `${guideHref}/ticket/recover` }
+        : state.reason === "event-missing"
+          ? { label: "처음으로", href: "/" }
+          : { label: "행사 안내로", href: guideHref };
+    const secondary = primary.label === "행사 안내로" ? undefined : { label: "행사 안내로", href: guideHref };
     return (
-      <main id="main-content" tabIndex={-1} className={styles.homePage}>
+      <AttendeeSurface as="main" id="main-content" tabIndex={-1} className={styles.homePage}>
         <section className={styles.statePanel}>
           <h1 className={styles.stateTitle}>{title}</h1>
-          <p className={styles.stateMessage} role={state.reason === "transient" ? "alert" : undefined}>{state.message}</p>
-          {state.reason === "ticket-invalid" && recoveryBlocked ? (
-            <p className={styles.stateMessage} role="note">
-              이 행사는 문자로 티켓을 다시 연결할 수 없습니다. 신청을 완료한 브라우저 탭을 확인하고,
-              확인되지 않으면 행사 주최 측에 문의하세요.
-            </p>
-          ) : null}
-          <p className={styles.stateAction}>
-            {state.reason === "transient" ? (
-              <>
-                <button type="button" className={styles.stateButton} onClick={retrySameTab}>
-                  다시 시도
-                </button>{" "}
-              </>
-            ) : null}
-            {state.reason === "ticket-invalid" && !recoveryBlocked ? (
-              <>
-                <ProductLink className={styles.stateButton} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>
-                  내 티켓 찾기
-                </ProductLink>{" "}
-              </>
-            ) : null}
-            {state.reason === "event-missing" ? (
-              <>
-                <ProductLink className={styles.stateButton} href="/">
-                  처음으로
-                </ProductLink>{" "}
-              </>
-            ) : null}
-            <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>
-              행사 안내로
-            </ProductLink>
-          </p>
+          <AttendeeStateMessage kind={state.reason === "transient" ? "error" : "info"} title={state.message}>
+            {state.reason === "ticket-invalid" && recoveryBlocked
+              ? "이 행사는 문자로 티켓을 다시 연결할 수 없습니다. 신청을 완료한 브라우저 탭을 확인하고, 확인되지 않으면 행사 주최 측에 문의하세요."
+              : null}
+          </AttendeeStateMessage>
         </section>
+        <BottomAction primary={primary} secondary={secondary} label="다음 행동" />
         {recovery}
-      </main>
+      </AttendeeSurface>
     );
   }
 
   const activeMenu = activeTab === "application" ? { label: "내 신청 정보" } : activeTab ? HOME_MENUS.find((menu) => menu.key === activeTab) ?? null : null;
 
+  // a1 white ground unless the agency picked a ground color (a2); the same look as the landing.
+  const look = attendeeLook(state.homeStyle, state.accent);
   return (
-    <main id="main-content" tabIndex={-1} className={styles.homePage} style={homeSurfaceStyle(state.homeStyle)}>
+    <AttendeeSurface as="main" id="main-content" tabIndex={-1} color={look.color} mode={look.mode} ground={look.ground} className={styles.homePage} style={homeSurfaceStyle(state.homeStyle)}>
       {recovery}
       {activeTab === null ? (
         <AttendeeHomeLanding
@@ -1237,6 +1231,7 @@ export default function HomeShell({ slug }: { slug: string }) {
           keyvisual={state.keyvisual}
           defaultHomeBanner={state.defaultHomeBanner}
           homeStyle={state.homeStyle}
+          accent={state.accent}
           homeMenus={state.homeMenus}
           programs={state.programs}
           photos={state.photos}
@@ -1265,14 +1260,11 @@ export default function HomeShell({ slug }: { slug: string }) {
 
           <section className={styles.tabPanel} id={`menu-${activeTab}`} aria-label={activeMenu?.label}>
         {state.refreshFailed && (activeTab === "vote" || activeTab === "roulette") && (
-          <div className={styles.refreshNotice} role="status">
-            <span>최신 상태를 확인하지 못했습니다. 연결을 확인하고 다시 시도하세요.</span>
-            <button type="button" onClick={refresh}>다시 시도</button>
-          </div>
+          <AttendeeStateMessage kind="info" icon="refresh" title="최신 상태를 확인하지 못했습니다. 연결을 확인하고 다시 시도하세요." action={{ label: "다시 시도", onClick: refresh }} className={styles.refreshNotice} />
         )}
         {activeTab === "qr" && <TicketView slug={slug} initialTicket={state.ticketToken} />}
         {activeTab === "application" && <TicketView slug={slug} initialTicket={state.ticketToken} mode="application" />}
-        {state.unavailable.includes(activeTab) && <div className={styles.statePanel}><h1 className={styles.stateTitle}>{activeMenu?.label}</h1><p className={styles.stateMessage}>현재 이 행사에서 제공하지 않습니다. 참가 메뉴에서 다른 안내를 확인하세요.</p></div>}
+        {state.unavailable.includes(activeTab) && <div className={styles.statePanel}><h1 className={styles.stateTitle}>{activeMenu?.label}</h1><AttendeeStateMessage kind="empty" title="현재 이 행사에서 제공하지 않습니다.">참가 메뉴에서 다른 안내를 확인하세요.</AttendeeStateMessage></div>}
         {activeTab === "notice" && !state.unavailable.includes(activeTab) && <NoticeTab slug={slug} notices={state.notices} />}
         {activeTab === "lucky" && !state.unavailable.includes(activeTab) && (
           <LuckyTab
@@ -1349,19 +1341,14 @@ export default function HomeShell({ slug }: { slug: string }) {
           </section>
         </>
       )}
-    </main>
+    </AttendeeSurface>
   );
 }
 
 function NoticeTab({ slug, notices }: { slug: string; notices: Notice[] }) {
   if (!notices.length) {
     return (
-      <section className={styles.emptyState}>
-        <p className={styles.emptyText}>등록된 공지사항이 없습니다.</p>
-        <p className={styles.emptyText}>
-          <ProductLink className={styles.needTicketButton} href={`/event/${encodeURIComponent(slug)}`}>행사 안내 보기</ProductLink>
-        </p>
-      </section>
+      <AttendeeStateMessage kind="empty" icon="board" title="등록된 공지사항이 없습니다." action={{ label: "행사 안내 보기", href: `/event/${encodeURIComponent(slug)}` }} />
     );
   }
   return (
@@ -1391,13 +1378,11 @@ function NeedTicket({ slug }: { slug: string }) {
   const recoveryBlocked = isRecoveryBlocked(useVerificationMode());
   return (
     <section className={styles.needTicket}>
-      <p className={styles.needTicketText}>이 탭에서 티켓이 확인되지 않습니다.</p>
-      {recoveryBlocked ? (
-        <p className={styles.needTicketText} role="note">
-          이 행사는 문자로 티켓을 다시 연결할 수 없습니다. 신청을 완료한 브라우저 탭을 확인하고,
-          탭을 찾을 수 없다면 행사 주최 측에 문의하세요.
-        </p>
-      ) : null}
+      <AttendeeStateMessage kind="info" icon="ticket" title="이 탭에서 티켓이 확인되지 않습니다.">
+        {recoveryBlocked
+          ? "이 행사는 문자로 티켓을 다시 연결할 수 없습니다. 신청을 완료한 브라우저 탭을 확인하고, 탭을 찾을 수 없다면 행사 주최 측에 문의하세요."
+          : "신청한 티켓을 확인하면 이 참여를 이어서 할 수 있어요."}
+      </AttendeeStateMessage>
       <p className={styles.needTicketAction}>
         {recoveryBlocked ? null : (
           <>
@@ -1474,7 +1459,7 @@ function LuckyTab({
             >
               {loading ? "발급 중입니다" : "럭키번호 발급"}
             </button>
-            {error ? <p className={styles.luckyError} role="alert">{error}</p> : null}
+            {error ? <AttendeeStateMessage kind="error" title={error} className={styles.stateInline} /> : null}
           </>
         )}
       </div>
@@ -1669,7 +1654,7 @@ function RouletteTab({
             {rouletteWaitingMessage(config, serverClock)}
           </p>
         )}
-        {error && !result ? <p className={styles.rouletteError} role="alert">{error}</p> : null}
+        {error && !result ? <AttendeeStateMessage kind="error" title={error} className={styles.stateInline} /> : null}
       </div>
     </section>
   );
@@ -2002,7 +1987,7 @@ function StampTab({
           </ul>
         ) : <p className={styles.stampHint}>아직 등록된 부스가 없습니다.</p>}
       </section>
-      {failure ? <p className={styles.stampError} role="alert">{failure.message}</p> : null}
+      {failure ? <AttendeeStateMessage kind="error" title={failure.message} className={styles.stateInline} /> : null}
       {failure?.limitReached && nextBooth ? (
         <a href="#stamp-next-booth" className={styles.stampNextLink}>인증 가능한 부스 {availableBooths.length}곳 보기</a>
       ) : null}
@@ -2176,7 +2161,7 @@ function VoteTab({
   if (!teams.length) {
     return (
       <section className={styles.emptyState}>
-        <p className={styles.emptyText}>투표 대상 팀이 아직 등록되지 않았습니다.</p>
+        <AttendeeStateMessage kind="empty" icon="vote" title="투표 대상 팀이 아직 등록되지 않았습니다." />
       </section>
     );
   }
@@ -2224,7 +2209,7 @@ function VoteTab({
       <p className={styles.voteCount}>
         선택된 팀: {selected.length} / {exactCount === null ? `최대 ${maxCount}` : requiredCount}
       </p>
-      {error ? <p className={styles.voteError} role="alert">{error}</p> : null}
+      {error ? <AttendeeStateMessage kind="error" title={error} className={styles.stateInline} /> : null}
       <button
         type="button"
         className={styles.submitButton}

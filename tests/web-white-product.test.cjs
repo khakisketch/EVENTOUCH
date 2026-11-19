@@ -82,7 +82,8 @@ test('message preview does not replace recipient review or explicit command conf
 
 test('published attendee appearance remains event-local, including non-white choices', () => {
   const home = read('event/[slug]/home/home.module.css');
-  assert.match(home, /background: var\(--home-background-color, #b9def0\)/u);
+  // Reopened 2026-11-20: the ground is the attendee surface's --ev-ground; the chosen color still rides --home-background-color.
+  assert.match(home, /background: var\(--ev-ground, var\(--home-background-color\)\)/u);
   assert.match(home, /var\(--home-viewport-height\)/u);
   assert.doesNotMatch(read('globals.css'), /--home-background-color:/u);
   assert.match(read('tokens.css'), /--ref-navy: #2E3D5B;/u);

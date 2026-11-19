@@ -76,3 +76,13 @@ test('the stage carries a brand glow, an orange mark and a banded current sessio
   assert.match(css, /\.program-item\[data-live="true"\]\)\s*\{[^}]*background:\s*color-mix\([^}]*var\(--brand\)/su, 'the session in progress is a lit band');
   assert.match(css, /\.poll-row\[data-leader="true"\]\) strong\s*\{[^}]*var\(--brand\)/su, 'the leader count is lit with its bar');
 });
+
+// Reopened 2026-11-20: no one-sided accents (side-tabs) on the stage. A question is one rounded
+// card with a full border; the session in progress is a lit band with a full ring.
+test('the stage has no side-tab: questions and the live row use a full border and a wash', () => {
+  assert.doesNotMatch(css, /border-(?:left|right|inline-start|inline-end)\s*:\s*[2-9]px/u, 'no thick one-sided border');
+  assert.match(css, /\.display-question\)\s*\{[^}]*border:\s*1px solid color-mix\([^}]*var\(--brand\)[^}]*border-radius:[^}]*background:\s*var\(--board-wash-faint\)/su, 'a question is a full-bordered card on a faint wash');
+  assert.match(css, /\.program-item\[data-live="true"\]\)\s*\{[^}]*box-shadow:\s*inset 0 0 0 clamp\([^}]*var\(--brand\)/su, 'the live row has a full ring');
+  assert.doesNotMatch(css, /box-shadow:\s*inset clamp\(/u, 'and no inset bar on one side');
+  assert.match(board, /\[session\.place, live \? "진행 중" : ""\]/u, 'the live row also says so in words');
+});

@@ -11,6 +11,8 @@ import ticketStyles from "../ticket.module.css";
 import { useUnsavedNavigationGuard } from "../../../../../lib/use-unsaved-navigation-guard";
 import { postAttendeeRequest } from "../../attendee-request";
 import { holdRecoveredTicket } from "../recovered-ticket";
+import AttendeeStateMessage from "../../ui/AttendeeStateMessage";
+import BottomAction from "../../ui/BottomAction";
 
 type Failure = { message: string; field?: string };
 
@@ -167,16 +169,19 @@ export default function RecoverForm({ slug }: { slug: string }) {
               required
             />
           </div>
-          {failure ? <p role="alert">{failure.message}</p> : null}
-          <p className={ticketStyles.ticketMessageActions}>
-            <ProductButton type="submit" className="button button-primary" disabled={working}>
-              {working ? "보내는 중입니다" : "인증번호 받기"}
-            </ProductButton>
-            <ProductButton type="button" className="button button-secondary" disabled={working} onClick={() => {
-              if (!phone.trim()) { setFailure({ field: "phone", message: "연락처를 먼저 입력하세요." }); document.getElementById("recover-phone")?.focus(); return; }
-              setSent(true); setRequestUncertain(true); setFailure(null);
-            }}>이미 받은 인증번호 입력</ProductButton>
-          </p>
+          {failure ? <AttendeeStateMessage kind="error" title={failure.message} /> : null}
+          <BottomAction
+            label="다음 행동"
+            primary={{ label: working ? "보내는 중입니다" : "인증번호 받기", type: "submit", disabled: working }}
+            secondary={{
+              label: "이미 받은 인증번호 입력",
+              disabled: working,
+              onClick: () => {
+                if (!phone.trim()) { setFailure({ field: "phone", message: "연락처를 먼저 입력하세요." }); document.getElementById("recover-phone")?.focus(); return; }
+                setSent(true); setRequestUncertain(true); setFailure(null);
+              },
+            }}
+          />
         </ValidatedForm>
       ) : (
         <ValidatedForm className="registration-form" onSubmit={confirmCode}>
@@ -201,35 +206,37 @@ export default function RecoverForm({ slug }: { slug: string }) {
               required
             />
           </div>
-          {failure ? <p role="alert">{failure.message}</p> : null}
-          <div className={ticketStyles.ticketMessageActions}>
-            {confirmationUncertain ? <ProductButton type="button" className={`button button-primary ${ticketStyles.recoverPrimary}`} disabled={working} onClick={() => void checkConnectedTicket()}>연결된 티켓 확인</ProductButton> : null}
-            <ProductButton type="submit" className={`button ${confirmationUncertain ? `button-secondary ${ticketStyles.recoverSecondary}` : "button-primary"}`} disabled={working}>
-              {working ? "확인 중입니다" : confirmationUncertain ? "인증번호 다시 확인" : "내 티켓 열기"}
+          {failure ? <AttendeeStateMessage kind="error" title={failure.message} /> : null}
+          <p className={ticketStyles.ticketMessageActions}>
+            <ProductButton type="button" variant="ghost" disabled={working} onClick={sendCode}>
+              {working ? "보내는 중입니다" : "인증번호 다시 받기"}
             </ProductButton>
-          <ProductButton
-            type="button"
-            className="button button-secondary"
-            disabled={working}
-            onClick={sendCode}
-          >
-            {working ? "보내는 중입니다" : "인증번호 다시 받기"}
-          </ProductButton>
-          <ProductButton
-            type="button"
-            className="button button-secondary"
-            disabled={working}
-            onClick={() => {
-              setSent(false);
-              setCode("");
-              setRequestUncertain(false);
-              setConfirmationUncertain(false);
-              setFailure(null);
-            }}
-          >
-            연락처 바꾸기
-          </ProductButton>
-          </div>
+            <ProductButton
+              type="button"
+              variant="ghost"
+              disabled={working}
+              onClick={() => {
+                setSent(false);
+                setCode("");
+                setRequestUncertain(false);
+                setConfirmationUncertain(false);
+                setFailure(null);
+              }}
+            >
+              연락처 바꾸기
+            </ProductButton>
+          </p>
+          {/* The strong action is fixed to the bottom; after an unclear result the
+              check of the connected ticket leads and the code re-check sits beside it. */}
+          <BottomAction
+            label="다음 행동"
+            primary={confirmationUncertain
+              ? { label: "연결된 티켓 확인", disabled: working, onClick: () => void checkConnectedTicket() }
+              : { label: working ? "확인 중입니다" : "내 티켓 열기", type: "submit", disabled: working }}
+            secondary={confirmationUncertain
+              ? { label: working ? "확인 중입니다" : "인증번호 다시 확인", type: "submit", disabled: working }
+              : undefined}
+          />
         </ValidatedForm>
       )}
       <p className={ticketStyles.ticketMessageActions}>

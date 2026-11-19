@@ -8,14 +8,14 @@
 .intro {
   margin: 16px 20px 0;
   color: var(--lay-ink);
-  font-size: 14px;
+  font-size: var(--text-sm);
   line-height: 1.55;
   overflow-wrap: anywhere;
 }
 
 .ticketSub {
-  color: color-mix(in srgb, #17252b 72%, #fff);
-  font-size: 12.5px;
+  color: color-mix(in srgb, var(--ink) 72%, var(--paper));
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
@@ -43,8 +43,8 @@
   min-width: 0;
   padding: 14px;
   border-radius: var(--lay-radius, 22px);
-  background: #fff;
-  color: #17252b;
+  background: var(--paper);
+  color: var(--ink);
   box-shadow: 0 8px 22px -16px rgb(16 17 20 / 70%);
 }
 
@@ -54,9 +54,9 @@
   width: 46px;
   height: 46px;
   place-items: center;
-  border-radius: 15px;
-  background: var(--brand-tint, #fdeee4);
-  color: var(--brand, #c8441f);
+  border-radius: var(--radius-large);
+  background: var(--ev-accent-soft, var(--brand-tint));
+  color: var(--ev-accent, var(--brand));
 }
 
 .factIcon :global(svg) {
@@ -71,7 +71,7 @@
 }
 
 .factMain {
-  font-size: 15.5px;
+  font-size: var(--text-md);
   font-weight: 800;
   line-height: 1.3;
   letter-spacing: -0.01em;
@@ -80,8 +80,8 @@
 }
 
 .factSub {
-  color: color-mix(in srgb, #17252b 66%, #fff);
-  font-size: 12.5px;
+  color: color-mix(in srgb, var(--ink) 66%, var(--paper));
+  font-size: var(--text-xs);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
@@ -92,10 +92,10 @@
   top: -8px;
   right: 10px;
   padding: 3px 9px;
-  border-radius: 999px;
-  background: var(--brand, #c8441f);
-  color: var(--on-brand, #19191c);
-  font-size: 12px;
+  border-radius: var(--r-pill);
+  background: var(--ev-accent, var(--brand));
+  color: var(--ev-on-accent, var(--on-brand));
+  font-size: var(--text-xs);
   font-weight: 800;
   letter-spacing: 0.01em;
 }
@@ -105,8 +105,8 @@
   margin: 14px 16px 0;
   padding: 4px 18px 18px;
   border-radius: var(--lay-radius, 22px);
-  background: #fff;
-  color: #17252b;
+  background: var(--paper);
+  color: var(--ink);
   box-shadow: 0 8px 22px -16px rgb(16 17 20 / 70%);
 }
 
@@ -120,7 +120,7 @@
   gap: 12px;
   min-width: 0;
   padding: 14px 0;
-  border-top: 1px solid #e5e5e7;
+  border-top: 1px solid var(--line);
 }
 
 .factRow:first-child {
@@ -135,7 +135,7 @@
 .summary .factIcon {
   width: 42px;
   height: 42px;
-  border-radius: 14px;
+  border-radius: var(--radius-medium);
 }
 
 .summaryAction {
@@ -144,8 +144,8 @@
 
 .summaryIntro {
   margin: 14px 2px 0;
-  color: #4a5258;
-  font-size: 14px;
+  color: var(--muted);
+  font-size: var(--text-sm);
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
@@ -162,22 +162,17 @@
   min-height: 52px;
   align-items: center;
   justify-content: center;
-  border-radius: 16px;
-  font-size: 16px;
+  border-radius: var(--radius-large);
+  font-size: var(--body);
   font-weight: 800;
   text-decoration: none;
 }
 
 .primarySub {
   margin: 0;
-  color: color-mix(in srgb, #17252b 66%, #fff);
-  font-size: 12.5px;
+  color: color-mix(in srgb, var(--ink) 66%, var(--paper));
+  font-size: var(--text-xs);
   font-weight: 600;
-}
-
-.summary .closedCard {
-  background: #f4f4f6;
-  box-shadow: none;
 }
 
 /* The registration card is a link, not a button. */
@@ -185,31 +180,9 @@
   text-decoration: none;
 }
 
-/* Opaque like the home's ticket card: it overlaps the banner, so a translucent
-   fill would lose its text on a dark banner. */
+/* The closed-intake message is AttendeeStateMessage; this only places it. */
 .closedCard {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 64px;
-  padding: 10px 14px;
-  border-radius: 18px;
-  background: #fff;
-  box-shadow: 0 10px 26px -14px rgb(16 17 20 / 60%);
-  color: #17252b;
-}
-
-.closedCard :global(svg) {
-  flex: none;
-  width: 30px;
-  height: 30px;
-  color: color-mix(in srgb, #17252b 60%, #fff);
-}
-
-.registrationClosed {
   margin: 0;
-  font-size: 15px;
-  font-weight: 800;
 }
 
 .recoveryDetails {
@@ -222,17 +195,17 @@
   display: flex;
   align-items: center;
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
 .recoveryNote {
   margin: 0 0 6px;
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: var(--radius-medium);
   background: rgb(255 255 255 / 78%);
-  color: #17252b;
-  font-size: 13.5px;
+  color: var(--ink);
+  font-size: var(--text-sm);
   line-height: 1.55;
 }
 
@@ -242,8 +215,9 @@
   padding: 8px 16px 0;
 }
 
-.sectionLabel {
-  margin: 22px 4px 10px;
+/* The section titles are AttendeeSectionHeader (small size); this spaces them. */
+.sections .sectionHead {
+  margin: var(--s5) var(--s1) var(--s3);
 }
 
 .section {
@@ -253,8 +227,8 @@
 .card {
   padding: 6px 18px 16px;
   border-radius: var(--lay-radius, 22px);
-  background: #fff;
-  color: #17252b;
+  background: var(--paper);
+  color: var(--ink);
   box-shadow: 0 8px 22px -16px rgb(16 17 20 / 70%);
 }
 
@@ -269,7 +243,7 @@
 .card :global(.event-fact) {
   padding: 12px 0;
   border: 0;
-  border-top: 1px solid #e5e5e7;
+  border-top: 1px solid var(--line);
   border-radius: 0;
   background: transparent;
 }
@@ -291,7 +265,7 @@
   grid-template-columns: 40px minmax(0, 1fr);
   gap: 12px;
   padding: 14px 0;
-  border-top: 1px solid #e5e5e7;
+  border-top: 1px solid var(--line);
 }
 
 /* Inside the console's content preview the list has no icon column. */
@@ -304,9 +278,9 @@
   width: 40px;
   height: 40px;
   place-items: center;
-  border-radius: 13px;
-  background: var(--brand-tint, #fdeee4);
-  color: var(--brand, #c8441f);
+  border-radius: var(--radius-medium);
+  background: var(--ev-accent-soft, var(--brand-tint));
+  color: var(--ev-accent, var(--brand));
 }
 
 .noticeIcon :global(svg) {
@@ -319,8 +293,8 @@
 }
 
 .noticeList li[data-pinned] .noticeIcon {
-  background: var(--brand, #c8441f);
-  color: var(--on-brand, #19191c);
+  background: var(--ev-accent, var(--brand));
+  color: var(--ev-on-accent, var(--on-brand));
 }
 
 .noticeList li:first-child {
@@ -329,7 +303,7 @@
 
 .noticeList h3 {
   margin: 0 0 6px;
-  font-size: 16px;
+  font-size: var(--body);
   font-weight: 800;
   line-height: 1.4;
   letter-spacing: -0.01em;
@@ -344,8 +318,8 @@
 }
 
 .noticeList :global(.rich-text) {
-  color: #4a5258;
-  font-size: 14.5px;
+  color: var(--muted);
+  font-size: var(--text-md);
   line-height: 1.6;
 }
 
@@ -355,10 +329,10 @@
   align-items: center;
   margin-right: 8px;
   padding-inline: 8px;
-  border-radius: 999px;
-  background: var(--brand-tint, #fdeee4);
-  color: var(--brand-text, #8e351f);
-  font-size: 12px;
+  border-radius: var(--r-pill);
+  background: var(--ev-accent-soft, var(--brand-tint));
+  color: var(--ev-accent-ink, var(--brand-text));
+  font-size: var(--text-xs);
   font-weight: 800;
   vertical-align: middle;
 }
@@ -377,9 +351,9 @@
   width: 52px;
   height: 52px;
   place-items: center;
-  border-radius: 17px;
-  background: var(--brand-tint, #fdeee4);
-  color: var(--brand, #c8441f);
+  border-radius: var(--radius-large);
+  background: var(--ev-accent-soft, var(--brand-tint));
+  color: var(--ev-accent, var(--brand));
 }
 
 .venueBubble :global(svg) {
@@ -396,7 +370,7 @@
 
 .venueName {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 800;
   line-height: 1.3;
   letter-spacing: -0.02em;
@@ -409,16 +383,16 @@
   align-items: center;
   gap: 6px;
   padding: 0 16px;
-  border-radius: 14px;
-  background: #17252b;
-  color: #fff;
-  font-size: 14px;
+  border-radius: var(--radius-medium);
+  background: var(--ink);
+  color: var(--paper);
+  font-size: var(--text-sm);
   font-weight: 800;
   text-decoration: none;
 }
 
 .mapLink:focus-visible {
-  outline: 3px solid var(--focus, #2453a6);
+  outline: 3px solid var(--focus);
   outline-offset: 3px;
 }
 
@@ -431,9 +405,9 @@
   display: inline-block;
   max-width: 100%;
   margin-top: 12px;
-  border-radius: 14px;
+  border-radius: var(--radius-medium);
   overflow: hidden;
-  background: #fff;
+  background: var(--paper);
 }
 
 .mapImage {
@@ -446,10 +420,10 @@
   position: absolute;
   transform: translate(-50%, -50%);
   padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--brand);
-  color: var(--on-brand);
-  font-size: 12px;
+  border-radius: var(--r-pill);
+  background: var(--ev-accent, var(--brand));
+  color: var(--ev-on-accent, var(--on-brand));
+  font-size: var(--text-xs);
   font-weight: 800;
   white-space: nowrap;
   pointer-events: none;
@@ -464,7 +438,7 @@
   width: auto;
   max-width: 100%;
   height: auto;
-  border-radius: 14px;
+  border-radius: var(--radius-medium);
 }
 
 .venueMap figcaption {
@@ -511,7 +485,7 @@
   background: var(--paper);
   color: var(--ink);
   font: inherit;
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -528,6 +502,29 @@
 
 .addressButton:focus-visible,
 .addressValue:focus-visible {
-  outline: 3px solid var(--focus, #2453a6);
+  outline: 3px solid var(--focus);
   outline-offset: 3px;
+}
+
+/* ---- a1: quiet soft cards instead of white cards with a shadow ----
+   a2 (the event's own ground) keeps the white cards. The console's guide
+   preview has no mode and keeps its white cards too. */
+[data-attendee-mode="a1"] .summary,
+[data-attendee-mode="a1"] .card,
+[data-attendee-mode="a1"] .fact {
+  background: color-mix(in srgb, var(--ink) 5%, var(--paper));
+  box-shadow: none;
+}
+
+[data-attendee-mode="a1"] .factRow,
+[data-attendee-mode="a1"] .noticeList li,
+[data-attendee-mode="a1"] .card :global(.event-fact) {
+  border-top-color: color-mix(in srgb, var(--ink) 10%, transparent);
+}
+
+/* The one strong action wears the event color. */
+.summaryAction .primaryAction {
+  border-color: var(--ev-accent, var(--brand));
+  background: var(--ev-accent, var(--brand));
+  color: var(--ev-on-accent, var(--on-brand));
 }

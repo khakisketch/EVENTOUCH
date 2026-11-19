@@ -13,6 +13,9 @@ import styles from "./register.module.css";
 import { useUnsavedNavigationGuard } from "../../../../lib/use-unsaved-navigation-guard";
 import { postAttendeeRequest } from "../attendee-request";
 import AttendeeIcon from "../AttendeeIcons";
+import AttendeeStep from "../ui/AttendeeStep";
+import AttendeeStateMessage from "../ui/AttendeeStateMessage";
+import BottomAction from "../ui/BottomAction";
 
 type Props = {
   slug: string;
@@ -56,7 +59,6 @@ export default function RegisterForm(initial: Props) {
   const submitGateRef = useRef(false);
   const protectAttemptRef = useRef(false);
   const retryNoticeRef = useRef<HTMLElement>(null);
-  const submitButtonRef = useRef<HTMLButtonElement>(null);
   const pendingFieldFocusRef = useRef<{ field: string; origin: Element | null } | null>(null);
   const [values, setValues] = useState<Record<string, string | boolean>>({});
   const [consent, setConsent] = useState(false);
@@ -169,7 +171,7 @@ export default function RegisterForm(initial: Props) {
     if (retryNoticeVersion > 0) {
       retryNoticeRef.current?.focus({ preventScroll: true });
       // Keep the explanation and its action together in the mobile viewport.
-      (signupSuperseded ? retryNoticeRef.current : submitButtonRef.current)?.scrollIntoView({ block: "end", inline: "nearest" });
+      retryNoticeRef.current?.scrollIntoView({ block: "end", inline: "nearest" });
     }
   }, [retryNoticeVersion, signupSuperseded]);
 
@@ -477,6 +479,13 @@ export default function RegisterForm(initial: Props) {
     pendingSteps.push({ id: "consent", label: "개인정보 동의", problem: failure?.field === "consent", required: true });
   }
 
+  // The sections are the steps: 참가자 정보, 연락처 인증 (verified-only events), 정보 수집 동의.
+  // The current step follows what is still open, so the bar reads as progress without hiding a field.
+  const hasVerificationStep = verificationRequired && !signupSuperseded && !recoveryBlocked;
+  const totalSteps = 1 + (hasVerificationStep ? 1 : 0) + (consentText ? 1 : 0);
+  const fieldsPending = pendingSteps.some((step) => step.id.startsWith("field-"));
+  const currentStep = fieldsPending ? 1 : hasVerificationStep && !grant ? 2 : totalSteps;
+
   function focusRegistrationStep(id: string) {
     const target = document.getElementById(id);
     if (!(target instanceof HTMLElement)) return;
@@ -606,6 +615,7 @@ export default function RegisterForm(initial: Props) {
     >
       <fieldset className="registration-fields" disabled={submitting || retryPending || signupSuperseded}>
       <legend className="sr-only">참가 신청 정보</legend>
+      {totalSteps > 1 ? <AttendeeStep className={styles.step} current={currentStep} total={totalSteps} label="신청 진행 단계" /> : null}
       <section className={styles.stepSection} aria-label="신청 결과 안내">
         <h2 className="sr-only">신청하면 어떻게 되나요</h2>
         <p className={styles.outcomeNote} role="note">
@@ -672,7 +682,7 @@ export default function RegisterForm(initial: Props) {
                   </ProductButton>
                 </>
               )}
-              {verifyFailure ? <p role="alert">{verifyFailure}</p> : null}
+              {verifyFailure ? <AttendeeStateMessage kind="error" title={verifyFailure} /> : null}
               <p className="verification-help">
                 문자가 오지 않거나 인증이 계속되지 않으면{" "}
                 <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내에서 운영 정보를 확인하세요.</ProductLink>
@@ -714,13 +724,13 @@ export default function RegisterForm(initial: Props) {
           {formRefreshError ? <p role="alert">{formRefreshError}</p> : null}
         </section>
       ) : null}
-      {formUpdated && !failure ? <p role="status">{consentText ? "최신 신청 양식을 불러왔습니다. 입력 내용을 확인하고 동의 안내를 다시 읽어 주세요." : "최신 신청 양식을 불러왔습니다. 입력 내용을 다시 확인해 주세요."}</p> : null}
-      {failure && !failure.field ? <p role="alert">{failure.message}</p> : null}
+      {formUpdated && !failure ? <AttendeeStateMessage kind="info" icon="refresh" title="최신 신청 양식을 불러왔습니다.">{consentText ? "입력 내용을 확인하고 동의 안내를 다시 읽어 주세요." : "입력 내용을 다시 확인해 주세요."}</AttendeeStateMessage> : null}
+      {failure && !failure.field ? <AttendeeStateMessage kind="error" title={failure.message} /> : null}
       {failure?.field !== "phone" ? duplicateRecovery : null}
       {verificationRequired && !grant && !signupSuperseded ? (
         <p className="notice" role="status">신청하려면 위에서 연락처 인증을 완료하세요.</p>
       ) : null}
-      {verificationRequired && recoveryBlocked ? <p role="alert">현재 연락처 인증을 사용할 수 없습니다. 행사 주최 측에 문의하세요.</p> : null}
+      {verificationRequired && recoveryBlocked ? <AttendeeStateMessage kind="error" title="현재 연락처 인증을 사용할 수 없습니다.">행사 주최 측에 문의하세요.</AttendeeStateMessage> : null}
       {retryPending ? (
         <section className="registration-retry" role="alert" tabIndex={-1} ref={retryNoticeRef}>
           <h2>신청 결과를 확인하지 못했습니다</h2>
@@ -738,27 +748,32 @@ export default function RegisterForm(initial: Props) {
           ) : <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</ProductLink>}
         </section>
       ) : null}
-      <div className={styles.submitBlock}>
-        <div className={styles.progressLine}>
-          <p className={styles.progressMessage} role="status" aria-atomic="true">{progressMessage}</p>
-          {nextProgressStep ? (
-            <ProductButton
-              className={styles.progressJump}
-              variant="ghost"
-              type="button"
-              onClick={() => focusRegistrationStep(nextProgressStep?.id ?? "")}
-            >
-              <span className={styles.progressJumpText}>
-                <span className={styles.progressJumpLabel}>{nextProgressStep.label}</span>
-                {versionNeedsRefresh ? null : " 바로가기"}
-              </span>
-            </ProductButton>
-          ) : null}
-        </div>
-        <ProductButton ref={submitButtonRef} variant="primary" type="submit" disabled={submitting || signupSuperseded || formClosed || (verificationRequired && recoveryBlocked) || failure?.field === "formVersion"}>
-          {submitting ? (retryPending ? "신청 결과 확인 중입니다" : "신청 중입니다") : (retryPending ? "신청 결과 다시 확인" : "신청하기")}
-        </ProductButton>
+      <div className={styles.progressLine}>
+        <p className={styles.progressMessage} role="status" aria-atomic="true">{progressMessage}</p>
+        {nextProgressStep ? (
+          <ProductButton
+            className={styles.progressJump}
+            variant="ghost"
+            type="button"
+            onClick={() => focusRegistrationStep(nextProgressStep?.id ?? "")}
+          >
+            <span className={styles.progressJumpText}>
+              <span className={styles.progressJumpLabel}>{nextProgressStep.label}</span>
+              {versionNeedsRefresh ? null : " 바로가기"}
+            </span>
+          </ProductButton>
+        ) : null}
       </div>
+      {/* The one strong action, fixed to the bottom of the phone column. It stays
+          inside the form, so a plain submit still validates and sends it. */}
+      <BottomAction
+        label="신청 진행"
+        primary={{
+          label: submitting ? (retryPending ? "신청 결과 확인 중입니다" : "신청 중입니다") : (retryPending ? "신청 결과 다시 확인" : "신청하기"),
+          type: "submit",
+          disabled: submitting || signupSuperseded || formClosed || (verificationRequired && recoveryBlocked) || failure?.field === "formVersion",
+        }}
+      />
     </ValidatedForm>
   );
 }

@@ -19,9 +19,9 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  border-radius: 12px;
-  background: var(--brand-tint);
-  color: var(--brand-text);
+  border-radius: var(--radius-medium);
+  background: var(--ev-accent-soft, var(--brand-tint));
+  color: var(--ev-accent-ink, var(--brand-text));
 }
 
 .text {
@@ -36,7 +36,7 @@
 .strong {
   color: var(--ink);
   font-size: var(--body);
-  font-weight: 750;
+  font-weight: 800;
   letter-spacing: -0.01em;
   word-break: keep-all;
   overflow-wrap: anywhere;
@@ -56,9 +56,9 @@
   min-height: 44px;
   padding-inline: var(--s2);
   margin-block: -4px;
-  color: var(--brand-text);
+  color: var(--ev-accent-ink, var(--brand-text));
   font-size: var(--small);
-  font-weight: 750;
+  font-weight: 800;
   text-decoration: underline;
   text-underline-offset: 3px;
   white-space: nowrap;
@@ -67,5 +67,5 @@
 .guideLink:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: var(--radius-small);
 }
