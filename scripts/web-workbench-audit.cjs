@@ -196,7 +196,7 @@ async function main() {
         const rowTop = (await firstRow.boundingBox()).y;
         check(`mobile roster starts within the working viewport at ${width}`, rowTop <= 600, rowTop);
         const picker = page.getByRole('combobox', { name: '빠른 상태 보기', exact: true });
-        const tools = page.locator('summary[aria-label="명단 도구"]');
+        const tools = page.locator('summary[aria-label="내보내기"]');
         const add = page.getByRole('button', { name: '참가자 추가', exact: true });
         const controls = await Promise.all([picker.boundingBox(), tools.boundingBox(), add.boundingBox(), page.getByRole('button', { name: '명단 가져오기', exact: true }).boundingBox()]);
         check(`mobile roster keeps lookup controls together and touch sized at ${width}`,

@@ -30,7 +30,7 @@ test('import is a drop area, then one review screen: no step line, no separate m
 test('the review answers with a number, a distribution bar, a sample and tinted problem cards', () => {
   assert.match(wizard, /등록할 수 있어요/u);
   assert.match(wizard, /styles\.heroNumber/u);
-  assert.match(wizard, /role="img" aria-label=\{`바로 등록 \$\{cleanCount\}명, 확인 필요 \$\{preview\.phoneReview\.length\}명, 제외 \$\{preview\.errors\.length\}행`\}/u);
+  assert.match(wizard, /role="img" aria-label=\{`바로 등록 \$\{cleanCount\}명, 등록 후 확인 \$\{preview\.emailReview\.length\}명, 제외 \$\{preview\.errors\.length\}행`\}/u);
   assert.match(wizard, /preview\.valid\.slice\(0, 3\)/u);
   assert.match(wizard, /aria-label="적용될 값 미리보기"/u);
   assert.match(wizard, /data-tone="check"/u);
@@ -49,9 +49,16 @@ test('error rows unfold in place and stay reachable by keyboard', () => {
 });
 
 test('the contact check, consent facts and commit gate keep their rules', () => {
-  assert.match(wizard, /확인할 연락처를 원본과 비교했고, 표시된 번호로 등록합니다\./u);
+  // 2026-11-19: a spreadsheet-dropped leading 0 is restored and listed (not a gate);
+  // a malformed email registers the person and is flagged in the roster.
+  assert.match(wizard, /앞자리 0을 붙여 등록해요/u);
+  assert.match(wizard, /\{item\.raw\} → \{formatPhone\(item\.phone\)\}/u, 'the restored number shows before and after');
+  assert.match(wizard, /이메일 \{preview\.emailReview\.length\}건은 형식이 맞지 않아요/u);
+  assert.doesNotMatch(wizard, /errors\.push\(\{ row: line, reason: "이메일 형식을 확인하세요" \}\)/u, 'a malformed email no longer drops the row');
+  assert.match(wizard, /비슷한 소속 \{companySuggestions\.length\}건이 있어요/u);
+  assert.match(wizard, /companyFixes\[row\.company\]/u, 'similar 소속 is only unified when the operator ticks it');
   assert.match(wizard, /가져온 유효 행은 승인 검토 없이 참가 확정으로 등록됩니다\. 동의 기록은 가져오기만으로 생성하지 않습니다\. 열 제목이 행사의 신청 항목 이름과 같으면 그 응답도 함께 가져옵니다\./u);
-  assert.match(wizard, /preview\.phoneReview\.length > 0 && !phoneReviewed && !importUncertain/u);
+  assert.doesNotMatch(wizard, /preview\.phoneReview\.length > 0 && !phoneReviewed/u, 'restored phones do not block the commit');
   assert.match(wizard, /같은 요청 다시 시도/u);
   assert.match(wizard, /서버 처리 확인/u);
 });

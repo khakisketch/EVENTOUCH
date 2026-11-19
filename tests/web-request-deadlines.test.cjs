@@ -279,7 +279,7 @@ for (const stage of ['headers', 'body', 'rejection-body']) test(`import ${stage}
   s.consoleFetch = world.load('lib/console-api.ts').consoleFetch;
   s.confirmsParticipantImport = operator.confirmsParticipantImport;
   s.isOrganizationContextBlock = operator.isOrganizationContextBlock;
-  Object.assign(s, { eventId: 'event-original', preview: { valid: [{ name: 'Synthetic', phone: '01000009999', email: '', company: '' }], phoneReview: [] }, submittingRef: { current: false }, pendingImportRef: { current: null }, checkingImport: false, otherImportReceipt: false, fileReadingRef: { current: false }, phoneReviewed: false, importUncertain: false });
+  Object.assign(s, { eventId: 'event-original', preview: { valid: [{ name: 'Synthetic', phone: '01000009999', email: '', company: '' }], phoneReview: [] }, submittingRef: { current: false }, pendingImportRef: { current: null }, checkingImport: false, otherImportReceipt: false, fileReadingRef: { current: false }, phoneReviewed: false, importUncertain: false, companyFixes: {}, companySuggestions: [] });
   stateSetters(s, ['committing', 'commitError', 'importUncertain', 'committed', 'headers', 'dataRows', 'preview', 'fileKind', 'fileName']);
   world.functions(IMPORT, ['commit', 'randomCommandId']);
   const body = deferred();

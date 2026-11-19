@@ -1,5 +1,7 @@
 "use client";
 import ProductButton from "../../../../ui/ProductButton";
+import CompanyField from "./CompanyField";
+import { normalizeContactPhone } from "../../../../../lib/contact-normalize.cjs";
 
 import { useEffect, useRef, useState } from "react";
 import ValidatedForm from "../../../../ui/ValidatedForm";
@@ -24,7 +26,7 @@ const string = (value: unknown) => typeof value === "string" ? value : "";
 function record(value: unknown): Record<string, unknown> | null { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null; }
 function id() { return typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `web-${Date.now()}-${Math.floor(Math.random() * 1e9)}`; }
 function normalized(values: Values): Values {
-  return { ...values, name: values.name.trim(), phone: values.phone.replace(/\D/g, ""), company: values.company.trim(), email: values.email.trim(),
+  return { ...values, name: values.name.trim(), phone: normalizeContactPhone(values.phone), company: values.company.trim(), email: values.email.trim(),
     answers: Object.fromEntries(Object.entries(values.answers).map(([key, value]) => [key, typeof value === "string" ? value.trim() : value])) };
 }
 function matches(values: Values, payload: Record<string, unknown>): boolean {
@@ -34,7 +36,8 @@ function matches(values: Values, payload: Record<string, unknown>): boolean {
   return !answers || Object.entries(answers).every(([key, value]) => actual.answers[key] === value);
 }
 
-export default function ParticipantEditor({ eventId, participantId, onClose, onRefresh }: {
+export default function ParticipantEditor({ eventId, participantId, onClose, onRefresh, companyCounts = new Map() }: {
+  companyCounts?: Map<string, number>;
   eventId: string; participantId: string; onClose: () => void; onRefresh: () => Promise<boolean>;
 }) {
   const [base, setBase] = useState<Snapshot | null>(null);
@@ -197,7 +200,7 @@ export default function ParticipantEditor({ eventId, participantId, onClose, onR
       <fieldset className={`${uiStyles.formStack} ${styles.addFields}`} disabled={busy || Boolean(pending)}><legend className="sr-only">참가자 정보</legend>
       <div><label htmlFor="edit-name">이름</label><input id="edit-name" required maxLength={60} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></div>
       <div><label htmlFor="edit-phone">연락처</label><input id="edit-phone" type="tel" inputMode="numeric" required maxLength={20} value={draft.phone} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} /><p>연락처를 바꾸면 기존 참가자 세션이 해제됩니다.</p></div>
-      <div><label htmlFor="edit-company">소속</label><input id="edit-company" maxLength={200} value={draft.company} onChange={(event) => setDraft({ ...draft, company: event.target.value })} /></div>
+      <div><label htmlFor="edit-company">소속</label><CompanyField id="edit-company" value={draft.company} counts={companyCounts} onChange={(company) => setDraft({ ...draft, company })} /></div>
       <div><label htmlFor="edit-email">이메일</label><input id="edit-email" type="email" maxLength={120} value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} /></div>
       {base.fields.map((field, index) => {
         const inputId = `edit-answer-${index}`; const value = draft.answers[field.id];

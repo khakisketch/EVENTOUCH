@@ -303,3 +303,14 @@
   .mapChip { width: 100%; }
   .mapChip select { flex: 1 1 auto; max-width: none; }
 }
+
+/* Auto-fixed contacts are information, not a gate; similar 소속 is an opt-in fix. */
+.notice[data-tone="info"] { background: var(--surface-muted); }
+fieldset.notice { margin: 0; min-width: 0; border: 0; }
+fieldset.notice > legend { float: left; width: 100%; padding: 0; }
+fieldset.notice > legend + * { clear: both; }
+.companyFixes { display: grid; gap: var(--s1); margin: var(--s2) 0 0; padding: 0; list-style: none; }
+.companyFixes label { display: flex; align-items: center; gap: var(--s2); min-height: 44px; cursor: pointer; word-break: keep-all; }
+.companyFixes input { width: 20px; height: 20px; flex: none; accent-color: var(--brand-text); }
+.companyFixes small { color: var(--muted); }
+.moreNote { margin: var(--s1) 0 0; color: var(--muted); font-size: var(--small); }

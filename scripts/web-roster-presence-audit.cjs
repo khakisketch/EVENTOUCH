@@ -136,7 +136,7 @@ async function main() {
     }
     await page.setViewportSize({ width: 1280, height: 900 });
     await otherDialog.getByRole('button', { name: '닫기', exact: true }).click();
-    await page.locator('summary[aria-label="명단 도구"]').click();
+    await page.locator('summary[aria-label="내보내기"]').click();
     const csvDownload = page.waitForEvent('download');
     await page.getByRole('button', { name: /CSV 내보내기 · 검색·필터 결과 1명/ }).click();
     const csv = fs.readFileSync(await (await csvDownload).path(), 'utf8');

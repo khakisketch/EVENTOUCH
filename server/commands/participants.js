@@ -1,5 +1,7 @@
 'use strict';
 
+const { normalizeContactPhone, emailLooksValid } = require('../../apps/web/lib/contact-normalize.cjs');
+
 const crypto = require('node:crypto');
 const { normalizeEvent, normalizeWorkspace, workspaceChangesForSave, projectParticipant } = require('../state');
 const { ensureConsentNotice } = require('../consent-notices');
@@ -31,8 +33,9 @@ const COMMANDS = new Set([
 ]);
 const GUEST_COMMANDS = new Set(['participant.self-update', 'participant.cancel']);
 
+// Hyphens, +82 and a spreadsheet-dropped leading 0 are accepted (shared with the import preview).
 function normalizedPhone(value) {
-  return String(value === undefined || value === null ? '' : value).replace(/\D/g, '');
+  return normalizeContactPhone(value);
 }
 
 function eventCapacity(event) {
@@ -53,7 +56,7 @@ function existingParticipant(workspace, id) {
 }
 
 function validateParticipant(inputValue, workspace, { fields, existing, excludeId, enforcePublishedCompanyRequired = false,
-  grandfatherMissingPublishedRequired = false } = {}) {
+  grandfatherMissingPublishedRequired = false, lenientEmail = false } = {}) {
   const input = object(inputValue);
   const name = clean(input.name === undefined && existing ? existing.name : input.name, 60);
   if (!name) throw failure(400, '이름을 입력하세요', 'name');
@@ -62,7 +65,9 @@ function validateParticipant(inputValue, workspace, { fields, existing, excludeI
   if (!/^\d{9,15}$/.test(phone)) throw failure(400, '연락처를 숫자 9~15자리로 입력하세요', 'phone');
 
   const email = clean(input.email === undefined && existing ? existing.email : input.email, 120);
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  // A bulk import keeps a malformed email and registers the person; the roster
+  // flags it for review. Single add/edit still asks for a correct address.
+  if (email && !lenientEmail && !emailLooksValid(email)) {
     throw failure(400, '이메일 형식을 확인하세요', 'email');
   }
   const company = clean(input.company === undefined && existing ? existing.company : input.company, 200);
@@ -161,9 +166,9 @@ function importFieldsFor(workspace, carried) {
   });
 }
 
-function createParticipant(event, workspace, input, { registrationType, publicSignup = false, fields, now }) {
+function createParticipant(event, workspace, input, { registrationType, publicSignup = false, fields, now, lenientEmail = false }) {
   const form = fields || list(publicSignup ? workspace.publishedFields : workspace.fields);
-  const values = validateParticipant(input, workspace, { fields: form, enforcePublishedCompanyRequired: publicSignup });
+  const values = validateParticipant(input, workspace, { fields: form, enforcePublishedCompanyRequired: publicSignup, lenientEmail });
   const visibleConsent = clean(workspace.consentText, 3000).length > 0;
   if (publicSignup && visibleConsent && object(input).consent !== true) {
     throw failure(400, '필수 정보 수집 안내에 동의해주세요', 'consent');
@@ -970,6 +975,7 @@ function createParticipantCommands(database) {
                 registrationType: 'PRE',
                 fields: importFieldsFor(workspace, carried),
                 now,
+                lenientEmail: true,
               });
               participant.status = 'APPROVED';
               participant.consent = null;

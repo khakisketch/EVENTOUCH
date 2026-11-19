@@ -25,6 +25,7 @@ import { canWriteEvent } from "../../../../../../lib/event-capabilities";
 import { acknowledgeOperatorReceipt, confirmsParticipantImport, isOrganizationContextBlock } from "../../../../../../lib/operator-context";
 import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../../lib/operator-receipts";
 import { useEventReceipts } from "../../../../../../lib/use-event-receipts";
+import { suggestCompany } from "../../../../../../lib/contact-normalize.cjs";
 
 type ImportMap = { name: string; phone: string; email: string; company: string };
 // An extra field of the event's own form (식사 선택, 요청 사항 ...) that a file
@@ -36,8 +37,9 @@ type ExtraImport = { fields: ExtraField[]; map: ExtraMap };
 type ValidRow = { name: string; phone: string; email: string; company: string; line: number; answers?: Answers };
 type ImportRow = { cells: string[]; line: number };
 type RowError = { row: number; reason: string };
-type PhoneReview = { row: number; name: string; phone: string };
-type ImportPreview = { valid: ValidRow[]; errors: RowError[]; phoneReview: PhoneReview[] };
+type PhoneReview = { row: number; name: string; phone: string; raw: string };
+type EmailReview = { row: number; name: string; email: string };
+type ImportPreview = { valid: ValidRow[]; errors: RowError[]; phoneReview: PhoneReview[]; emailReview: EmailReview[] };
 
 type GateState =
   | { kind: "loading" }
@@ -286,8 +288,15 @@ function parseTxt(text: string): { headers: string[]; rows: ImportRow[] } {
   return { headers, rows };
 }
 
+// Same rule as lib/contact-normalize.cjs (the server stores what this shows):
+// digits only, "+82" and a spreadsheet-dropped leading 0 restored. Kept inline
+// so the preview logic stays self-contained.
 function normalizePhone(value: string): string {
-  return value.replace(/\D/g, "");
+  const digits = value.replace(/\D/g, "");
+  const international = /^82(0?)([1-9]\d{7,9})$/.exec(digits);
+  if (international) return `0${international[2]}`;
+  if (/^[1-9]\d{8,9}$/.test(digits)) return `0${digits}`;
+  return digits;
 }
 
 function validateRows(
@@ -298,6 +307,7 @@ function validateRows(
   const valid: ValidRow[] = [];
   const errors: RowError[] = [];
   const phoneReview: PhoneReview[] = [];
+  const emailReview: EmailReview[] = [];
   const seen = new Set<string>();
   dataRows.forEach(({ cells: cols, line }) => {
     const get = (key: keyof ImportMap) =>
@@ -305,7 +315,8 @@ function validateRows(
     // Server limits stay as-is (60/120/200), but over-limit values are
     // field errors with row numbers — never silently cut before validation.
     const name = get("name");
-    const phone = normalizePhone(get("phone"));
+    const rawPhone = get("phone");
+    const phone = normalizePhone(rawPhone);
     const email = get("email");
     const company = get("company");
     if (!name) {
@@ -322,10 +333,6 @@ function validateRows(
     }
     if (email.length > 120) {
       errors.push({ row: line, reason: `이메일이 120자를 초과합니다(${email.length}자)` });
-      return;
-    }
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errors.push({ row: line, reason: "이메일 형식을 확인하세요" });
       return;
     }
     if (company.length > 200) {
@@ -354,12 +361,13 @@ function validateRows(
     }
     seen.add(phone);
     valid.push({ name, phone, email, company, line, ...(Object.keys(collected).length ? { answers: collected } : {}) });
-    // A Korean 010 mobile number entered into a numeric spreadsheet cell
-    // often loses its first zero. Do not invent a number: it may also be an
-    // intentional international number and needs the operator's review.
-    if (/^10\d{8}$/.test(phone)) phoneReview.push({ row: line, name, phone });
+    // A spreadsheet drops the first 0 of a numeric cell. The number is restored
+    // and listed so the operator can see exactly what changed (never silent).
+    if (phone !== rawPhone.replace(/\D/g, "")) phoneReview.push({ row: line, name, phone, raw: rawPhone });
+    // A malformed email does not block registration; the roster flags it for review.
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) emailReview.push({ row: line, name, email });
   });
-  return { valid, errors, phoneReview };
+  return { valid, errors, phoneReview, emailReview };
 }
 
 function downloadCsv(filename: string, rows: string[][]) {
@@ -391,7 +399,7 @@ function ImportFrame({ onDismiss, busy, canClose, footer, ...page }: ImportFrame
   </ConsoleDialog>;
 }
 
-export default function ImportWizard({ eventId, onDismiss, onCommitted }: { eventId: string; onDismiss?: () => void; onCommitted?: () => void }) {
+export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCompanies = [] }: { eventId: string; onDismiss?: () => void; onCommitted?: () => void; knownCompanies?: string[] }) {
   const router = useRouter();
   const [dragging, setDragging] = useState(false);
   const [dismissConfirm, setDismissConfirm] = useState(false);
@@ -406,7 +414,9 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
   const [extraMap, setExtraMap] = useState<ExtraMap>({});
   const extraFields = gate.kind === "ready" ? gate.extraFields : NO_EXTRA_FIELDS;
   const [preview, setPreview] = useState<ImportPreview | null>(null);
-  const [phoneReviewed, setPhoneReviewed] = useState(false);
+  const [, setPhoneReviewed] = useState(false);
+  // Opt-in spelling fixes for a rare 소속 that looks like a common one (삼상전자 → 삼성전자).
+  const [companyFixes, setCompanyFixes] = useState<Record<string, boolean>>({});
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [readingFile, setReadingFile] = useState(false);
@@ -669,11 +679,11 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
 
   async function commit() {
     if (!preview || !preview.valid.length || submittingRef.current || checkingImport || otherImportReceipt || fileReadingRef.current) return;
-    if (preview.phoneReview.length && !phoneReviewed && !importUncertain) return;
     submittingRef.current = true;
     setCommitting(true);
     setCommitError(null);
-    const fingerprint = JSON.stringify([eventId, preview.valid]);
+    const rowsToSend = preview.valid.map((row) => companyFixes[row.company] && companySuggestions.some((item) => item.from === row.company) ? { ...row, company: companySuggestions.find((item) => item.from === row.company)!.to } : row);
+    const fingerprint = JSON.stringify([eventId, rowsToSend]);
     if (pendingImportRef.current?.uncertain && pendingImportRef.current.fingerprint !== fingerprint) {
       submittingRef.current = false;
       setCommitting(false);
@@ -682,7 +692,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
     }
     const attempt = pendingImportRef.current?.fingerprint === fingerprint
       ? pendingImportRef.current
-      : { fingerprint, commandId: randomCommandId(), rows: preview.valid.map((row) => ({ ...row })), uncertain: false };
+      : { fingerprint, commandId: randomCommandId(), rows: rowsToSend.map((row) => ({ ...row })), uncertain: false };
     pendingImportRef.current = attempt;
     const commandId = attempt.commandId;
     try {
@@ -831,9 +841,20 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
   // Required form fields the file has no column for: their answer stays empty.
   const unmappedRequired = extraFields.filter((field) => field.required && !extraMap[field.id]);
   const reviewing = Boolean(headers && preview && !missingField);
-  const cleanCount = preview ? preview.valid.length - preview.phoneReview.length : 0;
-  const commitDisabled = committing || checkingImport || otherImportReceipt || !preview?.valid.length || stageBlocked
-    || Boolean(preview && preview.phoneReview.length > 0 && !phoneReviewed && !importUncertain);
+  // 소속 spellings already in this event plus the file's, by head count.
+  const companyCounts = new Map<string, number>();
+  for (const name of [...knownCompanies, ...(preview?.valid ?? []).map((row) => row.company)]) {
+    const value = name.trim();
+    if (value) companyCounts.set(value, (companyCounts.get(value) ?? 0) + 1);
+  }
+  const fileCompanyCounts = new Map<string, number>();
+  for (const row of preview?.valid ?? []) if (row.company) fileCompanyCounts.set(row.company, (fileCompanyCounts.get(row.company) ?? 0) + 1);
+  const companySuggestions = [...fileCompanyCounts.keys()].flatMap((from) => {
+    const hit = suggestCompany(from, companyCounts);
+    return hit ? [{ from, to: hit.company, rows: fileCompanyCounts.get(from) ?? 0, toCount: hit.count }] : [];
+  });
+  const cleanCount = preview ? preview.valid.length - preview.emailReview.length : 0;
+  const commitDisabled = committing || checkingImport || otherImportReceipt || !preview?.valid.length || stageBlocked;
 
   function changeColumn(field: keyof ImportMap, value: string) {
     const next = { ...map, [field]: value };
@@ -932,7 +953,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
                     onClick={() =>
                       downloadCsv("EVENTOUCH_import_template.csv", [
                         ["이름", "연락처", "이메일", "소속", ...extraFields.map((field) => field.label)],
-                        ["예시 참가자", "01000009999", "sample@example.demo", "예시 조직", ...extraFields.map((field) =>
+                        ["예시 참가자", "010-0000-9999", "sample@example.demo", "예시 조직", ...extraFields.map((field) =>
                           field.type === "select" ? field.options[0] ?? "" : field.type === "checkbox" ? "예" : field.type === "email" ? "sample@example.demo" : "예시")],
                       ])
                     }
@@ -975,14 +996,14 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
                 <div className={styles.hero} data-empty={preview.valid.length ? undefined : "true"} role="status">
                   <h3 className={styles.heroLabel}>{preview.valid.length ? "등록할 수 있어요" : "등록할 수 있는 행이 없어요"}</h3>
                   <p className={styles.heroNumber}><b>{preview.valid.length}</b><span>명</span></p>
-                  <div className={styles.bar} role="img" aria-label={`바로 등록 ${cleanCount}명, 확인 필요 ${preview.phoneReview.length}명, 제외 ${preview.errors.length}행`}>
+                  <div className={styles.bar} role="img" aria-label={`바로 등록 ${cleanCount}명, 등록 후 확인 ${preview.emailReview.length}명, 제외 ${preview.errors.length}행`}>
                     {cleanCount ? <i data-kind="clean" style={{ flexGrow: cleanCount }} /> : null}
-                    {preview.phoneReview.length ? <i data-kind="check" style={{ flexGrow: preview.phoneReview.length }} /> : null}
+                    {preview.emailReview.length ? <i data-kind="check" style={{ flexGrow: preview.emailReview.length }} /> : null}
                     {preview.errors.length ? <i data-kind="skip" style={{ flexGrow: preview.errors.length }} /> : null}
                   </div>
                   <p className={styles.legend}>
                     <span data-kind="clean">바로 등록<b>{cleanCount}</b></span>
-                    <span data-kind="check">확인 필요<b>{preview.phoneReview.length}</b></span>
+                    <span data-kind="check">등록 후 확인<b>{preview.emailReview.length}</b></span>
                     <span data-kind="skip">제외<b>{preview.errors.length}</b></span>
                   </p>
                 </div>
@@ -1007,25 +1028,50 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted }: { even
                 ) : null}
 
                 {preview.phoneReview.length ? (
-                  <div className={styles.notice} data-tone="check">
-                    <h4>연락처 {preview.phoneReview.length}건을 확인해 주세요</h4>
-                    <p>010으로 시작하는 번호의 앞자리 0이 빠졌을 수 있습니다. 해외 번호 등은 그대로 맞을 수도 있으니 원본과 비교하세요. 잘못된 값은 원본 파일에서 수정한 뒤 다시 가져오세요.</p>
-                    <ul className={styles.chips} aria-label="확인할 연락처 목록">
-                      {preview.phoneReview.slice(0, 5).map((item) => <li key={item.row}>파일 {item.row}행 · {item.name} <small>{item.phone}</small></li>)}
+                  <div className={styles.notice} data-tone="info">
+                    <h4>연락처 {preview.phoneReview.length}건은 앞자리 0을 붙여 등록해요</h4>
+                    <p>엑셀이 숫자 칸의 첫 0을 지운 번호입니다. 하이픈(-)이나 +82가 있어도 그대로 받아들입니다.</p>
+                    <ul className={styles.chips} aria-label="앞자리 0을 붙인 연락처 목록">
+                      {preview.phoneReview.slice(0, 5).map((item) => <li key={item.row}>파일 {item.row}행 · {item.name} <small>{item.raw} → {formatPhone(item.phone)}</small></li>)}
                     </ul>
                     {preview.phoneReview.length > 5 ? (
                       <details className={styles.more}>
                         <summary>나머지 {preview.phoneReview.length - 5}건 보기</summary>
-                        <ul className={styles.chips} aria-label="확인할 연락처 나머지 목록">
-                          {preview.phoneReview.slice(5).map((item) => <li key={item.row}>파일 {item.row}행 · {item.name} <small>{item.phone}</small></li>)}
+                        <ul className={styles.chips} aria-label="앞자리 0을 붙인 연락처 나머지 목록">
+                          {preview.phoneReview.slice(5).map((item) => <li key={item.row}>파일 {item.row}행 · {item.name} <small>{item.raw} → {formatPhone(item.phone)}</small></li>)}
                         </ul>
                       </details>
                     ) : null}
-                    <div className="checkbox-field"><label className={styles.phoneConfirm}>
-                      <input type="checkbox" checked={phoneReviewed} onChange={(event) => setPhoneReviewed(event.target.checked)} disabled={importLocked} />
-                      <span>확인할 연락처를 원본과 비교했고, 표시된 번호로 등록합니다.</span>
-                    </label></div>
                   </div>
+                ) : null}
+
+                {preview.emailReview.length ? (
+                  <div className={styles.notice} data-tone="check">
+                    <h4>이메일 {preview.emailReview.length}건은 형식이 맞지 않아요</h4>
+                    <p>참가자는 그대로 등록하고, 명단에 "이메일 확인 필요"로 표시합니다. 나중에 참가자 상세에서 고칠 수 있습니다.</p>
+                    <ul className={styles.chips} aria-label="형식이 맞지 않는 이메일 목록">
+                      {preview.emailReview.slice(0, 5).map((item) => <li key={item.row}>파일 {item.row}행 · {item.name} <small>{item.email}</small></li>)}
+                    </ul>
+                    {preview.emailReview.length > 5 ? <p className={styles.moreNote}>외 {preview.emailReview.length - 5}건</p> : null}
+                  </div>
+                ) : null}
+
+                {companySuggestions.length ? (
+                  <fieldset className={styles.notice} data-tone="check">
+                    <legend><h4>비슷한 소속 {companySuggestions.length}건이 있어요</h4></legend>
+                    <p>오타일 수도, 실제로 다른 곳일 수도 있습니다. 같은 곳이면 체크해서 많이 쓰는 이름으로 맞추세요. 체크하지 않으면 파일 그대로 등록합니다.</p>
+                    <ul className={styles.companyFixes}>
+                      {companySuggestions.map((item) => (
+                        <li key={item.from}>
+                          <label>
+                            <input type="checkbox" checked={Boolean(companyFixes[item.from])} disabled={importLocked}
+                              onChange={(event) => setCompanyFixes((current) => ({ ...current, [item.from]: event.target.checked }))} />
+                            <span><b>{item.from}</b> <small>{item.rows}명</small> → <b>{item.to}</b> <small>{item.toCount}명</small> 이름으로 맞추기</span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </fieldset>
                 ) : null}
 
                 {preview.errors.length ? (

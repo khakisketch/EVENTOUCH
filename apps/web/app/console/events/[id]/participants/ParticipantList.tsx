@@ -39,6 +39,8 @@ import { readCloseSnapshot, type CloseSnapshot } from "../../../console-event-cl
 import styles from "./participants.module.css";
 import ParticipantEditor from "./ParticipantEditor";
 import ImportWizard from "./import/ImportWizard";
+import CompanyField from "./CompanyField";
+import { emailLooksValid } from "../../../../../lib/contact-normalize.cjs";
 import BulkCancelDialog from "./BulkCancelDialog";
 import TicketReissue from "./TicketReissue";
 import ReviewedExit from "./ReviewedExit";
@@ -1373,10 +1375,16 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   const selectedPerson = toolsOpenId
     ? state.people.find((person) => person.id === toolsOpenId) ?? null
     : null;
+  // 소속 spellings in use (cancelled people excluded), for suggestions in add/edit and import.
+  const companyCounts = new Map<string, number>();
+  for (const person of state.people) {
+    const company = person.company.trim();
+    if (company && person.status !== "CANCELLED") companyCounts.set(company, (companyCounts.get(company) ?? 0) + 1);
+  }
   const selectedDetailFacts = selectedPerson
     ? [
         `연락처 ${maskPhone(selectedPerson.phone)}`,
-        selectedPerson.email.trim() ? `이메일 ${selectedPerson.email.trim()}` : "",
+        selectedPerson.email.trim() ? `이메일 ${selectedPerson.email.trim()}${emailLooksValid(selectedPerson.email) ? "" : " (형식 확인 필요)"}` : "",
         `출입 ${presenceLabel(selectedPerson)}`,
       ].map((part) => part.trim()).filter(Boolean).join(" · ")
     : "";
@@ -1951,7 +1959,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                 </select>
               </label>
               <details className={styles.rosterUtilities} ref={rosterUtilitiesRef}>
-                <summary aria-label="명단 도구"><DownloadIcon /><span className={styles.longAction}>명단 도구</span><span className={styles.shortAction} aria-hidden="true">도구</span></summary>
+                <summary aria-label="내보내기"><DownloadIcon /><span className={styles.longAction}>내보내기</span><span className={styles.shortAction} aria-hidden="true">내보내기</span></summary>
                 <div className={styles.utilityMenu}>
               <ProductButton type="button" className="button button-secondary" aria-label={`엑셀 내보내기 · 검색·필터 결과 ${visiblePeople.length}명`} aria-describedby={state.exportIssue ? "roster-export-unavailable" : undefined} title={`검색·필터 결과 ${visiblePeople.length}명을 현재 정렬 순서로 내보냅니다.`} disabled={exporting || rosterUnavailable || Boolean(state.exportIssue)} onClick={() => void exportXlsx()} icon={<DownloadIcon />}>
 
@@ -2245,7 +2253,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               </>
             ) : null}
       </div>
-      {importOpen ? <ImportWizard eventId={eventId} onDismiss={() => setImportOpen(false)} onCommitted={() => void load(true)} /> : null}
+      {importOpen ? <ImportWizard eventId={eventId} knownCompanies={state.people.filter((person) => person.status !== "CANCELLED").map((person) => person.company)} onDismiss={() => setImportOpen(false)} onCommitted={() => void load(true)} /> : null}
       {visiblePeople.length ? (
         <>
           <div className={styles.rosterWorkbench}>
@@ -2283,7 +2291,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   {canAssignGroup ? <td className={styles.selectColumn}><label className={styles.participantSelectTarget}>
                     <input type="checkbox" className={styles.participantSelect} aria-label={`${person.name} 선택`} checked={effectiveSelection.includes(person.id)} onChange={() => togglePerson(person.id)} />
                   </label></td> : null}
-                  <td><span className={styles.nameCell}><span className={styles.avatar} data-status={person.status} aria-hidden="true">{[...person.name.trim()][0] ?? "?"}</span><span className={styles.tableIdentity}><strong id={`roster-name-desktop-${person.id}`}>{person.name}</strong><small>{person.company || "소속 미입력"}</small></span></span></td>
+                  <td><span className={styles.nameCell}><span className={styles.avatar} data-status={person.status} aria-hidden="true">{[...person.name.trim()][0] ?? "?"}</span><span className={styles.tableIdentity}><strong id={`roster-name-desktop-${person.id}`}>{person.name}</strong><small>{person.company || "소속 미입력"}</small>{emailLooksValid(person.email) ? null : <small className={styles.ticketReviewLabel}>이메일 확인 필요</small>}</span></span></td>
                   <td className={styles.rosterContact}>{maskPhone(person.phone)}</td><td className={styles.rosterGroup}>{person.group || "미지정"}</td>
                   <td><span className={`status-chip ${tone} ${styles.participantStatus}`}>{statusLabel(person.status)}</span>{["PENDING", "WAITLIST"].includes(person.status) && person.ticketReview === "cancelled" ? <small className={styles.ticketReviewLabel}>취소 상태 확인 필요</small> : null}{["PENDING", "WAITLIST"].includes(person.status) && person.ticketNeedsExplicitReissue ? <small className={styles.ticketReviewLabel}>승인 후 티켓 재발급 필요</small> : null}</td>
                   <td><span className={person.inside ? styles.presenceInside : styles.presence}>{presenceLabel(person)}</span></td>
@@ -2327,6 +2335,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   <span className={styles.participantSummary}>
                     <strong className={styles.participantName} id={`roster-name-mobile-${person.id}`}>{person.name}</strong>
                     <small className={styles.participantIdentity}>{[identityOrg(person), presenceLabel(person)].filter(Boolean).join(" · ")}</small>
+                    {emailLooksValid(person.email) ? null : <small className={styles.ticketReviewLabel}>이메일 확인 필요</small>}
                     {ticketFilter || (["PENDING", "WAITLIST"].includes(person.status) && person.ticketReview === "cancelled") ? <small className={styles.ticketReviewLabel}>{ticketReviewLabel(person.ticketReview)}</small> : null}
                     {["PENDING", "WAITLIST"].includes(person.status) && person.ticketNeedsExplicitReissue ? <small className={styles.ticketReviewLabel}>승인 후 티켓 재발급 필요</small> : null}
                   </span>
@@ -2599,7 +2608,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           </p>
         </div>
       )}
-      {editTargetId ? <ParticipantEditor key={`${eventId}-${editTargetId}`} eventId={eventId} participantId={editTargetId} onClose={() => { setEditTargetId(null); window.requestAnimationFrame(() => inspectorHeadingRef.current?.focus({ preventScroll: true })); }} onRefresh={() => load(true)} /> : null}
+      {editTargetId ? <ParticipantEditor key={`${eventId}-${editTargetId}`} eventId={eventId} participantId={editTargetId} companyCounts={companyCounts} onClose={() => { setEditTargetId(null); window.requestAnimationFrame(() => inspectorHeadingRef.current?.focus({ preventScroll: true })); }} onRefresh={() => load(true)} /> : null}
       {reviewedExitTarget ? <ReviewedExit key={`${eventId}-${reviewedExitTarget}`} eventId={eventId} participantId={reviewedExitTarget}
         onRefresh={() => load(true)} onClose={() => { setReviewedExitTarget(null); window.requestAnimationFrame(() => inspectorHeadingRef.current?.focus({ preventScroll: true })); }}
         onDone={() => { setReviewedExitTarget(null); setFailure(null); setNotice("퇴장 기록을 저장했습니다. 최신 출입 상태를 확인하세요."); window.requestAnimationFrame(() => inspectorHeadingRef.current?.focus({ preventScroll: true })); }} /> : null}
@@ -2667,13 +2676,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
             </div>
             <div>
               <label htmlFor="participant-add-company">소속 (선택)</label>
-              <input
-                id="participant-add-company"
-                type="text"
-                maxLength={200}
-                value={addDraft.company}
-                onChange={(event) => setAddDraft({ ...addDraft, company: event.target.value })}
-              />
+              <CompanyField id="participant-add-company" value={addDraft.company} counts={companyCounts}
+                onChange={(company) => setAddDraft({ ...addDraft, company })} />
             </div>
             <div>
               <label htmlFor="participant-add-email">이메일 (선택)</label>

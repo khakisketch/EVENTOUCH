@@ -364,3 +364,9 @@
 @media (max-width: 768px) { .quickPresets { display: none; } }
 .selectionWorkbench .selectionActions > :global([data-bulk="primary"]:disabled) { background: transparent; color: var(--side-muted); border-color: var(--side-muted); opacity: 1; }
 .workbenchControls .utilityPair > :global([data-variant="ghost"]) { border: 1px solid var(--line-strong); border-radius: 999px; background: var(--paper); }
+
+/* 소속 suggestion under the field: quiet text with a one-tap fix. */
+.companyHint { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s2); margin-top: var(--s1); color: var(--muted); font-size: var(--small); word-break: keep-all; }
+.companyHint:empty { display: none; }
+.companyHint b { color: var(--ink); }
+.companyHint :global(.astryx-button) { min-height: 44px; padding-inline: var(--s2); color: var(--brand-text); font-weight: 700; }
