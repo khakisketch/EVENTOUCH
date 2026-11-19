@@ -225,8 +225,11 @@ test("states script reveals paged activity before asserting older labels", () =>
 test("photos upload stacks full-width on phones; import file aligns left", () => {
   const photos = read("console/events/[id]/photos/evidence-photos.module.css");
   const mobile = photos.slice(photos.indexOf("@media (max-width: 768px)"));
-  assert.match(mobile, /\.uploadArea\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/su, "explanation keeps full width");
-  assert.match(mobile, /\.uploadArea > :global\(\.product-action\)\s*\{[^}]*width:\s*100%/su, "upload action goes full-width");
+  // Reopened 2026-11-20: the old uploadArea box is gone (dead since the gallery redesign); the preview and job rows are what stack.
+  const narrow = photos.slice(photos.indexOf("@media (max-width: 420px)"));
+  assert.match(mobile, /\.previewGrid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill/su, "previews wrap to the phone width");
+  assert.match(narrow, /\.jobItem\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/su, "upload rows keep full width");
+  assert.match(narrow, /\.previewActions :global\(\.product-action\)\s*\{[^}]*width:\s*100%/su, "upload action goes full-width");
   const wizard = read("console/events/[id]/participants/import/ImportWizard.tsx");
   assert.match(wizard, /<label data-import-dropzone/u, "the drop area is one label around the real file input");
   assert.match(wizard, /styles\.filePicker/u, "the picker owns its focusable presentation");
