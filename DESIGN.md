@@ -632,3 +632,13 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/console/CreateE
 - Each field gets the control that fits it instead of one white box: the name is a title input without a box with the 참가자 주소 line under it ("바꾸기" opens 주소 코드), the date is a large soft field with 내일/1주 뒤/1개월 뒤 chips and a plain "선택한 날짜 … · N일 뒤" line, the time is 종일/오전/오후/저녁 chips with a "09:00–18:00 · 9시간" line, 정원 has 50/100/300/500 chips, and the create mode is a two-way segmented bar.
 - Chips are native radios that only set values the form already holds (date, start/end, capacity); the payload and the write path (receipts, retry, duplicate, customer registration) are unchanged. Selected chips are ink, so the one orange action stays "행사 만들기".
 - Guidance never blocks the write: a same-name event, a past date, a duplicate that keeps the source date, and an end that is not after the start (the server's own rule) show as a one-line notice. With no customers the select is replaced by a one-line explanation and the register action.
+
+## 참가자 디자인 시스템 기초 (2026-11-20)
+
+참가자(공개·폰) 화면의 공통 기초다. 기존 화면의 모양은 바꾸지 않고 새 화면이 얹을 부품만 추가한다(`apps/web/app/event/[slug]/ui/`).
+
+- **팔레트 파생(한 곳):** `apps/web/lib/event-palette.ts`의 `deriveEventPalette(color)`가 행사 색에서 `accent`(채움), `accentStrong`(눌림), `accentSoft`(흰 바탕 위 약 11% 틴트), `onAccent`(포인트 위 글자), `accentInk`(포인트를 글자로 쓸 때)를 만든다. `onAccent`는 포인트·눌림색 위에서, `accentInk`는 흰 바탕·연한 면·연한 카드 위에서 모두 WCAG AA 4.5:1 이상이다(색상 명도를 낮춰 맞춘다). 비었거나 잘못된 색은 제품 브랜드 `#EA552E` 팔레트가 된다. `paletteStyle(color)`가 `--ev-accent`·`--ev-accent-strong`·`--ev-accent-soft`·`--ev-on-accent`·`--ev-accent-ink`를 낸다.
+- **글자색 계산 한 가지:** `readableInk`(`lib/attendee-home.ts`)와 `homeSurfaceStyle`의 글자색은 같은 알고리즘이다(어두운 잉크·흰색 중 대비가 큰 쪽, 4.55:1에 못 미치면 순흑·순백으로 올림).
+- **두 모드, 한 래퍼:** `AttendeeSurface`가 팔레트와 바탕을 적용하고 `data-attendee-mode`를 단다. `a1`(기본)은 흰 바탕에 행사 색을 단추·칩·아이콘·진행에만 쓰는 토스형이다. `a2`(선택)는 행사 색이 바탕이고 흰 카드가 그 위에 놓인다(바탕 색은 행사의 기존 배경색 기능을 그대로 쓴다: `ground`). 컴포넌트는 모드를 직접 정하지 않고 래퍼의 값에 따라 모양만 바뀐다.
+- **부품:** `AttendeeCard`(22px 카드, soft·white), `AttendeeSectionHeader`(작은 라벨+큰 제목+링크), `AttendeeListRow`·`AttendeeList`(아이콘 타일+제목·메타+화살표, 한 줄이 56px 이상의 한 대상), `AttendeeStateMessage`(empty·error·info; 오류는 `role="alert"`, 나머지는 `role="status"`), `BottomAction`·`BottomActionSpacer`(하단 고정 주 버튼+보조, 안전 영역, 520px 열), `AttendeeStep`(1/3 진행), `AttendeeIcon`(아이콘 한 곳: `AttendeeIcons`).
+- **규칙:** 부품 CSS는 `tokens.css`와 `--ev-*`만 쓴다(hex·px 글자 크기·px 반경 금지), 굵기는 400·600·800, 조작 대상은 48px 이상, 줄바꿈은 `keep-all`, 움직임은 `prefers-reduced-motion: no-preference` 안에서만. 계약은 `tests/web-attendee-ds-components.test.cjs`와 `tests/event-palette.test.cjs`가 지킨다.
