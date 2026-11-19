@@ -12,6 +12,8 @@ import PublicEventContext from "../PublicEventContext";
 import EventBanner from "../EventBanner";
 import EventFacts from "../EventFacts";
 import AttendeeIcon from "../AttendeeIcons";
+import AttendeeStateMessage from "../ui/AttendeeStateMessage";
+import BottomAction from "../ui/BottomAction";
 import { DEFAULT_ATTENDEE_THEME, type AttendeeTheme } from "../event-theme";
 import { readPublicEventContext } from "../../../../lib/public-event-context";
 import type { PublicEventContext as EventContext } from "../../../../lib/public-event-context";
@@ -114,6 +116,12 @@ function applicationRows(participant: Record<string, unknown>, workspace: unknow
     if (value.trim()) rows.push({ label: field.label, value });
   }
   return rows;
+}
+
+// The receipt copy reads as a bold first sentence and the rest as the explanation.
+function firstSentence(text: string): { head: string; rest: string } {
+  const cut = text.indexOf(". ");
+  return cut < 0 ? { head: text, rest: "" } : { head: text.slice(0, cut + 1), rest: text.slice(cut + 2) };
 }
 
 function unusableCopy(state: { status: string; paymentStatus?: string; ticket: string }): { text: string; showRegister: boolean } {
@@ -454,8 +462,9 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
 
   if (state.kind === "loading") {
     return <div className={`ticket-state${pass ? ` ${styles.passMessage}` : ""}`}>
-      <p className={styles.ticketLoadingStatus} role="status">티켓을 확인하고 있습니다.</p>
-      <p className={styles.ticketLoadingHelp}>확인이 오래 걸리면 인터넷 연결을 확인해 주세요.</p>
+      <AttendeeStateMessage kind="info" icon="clock" title="티켓을 확인하고 있습니다.">
+        확인이 오래 걸리면 인터넷 연결을 확인해 주세요.
+      </AttendeeStateMessage>
       {/* Native reload still works if hydration fails; once hydrated, retry
           in place so a memory-only bearer survives without entering markup. */}
       <a className={styles.ticketLoadingRetry} href="" onClick={(event) => {
@@ -464,31 +473,40 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
       }}>다시 불러오기</a>
     </div>;
   }
+  // The next step of a message screen: the first action is the strong one fixed
+  // to the bottom, the second sits beside it, any more stay as quiet links.
+  type StateAction = { label: string; href?: string; onClick?: () => void };
+  const stateActions = (actions: StateAction[]) => (
+    <>
+      {actions.slice(2).length ? (
+        <p className={styles.ticketMessageActions}>
+          {actions.slice(2).map((action) => (
+            <ProductLink key={action.label} variant="ghost" href={action.href ?? "#"} onClick={action.onClick}>{action.label}</ProductLink>
+          ))}
+        </p>
+      ) : null}
+      <BottomAction label="다음 행동" primary={actions[0]} secondary={actions[1]} />
+    </>
+  );
   if (state.kind === "missing") {
+    const ticketBase = `/event/${encodeURIComponent(slug)}`;
+    const actions: StateAction[] = [];
+    if (!storageAvailable) actions.push({ label: "이 브라우저에서 인증된 티켓 확인", onClick: () => window.location.assign(`${ticketBase}/ticket?session=1`) });
+    if (recoveryBlocked) actions.push({ label: "처음 신청하기", href: `${ticketBase}/register` }, { label: "행사 안내 확인", href: ticketBase });
+    else actions.push({ label: "연락처 인증으로 티켓 다시 찾기", href: `${ticketBase}/ticket/recover` }, { label: "처음 신청하기", href: `${ticketBase}/register` });
     return (
       <section className={`${styles.ticketCard} ${styles.ticketMessage}${pass ? ` ${styles.passMessage}` : ""}`}>
         {pass ? <span className={styles.messageIcon} data-tone="wait"><AttendeeIcon name="ticket" size={26} /></span> : null}
         {/* Same state, same words as the home entries: the attendee has no
             ticket here, and the way forward is the same everywhere. */}
         <h1>티켓이 확인되지 않습니다</h1>
-        {!storageAvailable ? <p>이 탭에서 티켓이 확인되지 않습니다.</p> : recoveryBlocked ? (
-          <p>이 탭에서 티켓이 확인되지 않습니다. 이 행사는 문자로 다시 연결할 수 없으므로 신청을 완료한 브라우저 탭을 확인하세요. 탭을 찾을 수 없다면 행사 주최 측에 문의하세요.</p>
-        ) : (
-          <p>이 브라우저에 티켓이 보관되어 있지 않습니다. 신청할 때 쓴 연락처를 인증하면 다시 열 수 있습니다.</p>
-        )}
+        <AttendeeStateMessage kind="info" icon="ticket" title={!storageAvailable ? "이 탭에서 티켓이 확인되지 않습니다." : "이 브라우저에 티켓이 보관되어 있지 않습니다."}>
+          {!storageAvailable ? null : recoveryBlocked
+            ? "이 행사는 문자로 다시 연결할 수 없으므로 신청을 완료한 브라우저 탭을 확인하세요. 탭을 찾을 수 없다면 행사 주최 측에 문의하세요."
+            : "신청할 때 쓴 연락처를 인증하면 다시 열 수 있습니다."}
+        </AttendeeStateMessage>
         {!storageAvailable ? <p className={styles.ticketIdentityNotice}>브라우저 저장소를 사용할 수 없어 자동으로 티켓을 불러오지 않았습니다. 확인하면 이 브라우저에서 마지막으로 인증한 참가자의 티켓이 열립니다.</p> : null}
-        {!storageAvailable ? <p className={styles.ticketMessageActions}><a className={styles.buttonPrimary} href={`/event/${encodeURIComponent(slug)}/ticket?session=1`}>이 브라우저에서 인증된 티켓 확인</a></p> : null}
-        {!recoveryBlocked ? (
-          <p className={styles.ticketMessageActions}>
-            <ProductLink className={storageAvailable ? styles.buttonPrimary : styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>연락처 인증으로 티켓 다시 찾기</ProductLink>
-          </p>
-        ) : null}
-        {recoveryBlocked ? <p className={styles.ticketMessageActions}>
-          <ProductLink className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}`}>행사 안내 확인</ProductLink>
-        </p> : null}
-        <p className={styles.ticketMessageActions}>
-          <ProductLink className={recoveryBlocked ? styles.buttonPrimary : styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/register`}>처음 신청하기</ProductLink>
-        </p>
+        {stateActions(actions)}
       </section>
     );
   }
@@ -497,61 +515,41 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
     // recover screen would only repeat that verdict, so it steps aside for
     // device + operator guidance.
     const showRecover = state.canRecover && !recoveryBlocked;
+    const actions: StateAction[] = [];
+    if (showRecover) actions.push({ label: "연락처 인증으로 티켓 다시 찾기", href: `/event/${encodeURIComponent(slug)}/ticket/recover` });
+    if (!state.canRecover) actions.push({ label: "다시 시도", onClick: () => { setState({ kind: "loading" }); setReloadTick((tick) => tick + 1); } });
+    actions.push({ label: "행사 안내로", href: `/event/${encodeURIComponent(slug)}` });
     return (
       <section className={`${styles.ticketCard} ${styles.ticketMessage}${pass ? ` ${styles.passMessage}` : ""}`}>
         {pass ? <span className={styles.messageIcon} data-tone="bad"><AttendeeIcon name="info" size={26} /></span> : null}
         <h1>티켓을 사용할 수 없습니다</h1>
-        <p role="alert">{state.message}</p>
-        {state.canRecover ? (
-          <p>새 티켓 안내 링크를 확인하세요. {recoveryBlocked
-            ? "새 티켓을 받지 못했다면 행사 주최 측에 문의하세요."
-            : "링크가 없다면 신청 연락처를 인증해 티켓을 다시 찾을 수 있습니다."}</p>
-        ) : null}
-        {showRecover ? (
-          <p className={styles.ticketMessageActions}>
-            <ProductLink className={styles.buttonPrimary} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>연락처 인증으로 티켓 다시 찾기</ProductLink>
-          </p>
-        ) : null}
-        {!state.canRecover ? (
-          <p className={styles.ticketMessageActions}>
-            <ProductButton
-              type="button"
-              className={styles.buttonPrimary}
-              onClick={() => {
-                setState({ kind: "loading" });
-                setReloadTick((tick) => tick + 1);
-              }}
-            >
-              다시 시도
-            </ProductButton>
-          </p>
-        ) : null}
-        <p className={styles.ticketMessageActions}>
-          <ProductLink className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</ProductLink>
-        </p>
+        <AttendeeStateMessage kind="error" title={state.message}>
+          {state.canRecover
+            ? `새 티켓 안내 링크를 확인하세요. ${recoveryBlocked
+              ? "새 티켓을 받지 못했다면 행사 주최 측에 문의하세요."
+              : "링크가 없다면 신청 연락처를 인증해 티켓을 다시 찾을 수 있습니다."}`
+            : null}
+        </AttendeeStateMessage>
+        {stateActions(actions)}
       </section>
     );
   }
-  const recheckButton = (
-    <ProductButton
-      type="button"
-      className={mode === "ticket" ? (usable ? styles.buttonGhost : styles.buttonPrimary) : styles.buttonSecondary}
-      disabled={rechecking}
-      onClick={() => void recheckTicket()}
-    >
-      {rechecking ? "확인 중입니다" : "상태 다시 확인"}
-    </ProductButton>
-  );
+  // The status re-check is the pass's utility action: the strong one when there is no QR yet
+  // (and in the application view), the quiet one beside "참여 콘텐츠 보기" once the QR is in hand.
+  const recheckAction = {
+    label: rechecking ? "확인 중입니다" : "상태 다시 확인",
+    onClick: () => void recheckTicket(),
+    disabled: rechecking,
+  };
   const recheckFeedback = (
     <>
       {rechecking ? (
-        <p role="status" className={styles.ticketRecovery}>
-          {showingQr
-            ? "최신 상태를 확인하고 있습니다. 확인이 끝날 때까지 이 QR의 입장 가능 여부는 확정되지 않습니다."
-            : "최신 신청 상태를 확인하고 있습니다."}
-        </p>
+        <AttendeeStateMessage kind="info" icon="refresh" className={styles.ticketRecovery}
+          title={showingQr ? "최신 상태를 확인하고 있습니다." : "최신 신청 상태를 확인하고 있습니다."}>
+          {showingQr ? "확인이 끝날 때까지 이 QR의 입장 가능 여부는 확정되지 않습니다." : null}
+        </AttendeeStateMessage>
       ) : null}
-      {recheckError ? <p role="alert" className={styles.ticketRecheckError}>{recheckError}</p> : null}
+      {recheckError ? <AttendeeStateMessage kind="error" className={styles.ticketRecheckError} title={recheckError} /> : null}
     </>
   );
   if (mode === "application") {
@@ -567,8 +565,8 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
         {state.application.length ? <dl className={styles.applicationList}>
           {state.application.map((row, index) => <div key={`${row.label}-${index}`}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}
         </dl> : <p>표시할 신청 정보가 없습니다.</p>}
-        {recheckButton}
         {recheckFeedback}
+        <BottomAction label="다음 행동" primary={recheckAction} />
       </section>
     );
   }
@@ -634,21 +632,18 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
               <p className={styles.ticketBrightness}><AttendeeIcon name="sun" size={16} />화면을 밝게 하면 더 잘 읽혀요</p>
             </div>
             {facts}
-            <div className={styles.ticketActions}>
-              {/* The next step once the QR is in hand is the event's content.
-                  The recheck beside it is a quiet utility. */}
-              <ProductLink className={styles.buttonPrimary} href={`/event/${encodeURIComponent(slug)}/engage`}>
-                참여 콘텐츠 보기<AttendeeIcon name="arrow" size={18} />
-              </ProductLink>
-              {recheckButton}
-            </div>
+            {/* The next step once the QR is in hand is the event's content, fixed to
+                the bottom; the recheck beside it is a quiet utility. */}
+            <BottomAction label="다음 행동" primary={{ label: "참여 콘텐츠 보기", href: `/event/${encodeURIComponent(slug)}/engage` }} secondary={recheckAction} />
           </>
         ) : (
           <>
             <div className={styles.ticketPending}>
-              <p className={styles.ticketUnusable}><AttendeeIcon name="info" size={18} />{unusableCopy(state).text}</p>
-              <p className={styles.ticketMessageActions}>{recheckButton}</p>
+              <AttendeeStateMessage kind={state.status === "CANCELLED" ? "error" : "info"} icon="info" title={firstSentence(unusableCopy(state).text).head}>
+                {firstSentence(unusableCopy(state).text).rest || null}
+              </AttendeeStateMessage>
               {recheckFeedback}
+              <BottomAction label="다음 행동" primary={recheckAction} />
               {unusableCopy(state).showRegister ? (
                 <p className={styles.ticketMessageActions}>
                   <ProductLink className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/register`}>다시 신청하기</ProductLink>

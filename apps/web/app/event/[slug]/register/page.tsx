@@ -12,6 +12,9 @@ import EventFacts from "../EventFacts";
 import { attendeeGroundStyle } from "../event-theme";
 import type { AttendeeTheme } from "../event-theme";
 import TabTicketChoice from "../TabTicketChoice";
+import AttendeeSurface from "../ui/AttendeeSurface";
+import AttendeeStateMessage from "../ui/AttendeeStateMessage";
+import { attendeeLook } from "../attendee-look";
 export type { PublishedField } from "./register-data";
 
 function apiBase(): string {
@@ -42,8 +45,9 @@ function Shell({
   state?: boolean;
   children: ReactNode;
 }) {
+  const look = attendeeLook(theme.homeStyle, theme.accent);
   return (
-    <main id="main-content" tabIndex={-1} className={`site-page registration-page${state ? " registration-state" : ""} ${styles.page}`} style={attendeeGroundStyle(theme)}>
+    <AttendeeSurface as="main" id="main-content" tabIndex={-1} color={look.color} mode={look.mode} ground={look.ground} className={`site-page registration-page${state ? " registration-state" : ""} ${styles.page}`} style={attendeeGroundStyle(theme)}>
       <header className="public-page-header">
         <span className="compact-wordmark">EVENTOUCH</span>
         <p className={styles.pageContext}>참가 신청</p>
@@ -56,7 +60,7 @@ function Shell({
           {children}
         </div>
       </section>
-    </main>
+    </AttendeeSurface>
   );
 }
 
@@ -89,7 +93,7 @@ export default async function RegisterPage({
     const recoveryUnavailable = verificationMode === "mock" || verificationMode === "none";
     return (
       <Shell slug={slug} data={data} theme={theme} state>
-        <p className={styles.stateNote}>현재 신청을 받지 않습니다.</p>
+        <AttendeeStateMessage kind="info" title="현재 신청을 받지 않습니다." />
         <div className={styles.stateActions}>
           <TabTicketChoice
             slug={slug}

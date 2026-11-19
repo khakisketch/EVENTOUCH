@@ -30,7 +30,7 @@ function loadingView() {
   visit(parsed);
   assert.ok(block, 'production ticket loading branch');
   let tick = 0;
-  const sandbox = { exports: {}, require: name => { assert.equal(name, 'react/jsx-runtime'); return jsx; }, styles: { ticketLoadingRetry: 'loading-retry', passMessage: 'pass-message' }, pass: true, setReloadTick: update => { tick = update(tick); } };
+  const sandbox = { exports: {}, require: name => { assert.equal(name, 'react/jsx-runtime'); return jsx; }, styles: { ticketLoadingRetry: 'loading-retry', passMessage: 'pass-message' }, AttendeeStateMessage: ({ title, children }) => jsx.jsxs('div', { children: [title, children] }), pass: true, setReloadTick: update => { tick = update(tick); } };
   vm.createContext(sandbox);
   vm.runInContext(compile(`globalThis.renderLoading = () => ${block}`), sandbox);
   const element = sandbox.renderLoading();

@@ -29,26 +29,12 @@ test('installed Astryx packages remain aligned to the verified release',()=>{
   }
 });
 
-test('registration exposes its primary submit intent through the real action adapter',()=>{
-  const {createRequire}=require('node:module');
-  const webRequire=createRequire(path.join(web,'package.json'));
-  const ts=webRequire('typescript');
+test('registration exposes its primary submit intent through the attendee BottomAction',()=>{
+  // Reopened 2026-11-20: the submit is the one primary of the BottomAction bar (inside the form, type submit),
+  // not a ProductButton; the bar's primary is the strong event-color fill (BottomAction.module.css .primary).
   const source=fs.readFileSync(path.join(web,'app/event/[slug]/register/RegisterForm.tsx'),'utf8');
-  const file=ts.createSourceFile('RegisterForm.tsx',source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
-  const submits=[];
-  const visit=node=>{
-    if(ts.isJsxOpeningElement(node)&&node.tagName.getText(file)==='ProductButton'){
-      const props={};
-      for(const attr of node.attributes.properties){
-        if(ts.isJsxAttribute(attr)&&attr.initializer&&ts.isStringLiteral(attr.initializer)) props[attr.name.getText(file)]=attr.initializer.text;
-      }
-      if(props.type==='submit')submits.push(props);
-    }
-    ts.forEachChild(node,visit);
-  };
-  visit(file);
-  assert.equal(submits.length,1);
-  const {renderComponent}=require('./helpers/render-web-component.cjs');
-  const button=renderComponent('ProductButton',submits[0],'신청하기').querySelector('button');
-  assert.equal(button.getAttribute('data-variant'),'primary');
+  assert.match(source,/<BottomAction[\s\S]*?primary=\{\{[\s\S]*?type: "submit"/u);
+  assert.doesNotMatch(source,/<ProductButton[^>]*type="submit"/u);
+  const css=fs.readFileSync(path.join(web,'app/event/[slug]/ui/BottomAction.module.css'),'utf8');
+  assert.match(css,/\.primary\s*\{[^}]*background:\s*var\(--ev-accent/su);
 });

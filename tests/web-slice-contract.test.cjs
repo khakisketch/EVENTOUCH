@@ -288,7 +288,8 @@ test('web-ticket-keeps-the-bearer-out-of-history-and-persistent-storage', () => 
   assert.match(view, /이 브라우저에 티켓이 보관되어 있지 않습니다/);
   // Entry tone follows usability, and the failure is announced.
   assert.match(view, /data-tone/);
-  assert.match(view, /<p role="alert">/);
+  // Reopened 2026-11-20: the failure is an AttendeeStateMessage (error kind announces as role=alert).
+  assert.match(view, /<AttendeeStateMessage kind="error"/);
 });
 
 test('web-staff-uses-session-bootstrap-and-server-checked-commands', () => {

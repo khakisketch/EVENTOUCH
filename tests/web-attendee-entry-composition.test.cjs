@@ -31,7 +31,8 @@ test('the ticket is a pass: banner, a band with state and name, then the QR, the
   const banner = ticket.indexOf('<EventBanner theme={theme}');
   const band = ticket.indexOf('className={styles.ticketBand}');
   const qr = ticket.indexOf('className={styles.ticketQr}');
-  const actions = ticket.indexOf('className={styles.ticketActions}');
+  // Reopened 2026-11-20: the next step is the BottomAction fixed to the bottom of the phone column.
+  const actions = ticket.indexOf('primary={{ label: "참여 콘텐츠 보기"');
   assert.ok(banner > 0 && band > banner && qr > band && actions > qr, 'banner, band, QR, actions in that order');
   assert.ok(ticket.indexOf('{facts}', qr) > qr && ticket.indexOf('{facts}', qr) < actions, 'the facts sit between the QR and the actions');
   assert.match(ticket, /kicker=\{<h1>내 티켓<\/h1>\}/u, 'the heading stays for screen readers and audits');
@@ -48,8 +49,10 @@ test('the ticket is a pass: banner, a band with state and name, then the QR, the
 test('the ticket page sits on the event ground and wears its published banner', () => {
   assert.match(ticketPage, /loadAttendeeTheme\(slug\)/u);
   assert.match(ticketPage, /style=\{attendeeGroundStyle\(theme\)\}/u);
-  assert.match(ticketCss, /\.ticketPage:global\(\.site-page\)\s*\{[^}]*background:\s*var\(--home-background-color/su);
-  assert.match(ticketCss, /\.tear i\s*\{[^}]*var\(--home-background-color/su, 'the stub notches are cut in the ground color');
+  // Reopened 2026-11-20: the ground is the attendee surface's --ev-ground (the chosen color still rides --home-background-color).
+  assert.match(ticketCss, /\.ticketPage:global\(\.site-page\)\s*\{[^}]*background:\s*var\(--ev-ground, var\(--home-background-color\)/su);
+  assert.match(ticketPage, /<AttendeeSurface as="main"/u);
+  assert.match(ticketCss, /\.tear i\s*\{[^}]*var\(--ev-ground, var\(--home-background-color\)/su, 'the stub notches are cut in the ground color');
   assert.match(eventTheme, /normalizeHomeStyle/u);
   assert.match(bannerSource, /bannerFillCss\(homeStyle\)/u);
   assert.match(bannerSource, /\/attendee-home-banner\.png/u);
@@ -80,8 +83,8 @@ test('the way back is quiet; the next step is the one primary and the recheck is
   assert.match(ticketPage, /styles\.returnLink/u);
   // Reopened 2026-11-19: with the QR in hand the content link is the primary;
   // the recheck is ghost. Without a QR the recheck is the primary.
-  assert.match(ticket, /className=\{styles\.buttonPrimary\} href=\{`\/event\/\$\{encodeURIComponent\(slug\)\}\/engage`\}/u);
-  assert.match(ticketCss, /\.buttonGhost\s*\{[^}]*background:\s*transparent/su);
+  // Reopened 2026-11-20: both live in the BottomAction bar (primary: content link, secondary: the recheck).
+  assert.match(ticket, /<BottomAction label="다음 행동" primary=\{\{ label: "참여 콘텐츠 보기", href: `\/event\/\$\{encodeURIComponent\(slug\)\}\/engage` \}\} secondary=\{recheckAction\}/u);
 });
 
 test('the application is a numbered sheet: banner, facts, sections, a sticky submit', () => {
@@ -92,14 +95,17 @@ test('the application is a numbered sheet: banner, facts, sections, a sticky sub
   assert.match(registerCss, /\.stepTitle::before[\s\S]*?content:\s*counter\(step\)/u, 'each section title carries its step number');
   assert.match(registerPage, /<EventBanner theme=\{theme\} title=\{data\.name\} titleAs="h1"/u);
   assert.match(registerPage, /<EventFacts slug=\{slug\} context=\{data\.eventContext\} \/>/u);
-  assert.match(registerCss, /\.page:global\(\.registration-page\)\s*\{[^}]*background:\s*var\(--home-background-color/su);
+  // Reopened 2026-11-20: a1 (white ground) or a2 (the event's color) from AttendeeSurface; a step bar and a BottomAction submit.
+  assert.match(registerCss, /\.page:global\(\.registration-page\)\s*\{[^}]*background:\s*var\(--ev-ground, var\(--home-background-color\)/su);
+  assert.match(registerPage, /<AttendeeSurface as="main"/u);
+  assert.match(register, /<AttendeeStep className=\{styles\.step\} current=\{currentStep\} total=\{totalSteps\}/u, 'the sections are the steps, with a progress bar');
   assert.match(register, /<span className=\{styles\.req\}>/u);
-  assert.match(registerCss, /\.stepSection :global\(\.form-field\) input:not\(\[type="checkbox"\]\)[\s\S]*?min-height:\s*52px/u);
+  assert.match(registerCss, /\.stepSection :global\(\.form-field\) input:not\(\[type="checkbox"\]\)[\s\S]*?min-height:\s*calc\(var\(--s7\) \+ var\(--s2\)\)/u, 'large input fields (56px)');
   assert.match(registerCss, /\[aria-invalid="true"\]\s*\{[^}]*var\(--danger\)/su, 'only the field to fix turns red');
-  assert.match(registerCss, /\.submitBlock\s*\{[^}]*position:\s*sticky/su);
-  assert.match(registerCss, /\.submitBlock button\[type="submit"\]\s*\{[^}]*min-height:\s*56px/su, 'one strong submit');
+  // The submit is the BottomAction primary (fixed to the bottom of the column), still inside the form.
+  assert.match(register, /<BottomAction[\s\S]*?label: submitting \? \(retryPending \? "신청 결과 확인 중입니다" : "신청 중입니다"\) : \(retryPending \? "신청 결과 다시 확인" : "신청하기"\),\s*type: "submit"/u, 'one strong submit');
+  assert.doesNotMatch(registerCss, /\.submitBlock/u, 'the old sticky submit block is gone');
   assert.doesNotMatch(registerCss, /\.sheet\s*\{[^}]*overflow:\s*(?:hidden|clip)/su, 'no overflow clip on the sheet, or the submit bar stops sticking');
-  assert.doesNotMatch(registerCss, /\.submitBlock\s*\{[^}]*margin-inline:\s*calc\(/su, 'the bar must not bleed past the page and scroll sideways');
   assert.match(registerCss, /scroll-margin-block-end:\s*220px/u, 'a focused field keeps its error clear of the bar');
 });
 
@@ -109,7 +115,9 @@ test('closed intake has one way forward: find my ticket becomes the primary', ()
   // closed note where recovery is unavailable), so there is still one way forward.
   assert.match(eventPage, /\{acceptingSignup \? \(\s*<GuideCard slot=\{!simple\} href=\{`\$\{guideHref\}\/register`\}/u);
   assert.match(eventPage, /: !recoveryBlocked \? \(\s*<GuideCard slot=\{!simple\} href=\{`\$\{guideHref\}\/ticket\/recover`\}/u);
-  assert.match(eventCss, /\.closedCard\s*\{[^}]*background:/su);
+  // Reopened 2026-11-20: the closed note is an AttendeeStateMessage; the stylesheet only places it.
+  assert.match(eventPage, /<AttendeeStateMessage kind="info" title="현재 신청을 받지 않습니다\." className=\{styles\.closedCard\} \/>/u);
+  assert.match(eventCss, /\.closedCard\s*\{[^}]*margin:/su);
 });
 
 test('finding a ticket again is one large field and one primary action', () => {

@@ -4,6 +4,8 @@ import AttendeeIcon from "../../AttendeeIcons";
 import { attendeeGroundStyle, loadAttendeeTheme } from "../../event-theme";
 import { loadVerificationMode } from "../../../../../lib/verification-mode";
 import { loadPublicRecoveryContact } from "../../../../../lib/public-recovery-contact";
+import AttendeeSurface from "../../ui/AttendeeSurface";
+import { attendeeLook } from "../../attendee-look";
 import styles from "../ticket.module.css";
 
 // Verified recovery entry: a code sent to the registered number reconnects
@@ -19,8 +21,9 @@ export default async function TicketRecoverPage({
     loadAttendeeTheme(slug),
     verificationMode === "mock" || verificationMode === "none" ? loadPublicRecoveryContact(slug) : Promise.resolve(""),
   ]);
+  const look = attendeeLook(theme.homeStyle, theme.accent);
   return (
-    <main id="main-content" tabIndex={-1} className={`site-page registration-page ${styles.ticketPage}`} style={attendeeGroundStyle(theme)}>
+    <AttendeeSurface as="main" id="main-content" tabIndex={-1} color={look.color} mode={look.mode} ground={look.ground} className={`site-page registration-page ${styles.ticketPage}`} style={attendeeGroundStyle(theme)}>
       <header className="public-page-header">
         <span className="compact-wordmark">EVENTOUCH</span>
         <p className="eyebrow">내 티켓 찾기</p>
@@ -35,6 +38,6 @@ export default async function TicketRecoverPage({
           <RecoverForm slug={slug} />
         )}
       </section>
-    </main>
+    </AttendeeSurface>
   );
 }

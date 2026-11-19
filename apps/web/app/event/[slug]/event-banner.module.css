@@ -12,11 +12,11 @@
   min-height: 132px;
   padding: var(--s4) var(--s5) var(--s5);
   overflow: hidden;
-  background: #1e2026;
-  color: #fff;
+  background: var(--ink);
+  color: var(--paper);
 }
 
-.banner[data-tone="dark"] { color: #142b35; }
+.banner[data-tone="dark"] { color: var(--ink); }
 
 .artwork {
   position: absolute;
@@ -57,11 +57,11 @@
   min-height: 28px;
   margin: 0;
   padding: 0 var(--s3);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: rgb(16 17 20 / 38%);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 750;
+  color: var(--paper);
+  font-size: var(--text-sm);
+  font-weight: 800;
   line-height: 1.2;
   letter-spacing: 0.01em;
   word-break: keep-all;
@@ -69,13 +69,13 @@
 
 .banner[data-tone="dark"] .kicker > * {
   background: rgb(255 255 255 / 62%);
-  color: #142b35;
+  color: var(--ink);
 }
 
 .title {
   margin: auto 0 0;
   color: inherit;
-  font-size: clamp(24px, 7.4vw, 30px);
+  font-size: clamp(var(--h2), 7.4vw, var(--text-2xl));
   font-weight: 800;
   line-height: 1.18;
   letter-spacing: -0.035em;
@@ -94,5 +94,5 @@
 }
 
 .banner[data-compact] .title {
-  font-size: clamp(20px, 6vw, 24px);
+  font-size: clamp(var(--text-lg), 6vw, var(--h2));
 }
