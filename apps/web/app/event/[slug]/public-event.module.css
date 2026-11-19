@@ -19,6 +19,83 @@
   font-weight: 600;
 }
 
+/* When and where as two tiles with big icons, like the home's tiles. */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px 16px 0;
+}
+
+.facts > :only-child {
+  grid-column: 1 / -1;
+}
+
+.fact {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border-radius: var(--lay-radius, 22px);
+  background: #fff;
+  color: #17252b;
+  box-shadow: 0 8px 22px -16px rgb(16 17 20 / 70%);
+}
+
+.factIcon {
+  display: grid;
+  flex: none;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 15px;
+  background: var(--brand-tint, #fdeee4);
+  color: var(--brand, #c8441f);
+}
+
+.factIcon :global(svg) {
+  width: 26px;
+  height: 26px;
+}
+
+.factText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.factMain {
+  font-size: 15.5px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.factSub {
+  color: color-mix(in srgb, #17252b 66%, #fff);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.dday {
+  position: absolute;
+  top: -8px;
+  right: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--brand, #c8441f);
+  color: var(--on-brand, #19191c);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
 /* The registration card is a link, not a button. */
 .cardLink {
   text-decoration: none;
@@ -123,8 +200,40 @@
 }
 
 .noticeList li {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
   padding: 14px 0;
   border-top: 1px solid #e5e5e7;
+}
+
+/* Inside the console's content preview the list has no icon column. */
+.noticeList li:not(:has(.noticeIcon)) {
+  display: block;
+}
+
+.noticeIcon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 13px;
+  background: var(--brand-tint, #fdeee4);
+  color: var(--brand, #c8441f);
+}
+
+.noticeIcon :global(svg) {
+  width: 22px;
+  height: 22px;
+}
+
+.noticeBody {
+  min-width: 0;
+}
+
+.noticeList li[data-pinned] .noticeIcon {
+  background: var(--brand, #c8441f);
+  color: var(--on-brand, #19191c);
 }
 
 .noticeList li:first-child {
@@ -165,6 +274,65 @@
   font-size: 12px;
   font-weight: 800;
   vertical-align: middle;
+}
+
+/* The venue: a big pin, the place name, its address and a map button. */
+.venueHead {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding-top: 12px;
+}
+
+.venueBubble {
+  display: grid;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 17px;
+  background: var(--brand-tint, #fdeee4);
+  color: var(--brand, #c8441f);
+}
+
+.venueBubble :global(svg) {
+  width: 30px;
+  height: 30px;
+}
+
+.venueBody {
+  display: grid;
+  flex: 1;
+  gap: 10px;
+  min-width: 0;
+}
+
+.venueName {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+.mapLink {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 44px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px;
+  border-radius: 14px;
+  background: #17252b;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.mapLink:focus-visible {
+  outline: 3px solid var(--focus, #2453a6);
+  outline-offset: 3px;
 }
 
 .venueText {

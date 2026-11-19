@@ -3,7 +3,7 @@ import homeStyles from "./home/home.module.css";
 // Icons of the event guide, drawn like the attendee home's menu icons (same
 // 48px grid, stroke and size class) so a guide entry and a home entry read as
 // one family.
-export type GuideIconType = "register" | "ticket" | "notice" | "program" | "map" | "venue";
+export type GuideIconType = "register" | "ticket" | "notice" | "program" | "map" | "venue" | "calendar";
 
 export default function GuideIcon({ type }: { type: GuideIconType }) {
   const common = {
@@ -27,6 +27,8 @@ export default function GuideIcon({ type }: { type: GuideIconType }) {
       return <svg {...common}><circle cx="24" cy="24" r="16" /><path d="M24 14v10l7 4" /></svg>;
     case "map":
       return <svg {...common}><path d="M6 12l12-4 12 4 12-4v28l-12 4-12-4-12 4zM18 8v28M30 12v28" /></svg>;
+    case "calendar":
+      return <svg {...common}><rect x="7" y="10" width="34" height="30" rx="5" /><path d="M16 5v9M32 5v9M7 20h34" /><path d="M16 28h4M24 28h4M16 34h4" /></svg>;
     case "venue":
       return <svg {...common}><path d="M24 42s12-10.4 12-20a12 12 0 0 0-24 0c0 9.6 12 20 12 20z" /><circle cx="24" cy="22" r="4.5" /></svg>;
   }

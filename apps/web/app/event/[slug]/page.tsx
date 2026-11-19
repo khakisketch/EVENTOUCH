@@ -88,6 +88,16 @@ async function loadEvent(slug: string): Promise<{
   return { event: data.event, workspace: data.workspace ?? {} };
 }
 
+// "D-58" / "오늘" for an upcoming event day, in Korea Standard Time. Past events
+// say nothing: their stage chip already does.
+function ddayLabel(date: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "";
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+  const days = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
+  if (!Number.isFinite(days)) return "";
+  return days === 0 ? "오늘" : days > 0 ? `D-${days}` : "";
+}
+
 export default async function EventPage({
   params,
 }: {
@@ -221,9 +231,10 @@ export default async function EventPage({
   ].filter((section): section is { id: string; label: string; icon: GuideIconType } => Boolean(section));
   // The hero's second line, in the home's own subtitle slot: when and where.
   const clock = event.start ? `${event.start}${event.end ? `–${event.end}` : ""}` : "";
-  const whenText = showSchedule ? [date?.label ?? event.date, clock].filter(Boolean).join(" ") : "";
+  const whenText = showSchedule ? date?.shortLabel ?? date?.label ?? event.date : "";
+  const dday = showSchedule ? ddayLabel(event.date) : "";
   const whereText = showVenue ? venueName || venueAddress : "";
-  const heroLine = [whenText, whereText].filter(Boolean).join(" · ");
+  const whereSub = showVenue && venueName && venueAddress ? venueAddress : "";
   const stageLabel = eventStageLabel(event.stage);
   const guideHref = `/event/${encodeURIComponent(slug)}`;
 
@@ -240,7 +251,6 @@ export default async function EventPage({
           layout={layout}
           keyvisual={keyvisual}
           defaultHomeBanner={defaultHomeBanner}
-          subtitle={heroLine}
           label={`${event.name} 행사 안내`}
         />
 
@@ -268,6 +278,30 @@ export default async function EventPage({
           </TabTicketChoice>
         </div>
 
+        {whenText || whereText ? (
+          <div className={styles.facts}>
+            {whenText ? (
+              <div className={styles.fact} data-guide-when>
+                <span className={styles.factIcon} aria-hidden="true"><GuideIcon type="calendar" /></span>
+                <span className={styles.factText}>
+                  <span className={styles.factMain}>{whenText}</span>
+                  <span className={styles.factSub}>{clock || "시간 미정"}</span>
+                </span>
+                {dday ? <span className={styles.dday}>{dday}</span> : null}
+              </div>
+            ) : null}
+            {whereText ? (
+              <div className={styles.fact} data-guide-where>
+                <span className={styles.factIcon} aria-hidden="true"><GuideIcon type="venue" /></span>
+                <span className={styles.factText}>
+                  <span className={styles.factMain}>{whereText}</span>
+                  {whereSub ? <span className={styles.factSub}>{whereSub}</span> : null}
+                </span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         <p className={styles.intro}>{intro}</p>
 
         {layout === "poster" && publicSections.length ? (
@@ -290,12 +324,15 @@ export default async function EventPage({
               <div className={styles.card}>
                 <ul className={styles.noticeList}>
                   {notices.map((notice) => (
-                    <li key={notice.id}>
-                      <h3>
-                        {notice.pinned ? <span className={styles.pin}>고정</span> : null}
-                        {notice.title}
-                      </h3>
-                      {notice.body ? <RichText source={notice.body} imageSrc={(fileId) => `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`} /> : null}
+                    <li key={notice.id} data-pinned={notice.pinned || undefined}>
+                      <span className={styles.noticeIcon} aria-hidden="true"><GuideIcon type="notice" /></span>
+                      <div className={styles.noticeBody}>
+                        <h3>
+                          {notice.pinned ? <span className={styles.pin}>고정</span> : null}
+                          {notice.title}
+                        </h3>
+                        {notice.body ? <RichText source={notice.body} imageSrc={(fileId) => `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`} /> : null}
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -337,23 +374,33 @@ export default async function EventPage({
             <section className={styles.section} aria-labelledby="public-venue">
               <h2 id="public-venue" className={sectionLabel}>오시는 길</h2>
               <div className={styles.card}>
-                <dl className="event-facts">
-                  {venueName ? (
-                    <div className="event-fact"><dt>장소</dt><dd>{venueName}</dd></div>
-                  ) : null}
-                  {venueAddress ? (
-                    <div className="event-fact"><dt>주소</dt><dd className={styles.addressRow}><AddressCopyButton address={venueAddress} /></dd></div>
-                  ) : null}
-                  {venueDirections ? (
-                    <div className="event-fact"><dt>오시는 길</dt><dd className={styles.venueText}>{venueDirections}</dd></div>
-                  ) : null}
-                  {venueDescription ? (
-                    <div className="event-fact"><dt>행사장 안내</dt><dd className={styles.venueText}>{venueDescription}</dd></div>
-                  ) : null}
-                  {venueContact ? (
-                    <div className="event-fact"><dt>문의</dt><dd>{venueContact}</dd></div>
-                  ) : null}
-                </dl>
+                {venueName || venueAddress ? (
+                  <div className={styles.venueHead}>
+                    <span className={styles.venueBubble} aria-hidden="true"><GuideIcon type="venue" /></span>
+                    <div className={styles.venueBody}>
+                      {venueName ? <p className={styles.venueName}>{venueName}</p> : null}
+                      {venueAddress ? <div className={styles.addressRow}><AddressCopyButton address={venueAddress} /></div> : null}
+                      {venueAddress ? (
+                        <a className={styles.mapLink} href={`https://map.naver.com/p/search/${encodeURIComponent(venueAddress)}`} target="_blank" rel="noopener noreferrer">
+                          지도에서 보기 <span aria-hidden="true">↗</span><span className="sr-only"> (새 탭)</span>
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+                {venueDirections || venueDescription || venueContact ? (
+                  <dl className="event-facts">
+                    {venueDirections ? (
+                      <div className="event-fact"><dt>오시는 길</dt><dd className={styles.venueText}>{venueDirections}</dd></div>
+                    ) : null}
+                    {venueDescription ? (
+                      <div className="event-fact"><dt>행사장 안내</dt><dd className={styles.venueText}>{venueDescription}</dd></div>
+                    ) : null}
+                    {venueContact ? (
+                      <div className="event-fact"><dt>문의</dt><dd>{venueContact}</dd></div>
+                    ) : null}
+                  </dl>
+                ) : null}
                 {venueMap ? <figure className={styles.venueMap}>
                   {/* A normal image/link preserves zoom and the browser's download controls. */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}

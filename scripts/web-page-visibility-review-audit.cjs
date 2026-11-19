@@ -50,7 +50,7 @@ async function main() {
     await registration.locator('time[datetime="2027-01-16"]').waitFor();
     assert.equal(await venueLink(registration).getAttribute('href'), `/event/${fixture.slug}#public-venue`);
     await attendee.goto(eventUrl, { waitUntil: 'networkidle' });
-    await attendee.locator('[data-hero-subtitle]').filter({ hasText: /\d{4}년 \d{1,2}월/ }).waitFor();
+    await attendee.locator('[data-guide-when]').waitFor();
     await attendee.getByRole('heading', { name: '합성 프로그램 일정', exact: true }).waitFor();
     await attendee.getByRole('heading', { name: '오시는 길', exact: true }).waitFor();
     const publicProgramDates = async () => attendee.getByRole('region', { name: '프로그램', exact: true }).locator('h3 time[datetime]').evaluateAll(elements => elements.map(element => element.getAttribute('datetime')));
@@ -129,10 +129,10 @@ async function main() {
     assert.equal(await eventLink.getAttribute('href'), `/event/${fixture.slug}`);
     const [opened] = await Promise.all([operator.waitForEvent('page'), eventLink.click()]);
     await opened.waitForLoadState('networkidle');
-    await opened.locator('[data-hero-subtitle]').filter({ hasText: /\d{4}년 \d{1,2}월/ }).waitFor();
+    await opened.locator('[data-guide-when]').waitFor();
     await opened.close();
     await attendee.reload({ waitUntil: 'networkidle' });
-    await attendee.locator('[data-hero-subtitle]').filter({ hasText: /\d{4}년 \d{1,2}월/ }).waitFor();
+    await attendee.locator('[data-guide-when]').waitFor();
     const draftBeforeCancel = await workspace();
     await dialog.getByRole('button', { name: '돌아가기', exact: true }).click();
     assert.equal((await workspace()).pageExperience.publishedAt, draftBeforeCancel.pageExperience.publishedAt, 'leaving review does not publish');
@@ -155,7 +155,7 @@ async function main() {
     }
     await publish(dialog);
     await attendee.reload({ waitUntil: 'networkidle' });
-    assert.equal(await attendee.locator('[data-hero-subtitle]').filter({ hasText: /\d{4}년 \d{1,2}월/ }).count(), 0, 'event fact is hidden');
+    assert.equal(await attendee.locator('[data-guide-when]').count(), 0, 'event fact is hidden');
     await attendee.getByRole('heading', { name: '합성 프로그램 일정', exact: true }).waitFor();
     assert.deepEqual(await publicProgramDates(), ['2027-01-16', '2027-01-17'], 'program days remain visible with their actual dates independently of the event fact');
     const dateFilter = attendee.getByRole('group', { name: '프로그램 날짜 선택', exact: true });
@@ -203,7 +203,7 @@ async function main() {
     await dialog.screenshot({ path: path.join(out, 'all-hidden-review.png') });
     await publish(dialog);
     await attendee.reload({ waitUntil: 'networkidle' });
-    assert.equal(await attendee.locator('[data-hero-subtitle]').filter({ hasText: /\d{4}년 \d{1,2}월/ }).count(), 0);
+    assert.equal(await attendee.locator('[data-guide-when]').count(), 0);
     assert.equal(await attendee.getByRole('heading', { name: '합성 공지', exact: true }).count(), 0);
     assert.equal(await attendee.getByRole('heading', { name: '합성 프로그램 일정', exact: true }).count(), 0);
     assert.equal(await attendee.getByRole('heading', { name: '오시는 길', exact: true }).count(), 0);

@@ -38,7 +38,7 @@
   gap: var(--s2, 8px);
   padding: 0 var(--s4, 16px);
   border: 1px solid var(--schedule-line);
-  border-radius: var(--radius-medium, 12px);
+  border-radius: 999px;
   background: var(--paper, #fff);
   color: var(--schedule-ink);
   font: inherit;
@@ -76,41 +76,43 @@
 .dayHeading {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: var(--s2, 8px) var(--s3, 12px);
-  margin: 0 0 var(--s2, 8px);
-  color: var(--schedule-muted);
-  font-size: var(--small, 14px);
-  font-weight: 650;
+  margin: 0 0 var(--s3, 12px);
+  color: var(--schedule-ink);
+  font-size: var(--body, 16px);
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
+}
+
+.dayHeading::before {
+  width: 4px;
+  height: 1.1em;
+  border-radius: 2px;
+  background: var(--schedule-accent);
+  content: "";
 }
 
 .timeline {
   position: relative;
   display: grid;
+  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.timeline::before {
-  position: absolute;
-  top: var(--s3, 12px);
-  bottom: var(--s3, 12px);
-  left: calc(5.1rem + var(--s3, 12px));
-  width: 1px;
-  background: var(--schedule-line);
-  content: "";
-}
-
+/* A session is a card: the time is a tinted block on the left. */
 .session {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(4.55rem, 5.1rem) minmax(0, 1fr);
-  gap: var(--s5, 24px);
+  grid-template-columns: minmax(4.4rem, 4.9rem) minmax(0, 1fr);
+  gap: var(--s4, 16px);
   min-width: 0;
-  padding: var(--s4, 16px) 0;
-  border-bottom: 1px solid var(--schedule-line);
+  padding: 12px;
+  border: 1px solid var(--schedule-line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--schedule-accent) 3%, #fff);
 }
 
 .session[data-editing="true"] {
@@ -121,42 +123,39 @@
 .time {
   position: relative;
   display: grid;
-  align-content: start;
-  justify-items: end;
+  align-content: center;
+  justify-items: center;
   gap: var(--s1, 4px);
+  align-self: stretch;
   margin: 0;
-  padding-top: 2px;
-  color: var(--schedule-ink);
+  padding: 10px 6px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--schedule-accent) 12%, #fff);
+  color: var(--brand-text, #8e351f);
   font-size: var(--small, 14px);
-  font-weight: 700;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  text-align: center;
   word-break: keep-all;
-}
-
-.time::after {
-  position: absolute;
-  top: 0.5rem;
-  right: -18.5px;
-  width: 9px;
-  height: 9px;
-  border: 2px solid var(--schedule-accent);
-  border-radius: 50%;
-  background: var(--paper, #fff);
-  content: "";
 }
 
 .timeRange {
   display: grid;
-  justify-items: end;
+  justify-items: center;
   gap: 1px;
-  line-height: 1.25;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
+.timeRange > span:first-child {
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+
 .endTime {
-  color: var(--schedule-muted);
-  font-weight: 500;
+  color: color-mix(in srgb, var(--brand-text, #8e351f) 72%, #fff);
+  font-size: 12.5px;
+  font-weight: 650;
 }
 
 .dateNote {
@@ -167,14 +166,16 @@
 }
 
 .sessionBody {
+  display: grid;
+  align-content: center;
+  gap: 2px;
   min-width: 0;
-  padding-left: var(--s1, 4px);
 }
 
 .sessionBody h4 {
   margin: 0;
   color: var(--schedule-ink);
-  font-size: var(--h3, 20px);
+  font-size: 17px;
   font-weight: 700;
   line-height: 1.35;
   letter-spacing: -0.02em;
@@ -184,15 +185,36 @@
 
 .place,
 .speaker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: var(--s1, 4px) 0 0;
   color: var(--schedule-muted);
   font-size: var(--small, 14px);
-  line-height: 1.55;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
+/* Small drawn icons, so place and speaker read at a glance (no extra markup). */
+.place::before,
+.speaker::before {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  background: currentColor;
+  content: "";
+  -webkit-mask: var(--schedule-icon) center / contain no-repeat;
+  mask: var(--schedule-icon) center / contain no-repeat;
+}
+
+.place {
+  --schedule-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z'/%3E%3Ccircle cx='12' cy='9.5' r='2.5'/%3E%3C/svg%3E");
+}
+
 .speaker {
+  --schedule-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 21c1-4.5 4.4-6.5 8-6.5s7 2 8 6.5'/%3E%3C/svg%3E");
   color: var(--brand-text, #8e351f);
+  font-weight: 700;
 }
 
 .description {
@@ -250,21 +272,9 @@
     gap: var(--s5, 24px);
   }
 
-  .timeline::before {
-    left: calc(4.6rem + 10px);
-  }
-
   .session {
-    grid-template-columns: minmax(4.15rem, 4.6rem) minmax(0, 1fr);
-    gap: var(--s4, 16px);
-  }
-
-  .sessionBody h4 {
-    font-size: var(--body-large, 18px);
-  }
-
-  .time::after {
-    right: -16.5px;
+    grid-template-columns: minmax(4.1rem, 4.5rem) minmax(0, 1fr);
+    gap: var(--s3, 12px);
   }
 }
 
