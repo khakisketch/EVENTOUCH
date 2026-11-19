@@ -95,15 +95,16 @@ test('field screen is token-only, in normal flow and thumb sized', () => {
   assert.doesNotMatch(cameraCss, /#[0-9a-fA-F]{3,8}\b|rgb\(/);
   assert.match(css, /\.fieldStage\s*\{[^}]*flex:\s*1 1 auto/s);
   assert.match(css, /\.overlay\s*\{[^}]*position:\s*absolute/s);
-  assert.match(css, /\.bar3 button\s*\{[^}]*min-height:\s*64px/s);
+  assert.match(css, /\.bar3 button\s*\{[^}]*min-height:\s*72px/s);
   assert.match(css, /\.scanPrimary\s*\{[^}]*min-height:\s*60px/s);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.timer i \{ animation: none; \} \}/);
 });
 
 // Reopened 2026-11-19: the dark column gets presence without changing the flow.
 test('field column: segmented desk/booth switch, pill station title, lit viewfinder, icon tiles', () => {
-  assert.match(css, /\.fieldContext \.taskSwitch\s*\{[^}]*border-radius:\s*999px/s, 'the desk/booth switch is one segmented pill');
-  assert.match(css, /\.fieldContext :global\(\.staff-select-field\) select\s*\{[^}]*border-radius:\s*999px/s, 'the station select is a pill title');
+  // Reopened 2026-11-20: 999px became var(--r-pill).
+  assert.match(css, /\.fieldContext \.taskSwitch\s*\{[^}]*border-radius:\s*var\(--r-pill\)/s, 'the desk/booth switch is one segmented pill');
+  assert.match(css, /\.fieldContext :global\(\.staff-select-field\) select\s*\{[^}]*border-radius:\s*var\(--r-pill\)/s, 'the station select is a pill title');
   assert.match(css, /\.idleFrame::after\s*\{[^}]*linear-gradient/s, 'the idle viewfinder carries a scan line');
   assert.match(css, /@media \(prefers-reduced-motion: no-preference\) \{\s*\.idleFrame::after \{ animation/s, 'the scan line moves only for motion-tolerant users');
   assert.match(work, /icon=\{<CameraIcon \/>\}/, 'the one orange action carries a camera glyph');

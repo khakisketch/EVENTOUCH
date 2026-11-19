@@ -2,7 +2,24 @@
    scene except the draw (which keeps its violet and gold stage) sits on the
    product's stage ink. Sizes follow the viewport because the screen is read
    from across a room; the global .display-* rules supply structure and are
-   overridden here, so class names the audits use stay the same. */
+   overridden here, so class names the audits use stay the same.
+
+   Reopened 2026-11-20 (design-system application): colours, radii and weights
+   come from tokens.css. The clamp() font sizes are kept on purpose: they are
+   the room-scale type (a 1920px wall reads 3-5x the console scale) and the
+   shared --text-* steps stop at 34px, so they have no token equivalent. Only
+   the dark-surface tints that no token names are collected below. */
+.dark {
+  --board-ink: var(--paper);
+  /* Body text on the stage: just under pure white, easier on a bright projector. */
+  --board-body: color-mix(in srgb, var(--paper) 91%, transparent);
+  /* Pills, bars and quote bands lifted off the ink (4-12% paper). */
+  --board-wash: color-mix(in srgb, var(--paper) 12%, transparent);
+  --board-wash-soft: color-mix(in srgb, var(--paper) 6%, transparent);
+  --board-wash-faint: color-mix(in srgb, var(--paper) 5%, transparent);
+  --board-bar: color-mix(in srgb, var(--paper) 86%, transparent);
+}
+
 .dark:global(.display-board) {
   position: fixed;
   z-index: 20;
@@ -14,7 +31,7 @@
   border-radius: 0;
   overflow: hidden;
   background: var(--stage);
-  color: #fff;
+  color: var(--board-ink);
 }
 
 .dark :global(.display-header) { padding-bottom: 0; border-bottom: 0; }
@@ -23,7 +40,7 @@
   color: var(--side-muted);
   font-family: inherit;
   font-size: clamp(14px, 1.4vw, 28px);
-  font-weight: 750;
+  font-weight: var(--fw-heavy);
   letter-spacing: 0.08em;
 }
 .dark :global(.display-content) { justify-content: center; padding-block: 0; }
@@ -32,20 +49,20 @@
   margin: 0 0 clamp(8px, 1.2vw, 24px);
   color: var(--side-muted);
   font-size: clamp(18px, 2.3vw, 44px);
-  font-weight: 700;
+  font-weight: var(--fw-strong);
   line-height: 1.2;
 }
 .dark :global(.display-frame) { max-width: none; padding: 0; border: 0; }
 .dark :global(.display-frame) h2 {
   margin: 0 0 0.3em;
-  color: #fff;
+  color: var(--board-ink);
   font-size: clamp(34px, 6vw, 116px);
   letter-spacing: -0.04em;
   line-height: 1.12;
 }
 .dark :global(.display-frame) > p {
   max-width: 32ch;
-  color: #e8e9eb;
+  color: var(--board-body);
   font-size: clamp(22px, 3.5vw, 67px);
   line-height: 1.55;
 }
@@ -63,14 +80,14 @@
 .dark :global(.display-live) {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--s2);
   width: max-content;
-  padding: 6px 16px;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 12%);
-  color: #fff;
+  padding: var(--s1) var(--s4);
+  border-radius: var(--r-pill);
+  background: var(--board-wash);
+  color: var(--board-ink);
   font-size: clamp(14px, 1.4vw, 28px);
-  font-weight: 800;
+  font-weight: var(--fw-heavy);
 }
 .dark :global(.display-live)::before { width: 10px; height: 10px; border-radius: 50%; background: var(--brand); content: ""; }
 .dark :global(.poll-row) {
@@ -79,10 +96,10 @@
   align-items: center;
   gap: clamp(12px, 1.8vw, 36px);
   font-size: clamp(18px, 2.7vw, 52px);
-  font-weight: 700;
+  font-weight: var(--fw-strong);
 }
-.dark :global(.poll-bar) { height: clamp(18px, 1.8vw, 36px); border-radius: 10px; background: var(--stage-2); }
-.dark :global(.poll-bar) span { border-radius: 10px; background: #fff; }
+.dark :global(.poll-bar) { height: clamp(18px, 1.8vw, 36px); border-radius: var(--r-ctl); background: var(--stage-2); }
+.dark :global(.poll-bar) span { border-radius: var(--r-ctl); background: var(--board-ink); }
 .dark :global(.poll-row[data-leader="true"]) :global(.poll-bar) span { background: var(--brand); }
 .dark :global(.poll-row) strong { text-align: right; font-variant-numeric: tabular-nums; }
 .dark :global(.display-count) { margin: 0; color: var(--side-muted); font-size: clamp(14px, 1.4vw, 28px); }
@@ -98,12 +115,12 @@
   min-height: min(calc(62vh / var(--rows)), 7.7vw);
   border-top: 1px solid var(--stage-line);
   font-size: clamp(16px, min(3.1vw, calc(26vh / var(--rows))), 60px);
-  font-weight: 700;
+  font-weight: var(--fw-strong);
 }
 .dark :global(.display-frame) ul { --rows: 3; }
 .dark :global(.program-item):last-child { border-bottom: 1px solid var(--stage-line); }
 .dark :global(.program-time),
-.dark :global(.program-meta) { color: var(--side-muted); font-size: 0.75em; font-weight: 600; }
+.dark :global(.program-meta) { color: var(--side-muted); font-size: 0.75em; font-weight: var(--fw-strong); }
 .dark :global(.program-time) { min-width: 3.6em; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .dark :global(.program-item[data-live="true"]) { color: var(--brand); }
 .dark :global(.program-item[data-live="true"]) :global(.program-time),
@@ -112,14 +129,14 @@
 /* Q&A and photos */
 .dark :global(.display-questions) { gap: clamp(14px, 1.8vw, 36px); }
 .dark :global(.display-question) { padding: 0 0 0 clamp(16px, 2.4vw, 48px); border: 0; border-left: 6px solid var(--brand); border-radius: 0; background: transparent; }
-.dark :global(.display-question) h3 { margin: 0; color: #fff; font-size: clamp(22px, 3.2vw, 62px); line-height: 1.3; }
+.dark :global(.display-question) h3 { margin: 0; color: var(--board-ink); font-size: clamp(22px, 3.2vw, 62px); line-height: 1.3; }
 .dark :global(.display-question) p { margin-top: 6px; color: var(--side-muted); font-size: clamp(18px, 2.4vw, 48px); }
 .dark :global(.display-photo-grid) figcaption { color: var(--side-muted); }
 
 /* Idle */
 .dark:global(.display-idle) { justify-content: center; }
 .dark:global(.display-idle) > p:first-child { color: var(--side-muted); font-family: inherit; font-size: clamp(16px, 1.6vw, 32px); letter-spacing: 0.08em; }
-.dark:global(.display-idle) > h1 { max-width: 20ch; color: #fff; font-size: clamp(40px, 6vw, 116px); }
+.dark:global(.display-idle) > h1 { max-width: 20ch; color: var(--board-ink); font-size: clamp(40px, 6vw, 116px); }
 .dark:global(.display-idle) > p { color: var(--side-muted); font-size: clamp(22px, 2.4vw, 48px); }
 .dark:global(.display-idle) :global(.display-footer) { position: absolute; inset-inline: clamp(28px, 4.2vw, 84px); bottom: clamp(14px, 1.8vw, 34px); }
 
@@ -135,13 +152,13 @@
     radial-gradient(50% 60% at 0% 100%, color-mix(in srgb, var(--paper) 6%, transparent) 0%, transparent 70%);
 }
 .dark :global(.display-brand)::first-letter { color: var(--brand); }
-.dark :global(.display-brand) { color: #fff; }
+.dark :global(.display-brand) { color: var(--board-ink); }
 .dark :global(.display-date) {
   padding: 0.28em 0.9em;
   border: 1px solid var(--stage-line);
-  border-radius: 999px;
-  background: rgb(255 255 255 / 6%);
-  color: #fff;
+  border-radius: var(--r-pill);
+  background: var(--board-wash-soft);
+  color: var(--board-ink);
   letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
 }
@@ -151,10 +168,10 @@
   width: clamp(44px, 4.6vw, 96px);
   height: clamp(5px, 0.5vw, 10px);
   margin-bottom: clamp(10px, 1.2vw, 24px);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--brand);
 }
-.dark :global(.display-content) > h1 { color: #fff; }
+.dark :global(.display-content) > h1 { color: var(--board-ink); }
 .dark :global(.display-footer) {
   display: flex;
   align-items: center;
@@ -175,20 +192,137 @@
 
 /* Program: a ledger whose current session is a lit band. */
 .dark :global(.program-item) { padding-inline: clamp(8px, 1.2vw, 24px); border-top-color: var(--stage-line); }
-.dark :global(.program-time) { color: #fff; font-weight: 750; }
+.dark :global(.program-time) { color: var(--board-ink); font-weight: var(--fw-heavy); }
 .dark :global(.program-meta) { color: var(--side-muted); }
 .dark :global(.program-item[data-live="true"]) {
   border-radius: clamp(10px, 1.2vw, 24px);
   background: color-mix(in srgb, var(--brand) 18%, transparent);
   box-shadow: inset clamp(6px, 0.6vw, 12px) 0 0 var(--brand);
 }
-.dark :global(.program-item[data-live="true"]) :global(.program-title) { color: #fff; }
+.dark :global(.program-item[data-live="true"]) :global(.program-title) { color: var(--board-ink); }
 
 /* Poll: the leader's count is lit too. */
-.dark :global(.poll-bar) { border-radius: 999px; background: var(--stage-2); }
-.dark :global(.poll-bar) span { border-radius: 999px; background: rgb(255 255 255 / 86%); }
+.dark :global(.poll-bar) { border-radius: var(--r-pill); background: var(--stage-2); }
+.dark :global(.poll-bar) span { border-radius: var(--r-pill); background: var(--board-bar); }
 .dark :global(.poll-row[data-leader="true"]) strong { color: var(--brand); }
 .dark :global(.display-live) { border: 1px solid var(--stage-line); }
 
 /* Questions and photos */
-.dark :global(.display-question) { background: rgb(255 255 255 / 5%); border-radius: 0 clamp(12px, 1.4vw, 28px) clamp(12px, 1.4vw, 28px) 0; padding-block: clamp(10px, 1.2vw, 24px); }
+.dark :global(.display-question) { background: var(--board-wash-faint); border-radius: 0 clamp(12px, 1.4vw, 28px) clamp(12px, 1.4vw, 28px) 0; padding-block: clamp(10px, 1.2vw, 24px); }
+
+/* Reopened 2026-11-20: states on the stage.
+   The stale notice, the refresh button and the four whole-screen states
+   (loading, missing, failed, output off) use one vocabulary: icon + words +
+   tone, on the stage ink. Sizes stay room-scale clamp() values for the same
+   reason as above. */
+.stale {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.stale svg:global(.action-icon) { width: 1.1em; height: 1.1em; stroke-width: 3; }
+
+.dark :global(.display-stale),
+.stateStage .stale {
+  margin: 0;
+  padding: 0.28em 0.9em;
+  border: 1px solid var(--warning-line);
+  border-radius: var(--r-pill);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: clamp(14px, 1.4vw, 28px);
+  font-weight: var(--fw-strong);
+  max-width: none;
+}
+
+/* The refresh button on the stage: a white face with ink text, large enough
+   to hit from a step away. The shared button has no dark-surface variant yet. */
+.dark :global(.display-header) [data-product-action],
+.stateStage [data-product-action],
+.stateStage [data-product-link] {
+  min-height: clamp(44px, 3.4vw, 72px);
+  padding-inline: clamp(16px, 1.6vw, 32px);
+  border-color: transparent;
+  border-radius: var(--r-pill);
+  background: var(--board-ink);
+  color: var(--ink);
+  font-size: clamp(14px, 1.4vw, 28px);
+  font-weight: var(--fw-heavy);
+}
+
+.stateStage {
+  --board-ink: var(--paper);
+  --board-body: color-mix(in srgb, var(--paper) 91%, transparent);
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: clamp(12px, 1.6vw, 32px);
+  padding: clamp(28px, 4.2vw, 84px);
+  border: 0;
+  border-radius: 0;
+  background: var(--stage);
+  color: var(--board-ink);
+}
+
+.stateStage h1,
+.stateStage p {
+  max-width: 28ch;
+  margin: 0;
+}
+
+.stateStage h1 {
+  color: var(--board-ink);
+  font-size: clamp(34px, 5vw, 96px);
+  font-weight: var(--fw-heavy);
+  letter-spacing: var(--ls-heading);
+  line-height: var(--lh-tight);
+  word-break: keep-all;
+}
+
+.stateStage p,
+.stateLoading {
+  color: var(--board-body);
+  font-size: clamp(20px, 2.4vw, 48px);
+  line-height: var(--lh-body);
+  word-break: keep-all;
+}
+
+.stateLoading {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: clamp(16px, 2vw, 40px);
+  font-weight: var(--fw-strong);
+}
+
+/* Tile: tone colour on the edge and the mark, the words carry the meaning. */
+.stateTile {
+  display: grid;
+  place-items: center;
+  width: clamp(56px, 6vw, 120px);
+  height: clamp(56px, 6vw, 120px);
+  border: 2px solid var(--side-muted);
+  border-radius: var(--r-card);
+  background: var(--stage-2);
+  color: var(--side-muted);
+}
+
+.stateTile[data-tone="danger"] { border-color: var(--danger-line); color: var(--danger-line); }
+.stateTile[data-tone="info"] { border-color: var(--info-line); color: var(--info-line); }
+.stateTile svg:global(.action-icon) { width: 55%; height: 55%; stroke-width: 2.4; }
+
+.stateTile[data-loading] {
+  border-color: var(--stage-line);
+  border-top-color: var(--board-ink);
+  border-radius: 50%;
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .stateTile[data-loading] { animation: stateSpin 1.1s linear infinite; }
+  @keyframes stateSpin { to { transform: rotate(1turn); } }
+}

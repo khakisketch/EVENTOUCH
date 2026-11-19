@@ -1,9 +1,35 @@
+/* The draw stage (DESIGN.md "행사장 대형 화면 확정 구성": the draw keeps its
+   violet and gold stage). Reopened 2026-11-20 (design-system application): the
+   product tokens have no violet/gold scale because this is the one scene that
+   is deliberately not the product's ink-and-orange, so its whole palette is
+   named once in the block below and nothing else in this file writes a hex.
+   Type sizes are room-scale clamp() values kept on purpose (read from a seat
+   at the back of a hall); weights and radii use the shared tokens. */
 .cinematicBoard {
   --stage-ink: #fff8e9;
   --stage-muted: #d2c7df;
   --stage-gold: #e8bd61;
   --stage-gold-bright: #ffe8a4;
   --stage-gold-line: rgb(232 189 97 / 43%);
+  /* backdrop */
+  --draw-bg-edge: #0a0914;
+  --draw-bg-mid: #191329;
+  --draw-bg-far: #0b0815;
+  /* brass and plum: wheel, pointer, slot frame */
+  --draw-brass: #b58b43;
+  --draw-bronze: #8c6834;
+  --draw-bronze-dark: #8a642b;
+  --draw-gold-line: #dfb95f;
+  --draw-gold-soft: #edcf82;
+  --draw-plum: #49335f;
+  --draw-plum-dark: #271b38;
+  --draw-plum-deep: #21182d;
+  --draw-hub-light: #806181;
+  --draw-hub-mid: #2a1e38;
+  --draw-hub-dark: #171120;
+  --draw-slot-a: #17111f;
+  --draw-slot-b: #221a2d;
+  --draw-slot-c: #130f1c;
   position: fixed;
   z-index: 20;
   inset: 0;
@@ -20,7 +46,7 @@
     radial-gradient(ellipse 68% 82% at 50% 56%, rgb(96 55 122 / 42%), transparent 72%),
     radial-gradient(ellipse 48% 46% at 8% 0%, rgb(145 104 46 / 17%), transparent 72%),
     radial-gradient(ellipse 46% 54% at 100% 100%, rgb(112 63 78 / 17%), transparent 75%),
-    linear-gradient(112deg, #0a0914 0%, #191329 48%, #0b0815 100%);
+    linear-gradient(112deg, var(--draw-bg-edge) 0%, var(--draw-bg-mid) 48%, var(--draw-bg-far) 100%);
   color: var(--stage-ink);
   box-shadow: inset 0 0 70px rgb(3 1 12 / 55%);
 }
@@ -97,7 +123,7 @@
   margin: 0 auto clamp(8px, 1.4vh, 18px);
   color: var(--stage-ink);
   font-size: clamp(30px, 3.35vw, 68px);
-  font-weight: 850;
+  font-weight: var(--fw-heavy);
   line-height: 1.06;
   letter-spacing: -0.025em;
   text-align: center;
@@ -123,7 +149,7 @@
   margin: 0 0 clamp(8px, 1.2vh, 16px) !important;
   color: var(--stage-gold-bright);
   font-size: clamp(22px, 2.15vw, 40px) !important;
-  font-weight: 800;
+  font-weight: var(--fw-heavy);
   line-height: 1.12;
   letter-spacing: 0.025em;
   text-align: center;
@@ -156,7 +182,7 @@
 .awaitingResult strong {
   color: var(--stage-gold-bright);
   font-size: clamp(26px, 3.6vw, 60px);
-  font-weight: 800;
+  font-weight: var(--fw-heavy);
   line-height: 1.12;
   text-wrap: balance;
 }
@@ -171,19 +197,19 @@
   width: clamp(220px, 34vh, 430px);
   flex: 0 0 auto;
   aspect-ratio: 1;
-  border: clamp(6px, 0.65vw, 12px) solid #b58b43;
+  border: clamp(6px, 0.65vw, 12px) solid var(--draw-brass);
   border-radius: 50%;
   background:
-    radial-gradient(circle at center, #21182d 0 16%, transparent 16.5%),
+    radial-gradient(circle at center, var(--draw-plum-deep) 0 16%, transparent 16.5%),
     radial-gradient(circle at center, transparent 0 23%, rgb(255 227 158 / 82%) 23.4% 24.2%, transparent 24.7%),
     radial-gradient(circle at center, transparent 0 76%, rgb(255 227 158 / 60%) 76.4% 77.3%, transparent 77.8%),
     repeating-conic-gradient(
       from -7.5deg,
-      #49335f 0deg 13deg,
-      #dfb95f 13deg 14deg,
-      #271b38 14deg 28deg,
-      #8c6834 28deg 29deg,
-      #49335f 29deg 30deg
+      var(--draw-plum) 0deg 13deg,
+      var(--draw-gold-line) 13deg 14deg,
+      var(--draw-plum-dark) 14deg 28deg,
+      var(--draw-bronze) 28deg 29deg,
+      var(--draw-plum) 29deg 30deg
     );
   box-shadow:
     0 22px 44px rgb(4 2 15 / 46%),
@@ -210,7 +236,7 @@
   height: clamp(28px, 2.7vw, 44px);
   transform: translateX(-50%);
   border: 1px solid rgb(255 245 211 / 88%);
-  background: linear-gradient(90deg, #8a642b, #ffe59a 44%, #bd8c3b);
+  background: linear-gradient(90deg, var(--draw-bronze-dark), var(--stage-gold-bright) 44%, var(--draw-brass));
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
   filter: drop-shadow(0 5px 7px rgb(3 1 12 / 55%));
 }
@@ -222,9 +248,9 @@
   width: 24%;
   aspect-ratio: 1;
   transform: translate(-50%, -50%);
-  border: 3px solid #edcf82;
+  border: 3px solid var(--draw-gold-soft);
   border-radius: 50%;
-  background: radial-gradient(circle at 36% 30%, #806181, #2a1e38 65%, #171120);
+  background: radial-gradient(circle at 36% 30%, var(--draw-hub-light), var(--draw-hub-mid) 65%, var(--draw-hub-dark));
   box-shadow: 0 5px 18px rgb(3 1 12 / 52%), inset 0 0 0 3px rgb(14 9 25 / 78%);
 }
 
@@ -237,7 +263,7 @@
   margin: 0;
   color: var(--stage-gold-bright);
   font-size: clamp(20px, 2.4vw, 38px);
-  font-weight: 800;
+  font-weight: var(--fw-heavy);
   letter-spacing: 0.07em;
 }
 
@@ -248,11 +274,11 @@
   height: min(42vh, 440px);
   min-height: 112px;
   overflow: hidden;
-  border: clamp(4px, 0.5vw, 8px) solid #b48a42;
+  border: clamp(4px, 0.5vw, 8px) solid var(--draw-brass);
   border-radius: clamp(7px, 0.7vw, 13px);
   background:
     linear-gradient(180deg, rgb(255 255 255 / 9%), transparent 17% 82%, rgb(0 0 0 / 25%)),
-    linear-gradient(105deg, #17111f 0%, #221a2d 48%, #130f1c 100%);
+    linear-gradient(105deg, var(--draw-slot-a) 0%, var(--draw-slot-b) 48%, var(--draw-slot-c) 100%);
   box-shadow:
     0 24px 48px rgb(4 2 15 / 48%),
     0 0 0 2px rgb(255 232 164 / 10%),
@@ -288,7 +314,7 @@
   font-family: var(--display-font);
   font-size: clamp(76px, min(30vh, 15vw), 320px);
   font-variant-numeric: tabular-nums;
-  font-weight: 900;
+  font-weight: var(--fw-heavy);
   line-height: 0.92;
   text-shadow: 0 6px 24px rgb(232 189 97 / 28%), 0 2px 3px rgb(255 250 229 / 45%);
 }
@@ -354,7 +380,7 @@
 .winnerKind {
   color: var(--stage-muted);
   font-size: clamp(16px, 1.25vw, 22px);
-  font-weight: 750;
+  font-weight: var(--fw-heavy);
   letter-spacing: 0.08em;
 }
 
@@ -362,7 +388,7 @@
   max-width: 26ch;
   color: var(--stage-ink);
   font-size: clamp(30px, 3.4vw, 64px);
-  font-weight: 850;
+  font-weight: var(--fw-heavy);
   line-height: 1.08;
   overflow-wrap: anywhere;
   text-wrap: balance;
@@ -378,7 +404,7 @@
 .companyTier {
   color: var(--stage-gold-bright);
   font-size: clamp(20px, 2.1vw, 34px);
-  font-weight: 800;
+  font-weight: var(--fw-heavy);
   line-height: 1.1;
   text-wrap: balance;
 }
@@ -389,7 +415,7 @@
   max-width: 22ch;
   color: var(--stage-gold-bright);
   font-size: clamp(52px, 11vw, 180px);
-  font-weight: 900;
+  font-weight: var(--fw-heavy);
   line-height: 1.04;
   text-wrap: balance;
   overflow-wrap: anywhere;
@@ -428,7 +454,7 @@
   max-width: 12ch;
   color: var(--stage-gold-bright);
   font-size: clamp(54px, 7.2vw, 138px);
-  font-weight: 900;
+  font-weight: var(--fw-heavy);
   line-height: 1.02;
   letter-spacing: -0.025em;
   text-shadow: 0 7px 28px rgb(4 2 15 / 46%);
@@ -465,7 +491,7 @@
   padding: clamp(10px, 1.1vw, 18px);
   overflow: hidden;
   border: 1px solid rgb(232 189 97 / 35%);
-  border-radius: 5px;
+  border-radius: var(--r-ctl);
   background:
     radial-gradient(ellipse at 50% 0%, rgb(232 189 97 / 12%), transparent 62%),
     linear-gradient(145deg, rgb(54 37 72 / 84%), rgb(19 14 32 / 88%));
@@ -477,7 +503,7 @@
   color: var(--stage-gold-bright);
   font-size: clamp(38px, 5vh, 72px);
   font-variant-numeric: tabular-nums;
-  font-weight: 900;
+  font-weight: var(--fw-heavy);
   line-height: 0.96;
   text-shadow: 0 4px 18px rgb(232 189 97 / 24%);
 }
@@ -486,7 +512,7 @@
   max-width: 100%;
   color: var(--stage-ink);
   font-size: clamp(21px, 1.65vw, 32px);
-  font-weight: 850;
+  font-weight: var(--fw-heavy);
   line-height: 1.1;
   text-wrap: balance;
   overflow-wrap: anywhere;
@@ -587,8 +613,8 @@
     padding-bottom: 8px;
   }
 
-  .cinematicBoard :global(.display-date) { font-size: 14px; }
-  .cinematicBoard :global(.display-stale) { max-width: 70%; font-size: 12px; }
+  .cinematicBoard :global(.display-date) { font-size: var(--text-sm); }
+  .cinematicBoard :global(.display-stale) { max-width: 70%; font-size: var(--text-xs); }
 
   .cinematicContent { padding-block: 10px; }
 
@@ -613,7 +639,7 @@
   .companyName { font-size: clamp(38px, 10vw, 60px); }
   .companyTier { font-size: clamp(22px, 6vw, 32px); }
   .numberLabel,
-  .revealLabel { font-size: 18px; }
+  .revealLabel { font-size: var(--text-lg); }
   .slotWindow { width: min(88vw, 1120px); height: clamp(120px, 26vh, 220px); min-height: 0; }
   .slotDigit,
   .slotBlank { font-size: clamp(54px, 21vw, 128px); }
@@ -621,23 +647,23 @@
   .personNameOutcome { gap: 12px; }
   .personIdentity { gap: 8px 12px; }
   .personName { font-size: clamp(26px, 7vw, 38px); }
-  .winnerCompany { font-size: 16px; }
-  .winnerTier { font-size: 18px; }
+  .winnerCompany { font-size: var(--text-md); }
+  .winnerTier { font-size: var(--text-lg); }
   .fallbackPersonName { font-size: clamp(40px, 12vw, 68px); }
   .winnerGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; padding: 2px; }
   .winnerCard { min-height: 96px; gap: 4px; padding: 8px 5px; }
-  .winnerCard .winnerKind { font-size: 11px; }
+  .winnerCard .winnerKind { font-size: var(--text-xs); }
   .gridLuckyNumber { font-size: clamp(30px, 9vw, 44px); }
   .winnerName,
   .winnerCardCompany .winnerName { font-size: clamp(16px, 4.4vw, 21px); }
   .winnerCardNumber .winnerName { font-size: clamp(14px, 3.8vw, 18px); }
-  .winnerCard .winnerTier { font-size: 14px; }
-  .emptyOutcome { font-size: 22px; }
+  .winnerCard .winnerTier { font-size: var(--text-sm); }
+  .emptyOutcome { font-size: var(--text-xl); }
 
   .cinematicBoard :global(.display-footer) {
     min-height: 20px;
     padding-top: 7px;
-    font-size: 13px;
+    font-size: var(--text-sm);
   }
 }
 

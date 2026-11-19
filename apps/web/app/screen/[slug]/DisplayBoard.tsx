@@ -6,6 +6,30 @@ import ProductButton from "../../ui/ProductButton";
 import drawStyles from "./draw-stage.module.css";
 import stageStyles from "./board-stage.module.css";
 import { richPlainText } from "../../../lib/rich-text";
+import { BangIcon, InfoIcon } from "../../console/console-ui/ConsoleIcons";
+
+// Venue-screen status vocabulary (design-system application 2026-11-20): every
+// state is an icon, words and a tone on the dark stage; colour never carries
+// the meaning alone. The stale notice keeps its role and text for the audits.
+function StaleNotice({ children }: { children: string }) {
+  return (
+    <p className={`display-stale ${stageStyles.stale}`} role="status">
+      <BangIcon />
+      {children}
+    </p>
+  );
+}
+
+// First load, missing event, failed load and "output off" share one stage:
+// a lit icon tile, a headline and one line of guidance, on the same ink the
+// board uses. A white page would flash the projector.
+function StateTile({ tone, loading = false }: { tone: "danger" | "info" | "neutral"; loading?: boolean }) {
+  return (
+    <span className={stageStyles.stateTile} data-tone={tone} data-loading={loading || undefined} aria-hidden="true">
+      {loading ? null : tone === "info" ? <InfoIcon /> : <BangIcon />}
+    </span>
+  );
+}
 
 type Notice = { id: string; title: string; body: string };
 type ProgramItem = {
@@ -574,10 +598,18 @@ export default function DisplayBoard({ slug }: { slug: string }) {
     };
   }, [slug, pollDelay, retryTick]);
 
-  if (state.kind === "loading") return <p className="display-status" role="status">화면을 준비하고 있습니다.</p>;
+  if (state.kind === "loading") {
+    return (
+      <p className={`${stageStyles.stateStage} ${stageStyles.stateLoading}`} role="status">
+        <StateTile tone="neutral" loading />
+        화면을 준비하고 있습니다.
+      </p>
+    );
+  }
   if (state.kind === "missing") {
     return (
-      <section className="display-state">
+      <section className={stageStyles.stateStage}>
+        <StateTile tone="danger" />
         <h1>행사를 찾을 수 없습니다</h1>
         <p>출력 주소를 확인하세요.</p>
         <p>
@@ -591,7 +623,8 @@ export default function DisplayBoard({ slug }: { slug: string }) {
     // poll loop retries on its own, and this button fetches now for the
     // staffer standing in front of the screen.
     return (
-      <section className="display-state" aria-label="화면 오류">
+      <section className={stageStyles.stateStage} aria-label="화면 오류">
+        <StateTile tone="danger" />
         <p role="alert">{state.message}</p>
         <p>
           <ProductButton type="button" className="button button-secondary" onClick={refreshNow}>
@@ -603,11 +636,12 @@ export default function DisplayBoard({ slug }: { slug: string }) {
   }
   if (state.kind === "disabled") {
     return (
-      <section className="display-state display-paused" aria-labelledby="display-disabled-heading">
+      <section className={stageStyles.stateStage} aria-labelledby="display-disabled-heading">
+        <StateTile tone="info" />
         <h1 id="display-disabled-heading">행사장 출력이 꺼져 있습니다</h1>
         <p>운영자가 행사 설정에서 출력을 켜면 화면이 자동으로 표시됩니다.</p>
         {state.stale ? <>
-          <p className="display-stale" role="status">연결 확인 중 · 마지막으로 확인한 상태입니다</p>
+          <StaleNotice>연결 확인 중 · 마지막으로 확인한 상태입니다</StaleNotice>
           <p><ProductButton type="button" className="button button-secondary" onClick={refreshNow}>새로고침</ProductButton></p>
         </> : null}
       </section>
@@ -719,7 +753,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
       <section className={`display-board ${drawSelected ? drawStyles.cinematicBoard : stageStyles.dark}`} aria-live="off">
         <header className="display-header">
           {!drawSelected ? <span className="display-brand">EVENTOUCH</span> : null}
-          {stale ? <p className="display-stale" role="status">연결 확인 중 · 마지막 화면입니다</p> : null}
+          {stale ? <StaleNotice>연결 확인 중 · 마지막 화면입니다</StaleNotice> : null}
           {stale ? (
             <ProductButton type="button" className="button button-secondary" onClick={refreshNow}>
               새로고침
@@ -794,7 +828,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
         <p>EVENTOUCH</p>
         <h1>{data.name}</h1>
         <p>{data.date}</p>
-        {stale ? <p className="display-stale" role="status">연결 확인 중 · 마지막 화면입니다</p> : null}
+        {stale ? <StaleNotice>연결 확인 중 · 마지막 화면입니다</StaleNotice> : null}
         {stale ? (
           <p>
             <ProductButton type="button" className="button button-secondary" onClick={refreshNow}>
@@ -812,7 +846,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
     <section className={`display-board ${stageStyles.dark}`} aria-live="off">
       <header className="display-header">
         <span className="display-brand">EVENTOUCH</span>
-        {stale ? <p className="display-stale" role="status">연결 확인 중 · 마지막 화면입니다</p> : null}
+        {stale ? <StaleNotice>연결 확인 중 · 마지막 화면입니다</StaleNotice> : null}
         {stale ? (
           <ProductButton type="button" className="button button-secondary" onClick={refreshNow}>
             새로고침

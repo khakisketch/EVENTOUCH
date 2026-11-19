@@ -1,0 +1,53 @@
+/* Staff status vocabulary (design-system application 2026-11-20). Tokens only.
+   Every tone pairs a tint with its own icon and words, so the face reads on
+   the white sheets and on the ink field column alike. Text stays --ink; the
+   tone colour is carried by the icon and the hairline. */
+.note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--info-line);
+  border-radius: var(--r-card);
+  background: var(--info-soft);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: var(--lh-body);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.note[data-tone="ok"] { border-color: var(--success-line); background: var(--success-soft); }
+.note[data-tone="warn"] { border-color: var(--warning-line); background: var(--warning-soft); }
+.note[data-tone="danger"] { border-color: var(--danger-line); background: var(--danger-soft); }
+
+.noteIcon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--info);
+  color: var(--paper);
+}
+
+.note[data-tone="ok"] .noteIcon { background: var(--success); }
+.note[data-tone="warn"] .noteIcon { background: var(--warning); }
+.note[data-tone="danger"] .noteIcon { background: var(--danger); }
+
+.noteIcon svg.action-icon { width: 16px; height: 16px; stroke-width: 3; }
+
+.noteBody {
+  display: grid;
+  justify-items: start;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.noteBody > p { margin: 0; }
+.noteBody button { min-height: var(--control-min-size); }
+
+.pill { gap: var(--s1); }
+.pillIcon { display: inline-grid; place-items: center; }
+.pillIcon svg.action-icon { width: 14px; height: 14px; stroke-width: 3; }

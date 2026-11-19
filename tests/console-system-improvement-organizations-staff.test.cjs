@@ -122,7 +122,8 @@ test('staff-account-menu-shows-account-and-expands-the-parent-switcher', () => {
   assert.match(menu, /mousedown/);
   assert.match(menu, /triggerRef\.current\?\.focus\(\)/);
   const css = readStaff('staff-account-menu.module.css');
-  assert.match(css, /min-height:\s*44px/);
+  // Reopened 2026-11-20: the literal 44px became --control-min-size (44px).
+  assert.match(css, /min-height:\s*(?:44px|var\(--control-min-size\))/);
   assert.match(css, /\.menuButton/);
   assert.match(css, /\.menuPanel/);
   // Token-only styling: no new hex colors, no new surfaces.
@@ -167,7 +168,8 @@ test('staff-event-work-locks-writes-retains-state-and-warns-explicitly', () => {
   // Fixed current-org line near the risk work region, in every branch.
   // The menu also consults the account gate: leaving for the holder's own
   // recovery page must not strand retained receipts and drafts.
-  assert.match(work, /<StaffAccountMenu confirmLeave=\{confirmLeaveStaff\} confirmLeaveAccount=\{confirmLeaveAccountPage\} \/>/);
+  // Reopened 2026-11-20: the loading/missing states draw the menu as a quiet pill on ink (tone="dark").
+  assert.match(work, /<StaffAccountMenu tone="dark" confirmLeave=\{confirmLeaveStaff\} confirmLeaveAccount=\{confirmLeaveAccountPage\} \/>/);
   assert.match(work, /orgLineText\(\)/);
   assert.match(work, /describeWorkingOrg\(\s*orgSnapshot\.context,\s*orgSnapshot\.loading,/);
   assert.match(work, /isSelectionRequiredError\(orgSnapshot\.error\)/);

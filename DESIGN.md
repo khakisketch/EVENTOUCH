@@ -533,6 +533,7 @@ Reopened 2026-11-19 (owner: plain; `tests/web-staff-field-composition.test.cjs` 
 - The 데스크 체크인 / 부스 인증 switch is one segmented pill on a translucent track (chosen = paper fill), not two outlined buttons; the station select is a pill title with a visible chevron.
 - The idle stage is a lit viewfinder: a soft radial lift, glowing corners and a slow orange scan line (only for users without a reduced-motion preference).
 - The bar's "카메라 켜기" carries a camera glyph (still the only orange); 코드 입력 / 명단 찾기 / 최근 처리 are 72px outlined icon tiles with 14px labels instead of grey chips.
+- Reopened 2026-11-20 (디자인 시스템 적용; `tests/web-staff-composition.test.cjs` and `tests/web-staff-field-composition.test.cjs` assert it; flow, copy, ids and recovery are unchanged): the dark column, the white bar and the colored result face keep their look. Type, weight and corners come from `tokens.css` (`--text-*`, `--fw-*`, `--r-*`); the "paper on ink" tints, the 28px sheet corner and the two room-scale result sizes (name 2.5rem, verdict 1.5rem) are named once as `--fld-*` at the top of `staff-event-work.module.css` because the shared tokens have no dark-surface scale. States share one rule: an icon, words and a tone (ok green, warn amber, danger red, info blue), never colour alone. Messages above the stage are `StaffNote`, row states are `StaffPill` (the shared `StatusPill` plus an icon), the desk-direction card carries a warning mark, and the loading/missing-assignment states stay on ink instead of landing as white cards. The ⋯ button keeps a light wash, not a light face, while hovered or open.
 
 ## Product component boundary
 
@@ -607,6 +608,10 @@ Reopened 2026-11-19 (owner: plain; `tests/web-venue-screen-composition.test.cjs`
 - The stage gets depth: a brand-orange glow from the top-right corner, a short orange mark above the event name, the wordmark's orange E, the date in a pill, and a venue footer with an orange dot over a hairline.
 - The program is a ledger with padded rows and white times; the session in progress is a lit orange band with a left bar and white title. A poll's leading count is orange like its bar; bars are fully rounded. Questions sit on a faint panel.
 
+Reopened 2026-11-20 (디자인 시스템 적용; `tests/web-venue-screen-composition.test.cjs` asserts it; scenes, selection rules and room-scale type are unchanged):
+- Colours, radii and weights come from `tokens.css`; the clamp() sizes stay because the shared `--text-*` scale stops at 34px and a hall is read at 3 to 5 times that. The draw stage keeps its violet and gold palette, now named once in the block at the top of `draw-stage.module.css`.
+- The stale notice carries a mark and the same words; loading, event not found, load failed and "output is off" are one dark stage (a tone-colored icon tile, a headline and one line) instead of a white card, so a failure never flashes a projector.
+
 ## 스태프 목록과 로그인 확정 구성
 
 The owner approved this composition on 2026-11-16 (`apps/web/app/staff/StaffHub.tsx` and `apps/web/app/login/`, mockups `staff-entry-a3.html` for the hub and `staff-entry-a2.html` for the login). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-staff-entry-composition.test.cjs` guards it.
@@ -615,6 +620,7 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/staff/StaffHub.
 - The event that is `LIVE` is one card with the hub's only orange: a "지금 진행 중" chip, the name, the start to end time at 38px, "내 배정 · 데스크 N곳", and "업무 열기". The rest are flat rows that open as a whole (initial tile, name, start label, kind and count, a status dot, a chevron). Names of desks and booths are not listed; they are the work screen's title. A start label is day-level: "09:00 시작", "내일 10:00 시작", "12.20 09:30 시작". With no live event the title is followed by "지금 진행 중인 행사는 없어요."
 - Empty and failed states are an icon tile, the unchanged sentence ("배정된 업무가 없습니다. 운영자에게 문의하세요."), and one outlined "다시 불러오기". Organization line, the changed-organization notice (the rows and card stand down) and the single-assignment shortcut are unchanged.
 - The login keeps its markup and copy: a dark band with the wordmark (orange E, from `::first-letter`) and the promise line over a white sheet with 56px fields; the error line and the submit sit at the bottom of the sheet, the error directly above the submit. On wide screens the band and sheet are one framed card. The submit is docked at the bottom of the sheet, not fixed to the screen. Everything after sign-in (staff to 내 업무, operators to the console), the session notice, first-operator setup and the reset help are unchanged.
+- Reopened 2026-11-20 (디자인 시스템 적용; `tests/web-staff-entry-composition.test.cjs` asserts it): the live card's chip and each row's state are the shared `StatusPill` ("지금 진행 중", "진행 중", "준비 중") instead of a colour-only dot, the failed and empty tiles carry an icon in the state's tone (warn for waiting on an assignment, danger for a failed load), and loading is a quiet ring with its words, not a white card. Sizes, weights and corners are tokens.
 
 ## 계정·첫 화면 확정 구성
 
