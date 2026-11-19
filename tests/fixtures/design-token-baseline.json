@@ -1,0 +1,260 @@
+{
+  "note": "Ratchet baseline for tests/web-design-tokens-guard.test.cjs. Counts may only go down. Refresh with: node tests/web-design-tokens-guard.test.cjs --update",
+  "totals": {
+    "fontSizePx": 175,
+    "radius": 122,
+    "hex": 182
+  },
+  "files": {
+    "console/clients/clients.module.css": {
+      "fontSizePx": 0,
+      "radius": 1,
+      "hex": 0
+    },
+    "console/console-home.module.css": {
+      "fontSizePx": 3,
+      "radius": 3,
+      "hex": 0
+    },
+    "console/console-ui/console-avatar.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/console-ui/console-choice-group.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/console-ui/console-empty-state.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/console-ui/console-task-queue.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/console-ui/console-ui.module.css": {
+      "fontSizePx": 4,
+      "radius": 1,
+      "hex": 0
+    },
+    "console/console-ui/count-tabs.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/console-ui/device-frame.module.css": {
+      "fontSizePx": 2,
+      "radius": 3,
+      "hex": 0
+    },
+    "console/console-ui/event-menu-search.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/console-ui/freshness.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/console-ui/list-row.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/console-ui/publication-review.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/console-ui/stat-card.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/console-ui/status-pill.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/events/[id]/analysis/analysis.module.css": {
+      "fontSizePx": 7,
+      "radius": 9,
+      "hex": 0
+    },
+    "console/events/[id]/content/content-preview.module.css": {
+      "fontSizePx": 0,
+      "radius": 2,
+      "hex": 0
+    },
+    "console/events/[id]/content/content.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/events/[id]/content/rich-editor.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/events/[id]/draws/draws.module.css": {
+      "fontSizePx": 25,
+      "radius": 7,
+      "hex": 0
+    },
+    "console/events/[id]/event-overview-board.module.css": {
+      "fontSizePx": 6,
+      "radius": 6,
+      "hex": 2
+    },
+    "console/events/[id]/event-overview.module.css": {
+      "fontSizePx": 10,
+      "radius": 0,
+      "hex": 3
+    },
+    "console/events/[id]/live/live.module.css": {
+      "fontSizePx": 3,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/events/[id]/messages/MessagingWorkspace.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/events/[id]/operations/operations.module.css": {
+      "fontSizePx": 5,
+      "radius": 2,
+      "hex": 0
+    },
+    "console/events/[id]/page/attendee-guide-qr.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 5
+    },
+    "console/events/[id]/page/color-field.module.css": {
+      "fontSizePx": 0,
+      "radius": 1,
+      "hex": 16
+    },
+    "console/events/[id]/page/layout-picker.module.css": {
+      "fontSizePx": 0,
+      "radius": 1,
+      "hex": 0
+    },
+    "console/events/[id]/page/page.module.css": {
+      "fontSizePx": 9,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/events/[id]/page/studio-controls.module.css": {
+      "fontSizePx": 0,
+      "radius": 1,
+      "hex": 0
+    },
+    "console/events/[id]/page/studio.module.css": {
+      "fontSizePx": 0,
+      "radius": 4,
+      "hex": 13
+    },
+    "console/events/[id]/participants/import/import.module.css": {
+      "fontSizePx": 0,
+      "radius": 1,
+      "hex": 0
+    },
+    "console/events/[id]/participants/participants.module.css": {
+      "fontSizePx": 4,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/events/[id]/photos/evidence-photos.module.css": {
+      "fontSizePx": 10,
+      "radius": 2,
+      "hex": 0
+    },
+    "console/events/[id]/programs/programs.module.css": {
+      "fontSizePx": 6,
+      "radius": 4,
+      "hex": 0
+    },
+    "console/events/[id]/reports/reports.module.css": {
+      "fontSizePx": 3,
+      "radius": 16,
+      "hex": 0
+    },
+    "console/events/[id]/rewards/rewards.module.css": {
+      "fontSizePx": 3,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/events/[id]/settings/fields/fields.module.css": {
+      "fontSizePx": 1,
+      "radius": 2,
+      "hex": 0
+    },
+    "console/events/[id]/settings/settings.module.css": {
+      "fontSizePx": 3,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/team/team.module.css": {
+      "fontSizePx": 0,
+      "radius": 2,
+      "hex": 0
+    },
+    "event/[slug]/engage/engage.module.css": {
+      "fontSizePx": 2,
+      "radius": 11,
+      "hex": 7
+    },
+    "event/[slug]/event-banner.module.css": {
+      "fontSizePx": 3,
+      "radius": 0,
+      "hex": 5
+    },
+    "event/[slug]/event-facts.module.css": {
+      "fontSizePx": 0,
+      "radius": 2,
+      "hex": 0
+    },
+    "event/[slug]/home/home-layouts.module.css": {
+      "fontSizePx": 15,
+      "radius": 4,
+      "hex": 28
+    },
+    "event/[slug]/home/home.module.css": {
+      "fontSizePx": 16,
+      "radius": 2,
+      "hex": 39
+    },
+    "event/[slug]/public-event-context.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 1
+    },
+    "event/[slug]/public-event.module.css": {
+      "fontSizePx": 17,
+      "radius": 10,
+      "hex": 40
+    },
+    "event/[slug]/public-program-schedule.module.css": {
+      "fontSizePx": 12,
+      "radius": 3,
+      "hex": 12
+    },
+    "event/[slug]/register/register.module.css": {
+      "fontSizePx": 2,
+      "radius": 12,
+      "hex": 3
+    },
+    "event/[slug]/ticket/ticket.module.css": {
+      "fontSizePx": 4,
+      "radius": 10,
+      "hex": 8
+    }
+  }
+}

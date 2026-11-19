@@ -23,6 +23,11 @@ type ConsoleSectionProps = {
    * unit, including its heading and actions, at the shared reading width.
    */
   width?: "full" | "form";
+  /**
+   * Heading treatment. `rule` (design-system C1) puts a hairline under the
+   * title row and sets the title at the section scale; `default` is unchanged.
+   */
+  heading?: "default" | "rule";
 };
 
 export default function ConsoleSection({
@@ -36,6 +41,7 @@ export default function ConsoleSection({
   divider = false,
   surface = "plain",
   width = "full",
+  heading = "default",
 }: ConsoleSectionProps) {
   const classNames = [
     styles.section,
@@ -43,6 +49,7 @@ export default function ConsoleSection({
     divider ? styles.sectionDivider : "",
     surface === "panel" ? styles.sectionPanel : "",
     width === "form" ? styles.sectionForm : "",
+    heading === "rule" ? styles.sectionRule : "",
     className,
   ].filter(Boolean).join(" ");
 

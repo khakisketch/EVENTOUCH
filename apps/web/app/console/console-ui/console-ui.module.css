@@ -212,6 +212,19 @@
   border-bottom: 1px solid var(--line);
 }
 
+/* heading="rule" (design-system C1): hairline under the title row. */
+.sectionRule > :global(.astryx-section) > .sectionHead {
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--line);
+}
+
+.sectionRule .sectionTitle {
+  font-size: var(--text-lg);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-heading);
+}
+
 .statePanel {
   display: grid;
   justify-items: start;

@@ -112,6 +112,50 @@
   --display-stage: 88px;
   --od-gap: 8px;
 
+  /* ---- Console design-system scale (2026-11-20, direction C1) ----
+     Additive: the older --small/--label/--h* and --radius-* names stay for
+     existing screens. New and reworked console work uses only the names here.
+     Weights (3 only)   --fw-regular 400 body and meta text
+                        --fw-strong  600 labels, titles, buttons, tabs
+                        --fw-heavy   800 page titles and big numbers
+     Type sizes         --text-xs 12 meta, pill, badge, caption
+                        --text-sm 14 secondary text, table cells
+                        --text-md 15 working body and list titles
+                        --text-lg 18 section titles
+                        --text-xl 22 sheet and panel titles
+                        --text-2xl 28 page title
+                        --text-num 34 big numbers, only where the number is the job
+     Leading/tracking   --lh-tight for titles and numbers, --lh-body for prose;
+                        --ls-heading for titles, --ls-num for big numbers
+     Radii (3)          --r-ctl 10 buttons, inputs, tiles; --r-card 16 cards and
+                        panels; --r-pill 999 pills, tabs, avatars
+     Surfaces           --surface-work white work area; --surface-sunken quiet
+                        wells and zebra; --surface-accent-soft the one orange
+                        tint (selected, soft call-out)
+     Status pairs       --success/-soft, --warning/-soft, --info/-soft,
+                        --danger/-soft; orange text is --brand-text, never
+                        white on --brand. */
+  --fw-regular: 400;
+  --fw-strong: 600;
+  --fw-heavy: 800;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-md: 15px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+  --text-num: 34px;
+  --lh-tight: 1.2;
+  --lh-body: 1.55;
+  --ls-heading: -.03em;
+  --ls-num: -.04em;
+  --r-ctl: 10px;
+  --r-card: 16px;
+  --r-pill: 999px;
+  --surface-work: var(--paper);
+  --surface-sunken: var(--surface-muted);
+  --surface-accent-soft: var(--brand-tint);
+
   --phone-screen-bg: var(--paper);
   --phone-stage-bg: var(--ground);
   --attendee-accent: var(--brand);

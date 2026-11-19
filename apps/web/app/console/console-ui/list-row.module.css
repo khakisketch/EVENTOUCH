@@ -1,0 +1,97 @@
+/* List row (design-system foundation 2026-11-20). Tokens only. */
+.row {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--line);
+  list-style: none;
+}
+
+.row:last-child { border-bottom: 0; }
+
+.body {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-min-size);
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  word-break: keep-all;
+}
+
+.row[data-density="comfortable"] .body {
+  min-height: 60px;
+  padding-block: var(--s3);
+}
+
+.row[data-list-row="interactive"] .body { cursor: pointer; transition: background-color var(--exit); }
+.row[data-list-row="interactive"] .body:hover { background: var(--surface-sunken); }
+.row[data-list-row="interactive"] .body:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.body[aria-current="true"] { background: var(--surface-accent-soft); }
+
+.leading {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.main {
+  display: grid;
+  flex: 1 1 auto;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.title {
+  min-width: 0;
+  font-size: var(--text-md);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-tight);
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+
+.trailing {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--s2);
+  max-width: 50%;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.chevron {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.chevron svg {
+  width: var(--s4);
+  height: var(--s4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row[data-list-row="interactive"] .body { transition: none; }
+}

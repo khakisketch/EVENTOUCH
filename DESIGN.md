@@ -632,3 +632,21 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/console/CreateE
 - Each field gets the control that fits it instead of one white box: the name is a title input without a box with the 참가자 주소 line under it ("바꾸기" opens 주소 코드), the date is a large soft field with 내일/1주 뒤/1개월 뒤 chips and a plain "선택한 날짜 … · N일 뒤" line, the time is 종일/오전/오후/저녁 chips with a "09:00–18:00 · 9시간" line, 정원 has 50/100/300/500 chips, and the create mode is a two-way segmented bar.
 - Chips are native radios that only set values the form already holds (date, start/end, capacity); the payload and the write path (receipts, retry, duplicate, customer registration) are unchanged. Selected chips are ink, so the one orange action stays "행사 만들기".
 - Guidance never blocks the write: a same-name event, a past date, a duplicate that keeps the source date, and an end that is not after the start (the server's own rule) show as a one-line notice. With no customers the select is replaced by a one-line explanation and the register action.
+
+## 디자인 시스템 기초 (2026-11-20)
+
+콘솔 방향은 "하이브리드 C1": 흰 작업면, 헤어라인, 굵기 3종, 반경 3종, 숫자는 숫자가 일인 곳에만 크게, 주황은 그 화면의 하나뿐인 주 행동에만 쓴다. 설정·보고서처럼 구역이 여러 개인 화면만 C2식 흰 카드 묶음을 빌린다. 이 단계는 추가만 하며 기존 화면의 모습은 바꾸지 않는다.
+
+**새 화면·수정은 이 부품과 토큰만 쓴다.** 기존 이름(`--small`, `--radius-*`, `.status-chip` 등)은 아직 옮기지 않은 화면을 위해 남아 있다.
+
+- 토큰(`apps/web/app/tokens.css`, 주석에 "어디에 무엇" 표가 있다)
+  - 굵기: `--fw-regular` 400, `--fw-strong` 600, `--fw-heavy` 800
+  - 글자 크기: `--text-xs` 12, `--text-sm` 14, `--text-md` 15, `--text-lg` 18, `--text-xl` 22, `--text-2xl` 28, `--text-num` 34(큰 숫자 전용)
+  - 줄간격·자간: `--lh-tight` 1.2, `--lh-body` 1.55, `--ls-heading` -.03em, `--ls-num` -.04em
+  - 반경: `--r-ctl` 10(버튼·입력), `--r-card` 16(카드·패널), `--r-pill` 999
+  - 바탕: `--surface-work`(흰 작업면), `--surface-sunken`(조용한 우물), `--surface-accent-soft`(유일한 주황 면)
+  - 상태 면: 기존 `--success|warning|info|danger` 와 `-soft` 쌍. 주황 글자는 `--brand-text`, `--brand` 위 흰 글자는 쓰지 않는다.
+- 부품(`apps/web/app/console/console-ui/`)
+  - `ConsoleEmptyState`(empty·filtered·error-soft), `StatCard`/`StatRow`, `StatusPill`(ok·wait·info·danger·neutral·live·ink), `ConsoleAvatar`, `ListRow`(행 전체가 하나의 링크·버튼), `CountTabs`(탭), `ConsoleSection`(`heading="rule"`로 제목 아래 헤어라인)
+- 재발 방지: `tests/web-design-tokens-guard.test.cjs`가 콘솔·행사 CSS의 px 글자 크기·숫자 반경·hex를 센다. 파일별 개수는 `tests/fixtures/design-token-baseline.json` 이하로만 허용하고, 새 파일과 위 새 부품 CSS는 0이어야 한다. 화면을 토큰으로 옮겨 숫자가 줄면 `node tests/web-design-tokens-guard.test.cjs --update`로 기준선을 낮춘다.
+- 부품 계약: `tests/web-console-ds-components.test.cjs`.

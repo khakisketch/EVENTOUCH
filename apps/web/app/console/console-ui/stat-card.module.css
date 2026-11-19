@@ -1,0 +1,95 @@
+/* Stat card and row (design-system foundation 2026-11-20). Tokens only. */
+.card {
+  display: grid;
+  align-content: start;
+  gap: var(--s1);
+  min-width: 0;
+  min-height: var(--control-min-size);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface-work);
+  color: var(--ink);
+  text-decoration: none;
+  word-break: keep-all;
+}
+
+.card[data-stat-card="wait"] { border-color: var(--warning-line); background: var(--warning-soft); }
+.card[data-stat-card="ok"] { border-color: var(--success-line); background: var(--success-soft); }
+
+.label {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-tight);
+}
+
+.card[data-stat-card="wait"] .label { color: var(--warning); }
+.card[data-stat-card="ok"] .label { color: var(--success); }
+
+.figure {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.value {
+  min-width: 0;
+  font-size: var(--text-num);
+  font-weight: var(--fw-heavy);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-num);
+  font-variant-numeric: tabular-nums;
+}
+
+.card[data-stat-card="wait"] .value { color: var(--warning); }
+.card[data-stat-card="ok"] .value { color: var(--success); }
+
+.unit {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
+}
+
+.card[data-stat-card="wait"] .unit { color: var(--warning); }
+.card[data-stat-card="ok"] .unit { color: var(--success); }
+
+.detail {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+
+.card[data-stat-card="wait"] .detail { color: var(--warning); }
+.card[data-stat-card="ok"] .detail { color: var(--success); }
+
+.link { cursor: pointer; transition: border-color var(--enter), box-shadow var(--enter); }
+.link:hover { border-color: var(--line-strong); box-shadow: 0 1px 3px var(--shadow-color); }
+.link:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+.row {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.row[data-stat-row="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.row[data-stat-row="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+@media (max-width: 768px) {
+  .row[data-stat-row="4"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .row { gap: var(--s2); }
+  .card { padding: var(--s3); }
+}
+
+@media (max-width: 480px) {
+  .row[data-stat-row="3"] { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .link { transition: none; }
+}
