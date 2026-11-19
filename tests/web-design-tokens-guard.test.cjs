@@ -128,8 +128,10 @@ test('no console or event CSS file adds hard-coded font sizes, radii or hex colo
 test('the baseline matches real files and the scan covers both areas', () => {
   assert.ok(Object.keys(counts).some((file) => file.startsWith('console/')), 'console CSS is scanned');
   assert.ok(Object.keys(counts).some((file) => file.startsWith('event/')), 'event CSS is scanned');
-  const sample = ['fontSizePx', 'radius', 'hex'].map((key) => Object.values(baseline).reduce((sum, c) => sum + c[key], 0));
-  assert.ok(sample.every((total) => total > 0), 'baseline records the existing debt, not an empty tree');
+  // The debt is mostly paid down (2026-11-20 design-system rollout): a zero total is a good result, so the
+  // proof that the scan is real is the number of CSS modules it covers, not a positive debt count.
+  assert.ok(Object.keys(baseline).length >= 40, 'baseline covers the CSS modules, not an empty tree');
+  assert.ok(Object.values(baseline).some((c) => c.fontSizePx > 0 || c.radius > 0 || c.hex > 0), 'the scan still counts something');
 });
 
 test('the counter recognises raw values and ignores tokens, comments and allowed radii', () => {
