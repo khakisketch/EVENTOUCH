@@ -92,14 +92,15 @@ test('mobile-workspaces: CSV and import ride one compact secondary pair', () => 
   assert.match(list, /canMutateStatus \? <ProductButton type="button" variant="ghost" onClick=\{\(\) => setImportOpen\(true\)\}/u, 'import stays gated and opens a quiet modal action');
 });
 
-test('mobile-workspaces: editor preview header wraps without squishing Korean', () => {
+// Reopened 2026-11-20 (디자인 시스템 적용): the old preview header / live mark rules were dead
+// layout leftovers and are gone; the phone's mobile contract is the studio stage collapsing
+// and the editor's panels wrapping Korean without squishing.
+test('mobile-workspaces: attendee page editor wraps without squishing Korean', () => {
   const css = read(ATTENDEE_PAGE_CSS);
-  assert.match(css, /\.previewHeader\s*\{[^}]*flex-wrap:\s*wrap/su, 'header wraps instead of squeezing');
-  assert.match(css, /\.previewHeader > div:first-child\s*\{[^}]*min-width:\s*0/su, 'copy column may shrink');
-  assert.match(css, /\.previewHeader h2\s*\{[^}]*word-break:\s*keep-all/su, 'heading keeps Korean syllables whole');
-  assert.match(css, /\.liveMark\s*\{[^}]*flex:\s*none/su, 'live mark never shrinks');
-  assert.match(css, /\.liveMark\s*\{[^}]*white-space:\s*nowrap/su, '실시간 never stacks vertically');
-  assert.match(css, /\.liveMark\s*\{[^}]*font-size:\s*12px/su, 'no type downsizing beyond the current token size');
+  assert.doesNotMatch(css, /\.previewHeader|\.liveMark|\.statePill/u, 'dead preview-header and bespoke pill rules are removed');
+  assert.match(css, /\.conflictPanel \.panelTitle, \.conflictPanel p \{[^}]*word-break:\s*keep-all/su, 'conflict copy keeps Korean syllables whole');
+  assert.match(css, /@media \(max-width: 680px\)[\s\S]*\.conflictPanel \{ flex-direction: column; \}/u, 'conflict actions stack under the copy on phones');
+  assert.match(css, /\.saveBar \.versionSummary \{[^}]*flex-wrap:\s*nowrap/su, 'the save bar status stays one row');
 });
 
 test('mobile-workspaces: analysis header folds refresh and stamp beside the KPIs', () => {
