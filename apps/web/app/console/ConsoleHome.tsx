@@ -11,6 +11,8 @@ import ConsoleToolbar from "./console-ui/ConsoleToolbar";
 import ConsoleSection from "./console-ui/ConsoleSection";
 import ConsoleStatePanel from "./console-ui/ConsoleStatePanel";
 import ConsoleFeedback from "./console-ui/ConsoleFeedback";
+import { ArrowRightIcon, ChevronRightIcon, PlusIcon, SearchIcon } from "./console-ui/ConsoleIcons";
+import { CalendarIcon, RowsIcon } from "./admin-icons";
 import CreateEventDialog from "./CreateEventDialog";
 import type { CSSProperties } from "react";
 import { cardHeaderTheme } from "./event-card-theme";
@@ -187,6 +189,7 @@ function EventRow({
   const zoneStyle = theme
     ? ({ "--card-zone": theme.background } as CSSProperties)
     : undefined;
+  const [, tileMonth, tileDay] = event.date ? event.date.split("-") : [];
 
   return (
     <article className={styles.eventRow} data-tone={tone}>
@@ -196,10 +199,23 @@ function EventRow({
         className={styles.eventRowLink}
         href={`/console/events/${encodeURIComponent(event.id)}`}
       >
+        <span className={styles.dateTile} data-tone={tone} aria-hidden="true">
+          {tileMonth && tileDay ? (
+            <>
+              <small>{Number(tileMonth)}월</small>
+              <b>{Number(tileDay)}</b>
+            </>
+          ) : (
+            <small>미정</small>
+          )}
+        </span>
         <div className={styles.eventRowMain}>
           <h3 className={styles.eventName} style={zoneStyle}>
-            <span className={styles.stageDot} data-tone={tone} aria-hidden="true" />
             {event.name}
+            <span className={styles.stageChip} data-tone={tone} aria-hidden="true">
+              <span className={styles.stageDot} data-tone={tone} />
+              {stageLabel}
+            </span>
           </h3>
           <p className={styles.eventDateTime}>
             <strong>{lead}</strong>
@@ -208,9 +224,7 @@ function EventRow({
         </div>
         {recency ? <span className={styles.eventRecency} data-soon={recency === "오늘" || recency === "내일" || undefined}>{recency}</span> : <span />}
         <span className={styles.rowArrow} aria-hidden="true">
-          <svg viewBox="0 0 20 20" focusable="false">
-            <path d="M7 4l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <ChevronRightIcon />
         </span>
         <span className="sr-only"> {stageLabel} · 열기</span>
       </ProductLink>
@@ -222,7 +236,7 @@ function EventRow({
           href={`/console/events/${encodeURIComponent(event.id)}/participants?status=PENDING`}
           aria-label={`${event.name} 승인 대기 ${event.pending}명 처리`}
         >
-          승인 대기 {event.pending}명 처리 ›
+          <span className={styles.rowActionPill}>승인 대기 {event.pending}명 처리 ›</span>
         </ProductLink>
       ) : null}
     </article>
@@ -572,6 +586,7 @@ export default function ConsoleHome() {
         aria-pressed={view === "cards"}
         onClick={() => setView("cards")}
       >
+        <RowsIcon />
         콜시트
       </button>
       <button
@@ -580,6 +595,7 @@ export default function ConsoleHome() {
         aria-pressed={view === "calendar"}
         onClick={() => setView("calendar")}
       >
+        <CalendarIcon />
         달력
       </button>
     </div>
@@ -591,10 +607,15 @@ export default function ConsoleHome() {
           key={item.id}
           type="button"
           className={`${styles.stageTab}${filter === item.id ? ` ${styles.stageTabActive}` : ""}`}
+          data-stage={item.id}
           aria-pressed={filter === item.id}
           onClick={() => setFilter(item.id)}
         >
-          {item.label}<small>{counts[item.id]}</small>
+          <span className={styles.stageLabel}>{item.label}</span>
+          <small className={styles.stageCount}>{counts[item.id]}</small>
+          <span className={styles.stageBar} aria-hidden="true">
+            <i style={{ width: `${counts.all ? Math.round((counts[item.id] / counts.all) * 100) : 0}%` }} />
+          </span>
         </button>
       ))}
     </div>
@@ -620,7 +641,7 @@ export default function ConsoleHome() {
       <>
         {live ? (
           <section className={styles.liveCard} aria-labelledby="console-live-event">
-            <div>
+            <div className={styles.liveBody}>
               <p className={styles.liveKicker}>진행 중</p>
               <h3 id="console-live-event" className={styles.liveName}>{live.name}</h3>
               <p className={styles.liveMeta}>
@@ -628,19 +649,20 @@ export default function ConsoleHome() {
               </p>
             </div>
             <ProductLink className={styles.liveLink} href={`/console/events/${encodeURIComponent(live.id)}`}>
-              운영 현황 열기 ›
+              운영 현황 열기
+              <ArrowRightIcon />
             </ProductLink>
           </section>
         ) : null}
         {upcoming.length ? (
           <>
-            <h3 className={styles.groupTitle}>다가오는 행사</h3>
+            <h3 className={styles.groupTitle}>다가오는 행사 <span className={styles.groupCount}>{upcoming.length}</span></h3>
             {renderRows(upcoming)}
           </>
         ) : null}
         {past.length ? (
           <>
-            <h3 className={styles.groupTitle}>지난 행사</h3>
+            <h3 className={styles.groupTitle}>지난 행사 <span className={styles.groupCount}>{past.length}</span></h3>
             {renderRows(past)}
           </>
         ) : null}
@@ -655,6 +677,7 @@ export default function ConsoleHome() {
           type="button"
           className={`button button-primary ${styles.createTrigger}`}
           onClick={() => setCreateOpen(true)}
+          icon={<PlusIcon />}
         >
           새 행사 만들기
         </ProductButton>
@@ -696,12 +719,13 @@ export default function ConsoleHome() {
       ) : null}
 
       <ConsoleSection headingId="console-event-directory" title="행사 목록" description={directoryDescription} surface="plain" width="full" className={styles.directorySection}>
-        <div className={styles.tabsRow}>{stageTabs}{viewSwitch}</div>
+        <div className={styles.tabsRow}>{stageTabs}</div>
         <ConsoleToolbar
           filters={
             <div className={styles.homeFilters} data-toolbar-span="full">
               <label className={`${styles.searchField} ${styles.homeSearch}`}>
                 <span className="sr-only">행사명·고객사·장소 검색</span>
+                <span className={styles.searchGlyph} aria-hidden="true"><SearchIcon /></span>
                 <input
                   type="search"
                   placeholder="행사 검색"
@@ -710,7 +734,7 @@ export default function ConsoleHome() {
                   onChange={(event) => setQuery(event.target.value)}
                 />
               </label>
-              <label className={`${styles.workFilter} ${styles.homeWork}`}>
+              <label className={`${styles.workFilter} ${styles.homeWork}`} data-alert={pendingQueueCount > 0 ? "true" : undefined}>
                 <input
                   type="checkbox"
                   checked={needsWork}
@@ -719,6 +743,7 @@ export default function ConsoleHome() {
                 />
                 <span aria-hidden="true">승인 대기만 <b>{pendingQueueCount}</b></span>
               </label>
+              {viewSwitch}
             </div>
           }
         />

@@ -342,6 +342,12 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/Console
 - The next action sits at the row's end as amber text only when one exists (today: "승인 대기 n명 처리"). It is a sibling link, never nested in the row link.
 - The directory carries no progress numbers; showing live entry counts here needs a server change first.
 
+Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behaviour):
+
+- Stage filters are four summary cards that stay the filter: a 32px tabular count and a share-of-all bar, ink outline when chosen, a green dot and bar for 진행 중. The approval toggle is an outlined pill that turns solid ink when on and carries its count in an amber chip when work waits. 콜시트/달력 is a segmented control with icons and sits in the search row. Search is a round field with a magnifier.
+- The running event is one dark card (ink with a brand glow): a live chip, the name in white, a white "운영 현황 열기" pill.
+- A row leads with a date tile (month over day, tinted by stage), then the name with a tinted stage pill (dot plus word, aria-hidden because the stage word stays in the accessible name), the date line, the countdown (today and tomorrow are an ink pill) and an arrow. Waiting approvals are an amber pill; groups show their counts.
+
 ## 결과 보고서 확정 구성
 
 The owner approved this composition on 2026-11-15 (`apps/web/app/console/events/[id]/reports/`, option "최종안": 탭 + 문서 카드 + PPTX 내보내기). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-reports-composition.test.cjs` guards it; `tests/web-reports-presentation.test.cjs` and `tests/web-reports-archive-checklist.test.cjs` keep pinning the A4/16:9 toggle and the print-clone/checklist mechanics those files describe.

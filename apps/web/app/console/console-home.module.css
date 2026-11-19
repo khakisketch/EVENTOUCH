@@ -1,6 +1,6 @@
-/* The directory is a flat page: tabs, a quiet search, grouped rows. The only
-   bordered unit is the running event's card. Calendar and dialogs keep their
-   own styles below. */
+/* 행사 목록 (2026-11-19 재설계). 단계 탭은 필터 역할을 그대로 하는 요약 카드로,
+   진행 중 행사는 어두운 상황판으로, 행은 날짜 타일과 단계 알약으로 읽힌다.
+   주황은 "새 행사 만들기" 하나에만 쓰고, 선택은 ink, 대기 업무만 amber다. */
 .createTrigger {
   flex: none;
   align-self: center;
@@ -33,67 +33,96 @@
 
 .directory { min-width: 0; }
 
-.tabsRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s4);
-  border-bottom: 1px solid var(--line);
-}
+.tabsRow { display: block; min-width: 0; }
 
-.stageTabs { display: flex; flex-wrap: wrap; gap: var(--s5); min-width: 0; }
+/* 단계 요약 카드: 누르면 그 단계만 본다. 숫자가 크고, 막대가 전체 대비 비율을 말한다. */
+.stageTabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s3); min-width: 0; }
 .stageTab {
-  min-height: 48px;
-  padding: 0;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--muted);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "label count" "bar bar";
+  align-items: end;
+  gap: var(--s2) var(--s3);
+  min-height: 92px;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-large);
+  background: var(--paper);
+  color: var(--ink);
   font: inherit;
-  font-weight: 650;
+  text-align: left;
   cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
 }
-.stageTab small { margin-left: var(--s1); color: var(--muted); font-size: var(--small); font-weight: 600; }
-.stageTab:hover { color: var(--ink); }
-.stageTabActive { border-bottom-color: var(--ink); color: var(--ink); }
+.stageTab:hover { border-color: var(--line-strong); background: var(--surface-muted); }
+.stageTabActive, .stageTabActive:hover { border-color: var(--ink); background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink); }
+.stageLabel { grid-area: label; align-self: start; color: var(--muted); font-size: var(--small); font-weight: 650; word-break: keep-all; }
+.stageTabActive .stageLabel { color: var(--ink); }
+.stageTab[data-stage="live"] .stageLabel::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: var(--s2); border-radius: 50%; background: var(--success); }
+.stageCount { grid-area: count; margin: 0; color: var(--ink); font-size: 32px; font-weight: 750; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.stageBar { grid-area: bar; display: block; height: 6px; overflow: hidden; border-radius: 999px; background: var(--line); }
+.stageBar i { display: block; height: 100%; border-radius: inherit; background: var(--ink); opacity: 0.55; }
+.stageTabActive .stageBar i { opacity: 1; }
+.stageTab[data-stage="live"] .stageBar i { background: var(--success); opacity: 1; }
 
+/* 검색·승인 대기·보기 방식은 한 줄: 둥근 검색, 켜지는 알약, 분절 스위치. */
 .homeFilters {
   display: flex;
   align-items: center;
-  gap: var(--s4);
+  gap: var(--s3);
   flex: 1 1 640px;
   min-width: 0;
 }
-.homeSearch { flex: 1 1 280px; max-width: 420px; }
+.homeSearch { flex: 1 1 280px; max-width: 460px; }
 .homeWork { flex: none; }
+.searchField { position: relative; display: block; min-width: 0; width: 100%; margin: 0; }
+.searchField input { width: 100%; min-height: 44px; margin: 0; padding-left: calc(var(--s3) + 18px + var(--s2)); border-radius: 999px; }
+.searchGlyph { position: absolute; inset-block: 0; left: var(--s3); z-index: 1; display: inline-flex; align-items: center; color: var(--muted); pointer-events: none; }
+.searchGlyph svg { width: 18px; height: 18px; }
+
 .workFilter {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: var(--s2);
   min-height: 44px;
   margin: 0;
-  color: var(--muted);
+  padding: 0 var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
   font-weight: 650;
+  white-space: nowrap;
   cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
 }
-.workFilter b { color: var(--ink); font-weight: 800; }
-.workFilter input { width: 20px; height: 20px; margin: 0; accent-color: var(--ink); }
-.searchField { display: block; min-width: 0; width: 100%; margin: 0; }
-.searchField input { width: 100%; margin: 0; }
+.workFilter:hover { background: var(--surface-muted); }
+.workFilter b { min-width: 24px; padding: 1px 8px; border-radius: 999px; background: var(--surface-muted); color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; text-align: center; }
+.workFilter[data-alert="true"] b { background: var(--warning-soft); color: var(--warning); }
+.workFilter input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+.workFilter:has(input:checked) { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.workFilter:has(input:checked) b { background: var(--paper); color: var(--ink); }
+.workFilter:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
 
-.viewSwitch { display: inline-flex; flex: none; gap: var(--s4); }
+.viewSwitch { display: inline-flex; flex: none; margin-left: auto; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-muted); }
 .viewButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
   min-height: 44px;
-  padding: 0;
+  padding: 0 var(--s4);
   border: 0;
+  border-radius: 999px;
   background: transparent;
   color: var(--muted);
   font: inherit;
   font-weight: 650;
   cursor: pointer;
 }
+.viewButton svg { width: 18px; height: 18px; }
 .viewButton:hover { color: var(--ink); }
-.viewActive { color: var(--ink); font-weight: 800; }
+.viewActive { background: var(--paper); box-shadow: 0 0 0 1px var(--line), 0 1px 2px color-mix(in srgb, var(--ink) 14%, transparent); color: var(--ink); font-weight: 800; }
 
 .viewButton:focus-visible,
 .stageTab:focus-visible,
@@ -107,25 +136,32 @@
 
 .resultsMeta { display: flex; justify-content: flex-end; margin-bottom: var(--s3); }
 .sectionTitle { margin: var(--s5) 0 var(--s3); font-size: var(--h3); }
-.groupTitle { margin: var(--s5) 0 0; color: var(--muted); font-size: var(--small); font-weight: 700; letter-spacing: 0.04em; }
+.groupTitle { display: flex; align-items: center; gap: var(--s2); margin: var(--s5) 0 var(--s1); color: var(--ink); font-size: var(--body); font-weight: 750; letter-spacing: -0.01em; }
+.groupCount { min-width: 24px; padding: 1px 8px; border-radius: 999px; background: var(--surface-muted); color: var(--muted); font-size: var(--small); font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
 
-/* The running event: the page's one card. */
+/* 진행 중인 행사: 어두운 상황판 카드 하나. */
 .liveCard {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--s4);
-  padding: var(--s5);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-large);
-  background: var(--paper);
+  overflow: hidden;
+  padding: clamp(var(--s4), 3vw, var(--s6));
+  border: 1px solid var(--ink);
+  border-radius: 24px;
+  background: radial-gradient(420px 220px at 100% 0%, color-mix(in srgb, var(--brand) 42%, transparent), transparent 70%), var(--ink);
+  color: var(--paper);
 }
-.liveKicker { display: inline-flex; align-items: center; gap: var(--s2); margin: 0; color: var(--success); font-size: var(--small); font-weight: 800; }
-.liveKicker::before { width: 8px; height: 8px; border-radius: 50%; background: var(--success); content: ""; }
-.liveName { margin: var(--s2) 0 var(--s1); font-size: 24px; font-weight: 800; letter-spacing: -0.03em; word-break: keep-all; overflow-wrap: anywhere; }
-.liveMeta { margin: 0; color: var(--muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.liveLink { display: inline-flex; align-items: center; min-height: 44px; color: var(--brand-text); font-weight: 800; white-space: nowrap; text-decoration: none; }
-.liveLink:hover { text-decoration: underline; text-underline-offset: 3px; }
+.liveBody { display: grid; gap: var(--s1); min-width: 0; }
+.liveKicker { display: inline-flex; align-items: center; justify-self: start; gap: var(--s2); margin: 0; padding: 5px 12px; border-radius: 999px; background: color-mix(in srgb, var(--paper) 14%, transparent); color: var(--paper); font-size: var(--small); font-weight: 800; }
+.liveKicker::before { width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--success) 45%, var(--paper)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 35%, transparent); content: ""; }
+.liveName { margin: var(--s2) 0 var(--s1); color: var(--paper); font-size: clamp(24px, 3vw, 32px); font-weight: 800; line-height: 1.25; letter-spacing: -0.03em; word-break: keep-all; overflow-wrap: anywhere; }
+.liveMeta { margin: 0; color: color-mix(in srgb, var(--paper) 74%, transparent); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.liveLink { display: inline-flex; align-items: center; gap: var(--s2); min-height: 48px; padding: 0 var(--s5); border-radius: 999px; background: var(--paper); color: var(--ink); font-weight: 800; white-space: nowrap; text-decoration: none; transition: background-color 0.15s; }
+.liveLink svg { width: 18px; height: 18px; }
+.liveLink:hover { background: var(--surface-muted); }
+.liveCard .liveLink:focus-visible { outline-color: var(--paper); }
 
 .eventGrid {
   display: grid;
@@ -137,37 +173,58 @@
 }
 .eventGrid > li { min-width: 0; }
 
-/* A row: name and date line, countdown, arrow, and (only when there is one)
-   the next action at the end. */
+/* A row: date tile, name with stage pill, date line, countdown, arrow, and
+   (only when there is one) the next action as an amber pill at the end. */
 .eventRow {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 156px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   column-gap: var(--s4);
   min-width: 0;
   border-bottom: 1px solid var(--line);
+  transition: background-color 0.12s;
 }
 .eventRow:hover { background: var(--surface-muted); }
 
 .eventRowLink {
   display: grid;
   grid-column: 1;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--s4);
-  min-height: 68px;
+  min-height: 76px;
   min-width: 0;
-  padding-block: var(--s2);
+  padding-block: var(--s3);
   border-radius: var(--radius-small);
   color: inherit;
   text-decoration: none;
 }
 .eventRowMain { display: grid; gap: 2px; min-width: 0; }
 
+.dateTile {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  width: 52px;
+  height: 56px;
+  border-radius: 14px;
+  background: var(--surface-muted);
+  color: var(--ink);
+  line-height: 1.1;
+}
+.dateTile small { color: var(--muted); font-size: var(--label); font-weight: 700; }
+.dateTile b { font-size: 22px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.dateTile[data-tone="live"] { background: var(--success-soft); }
+.dateTile[data-tone="live"] small, .dateTile[data-tone="live"] b { color: var(--success); }
+.dateTile[data-tone="prep"] { background: var(--warning-soft); }
+.dateTile[data-tone="prep"] small, .dateTile[data-tone="prep"] b { color: var(--warning); }
+.dateTile[data-tone="done"] b { color: var(--muted); }
+
 .eventName {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--s2);
+  gap: var(--s1) var(--s3);
   margin: 0;
   color: var(--ink);
   font-size: var(--body);
@@ -179,13 +236,16 @@
 }
 .eventRowLink:hover .eventName { text-decoration: underline; text-underline-offset: 3px; }
 
-.stageDot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); }
+.stageChip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; background: var(--surface-muted); color: var(--muted); font-size: var(--label); font-weight: 700; white-space: nowrap; }
+.stageChip[data-tone="live"] { background: var(--success-soft); color: var(--success); }
+.stageChip[data-tone="prep"] { background: var(--warning-soft); color: var(--warning); }
+.stageDot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); }
 .stageDot[data-tone="live"] { background: var(--success); }
 .stageDot[data-tone="prep"] { background: var(--warning); }
 .stageDot[data-tone="done"] { background: var(--paper); box-shadow: inset 0 0 0 2px var(--line-strong); }
 
 .eventDateTime {
-  margin: 0 0 0 calc(9px + var(--s2));
+  margin: 0;
   color: var(--muted);
   font-size: var(--small);
   font-variant-numeric: tabular-nums;
@@ -194,7 +254,7 @@
 .eventDateTime strong { color: var(--ink); font-weight: 700; }
 
 .eventRecency { min-width: 52px; color: var(--muted); font-size: var(--small); font-weight: 650; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
-.eventRecency[data-soon] { color: var(--ink); font-weight: 800; }
+.eventRecency[data-soon] { padding: 4px 12px; border-radius: 999px; background: var(--ink); color: var(--paper); font-weight: 800; }
 .rowArrow { display: inline-flex; width: 20px; color: var(--muted); }
 .rowArrow svg { width: 20px; height: 20px; }
 .eventRowLink:hover .rowArrow { color: var(--ink); }
@@ -207,19 +267,19 @@
   justify-content: flex-end;
   grid-column: 2;
   min-height: 44px;
-  color: var(--warning);
   font-size: var(--small);
   font-weight: 750;
   white-space: nowrap;
   text-decoration: none;
 }
-.rowAction:hover { text-decoration: underline; text-underline-offset: 3px; }
+.rowActionPill { display: inline-flex; align-items: center; min-height: 36px; padding: 0 var(--s4); border: 1px solid var(--warning-line); border-radius: 999px; background: var(--warning-soft); color: var(--warning); }
+.rowAction:hover .rowActionPill { background: var(--paper); }
 
 .calendarPanel {
   margin-top: var(--s3);
   padding: var(--s4);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-large);
   background: var(--paper);
 }
 
@@ -236,6 +296,7 @@
   min-width: 8ch;
   text-align: center;
   font-size: var(--h3);
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
@@ -256,53 +317,64 @@
 
 .dayCell {
   display: grid;
+  align-content: start;
   justify-items: center;
-  gap: 2px;
-  min-height: 56px;
-  padding: var(--s1);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-small);
-  background: var(--paper);
+  gap: 4px;
+  min-height: 64px;
+  padding: var(--s2) var(--s1);
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: var(--surface-muted);
   color: var(--ink);
   font: inherit;
   cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
 }
 
 .dayCell:hover {
   border-color: var(--line-strong);
-  background: var(--surface-muted);
+  background: var(--paper);
 }
 
 .dayNumber {
+  display: inline-grid;
+  place-items: center;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 999px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
 .dayCount {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--brand-tint);
   color: var(--brand-text);
-  font-size: var(--small);
-  font-weight: 650;
+  font-size: var(--label);
+  font-weight: 750;
   font-variant-numeric: tabular-nums;
 }
 
 .dayToday .dayNumber {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .daySelected {
   border-color: var(--ink);
-  background: var(--surface-muted);
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--ink);
 }
 
 .emptyState {
   display: grid;
   justify-items: start;
   gap: var(--s2);
-  padding: var(--s5);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
+  padding: var(--s6) var(--s5);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-large);
+  background: var(--surface-muted);
 }
 
 .emptyState h3,
@@ -318,27 +390,36 @@
   color: var(--muted);
 }
 
+@media (max-width: 1100px) {
+  .stageTabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 @media (max-width: 768px) {
-  .tabsRow { flex-wrap: wrap; gap: 0 var(--s4); }
-  .stageTabs { gap: var(--s4); }
-  .homeFilters { flex-wrap: wrap; gap: var(--s2) var(--s4); }
+  .stageTabs { gap: var(--s2); }
+  .stageTab { min-height: 84px; padding: var(--s3); }
+  .stageCount { font-size: 28px; }
+  .homeFilters { flex-wrap: wrap; gap: var(--s2) var(--s3); }
   .homeSearch { flex: 1 1 100%; max-width: none; }
-  .eventRow { grid-template-columns: minmax(0, 1fr); row-gap: 0; padding-bottom: var(--s1); }
+  .viewSwitch { margin-left: 0; }
+  .eventRow { grid-template-columns: minmax(0, 1fr); row-gap: 0; padding-bottom: var(--s2); }
   .eventRowLink, .rowAction { grid-column: 1; }
-  .rowAction { justify-content: flex-start; }
-  .eventRowLink { grid-template-columns: minmax(0, 1fr) auto; }
+  .rowAction { justify-content: flex-start; margin-left: calc(52px + var(--s4)); min-height: 44px; }
+  .eventRowLink { grid-template-columns: auto minmax(0, 1fr) auto; }
   .rowArrow { display: none; }
-  .rowAction { margin-left: calc(9px + var(--s2)); min-height: 44px; }
   .liveCard { grid-template-columns: minmax(0, 1fr); padding: var(--s4); }
-  .liveName { font-size: 20px; }
+  .liveLink { justify-self: start; }
   .calendarPanel { padding: var(--s3); }
-  .dayCell { min-height: 44px; }
+  .dayCell { min-height: 52px; }
+  .dayCount { padding: 0 6px; }
 }
 
 @media (max-width: 480px) {
   .createTrigger { width: 100%; }
   .monthGrid { gap: 2px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stageTab, .workFilter, .eventRow, .dayCell, .liveLink { transition: none; }
 }
 
 .slugHint {
