@@ -38,11 +38,13 @@ test("approved clients design stays locked", () => {
   assert.doesNotMatch(list, /검색 지우기/u, "the search input clears itself");
 });
 
-test("reopened 2026-11-19: file-status strip and tinted avatars, from real data only", () => {
-  assert.match(list, /<dl className=\{styles\.stats\} aria-label="고객사 자료 현황">/u);
+test("reopened 2026-11-19: file-status counts and tinted avatars, from real data only", () => {
+  // Reopened 2026-11-20 (owner: 카드 띠도 개수 탭으로): the three cards became count tabs
+  // that also filter the loaded list locally (전체 / 로고 등록 / 사업자등록증 등록).
+  assert.match(list, /<CountTabs\s+className=\{styles\.fileTabs\}\s+ariaLabel="고객사 자료 보기"/u);
+  assert.doesNotMatch(css, /\.stat\b|\.stats\b|\.statBar/u, 'the stat cards are gone');
   assert.match(list, /state\.clients\.filter\(\(client\) => client\.logoFileId\)\.length/u);
   assert.match(list, /state\.clients\.filter\(\(client\) => client\.docFileId\)\.length/u);
-  assert.match(css, /\.stat dd\s*\{[^}]*font-size:\s*32px[^}]*tabular-nums/su);
   assert.match(list, /data-tone=\{\(client\.name\.trim\(\)\.codePointAt\(0\) \?\? 0\) % 5\}/u);
   assert.match(css, /\.clientFiles > span\[data-state="yes"\]\s*\{[^}]*var\(--success-soft\)/su);
 });

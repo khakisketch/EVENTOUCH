@@ -17,6 +17,7 @@ import CreateEventDialog from "./CreateEventDialog";
 import type { CSSProperties } from "react";
 import { cardHeaderTheme } from "./event-card-theme";
 import styles from "./console-home.module.css";
+import CountTabs from "./console-ui/CountTabs";
 import { consoleFetch, subscribeConsoleFreshness } from "../../lib/console-api";
 
 type ConsoleEvent = {
@@ -601,24 +602,13 @@ export default function ConsoleHome() {
     </div>
   );
   const stageTabs = (
-    <div className={styles.stageTabs} role="group" aria-label="진행 단계">
-      {FILTERS.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          className={`${styles.stageTab}${filter === item.id ? ` ${styles.stageTabActive}` : ""}`}
-          data-stage={item.id}
-          aria-pressed={filter === item.id}
-          onClick={() => setFilter(item.id)}
-        >
-          <span className={styles.stageLabel}>{item.label}</span>
-          <small className={styles.stageCount}>{counts[item.id]}</small>
-          <span className={styles.stageBar} aria-hidden="true">
-            <i style={{ width: `${counts.all ? Math.round((counts[item.id] / counts.all) * 100) : 0}%` }} />
-          </span>
-        </button>
-      ))}
-    </div>
+    <CountTabs
+      ariaLabel="진행 단계"
+      value={filter}
+      onChange={(key) => setFilter(key as EventFilter)}
+      dots={{ live: "live" }}
+      items={FILTERS.map((item) => ({ key: item.id, label: item.label, count: counts[item.id] }))}
+    />
   );
   // Upcoming and past read as two groups; the nearest running event leads as
   // the page's one card. Order inside a group is already set by visibleEvents.

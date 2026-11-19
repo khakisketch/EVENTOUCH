@@ -35,35 +35,7 @@
 
 .tabsRow { display: block; min-width: 0; }
 
-/* 단계 요약 카드: 누르면 그 단계만 본다. 숫자가 크고, 막대가 전체 대비 비율을 말한다. */
-.stageTabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s3); min-width: 0; }
-.stageTab {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "label count" "bar bar";
-  align-items: end;
-  gap: var(--s2) var(--s3);
-  min-height: 92px;
-  padding: var(--s3) var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-large);
-  background: var(--paper);
-  color: var(--ink);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.15s, background-color 0.15s;
-}
-.stageTab:hover { border-color: var(--line-strong); background: var(--surface-muted); }
-.stageTabActive, .stageTabActive:hover { border-color: var(--ink); background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink); }
-.stageLabel { grid-area: label; align-self: start; color: var(--muted); font-size: var(--small); font-weight: 650; word-break: keep-all; }
-.stageTabActive .stageLabel { color: var(--ink); }
-.stageTab[data-stage="live"] .stageLabel::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: var(--s2); border-radius: 50%; background: var(--success); }
-.stageCount { grid-area: count; margin: 0; color: var(--ink); font-size: 32px; font-weight: 750; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.stageBar { grid-area: bar; display: block; height: 6px; overflow: hidden; border-radius: 999px; background: var(--line); }
-.stageBar i { display: block; height: 100%; border-radius: inherit; background: var(--ink); opacity: 0.55; }
-.stageTabActive .stageBar i { opacity: 1; }
-.stageTab[data-stage="live"] .stageBar i { background: var(--success); opacity: 1; }
+/* 단계 필터는 개수 탭 한 줄(console-ui/CountTabs). 2026-11-20: 카드 띠 → 개수 탭. */
 
 /* 검색·승인 대기·보기 방식은 한 줄: 둥근 검색, 켜지는 알약, 분절 스위치. */
 .homeFilters {
@@ -125,7 +97,6 @@
 .viewActive { background: var(--paper); box-shadow: 0 0 0 1px var(--line), 0 1px 2px color-mix(in srgb, var(--ink) 14%, transparent); color: var(--ink); font-weight: 800; }
 
 .viewButton:focus-visible,
-.stageTab:focus-visible,
 .dayCell:focus-visible,
 .eventRowLink:focus-visible,
 .rowAction:focus-visible,
@@ -387,14 +358,7 @@
   color: var(--muted);
 }
 
-@media (max-width: 1100px) {
-  .stageTabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
 @media (max-width: 768px) {
-  .stageTabs { gap: var(--s2); }
-  .stageTab { min-height: 84px; padding: var(--s3); }
-  .stageCount { font-size: 28px; }
   .homeFilters { flex-wrap: wrap; gap: var(--s2) var(--s3); }
   .homeSearch { flex: 1 1 100%; max-width: none; }
   .viewSwitch { margin-left: 0; }
@@ -416,7 +380,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stageTab, .workFilter, .eventRow, .dayCell, .liveLink { transition: none; }
+  .workFilter, .eventRow, .dayCell, .liveLink { transition: none; }
 }
 
 .slugHint {
@@ -774,14 +738,7 @@
   padding-block: var(--s2) var(--s3);
 }
 
-/* 휴대폰에서는 단계 카드를 한 줄 4칸으로 줄여 첫 행사가 첫 화면에서 시작하게 한다. */
 @media (max-width: 768px) {
-  .stageTabs { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s1); }
-  .stageTab { grid-template-columns: minmax(0, 1fr); grid-template-areas: "label" "count" "bar"; align-items: start; gap: var(--s1); min-height: 72px; padding: var(--s2) var(--s2) var(--s2) var(--s3); border-radius: var(--radius-medium); }
-  .stageLabel { font-size: var(--label); white-space: nowrap; }
-  .stageTab[data-stage="live"] .stageLabel::before { width: 6px; height: 6px; margin-right: 4px; }
-  .stageCount { font-size: 24px; }
-  .stageBar { height: 4px; }
   .liveCard { gap: var(--s3); padding: var(--s4); }
   .liveName { margin: var(--s1) 0; font-size: 22px; }
   .liveLink { min-height: 44px; }

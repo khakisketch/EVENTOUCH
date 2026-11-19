@@ -125,11 +125,14 @@ test('approved messages design stays locked', () => {
   // wide writing column with a narrow preview, one orange action per step.
   assert.match(SOURCE, /surface="plain"/u, 'compose is one flat sheet, not a card panel');
   // Reopened 2026-11-19: steps are three pills; the active one is ink-filled. History gets
-  // three filter cards (전체·예약·확인 필요) and status pills with a dot beside the colour.
+  // status pills with a dot beside the colour.
+  // Reopened 2026-11-20: the three filter cards (전체·예약·확인 필요) became one row of count tabs.
   assert.match(CSS, /\.composeSteps button\[aria-current="step"\]\s*\{[^}]*border-color:\s*var\(--ink\)[^}]*background:\s*var\(--ink\)/u, 'active step is an ink-filled pill');
-  assert.match(CSS, /\.historyOverviewItem\[aria-pressed="true"\]\s*\{[^}]*border-color:\s*var\(--ink\)/u, 'the chosen history card is an ink outline');
+  assert.doesNotMatch(CSS, /\.historyOverview/u, 'the history filter cards are gone');
   assert.match(CSS, /\.status::before\s*\{[^}]*border-radius:\s*50%/u, 'status pills carry a dot, not colour alone');
-  for (const overview of ['all', 'scheduled', 'attention']) assert.match(SOURCE, new RegExp(`data-overview="${overview}"`, 'u'), `${overview} history card`);
+  assert.match(SOURCE, /<CountTabs\s+className=\{styles\.historyTabs\}\s+ariaLabel="발송 빠른 필터"/u, 'history filters are count tabs');
+  for (const key of ['all', 'scheduled', 'attention']) assert.match(SOURCE, new RegExp(`\\{ key: "${key}", label: `, 'u'), `${key} history tab`);
+  assert.match(SOURCE, /key: "attention", label: "확인 필요", count: attentionCampaigns\.length, tone: "wait"/u, 'only the waiting work is amber');
   assert.match(CSS, /\.composeGrid\[data-step="2"\] \.composeDraft\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(260px,\s*300px\)/u, 'writing column plus one narrow preview');
   assert.match(CSS, /\.inkTabs :global\(\[role="tab"\]\[aria-selected="true"\]\)\s*\{[^}]*background:\s*var\(--ink\)/u, 'history/template tabs are an ink-filled segment');
   assert.match(CSS, /\.inkLink\s*\{\s*color:\s*var\(--ink\)/u, 'utility links are ink, not orange');

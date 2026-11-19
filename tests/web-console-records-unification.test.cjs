@@ -78,7 +78,8 @@ test('toolbars separate filters, actions and conditional selection', () => {
   // screen): it still filters its loaded list locally, with no selection row.
   const rewards = read(PAGES.rewards);
   assert.doesNotMatch(rewards, /ConsoleToolbar|selection=\{/u, 'rewards has no toolbar and no selection row');
-  assert.match(rewards, /className=\{styles\.tabs\} role="group"/u, 'rewards filters through tabs');
+  // Reopened 2026-11-20: the summary tiles and underline tabs became one row of count tabs.
+  assert.match(rewards, /<CountTabs\s+className=\{styles\.rewardTabs\}\s+ariaLabel="상태별 보기"/u, 'rewards filters through count tabs');
   const participants = read(PAGES.participants);
   assert.match(participants, /filters=\{/u);
   assert.match(participants, /actions=\{/u);
@@ -471,8 +472,7 @@ test('rewards desk filters its loaded list with search and status buckets', () =
   assert.match(desk, /id="reward-search-label"/u);
   assert.match(desk, /aria-labelledby="reward-search-label"/u);
   assert.match(desk, /참가자·소속·경품명·추첨명 검색/u);
-  assert.match(desk, /id="reward-status-label"/u);
-  assert.match(desk, /aria-labelledby="reward-status-label"/u);
+  assert.match(desk, /ariaLabel="상태별 보기"/u);
   for (const label of ['전체', '확인 필요', '지급 대기', '수령 완료']) {
     assert.match(desk, new RegExp(label, 'u'), `status bucket: ${label}`);
   }

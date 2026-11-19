@@ -23,14 +23,11 @@ test("approved event list design stays locked", () => {
   assert.match(home, /className=\{styles\.liveCard\}/u);
   assert.match(home, /운영 현황 열기/u);
 
-  // Reopened 2026-11-19: stage is four filter cards (ink outline when chosen, big count,
-  // share bar); the toggle keeps its queue count.
-  assert.match(home, /role="group" aria-label="진행 단계"/u);
-  assert.match(home, /aria-pressed=\{filter === item\.id\}/u);
-  assert.match(home, /<span className=\{styles\.stageLabel\}>\{item\.label\}<\/span>\s*<small className=\{styles\.stageCount\}>\{counts\[item\.id\]\}<\/small>/u);
-  assert.match(home, /styles\.stageBar/u, "each card carries its share of the whole");
-  assert.match(css, /\.stageTabActive[^{]*\{[^}]*border-color:\s*var\(--ink\)/su, "the chosen card is an ink outline, not orange");
-  assert.match(css, /\.stageCount\s*\{[^}]*font-size:\s*32px[^}]*tabular-nums/su);
+  // Reopened 2026-11-20 (owner: 카드 띠도 개수 탭으로): the stage filter is one row of
+  // count tabs (CountTabs: aria-pressed buttons, ink fill when chosen); the toggle keeps its queue count.
+  assert.match(home, /<CountTabs\s+ariaLabel="진행 단계"\s+value=\{filter\}/u);
+  assert.match(home, /items=\{FILTERS\.map\(\(item\) => \(\{ key: item\.id, label: item\.label, count: counts\[item\.id\] \}\)\)\}/u);
+  assert.doesNotMatch(css, /\.stageTab|\.stageCount|\.stageBar/u, "the four stage cards are gone");
   assert.match(home, /aria-label=\{`승인 대기 있는 행사만 보기 \(\$\{pendingQueueCount\}건\)`\}/u);
   const order = ["styles.homeSearch", "styles.homeWork"].map((token) => home.indexOf(token));
   assert.ok(order.every((p) => p >= 0) && order[0] < order[1], "search first, then the approval toggle");

@@ -13,10 +13,8 @@ const ROOT = path.join(__dirname, '..');
 const list = fs.readFileSync(path.join(ROOT, 'apps/web/app/console/events/[id]/participants/ParticipantList.tsx'), 'utf8');
 
 test('roster presets reuse the select setters and stay discoverable', () => {
-  assert.match(list, /role="group" aria-label="빠른 상태 보기"/u, 'presets are a labelled group');
-  assert.match(list, /aria-pressed=\{presetActive\}/u, 'active preset is announced');
-  assert.match(list, /const presetActive = !ticketFilter && statusFilter === preset\.status && attendanceFilter === preset\.attendance/u, 'active tracking includes both original filters and ticket review');
-  assert.match(list, /value=\{ticketFilter \? "custom" : rosterPresets\.find/u, 'mobile preset distinguishes a ticket filter from 전체');
+  assert.match(list, /ariaLabel="빠른 상태 보기"/u, 'presets are a labelled group (CountTabs renders aria-pressed buttons)');
+  assert.match(list, /value=\{ticketFilter \? null : rosterPresets\.find\(\(preset\) => statusFilter === preset\.status && attendanceFilter === preset\.attendance\)\?\.key \?\? null\}/u, 'active tracking includes both original filters; a ticket filter presses no tab, never 전체');
   assert.match(list, /function applyRosterPreset\(preset: RosterPreset\) \{\s*setStatusFilter\(preset\.status\);\s*setAttendanceFilter\(preset\.attendance\);\s*setTicketFilter\(""\);\s*\}/u, 'presets write through the same setters and clear the ticket-only filter');
   for (const [key, status, attendance] of [['pending', 'PENDING', ''], ['approved', 'APPROVED', ''], ['not-entered', 'APPROVED', 'NOT_ENTERED'], ['all', '', '']]) {
     assert.match(list, new RegExp(`key: "${key}", label: "[^"]+", status: "${status}", attendance: "${attendance}"`, 'u'), `${key} preset keeps its filter pair`);
@@ -34,14 +32,12 @@ test('approved roster design stays locked', () => {
   // One flat ledger: no card box around controls or list.
   assert.match(css, /\.workbenchControls \{[^}]*background: transparent/su, 'controls are not a card');
   assert.match(css, /\.rosterSection \{[^}]*border: 0;[^}]*box-shadow: none/su, 'list is not a card');
-  // Reopened 2026-11-19 (participants 시안 A): the tabs are funnel cards that are
-  // still the filter. Ink marks the chosen view, amber only waiting work, never orange.
-  assert.match(css, /\.quickPresets \{ display: grid; grid-template-columns: repeat\(4/u, 'view filters are a four-card funnel');
-  assert.match(css, /\.quickPresets :global\(\.pill\[aria-pressed="true"\]\) \{[^}]*border-color: var\(--ink\)/su, 'chosen card is ink');
-  assert.doesNotMatch(css, /\.quickPresets[^{]*\{[^}]*var\(--brand/su, 'funnel cards carry no orange');
-  assert.match(list, /className=\{styles\.funnelCount\}/u, 'cards show a large count');
-  assert.match(list, /<span className="sr-only">\{preset\.label\} · \{preset\.count\}명<\/span>/u, 'the card keeps its full accessible name');
-  assert.match(list, /data-alert=\{preset\.key === "pending" && preset\.count > 0/u, 'waiting approvals are flagged');
+  // Reopened 2026-11-20 (owner: 카드 띠도 개수 탭으로): the funnel cards are one row of count
+  // tabs that are still the filter. Amber badge only for 승인 대기, never orange.
+  assert.match(list, /<CountTabs\s+className=\{styles\.quickPresets\}/u, 'view filters are one row of count tabs');
+  assert.doesNotMatch(css, /\.funnel/u, 'the funnel cards are gone');
+  assert.match(list, /srLabel: `\$\{preset\.label\} · \$\{preset\.count\}명`/u, 'the tab keeps its full accessible name');
+  assert.match(list, /tone: preset\.key === "pending" \? "wait" : "default"/u, 'waiting approvals are flagged amber');
   // Search, filter and tools carry icons; rows carry an initial avatar; the bulk bar actions carry icons.
   assert.match(list, /<span className=\{styles\.searchGlyph\} aria-hidden="true"><SearchIcon \/><\/span>/u, 'search has a magnifier');
   assert.match(list, /<FilterIcon \/>\s*<span>필터/u, 'filter control has a filter icon');

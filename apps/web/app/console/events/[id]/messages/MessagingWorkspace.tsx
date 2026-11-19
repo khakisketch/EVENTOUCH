@@ -28,6 +28,7 @@ import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleRefreshButton from "../../../console-ui/ConsoleRefreshButton";
 import { MessageIcon, UsersIcon } from "../../../admin-icons";
 import ConsoleSectionNav, { requestConsoleTask } from "../../../console-ui/ConsoleSectionNav";
+import CountTabs from "../../../console-ui/CountTabs";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { consoleFetch, subscribeConsoleFreshness } from "../../../../../lib/console-api";
 import { hasValidScheduledInstant, isOverdueManualMessage, messageNeedsAttention } from "../../../../../lib/message-attention";
@@ -2809,6 +2810,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   const newOrgSimOnly = state.kind === "ready" && isNewOrgSimOnly(state.integrations);
   const blockedById = new Map(state.messageSchedule?.blocked.map(item => [item.id, item]));
   const attentionCampaigns = state.campaigns.filter((campaign) => needsAttention(campaign, nowMs) || blockedById.has(campaign.id));
+  const scheduledCount = state.campaigns.filter((campaign) => campaign.status === "SCHEDULED").length;
   const overdueCampaigns = state.campaigns.filter((campaign) => isOverdue(campaign, nowMs));
   const historyScope = attentionOnly ? attentionCampaigns : state.campaigns;
   const historySearch = historyQuery.trim().toLocaleLowerCase("ko-KR");
@@ -3686,27 +3688,29 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 <p>{messagesLocked ? "등록된 발송 기록은 이곳에서 확인합니다." : "메시지를 작성하고 수신자를 선택하면 발송 전에 내용을 확인할 수 있습니다."}</p>
               </div>
             ) : (<>
-            <div className={styles.historyOverview} role="group" aria-label="발송 빠른 필터">
-              <ProductButton type="button" className={styles.historyOverviewItem} variant="ghost" data-overview="all" aria-pressed={!attentionOnly && historyStatus === "ALL"} onClick={() => {
-                setAttentionOnly(false);
-                setHistoryStatus("ALL"); setHistoryQuery(""); setHistoryLimit(10);
-              }}>
-                <span>전체 발송</span> <strong>{state.campaigns.length}건</strong>
-              </ProductButton>
-              <ProductButton type="button" className={styles.historyOverviewItem} variant="ghost" data-overview="scheduled" aria-pressed={!attentionOnly && historyStatus === "SCHEDULED"} onClick={() => {
-                setAttentionOnly(false);
-                setHistoryStatus((current) => !attentionOnly && current === "SCHEDULED" ? "ALL" : "SCHEDULED");
-                setHistoryQuery(""); setHistoryLimit(10); setHistoryOpen(true);
-              }}>
-                <span>예약된 발송</span> <strong>{state.campaigns.filter((campaign) => campaign.status === "SCHEDULED").length}건</strong>
-              </ProductButton>
-              <ProductButton type="button" className={styles.historyOverviewItem} variant="ghost" data-overview="attention" data-alert={attentionCampaigns.length > 0 ? "true" : undefined} aria-pressed={attentionOnly} onClick={() => {
-                setAttentionOnly((current) => !current);
-                setHistoryStatus("ALL"); setHistoryQuery(""); setHistoryLimit(10); setHistoryOpen(true);
-              }}>
-                <span>확인 필요한 발송</span> <strong>{attentionCampaigns.length}건</strong>
-              </ProductButton>
-            </div>
+            <CountTabs
+              className={styles.historyTabs}
+              ariaLabel="발송 빠른 필터"
+              value={attentionOnly ? "attention" : historyStatus === "ALL" ? "all" : historyStatus === "SCHEDULED" ? "scheduled" : null}
+              onChange={(key) => {
+                if (key === "all") {
+                  setAttentionOnly(false);
+                  setHistoryStatus("ALL"); setHistoryQuery(""); setHistoryLimit(10);
+                } else if (key === "scheduled") {
+                  setAttentionOnly(false);
+                  setHistoryStatus((current) => !attentionOnly && current === "SCHEDULED" ? "ALL" : "SCHEDULED");
+                  setHistoryQuery(""); setHistoryLimit(10); setHistoryOpen(true);
+                } else {
+                  setAttentionOnly((current) => !current);
+                  setHistoryStatus("ALL"); setHistoryQuery(""); setHistoryLimit(10); setHistoryOpen(true);
+                }
+              }}
+              items={[
+                { key: "all", label: "전체", count: state.campaigns.length, srLabel: `전체 발송 ${state.campaigns.length}건` },
+                { key: "scheduled", label: "예약", count: scheduledCount, srLabel: `예약된 발송 ${scheduledCount}건` },
+                { key: "attention", label: "확인 필요", count: attentionCampaigns.length, tone: "wait", srLabel: `확인 필요한 발송 ${attentionCampaigns.length}건` },
+              ]}
+            />
             <div className={styles.historyFilters}>
               <label><span className="sr-only">발송 제목 검색</span><input id="message-history-search" type="search" placeholder="발송 제목 검색" value={historyQuery} onChange={(event) => { setHistoryQuery(event.target.value); setHistoryLimit(10); }} /></label>
               <label><span className="sr-only">발송 상태</span><select id="message-history-status" value={historyStatus} onChange={(event) => { setHistoryStatus(event.target.value); setHistoryLimit(10); }}>

@@ -28,71 +28,10 @@
   color: var(--danger);
 }
 
-/* ---- oversight: one summary card, then a flat ledger by urgency ---- */
+/* ---- oversight: one row of count tabs (2026-11-20, console-ui/CountTabs), then a flat ledger by urgency ---- */
 .oversight { display: grid; gap: var(--s2); }
-
-.summary {
-  display: grid;
-  grid-template-columns: 140px minmax(0, 1fr);
-  align-items: center;
-  gap: var(--s6);
-  margin-bottom: var(--s4);
-  padding: var(--s5);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-}
-
-.ring { position: relative; width: 140px; height: 140px; }
-.ring svg { width: 140px; height: 140px; transform: rotate(-90deg); }
-.ring circle { fill: none; stroke-width: 12; }
-.ringTrack { stroke: var(--chart-track); }
-.ringDone { stroke: var(--success); stroke-linecap: round; }
-.ringText { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
-.ringText b { font-size: 34px; letter-spacing: -0.04em; line-height: 1; }
-.ringText b span { color: var(--muted); font-size: 18px; font-weight: 650; }
-.ringText small { margin-top: var(--s1); color: var(--muted); font-size: 12.5px; font-weight: 650; }
-
-.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s4); }
-
-.tile {
-  display: grid;
-  gap: var(--s1);
-  justify-items: start;
-  padding: var(--s4);
-  border: 0;
-  border-radius: var(--radius-large);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.tile[data-tone="attention"] { background: var(--danger-soft); color: var(--danger); }
-.tile[data-tone="waiting"] { background: var(--warning-soft); color: var(--warning); }
-.tile[data-tone="received"] { background: var(--success-soft); color: var(--success); }
-.tile[data-tone="zero"] { background: color-mix(in srgb, var(--ink) 4%, var(--paper)); color: var(--muted); }
-.tile[aria-pressed="true"] { box-shadow: inset 0 0 0 2px currentColor; }
-.tile:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.tileHead { display: inline-flex; align-items: center; gap: var(--s2); font-size: 13px; font-weight: 700; }
-.tileHead svg, .groupTitle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-.tile b { font-size: 36px; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.tile small { font-size: 12.5px; font-weight: 600; }
-
-.tabs { display: flex; gap: var(--s5); border-bottom: 1px solid var(--line); }
-.tabs button {
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-weight: 650;
-  cursor: pointer;
-}
-.tabs button[aria-pressed="true"] { border-bottom-color: var(--ink); color: var(--ink); }
-.tabs small { margin-left: var(--s1); font-size: inherit; font-weight: 600; font-variant-numeric: tabular-nums; }
-.tabs button:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.rewardTabs { margin-bottom: var(--s2); }
+.groupTitle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 
 .search { display: block; margin-top: var(--s2); max-width: 420px; }
 .search input { width: 100%; min-height: 44px; }
@@ -196,32 +135,13 @@ button.rowGo[disabled], button.rowGo[aria-disabled="true"] { background: color-m
 .rowFoot :global(.product-action) { min-height: 44px; }
 
 @media (max-width: 768px) {
-  .summary { grid-template-columns: 1fr; justify-items: center; padding: var(--s4); gap: var(--s4); }
-  .tiles { width: 100%; gap: var(--s2); }
-  .tile { padding: var(--s3); }
-  .tile b { font-size: 28px; }
-  .tile small { display: none; }
-  .tabs { gap: var(--s4); overflow: hidden; }
   .rowSummary[data-has-action="true"] { padding-right: 0; grid-template-columns: 44px minmax(0, 1fr) auto; }
   .rowGo { position: static; margin: 0 0 var(--s3) calc(44px + var(--s4)); }
   .rowBody { padding-left: 0; }
 }
 
-/* Reopened 2026-11-19: tiles carry a share bar, the search shows its glyph,
-   group headings read as sections (mark + count), rows are divided by hairlines. */
-.summary { box-shadow: var(--shadow-soft); }
-.tile { transition: box-shadow 0.12s; }
-.tile:hover { box-shadow: inset 0 0 0 1px currentColor; }
-.tile[aria-pressed="true"] { box-shadow: inset 0 0 0 2px currentColor; }
-.tile b { font-size: 40px; }
-.tileBar { display: block; width: 100%; height: 6px; margin-block: var(--s1); border-radius: 999px; background: color-mix(in srgb, currentColor 16%, transparent); overflow: hidden; }
-.tileBar i { display: block; height: 100%; border-radius: inherit; background: currentColor; }
-
-.tabs { gap: var(--s4); }
-.tabs button { display: inline-flex; align-items: center; gap: var(--s2); }
-.tabs small { margin-left: 0; min-width: 24px; padding: 0 var(--s2); border-radius: 999px; background: var(--surface-muted); box-shadow: inset 0 0 0 1px var(--line); text-align: center; font-size: var(--label); line-height: 22px; }
-.tabs button[aria-pressed="true"] small { background: var(--ink); color: var(--paper); box-shadow: none; }
-
+/* Reopened 2026-11-19: the search shows its glyph, group headings read as sections
+   (mark + count), rows are divided by hairlines. */
 .search { position: relative; }
 .searchGlyph { position: absolute; inset-block: 0; left: var(--s3); z-index: 1; display: inline-flex; align-items: center; color: var(--muted); pointer-events: none; }
 .searchGlyph svg { width: 18px; height: 18px; }
@@ -237,10 +157,3 @@ button.rowGo[disabled], button.rowGo[aria-disabled="true"] { background: color-m
 .rowSummary { padding-block: var(--s3); }
 .rowMain > b { font-size: var(--h3); }
 .rowLine { font-size: var(--small); }
-
-.tabs button { white-space: nowrap; word-break: keep-all; }
-@media (max-width: 768px) {
-  .tabs { gap: var(--s3); overflow-x: auto; scrollbar-width: none; }
-  .tabs button { gap: var(--s1); font-size: var(--small); }
-  .tabs small { min-width: 20px; padding: 0 6px; line-height: 20px; }
-}

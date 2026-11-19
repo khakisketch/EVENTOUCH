@@ -13,7 +13,6 @@
 .workbenchControls :global([role="status"]) ~ :global(.astryx-button) { color: var(--ink); background: var(--paper); border-color: var(--line-strong); }
 .workbenchControls :global([role="status"]) ~ :global(.astryx-button:hover) { background: var(--surface-muted); }
 .searchField { min-width: 0; }
-.mobilePresetPicker { display: none; }
 .workbenchControls .searchField[data-toolbar-span="full"] { flex: 0 1 360px; }
 .workbenchControls .filterToggle { flex: 0 1 auto; }
 /* View tabs live with the records they filter, not in the query toolbar:
@@ -116,9 +115,7 @@
 
 @media (max-width: 768px) {
   .workbenchControls .searchField[data-toolbar-span="full"] { flex: 1 1 150px; }
-  .quickPresets { display: none; }
   .rosterTabs { align-items: center; gap: var(--s2); border-bottom: 0; }
-  .rosterTabs .mobilePresetPicker { display: none; flex: 1 1 100%; }
   .rosterMeta { flex: 1 1 100%; margin-left: 0; min-height: 44px; padding-inline: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; padding: var(--s2) 0; background: transparent; gap: 0 var(--s2); }
   .filterToggle { flex-wrap: wrap; justify-content: space-between; }
   .filterToggleSummary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -130,11 +127,12 @@
   /* Pair the four utilities 2×2 so the first row of people stays in view:
      the shared 2-col rule misses CSS-module hashing, so the workbench owns
      its own pairing. Every target keeps its 44px floor. */
-  .workbenchControls span[data-toolbar-inline].utilityPair { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2); width: 100%; align-items: stretch; }
+  .workbenchControls span[data-toolbar-inline].utilityPair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); width: 100%; align-items: stretch; }
   .workbenchControls .utilityPair > :global(.astryx-button) { width: 100%; min-width: 0; }
   /* Three utilities left: the primary owns the second row full-width so the
      first row of people stays in view on phones. */
-  .workbenchControls .utilityPair > :global([data-variant="primary"]) { grid-column: 2; grid-row: 2; width: 100%; min-width: 76px; }
+  .workbenchControls .utilityPair > :global([data-variant="primary"]) { grid-column: 1 / -1; grid-row: 2; width: 100%; min-width: 76px; }
+  .workbenchControls .utilityPair > :global([data-variant="ghost"]) { grid-column: 2; grid-row: 1; }
   /* Narrow meta reads in two deterministic rows — count + refresh share
      the first, the scope pair owns the second — so the count never
      collapses into a syllable-wide column beside nowrap controls. */
@@ -161,8 +159,7 @@
   .paginationBar { padding: var(--s2) 0; }
   .paginationActions { margin-left: 0; width: 100%; }
   .paginationPosition { font-size: var(--label); }
-  .workbenchControls .utilityPair .mobilePresetPicker { grid-column: 1; grid-row: 1; width: 100%; min-width: 0; }
-  .workbenchControls .rosterUtilities { grid-column: 2; grid-row: 1; justify-self: stretch; }
+  .workbenchControls .rosterUtilities { grid-column: 1; grid-row: 1; justify-self: stretch; }
   .workbenchControls .rosterUtilities > summary { width: 100%; }
   .workbenchControls .utilityPair > :global([data-variant="secondary"]) { grid-column: 1; grid-row: 2; width: 100%; min-width: 0; justify-content: center; }
 }
@@ -248,8 +245,6 @@
    count and action names remain available to assistive technology. */
 .shortAction, .metaShort { display: none; }
 @media (max-width: 768px) {
-  .utilityPair .mobilePresetPicker { display: block; min-width: 0; margin: 0; }
-  .mobilePresetPicker select { width: 100%; min-width: 0; min-height: 44px; padding-inline: var(--s2); font-size: var(--small); }
   .rosterUtilities summary { min-width: 64px; padding-inline: var(--s2); font-size: var(--small); }
   .utilityPair > :global([data-variant="primary"]) { min-width: 72px; padding-inline: var(--s2); }
   .longAction { display: none; }
@@ -257,15 +252,6 @@
   .metaLong { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .rosterMeta > :global(.astryx-button) { min-width: 44px; padding-inline: var(--s2); }
   .mobileScopeSingle { padding-inline: var(--s2); }
-}
-
-/* At narrow phone widths the preset names its complete attendance scope.
-   Give it room beside the compact tools control instead of clipping the
-   meaningful part of the selected value to make space for three columns. */
-@media (max-width: 360px) {
-  .workbenchControls span[data-toolbar-inline].utilityPair {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
 }
 
 .groupConflict {
@@ -278,27 +264,11 @@
 .groupConflictList { margin: var(--s2) 0; padding-left: var(--s4); }
 .groupConflictList li + li { margin-top: var(--s1); }
 
-/* Redesign 2026-11-19 (A): the view tabs become a funnel — each card is the
-   filter and shows how much of the whole it holds. Ink marks the chosen view;
-   amber is reserved for work waiting on a person (승인 대기). */
-.quickPresets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s3); width: 100%; min-width: 0; padding: var(--s3) 0; }
-.quickPresets :global(.pill) {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "label count" "bar bar"; align-items: end; gap: var(--s2) var(--s3);
-  min-height: 92px; padding: var(--s3) var(--s4); border: 1px solid var(--line); border-radius: var(--radius-large);
-  background: var(--paper); color: var(--ink); font-weight: 500; text-align: left; cursor: pointer; transition: border-color .15s, background-color .15s;
-}
-.quickPresets :global(.pill:hover) { border-color: var(--line-strong); background: var(--surface-muted); color: var(--ink); }
-.quickPresets :global(.pill[aria-pressed="true"]) { border-color: var(--ink); background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink); color: var(--ink); }
-.funnelLabel { grid-area: label; align-self: start; color: var(--muted); font-size: var(--small); font-weight: 600; word-break: keep-all; }
-.quickPresets :global(.pill[aria-pressed="true"]) .funnelLabel { color: var(--ink); }
-.funnelCount { grid-area: count; display: inline-flex; align-items: baseline; gap: 2px; font-size: 32px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
-.funnelCount small { color: var(--muted); font-size: var(--small); font-weight: 600; letter-spacing: 0; }
-.funnelBar { grid-area: bar; display: block; height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
-.funnelBar i { display: block; height: 100%; min-width: 0; border-radius: inherit; background: var(--ink); opacity: .55; }
-.quickPresets :global(.pill[aria-pressed="true"]) .funnelBar i { opacity: 1; }
-.quickPresets :global(.pill[data-alert="true"]) .funnelBar i { background: var(--warning); opacity: 1; }
-.quickPresets :global(.pill[data-alert="true"]) .funnelLabel::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: var(--s2); border-radius: 999px; background: var(--warning); vertical-align: baseline; }
+/* Reopened 2026-11-20: the funnel cards became one row of count tabs
+   (console-ui/CountTabs). Ink marks the chosen view; amber is reserved for
+   work waiting on a person (승인 대기). */
 .rosterTabs { border-bottom: 0; }
+.quickPresets { padding: var(--s3) 0 var(--s2); }
 
 /* Controls: the search field and the filter control carry an icon so they read
    as a search and a filter, not as two same-looking boxes. */
@@ -344,9 +314,7 @@
 .detailActions > :global(.astryx-button:hover:not(:disabled)) { background: var(--surface-muted); }
 .detailActions select { flex: none; width: 100%; margin-top: var(--s3); }
 
-@media (max-width: 1100px) { .quickPresets { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (prefers-reduced-motion: reduce) { .quickPresets :global(.pill), .rosterTable tbody tr { transition: none; } }
-@media (max-width: 768px) { .quickPresets { display: none; } }
+@media (prefers-reduced-motion: reduce) { .rosterTable tbody tr { transition: none; } }
 .selectionWorkbench .selectionActions > :global([data-bulk="primary"]:disabled) { background: transparent; color: var(--side-muted); border-color: var(--side-muted); opacity: 1; }
 .workbenchControls .utilityPair > :global([data-variant="ghost"]) { border: 1px solid var(--line-strong); border-radius: 999px; background: var(--paper); }
 

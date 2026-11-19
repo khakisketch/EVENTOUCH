@@ -24,10 +24,12 @@ function propertyAt(selector, property, width) {
 }
 for (const width of [320, 390]) {
   test(`mobile roster uses an intentional two-row action grid at ${width}px`, () => {
-    assert.equal(propertyAt('.workbenchControls span[data-toolbar-inline].utilityPair', 'grid-template-columns', width), 'minmax(0, 1fr) auto');
-    assert.equal(propertyAt('.workbenchControls .utilityPair > :global([data-variant="secondary"])', 'grid-row', width), '2', 'import stays visible beside creation, not as a third cramped filter');
-    assert.equal(propertyAt('.workbenchControls .utilityPair > :global([data-variant="secondary"])', 'grid-column', width), '1');
+    // Reopened 2026-11-20: the native status picker left the toolbar (count tabs carry the
+    // views), so tools and import share row 1 and creation owns row 2.
+    assert.equal(propertyAt('.workbenchControls span[data-toolbar-inline].utilityPair', 'grid-template-columns', width), 'repeat(2, minmax(0, 1fr))');
+    assert.equal(propertyAt('.workbenchControls .utilityPair > :global([data-variant="ghost"])', 'grid-row', width), '1', 'import sits beside the tools, not as a third cramped filter');
+    assert.equal(propertyAt('.workbenchControls .utilityPair > :global([data-variant="ghost"])', 'grid-column', width), '2');
     assert.equal(propertyAt('.workbenchControls .utilityPair > :global([data-variant="primary"])', 'grid-row', width), '2');
-    assert.equal(propertyAt('.workbenchControls .utilityPair > :global([data-variant="primary"])', 'grid-column', width), '2');
+    assert.equal(propertyAt('.workbenchControls .utilityPair > :global([data-variant="primary"])', 'grid-column', width), '1 / -1');
   });
 }

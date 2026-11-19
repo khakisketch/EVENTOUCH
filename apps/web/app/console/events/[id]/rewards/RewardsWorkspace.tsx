@@ -23,6 +23,7 @@ import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib
 import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 import { rewardBucket, rewardParticipantIssue } from "../../../../../lib/reward-status";
 import styles from "./rewards.module.css";
+import CountTabs from "../../../console-ui/CountTabs";
 
 // Reward handout desk: registration happens on the participant row
 // (경품 등록), and this screen is where staff/operators mark handout or
@@ -575,8 +576,6 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
   const countReceived = state.rewards.filter((reward) => reward.status === "RECEIVED").length;
   const countCancelled = state.rewards.filter((reward) => reward.status === "CANCELLED").length;
   const activeTotal = state.rewards.length - countCancelled;
-  const ringLength = 390;
-  const ringOffset = ringLength - (activeTotal ? (countReceived / activeTotal) * ringLength : 0);
   const buckets: Array<{ key: Bucket; label: string; rewards: Reward[] }> = [
     { key: "attention" as const, label: "확인 필요" },
     { key: "waiting" as const, label: "지급 대기" },
@@ -653,32 +652,19 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
         </div>
       ) : (
         <section className={styles.oversight} aria-label="경품 지급 목록">
-          <div className={styles.summary}>
-            <div className={styles.ring} role="img" aria-label={`지급 완료 ${countReceived}건 / 전체 ${activeTotal}건`}>
-              <svg viewBox="0 0 140 140" aria-hidden="true"><circle className={styles.ringTrack} cx="70" cy="70" r="62" /><circle className={styles.ringDone} cx="70" cy="70" r="62" strokeDasharray={ringLength} strokeDashoffset={ringOffset} /></svg>
-              <div className={styles.ringText} aria-hidden="true"><b>{countReceived}<span> / {activeTotal}</span></b><small>지급 완료</small></div>
-            </div>
-            <div className={styles.tiles} role="group" aria-label="상태별 보기">
-              {([
-                ["attention", "확인 필요", "alert", countAttention, "지급이 막힌 건"],
-                ["waiting", "지급 대기", "clock", countWaiting, "건네줄 차례"],
-                ["received", "수령 완료", "check", countReceived, "지급 끝난 건"],
-              ] as const).map(([key, label, glyph, count, hint]) => (
-                <button key={key} type="button" className={styles.tile} data-tone={count === 0 ? "zero" : key} aria-pressed={rewardStatusFilter === key} onClick={() => setRewardStatusFilter(rewardStatusFilter === key ? "" : key)}>
-                  <span className={styles.tileHead}><RewardGlyph name={glyph} />{label}</span>
-                  <b>{count}</b>
-                  <span className={styles.tileBar} aria-hidden="true"><i style={{ width: `${activeTotal ? Math.round((count / activeTotal) * 100) : 0}%` }} /></span>
-                  <small>{hint}</small>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className={styles.tabs} role="group" aria-labelledby="reward-status-label">
-            <span className="sr-only" id="reward-status-label">상태별 보기</span>
-            {([["", "전체", state.rewards.length], ["attention", "확인 필요", countAttention], ["waiting", "지급 대기", countWaiting], ["received", "수령 완료", countReceived]] as const).map(([value, label, count]) => (
-              <button key={value || "all"} type="button" aria-pressed={rewardStatusFilter === value} onClick={() => setRewardStatusFilter(value)}>{label}<small>{count}</small></button>
-            ))}
-          </div>
+          <CountTabs
+            className={styles.rewardTabs}
+            ariaLabel="상태별 보기"
+            value={rewardStatusFilter || "all"}
+            onChange={(key) => setRewardStatusFilter(key === "all" ? "" : key)}
+            aside={<span role="img" aria-label={`지급 완료 ${countReceived}건 / 전체 ${activeTotal}건`}>지급 완료 {countReceived} / {activeTotal}</span>}
+            items={[
+              { key: "all", label: "전체", count: state.rewards.length },
+              { key: "attention", label: "확인 필요", count: countAttention, tone: "wait" },
+              { key: "waiting", label: "지급 대기", count: countWaiting, tone: "wait" },
+              { key: "received", label: "수령 완료", count: countReceived },
+            ]}
+          />
           {state.rewards.length > 8 || rewardQuery ? (
             <label className={styles.search}>
               <span className="sr-only" id="reward-search-label">경품 검색</span>

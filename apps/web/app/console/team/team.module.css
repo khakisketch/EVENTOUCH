@@ -457,24 +457,21 @@
 .tabsHost :global([role="tab"][aria-selected="true"]) { background: var(--ink); color: var(--paper); font-weight: 750; }
 .tabsHost :global([role="tab"]:hover:not([aria-selected="true"])) { background: var(--paper); color: var(--ink); }
 
-.teamStats { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: var(--s3); margin: 0 0 var(--s4); }
-.teamStats:has(> :nth-child(2):last-child) { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
-.statTotal, .statWait, .statOff { display: grid; align-content: space-between; gap: var(--s2); min-height: 112px; padding: var(--s3) var(--s4); border: 1px solid var(--line); border-radius: var(--radius-large); background: var(--paper); }
-.statTotal > span:first-child, .statWait > span, .statOff > span { color: var(--muted); font-size: var(--small); font-weight: 650; word-break: keep-all; }
-.statTotal strong, .statWait strong, .statOff strong { display: inline-flex; align-items: baseline; gap: 2px; font-size: 32px; font-weight: 750; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.statTotal strong small, .statWait strong small, .statOff strong small { color: var(--muted); font-size: var(--small); font-weight: 600; letter-spacing: 0; }
-.statWait[data-alert="true"] { border-color: var(--warning-line); background: linear-gradient(180deg, var(--warning-soft), var(--paper) 85%); }
-.statWait[data-alert="true"] strong { color: var(--warning); }
-.statOff[data-alert="true"] strong { color: var(--muted); }
-.roleBar { display: flex; gap: 3px; height: 8px; overflow: hidden; border-radius: 999px; }
-.roleBar i { min-width: 8px; border-radius: 999px; background: var(--line-strong); }
-.roleBar i[data-role="AGENCY"], .roleLegend li[data-role="AGENCY"]::before { background: var(--ink); }
-.roleBar i[data-role="MANAGER"], .roleLegend li[data-role="MANAGER"]::before { background: var(--info); }
-.roleBar i[data-role="STAFF"], .roleLegend li[data-role="STAFF"]::before { background: var(--success); }
-.roleLegend { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4); margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--small); font-weight: 600; }
-.roleLegend li { display: inline-flex; align-items: center; gap: var(--s2); }
-.roleLegend li::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
-.roleLegend b { color: var(--ink); font-variant-numeric: tabular-nums; }
+/* Reopened 2026-11-20 (owner: 카드 띠 → 개수 탭): the status cards are one slim line of
+   counts. They summarise the loaded accounts; the list below is not filtered by them. */
+.teamSummary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); margin: 0 0 var(--s3); padding: 0; list-style: none; color: var(--muted); font-size: var(--small); font-weight: 600; }
+.teamSummary li { display: inline-flex; align-items: baseline; gap: var(--s1); min-width: 0; }
+.teamSummary b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.teamSummary small { margin-left: -2px; font-size: inherit; font-weight: 600; }
+.sumTotal { color: var(--ink); }
+.sumTotal b { font-size: var(--h3); letter-spacing: -0.02em; }
+.sumRole { align-items: center; }
+.sumRole::before { content: ""; width: 8px; height: 8px; margin-right: var(--s1); border-radius: 50%; background: var(--line-strong); align-self: center; }
+.sumRole[data-role="AGENCY"]::before { background: var(--ink); }
+.sumRole[data-role="MANAGER"]::before { background: var(--info); }
+.sumRole[data-role="STAFF"]::before { background: var(--success); }
+.sumFlag[data-tone="wait"] { align-items: center; padding: 2px var(--s3); border-radius: 999px; background: var(--warning-soft); box-shadow: inset 0 0 0 1px var(--warning-line); color: var(--warning); }
+.sumFlag[data-tone="wait"] b { color: var(--warning); }
 
 .peopleList { border-top: 0; }
 .personRow { grid-template-columns: 48px minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.8fr) 20px; min-height: 76px; padding-inline: var(--s2); }
@@ -495,10 +492,6 @@
 
 @media (max-width: 768px) {
   .tabsHost :global([role="tab"]) { padding: 0 var(--s3); }
-  .teamStats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); }
-  .teamStats > :first-child { grid-column: 1 / -1; }
-  .teamStats:has(> :nth-child(2):last-child) { grid-template-columns: minmax(0, 1fr); }
-  .statTotal, .statWait, .statOff { min-height: 92px; padding: var(--s3); }
   .personRow { padding-inline: 0; }
 }
 

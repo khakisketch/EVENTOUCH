@@ -1,7 +1,7 @@
 'use strict';
 
 // Approved rewards composition (2026-11-14): an oversight screen, not a
-// handout desk. One summary card (progress ring + three status tiles), then a
+// handout desk. One row of count tabs (was: summary card with ring + tiles), then a
 // flat ledger by urgency with recipient avatars. Change it only on a new owner
 // decision.
 
@@ -16,9 +16,12 @@ const rewards = read('RewardsWorkspace.tsx');
 const css = read('rewards.module.css');
 
 test('approved rewards design stays locked: summary card, then a ledger by urgency', () => {
-  assert.match(rewards, /className=\{styles\.summary\}/u);
-  assert.match(rewards, /styles\.ring/u, 'progress ring');
-  for (const tone of ['attention', 'waiting', 'received']) assert.match(rewards, new RegExp(`"${tone}"`, 'u'), `${tone} tile`);
+  // Reopened 2026-11-20 (owner: 카드 띠도 개수 탭으로): the summary card (ring + three tiles) is one
+  // row of count tabs; the progress stays a quiet "지급 완료 n / m" text beside it.
+  assert.match(rewards, /<CountTabs\s+className=\{styles\.rewardTabs\}\s+ariaLabel="상태별 보기"/u);
+  assert.doesNotMatch(rewards, /styles\.ring|styles\.tile|styles\.summary/u, 'no ring or tiles');
+  for (const tone of ['attention', 'waiting', 'received']) assert.match(rewards, new RegExp(`key: "${tone}"`, 'u'), `${tone} tab`);
+  assert.match(rewards, /key: "attention", label: "확인 필요", count: countAttention, tone: "wait"/u, 'blocked prizes are waiting work (amber)');
   assert.match(rewards, /label: "확인 필요"[\s\S]*label: "지급 대기"[\s\S]*label: "완료·취소"/u, 'groups read 확인 필요 → 지급 대기 → 완료·취소');
   assert.match(rewards, /className=\{styles\.avatar\}/u, 'rows lead with the recipient, not a prize icon');
   assert.match(rewards, /data-tone=\{unassigned \? "none"/u, 'an unassigned company win shows a dashed "?"');
@@ -46,11 +49,9 @@ test('state is shape + colour, tokens only, 44px targets, one line per row on ph
   assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.rowGo\s*\{\s*position:\s*static/u);
 });
 
-// Reopened 2026-11-19: same composition, stronger presentation. Tiles carry a
-// share bar, the search a glyph, group headings a mark and count.
-test('Reopened 2026-11-19: tiles show a share bar, search has a glyph, groups have a mark and count', () => {
-  assert.match(rewards, /className=\{styles\.tileBar\}/u);
-  assert.match(rewards, /Math\.round\(\(count \/ activeTotal\) \* 100\)/u, 'the bar is count over non-cancelled total, never invented');
+// Reopened 2026-11-19: same composition, stronger presentation. The search carries a
+// glyph, group headings a mark and count (the tile share bars went with the tiles on 2026-11-20).
+test('Reopened 2026-11-19: search has a glyph, groups have a mark and count', () => {
   assert.match(rewards, /<SearchIcon \/>/u);
   assert.match(rewards, /className=\{styles\.groupCount\} aria-hidden="true"/u, 'the count chip does not change the heading name');
   assert.match(css, /\.row \+ \.row \{ border-top: 1px solid var\(--line\); \}/u);

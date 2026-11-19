@@ -251,6 +251,8 @@ The owner approved this composition on 2026-11-13 (`apps/web/app/console/events/
 - Mobile rows are two lines: name, then company, group and presence. The phone number stays in the detail dialog.
 
 - 2026-11-19 data entry: 소속 in add/edit suggests the spellings already used in this event and offers a one-tap fix when a new name looks like a well-used one (삼상전자 → 삼성전자); nothing is changed on its own. A malformed email from an import is kept and flagged "이메일 확인 필요" on the row and in the details.
+- Reopened 2026-11-20 (owner: 카드 띠도 개수 탭으로): 카드 띠 → 개수 탭. The four-card funnel is one row of count tabs (전체 · 승인 대기 · 참가 확정 · 확정자 중 미입장) with the same filter setters; the amber badge is 승인 대기 only, and phones show the same row (the native picker is gone). Shared component `console-ui/CountTabs` (segmented control, pill count badges, ink fill when chosen, amber badge only for waiting work, scrolls inside its own box on phones). Big-number cards and rings stay only on 운영 현황, 현장 모드, 결과 보고서 and 기간 분석.
+
 ## 현장 사진 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/photos/`, option A with a Google-Photos-style gallery). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-photos-composition.test.cjs` guards it. This is the agency's own evidence archive (8 shooting sections, per-section ZIP), separate from attendee photos.
@@ -278,6 +280,7 @@ Reopened 2026-11-19 (owner: 얇은 선·작은 글씨·필터가 다른 버튼�
 - 상태 타일은 큰 숫자(40px)와 전체(취소 제외) 대비 비율 막대를 가진다. 선택하면 같은 색 외곽선, 0건이면 회색.
 - 상태 탭의 건수는 알약 칩이고 선택된 탭의 칩은 잉크 채움이다. 검색창은 돋보기 글리프가 있는 둥근 입력이다.
 - 그룹 제목은 상태색 원형 마크, 굵은 제목, 오른쪽 큰 건수와 상태색 2px 밑줄이다. 행은 헤어라인으로 나뉘고 경품명이 18px로 커졌다.
+- Reopened 2026-11-20 (owner: 카드 띠도 개수 탭으로): 카드 띠 → 개수 탭. The progress ring and the three status tiles are replaced by one row of count tabs (전체 · 확인 필요 · 지급 대기 · 수령 완료; 확인 필요 and 지급 대기 amber) with a quiet "지급 완료 n / m" text; the urgency-grouped ledger below is unchanged. Shared component `console-ui/CountTabs` (segmented control, pill count badges, ink fill when chosen, amber badge only for waiting work, scrolls inside its own box on phones). Big-number cards and rings stay only on 운영 현황, 현장 모드, 결과 보고서 and 기간 분석.
 
 ## 추첨·투표 확정 구성
 
@@ -377,6 +380,7 @@ Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behav
 - 발송 기록 / 템플릿 관리 are a segmented pill control; the chosen segment is ink-filled. Step 1/2/3 of the composer are pills with numbered dots; the current step is ink-filled.
 - History opens with three filter cards (전체 발송, 예약된 발송, 확인 필요한 발송: label over a 32px count, ink outline when chosen, amber only for 확인 필요 when it is above zero). Rows keep the table but show channel and recipient count as quiet chips and status as a pill with a dot.
 - Recipient selection shows the chosen count large on a soft band; each recipient row starts with a status-tinted initial avatar. The step recipient summary is a soft band with the count in heading size.
+- Reopened 2026-11-20 (owner: 카드 띠도 개수 탭으로): 카드 띠 → 개수 탭. The three history filter cards are one row of count tabs (전체 · 예약 · 확인 필요; 확인 필요 amber) above the search; accessible names stay "전체 발송 N건" etc. Shared component `console-ui/CountTabs` (segmented control, pill count badges, ink fill when chosen, amber badge only for waiting work, scrolls inside its own box on phones). Big-number cards and rings stay only on 운영 현황, 현장 모드, 결과 보고서 and 기간 분석.
 
 ## 현장 운영 확정 구성
 
@@ -418,6 +422,7 @@ Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behav
 - Stage filters are four summary cards that stay the filter: a 32px tabular count and a share-of-all bar, ink outline when chosen, a green dot and bar for 진행 중. The approval toggle is an outlined pill that turns solid ink when on and carries its count in an amber chip when work waits. 콜시트/달력 is a segmented control with icons and sits in the search row. Search is a round field with a magnifier.
 - The running event is one dark card (ink with a brand glow): a live chip, the name in white, a white "운영 현황 열기" pill.
 - A row leads with a date tile (month over day, tinted by stage), then the name with a tinted stage pill (dot plus word, aria-hidden because the stage word stays in the accessible name), the date line, the countdown (today and tomorrow are an ink pill) and an arrow. Waiting approvals are an amber pill; groups show their counts.
+- Reopened 2026-11-20 (owner: 카드 띠도 개수 탭으로): 카드 띠 → 개수 탭. The four stage cards are one row of count tabs (전체 · 준비 중 · 진행 중 with a green dot · 종료); the dark running-event card and the date-tile rows are unchanged. Shared component `console-ui/CountTabs` (segmented control, pill count badges, ink fill when chosen, amber badge only for waiting work, scrolls inside its own box on phones). Big-number cards and rings stay only on 운영 현황, 현장 모드, 결과 보고서 and 기간 분석.
 
 ## 결과 보고서 확정 구성
 
@@ -455,6 +460,7 @@ Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behav
 
 - Three read-only cards top the list: 전체 고객사, 로고 등록, 사업자등록증 등록 (32px counts with a share-of-all bar, computed from the loaded clients). Search is a round field with a magnifier; 고객사 등록 carries a plus.
 - A row is still flat with hairlines and no controls, but the initial sits in a 48px tinted tile (five soft tones picked from the name) and each file state is a pill: green-tinted with a green dot when registered, a hollow dot on a soft pill when not. The word and the screen-reader state are unchanged.
+- Reopened 2026-11-20 (owner: 카드 띠도 개수 탭으로): 카드 띠 → 개수 탭. The three read-only cards are count tabs (전체 · 로고 등록 · 사업자등록증 등록) that now also filter the loaded list locally together with the search. Shared component `console-ui/CountTabs` (segmented control, pill count badges, ink fill when chosen, amber badge only for waiting work, scrolls inside its own box on phones). Big-number cards and rings stay only on 운영 현황, 현장 모드, 결과 보고서 and 기간 분석.
 
 ## 팀·권한 확정 구성
 
@@ -471,6 +477,7 @@ Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behav
 
 - The three tabs are a segmented pill control (ink-filled choice). 구성원 opens with a status strip from the loaded accounts: 전체 구성원 with a role-share bar and legend (조직 소유자 ink, 조직 구성원 blue, 현장 스태프 green), 대기 중인 초대 (owners only, the single amber card when above zero) and 사용 중지.
 - Rows stay flat hairline rows with one control, but the initial is a role-tinted circle (owner ink, member blue, staff green, invitation dashed), the role is a pill and 대기 중 / 사용 중지 are tinted pills. 구성원 초대 carries a plus. The gauge bars are rounder and thicker; the drawer, role flow and write contracts are unchanged.
+- Reopened 2026-11-20 (owner: 카드 띠도 개수 탭으로): 카드 띠 → 개수 탭. The status cards and role-share bar are one slim summary line (전체 구성원, role counts with dots, 대기 중인 초대 in an amber pill for owners, 사용 중지); it summarises, the list is not filtered by it.
 
 ## 명단 가져오기 확정 구성
 

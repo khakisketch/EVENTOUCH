@@ -195,16 +195,20 @@ async function main() {
         await firstRow.waitFor({ state: 'visible' });
         const rowTop = (await firstRow.boundingBox()).y;
         check(`mobile roster starts within the working viewport at ${width}`, rowTop <= 600, rowTop);
-        const picker = page.getByRole('combobox', { name: '빠른 상태 보기', exact: true });
+        const presets = page.getByRole('group', { name: '빠른 상태 보기', exact: true });
         const tools = page.locator('summary[aria-label="내보내기"]');
         const add = page.getByRole('button', { name: '참가자 추가', exact: true });
-        const controls = await Promise.all([picker.boundingBox(), tools.boundingBox(), add.boundingBox(), page.getByRole('button', { name: '명단 가져오기', exact: true }).boundingBox()]);
+        const controls = await Promise.all([tools.boundingBox(), add.boundingBox(), page.getByRole('button', { name: '명단 가져오기', exact: true }).boundingBox()]);
         check(`mobile roster keeps lookup controls together and touch sized at ${width}`,
           controls.every(box => box && box.width >= 44 && box.height >= 44 && box.x >= 0 && box.x + box.width <= width)
           && Math.max(...controls.map(box => box.y)) - Math.min(...controls.map(box => box.y)) <= 52, controls);
-        await picker.selectOption('pending');
-        check(`mobile status picker changes the current view at ${width}`, await picker.inputValue() === 'pending');
-        await picker.selectOption('all');
+        // Reopened 2026-11-20: phones keep the same count-tab row, scrolling inside its own box.
+        const presetBox = await presets.boundingBox();
+        check(`mobile count tabs stay inside the viewport at ${width}`, presetBox && presetBox.x >= 0 && presetBox.x + presetBox.width <= width, presetBox);
+        check(`mobile count tabs are touch sized at ${width}`, (await presets.getByRole('button').evaluateAll(nodes => nodes.every(node => node.getBoundingClientRect().height >= 44))));
+        await presets.getByRole('button', { name: /^승인 대기 · \d+명$/ }).click();
+        check(`mobile count tab changes the current view at ${width}`, await presets.getByRole('button', { name: /^승인 대기 · \d+명$/ }).getAttribute('aria-pressed') === 'true');
+        await presets.getByRole('button', { name: /^전체 · \d+명$/ }).click();
         const scope = page.locator('details').filter({ has: page.getByText('여러 명 선택', { exact: true }) });
         const summary = scope.locator('summary');
         await summary.focus();

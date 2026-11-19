@@ -45,6 +45,7 @@ import BulkCancelDialog from "./BulkCancelDialog";
 import TicketReissue from "./TicketReissue";
 import ReviewedExit from "./ReviewedExit";
 import CancellationConflictReview from "./CancellationConflictReview";
+import CountTabs from "../../../console-ui/CountTabs";
 
 // Shared dirty-dismiss copy for the roster dialogs: the guard asks on
 // navigation, canClose asks on Escape/backdrop/Cancel.
@@ -1989,14 +1990,6 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           }
           actions={
             <span data-toolbar-inline className={styles.utilityPair}>
-              <label className={styles.mobilePresetPicker}>
-                <span className="sr-only">빠른 상태 보기</span>
-                <select value={ticketFilter ? "custom" : rosterPresets.find((preset) => statusFilter === preset.status && attendanceFilter === preset.attendance)?.key ?? "custom"}
-                  onChange={(event) => { const preset = rosterPresets.find((item) => item.key === event.target.value); if (preset) applyRosterPreset(preset); }}>
-                  <option value="custom" disabled>직접 설정한 보기</option>
-                  {rosterPresets.map((preset) => <option key={preset.key} value={preset.key}>{preset.label} · {preset.count}명</option>)}
-                </select>
-              </label>
               <details className={styles.rosterUtilities} ref={rosterUtilitiesRef}>
                 <summary aria-label="내보내기"><DownloadIcon /><span className={styles.longAction}>내보내기</span><span className={styles.shortAction} aria-hidden="true">내보내기</span></summary>
                 <div className={styles.utilityMenu}>
@@ -2112,27 +2105,13 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         className={styles.rosterSection}
       >
       <div className={styles.rosterTabs}>
-      <div className={styles.quickPresets} role="group" aria-label="빠른 상태 보기">
-        {rosterPresets.map((preset) => {
-          const presetActive = !ticketFilter && statusFilter === preset.status && attendanceFilter === preset.attendance;
-          return (
-            <button
-              key={preset.key}
-              type="button"
-              className="pill"
-              data-preset={preset.key}
-              data-alert={preset.key === "pending" && preset.count > 0 ? "true" : undefined}
-              aria-pressed={presetActive}
-              onClick={() => applyRosterPreset(preset)}
-            >
-              <span className="sr-only">{preset.label} · {preset.count}명</span>
-              <span className={styles.funnelLabel} aria-hidden="true">{preset.label}</span>
-              <span className={styles.funnelCount} aria-hidden="true">{preset.count}<small>명</small></span>
-              <span className={styles.funnelBar} aria-hidden="true"><i style={{ width: `${presetCounts.all ? Math.round((preset.count / presetCounts.all) * 100) : 0}%` }} /></span>
-            </button>
-          );
-        })}
-      </div>
+      <CountTabs
+        className={styles.quickPresets}
+        ariaLabel="빠른 상태 보기"
+        value={ticketFilter ? null : rosterPresets.find((preset) => statusFilter === preset.status && attendanceFilter === preset.attendance)?.key ?? null}
+        onChange={(key) => { const preset = rosterPresets.find((item) => item.key === key); if (preset) applyRosterPreset(preset); }}
+        items={rosterPresets.map((preset) => ({ key: preset.key, label: preset.label, count: preset.count, tone: preset.key === "pending" ? "wait" : "default", srLabel: `${preset.label} · ${preset.count}명` }))}
+      />
       {ticketFilter && visiblePeople.some((person) => person.ticketReview === "unknown") ? <ConsoleFeedback kind="warning">일부 티켓의 상태를 불러오지 못해 확인 목록에 함께 표시했습니다. 최신 서버 연결을 확인한 뒤 명단을 새로고침하세요.</ConsoleFeedback> : null}
       <div className={styles.rosterMeta}>
       <p className="participant-count" role="status">

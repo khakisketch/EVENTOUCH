@@ -44,11 +44,13 @@ test("approved team design stays locked: three tabs, flat people rows, no button
   assert.match(team, /className="button button-primary"\s+disabled=\{hasUnconfirmedInvite \|\| refreshState !== "idle"\}/u);
 });
 
-test("reopened 2026-11-19: status strip from loaded accounts, role-tinted avatars and pills", () => {
-  assert.match(team, /className=\{teamStyles\.teamStats\} role="group" aria-label="구성원 현황"/u);
+test("reopened 2026-11-19: status counts from loaded accounts, role-tinted avatars and pills", () => {
+  // Reopened 2026-11-20 (owner: 카드 띠도 개수 탭으로): the three cards are one slim summary line.
+  assert.match(team, /<ul className=\{teamStyles\.teamSummary\} aria-label="구성원 현황">/u);
+  assert.doesNotMatch(css, /\.teamStats|\.statTotal|\.statWait|\.statOff|\.roleBar/u, "the status cards are gone");
   assert.match(team, /state\.accounts\.filter\(\(account\) => account\.role === role\)\.length/u);
-  assert.match(team, /state\.isOwner \? \(\s*<div className=\{teamStyles\.statWait\}/u, "the invitation count is owner-only like the queue");
-  assert.match(css, /\.statWait\[data-alert="true"\]\s*\{[^}]*var\(--warning-line\)/su, "waiting invitations are the only amber card");
+  assert.match(team, /state\.isOwner \? \(\s*<li className=\{teamStyles\.sumFlag\}/u, "the invitation count is owner-only like the queue");
+  assert.match(css, /\.sumFlag\[data-tone="wait"\]\s*\{[^}]*var\(--warning-line\)/su, "waiting invitations are the only amber count");
   assert.match(css, /\.rolePill\[data-role="AGENCY"\]\s*\{[^}]*background:\s*var\(--ink\)/su);
   assert.match(css, /\.avatar\[data-role="MANAGER"\]/u);
   assert.doesNotMatch(css, /\.(?:personRow|permRow)\s*\{[^}]*(?:box-shadow|border-radius)/su, "a row is still not a card");

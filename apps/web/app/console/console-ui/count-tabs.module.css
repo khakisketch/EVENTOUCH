@@ -1,0 +1,36 @@
+/* Count tabs (owner decision 2026-11-20: 카드 띠 → 개수 탭). One segmented row
+   with pill count badges replaces the strip of big-number cards on list
+   screens. Selected = ink fill (same pattern as the messages and team tabs);
+   amber badge only for waiting work. */
+.row { display: flex; align-items: center; gap: var(--s3); min-width: 0; max-width: 100%; }
+.track {
+  display: inline-flex; gap: 2px; min-width: 0; max-width: 100%; padding: 3px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface-muted);
+  overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+}
+.track::-webkit-scrollbar { display: none; }
+.tab {
+  position: relative; /* keeps the sr-only name inside the scrolling track */
+  display: inline-flex; flex: 0 0 auto; align-items: center; gap: var(--s2);
+  min-height: 44px; padding: 0 var(--s3) 0 var(--s4); border: 0; border-radius: 999px;
+  background: transparent; color: var(--muted); font: inherit; font-size: var(--small); font-weight: 650;
+  white-space: nowrap; word-break: keep-all; cursor: pointer; transition: background-color .15s, color .15s;
+}
+.tab:hover:not([aria-pressed="true"]) { background: var(--paper); color: var(--ink); }
+.tab[aria-pressed="true"] { background: var(--ink); color: var(--paper); font-weight: 750; }
+.tab:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.label { display: inline-flex; align-items: center; gap: var(--s2); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+.badge {
+  min-width: 26px; padding: 0 var(--s2); border-radius: 999px; background: var(--line); color: var(--ink);
+  font-style: normal; font-size: var(--label); font-weight: 750; line-height: 22px; text-align: center; font-variant-numeric: tabular-nums;
+}
+.tab[aria-pressed="true"] .badge { background: var(--paper); color: var(--ink); }
+.tab[data-tone="wait"] .badge { background: var(--warning-soft); color: var(--warning); box-shadow: inset 0 0 0 1px var(--warning-line); }
+.aside { flex: 0 1 auto; min-width: 0; color: var(--muted); font-size: var(--small); font-variant-numeric: tabular-nums; }
+@media (max-width: 768px) {
+  .row { flex-wrap: wrap; gap: var(--s2); }
+  .track { width: 100%; }
+  .tab { padding-inline: var(--s3) var(--s2); }
+}
+@media (prefers-reduced-motion: reduce) { .tab { transition: none; } }

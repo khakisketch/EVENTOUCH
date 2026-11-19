@@ -21,6 +21,7 @@ import ConsoleDialog from "../console-ui/ConsoleDialog";
 import ConsoleFormActions from "../console-ui/ConsoleFormActions";
 import ConsoleSection from "../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../console-ui/ConsoleStatePanel";
+import CountTabs from "../console-ui/CountTabs";
 import { UNCONFIRMED_WRITE_CLOSE_MESSAGE, useConsoleDraftGuard } from "../console-draft-guard";
 import consoleUiStyles from "../console-ui/console-ui.module.css";
 import styles from "./clients.module.css";
@@ -88,6 +89,7 @@ export default function ClientsList() {
   // Local-only directory search (no API): name/contact/email match with a
   // visible count and clear. File and write paths below are untouched.
   const [clientQuery, setClientQuery] = useState("");
+  const [fileFilter, setFileFilter] = useState<"all" | "logo" | "doc">("all");
   // Opening snapshot for true-diff dirt: a pristine open form is not dirty,
   // only an actual change versus these values (or unsettled/pending work).
   const draftBaselineRef = useRef<Draft | null>(null);
@@ -475,11 +477,12 @@ export default function ClientsList() {
   // Local filter only: no API, no new detail area. The count stays visible so
   // a filtered list never reads as the whole directory.
   const clientSearch = clientQuery.trim().toLocaleLowerCase("ko-KR");
-  const visibleClients = state.kind === "ready" && clientSearch
+  const visibleClients = state.kind === "ready"
     ? state.clients.filter((client) =>
-        `${client.name} ${client.contact} ${client.email}`.toLocaleLowerCase("ko-KR").includes(clientSearch)
+        (!clientSearch || `${client.name} ${client.contact} ${client.email}`.toLocaleLowerCase("ko-KR").includes(clientSearch))
+        && (fileFilter === "all" || (fileFilter === "logo" ? Boolean(client.logoFileId) : Boolean(client.docFileId)))
       )
-    : state.kind === "ready" ? state.clients : [];
+    : [];
 
   const writeLocked = otherClientReceipt || Boolean(pendingAttachment);
   const draftClient = draft?.id ? state.clients.find((item) => item.id === draft.id) ?? null : null;
@@ -596,22 +599,20 @@ export default function ClientsList() {
     >
       <ConsoleSection headingId="client-list-heading" title="고객사 목록" surface="plain" width="full" className={styles.listSection}>
         {state.clients.length ? (
-          <dl className={styles.stats} aria-label="고객사 자료 현황">
-            {([
-              ["all", "전체 고객사", state.clients.length],
-              ["logo", "로고 등록", state.clients.filter((client) => client.logoFileId).length],
-              ["doc", "사업자등록증 등록", state.clients.filter((client) => client.docFileId).length],
-            ] as const).map(([key, label, count]) => (
-              <div key={key} className={styles.stat} data-key={key}>
-                <dt>{label}</dt>
-                <dd>{count}<small>개</small></dd>
-                <span className={styles.statBar} aria-hidden="true"><i style={{ width: `${Math.round((count / state.clients.length) * 100)}%` }} /></span>
-              </div>
-            ))}
-          </dl>
+          <CountTabs
+            className={styles.fileTabs}
+            ariaLabel="고객사 자료 보기"
+            value={fileFilter}
+            onChange={(key) => setFileFilter(key as "all" | "logo" | "doc")}
+            items={[
+              { key: "all", label: "전체", count: state.clients.length, srLabel: `전체 고객사 · ${state.clients.length}개` },
+              { key: "logo", label: "로고 등록", count: state.clients.filter((client) => client.logoFileId).length, srLabel: `로고 등록 · ${state.clients.filter((client) => client.logoFileId).length}개` },
+              { key: "doc", label: "사업자등록증 등록", count: state.clients.filter((client) => client.docFileId).length, srLabel: `사업자등록증 등록 · ${state.clients.filter((client) => client.docFileId).length}개` },
+            ]}
+          />
         ) : null}
         <p className={`participant-count ${styles.count}`} role="status">
-          {clientSearch
+          {clientSearch || fileFilter !== "all"
             ? `검색 결과 ${visibleClients.length}개 / 전체 ${state.clients.length}개`
             : `전체 ${state.clients.length}개`}
         </p>

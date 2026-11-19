@@ -568,33 +568,16 @@ export default function TeamWorkspace() {
       <div className={teamStyles.memberLayout} data-open={memberRow && state.canManageTeam ? "" : undefined}>
       <ConsoleSection headingId="team-members" title="구성원" surface="plain" width="full" className={teamStyles.hiddenHead}>
         {state.accounts.length ? (
-          <div className={teamStyles.teamStats} role="group" aria-label="구성원 현황">
-            <div className={teamStyles.statTotal}>
-              <span>전체 구성원</span>
-              <strong>{state.accounts.length}<small>명</small></strong>
-              <span className={teamStyles.roleBar} aria-hidden="true">
-                {(["AGENCY", "MANAGER", "STAFF"] as const).map((role) => {
-                  const count = state.accounts.filter((account) => account.role === role).length;
-                  return count ? <i key={role} data-role={role} style={{ flexGrow: count }} /> : null;
-                })}
-              </span>
-              <ul className={teamStyles.roleLegend}>
-                {(["AGENCY", "MANAGER", "STAFF"] as const).map((role) => (
-                  <li key={role} data-role={role}>{roleLabel(role)} <b>{state.accounts.filter((account) => account.role === role).length}</b></li>
-                ))}
-              </ul>
-            </div>
+          <ul className={teamStyles.teamSummary} aria-label="구성원 현황">
+            <li className={teamStyles.sumTotal}>전체 구성원 <b>{state.accounts.length}</b><small>명</small></li>
+            {(["AGENCY", "MANAGER", "STAFF"] as const).map((role) => (
+              <li key={role} className={teamStyles.sumRole} data-role={role}>{roleLabel(role)} <b>{state.accounts.filter((account) => account.role === role).length}</b></li>
+            ))}
             {state.isOwner ? (
-              <div className={teamStyles.statWait} data-alert={state.invitations.length > 0 ? "true" : undefined}>
-                <span>대기 중인 초대</span>
-                <strong>{state.invitations.length}<small>건</small></strong>
-              </div>
+              <li className={teamStyles.sumFlag} data-tone={state.invitations.length > 0 ? "wait" : undefined}>대기 중인 초대 <b>{state.invitations.length}</b><small>건</small></li>
             ) : null}
-            <div className={teamStyles.statOff} data-alert={state.accounts.some((account) => !account.active) ? "true" : undefined}>
-              <span>사용 중지</span>
-              <strong>{state.accounts.filter((account) => !account.active).length}<small>명</small></strong>
-            </div>
-          </div>
+            <li className={teamStyles.sumFlag}>사용 중지 <b>{state.accounts.filter((account) => !account.active).length}</b><small>명</small></li>
+          </ul>
         ) : null}
         {state.isOwner && state.invitations.length ? (
           <ConsoleSection headingId="pending-invites" title="대기 중인 초대" surface="plain" width="full">

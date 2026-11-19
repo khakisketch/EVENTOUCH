@@ -423,8 +423,9 @@ test('web-console-home-is-a-card-grid-with-a-calendar-date-filter', () => {
   assert.match(home, /styles\.dayCell/);
   assert.match(home, /selectedDate/);
   // The four stable filters are ink-underline tabs with their counts.
-  assert.match(home, /role="group" aria-label="진행 단계"/);
-  assert.match(home, /aria-pressed=\{filter === item\.id\}/);
+  // Reopened 2026-11-20: the stage filter is CountTabs (role="group" aria-pressed buttons).
+  assert.match(home, /<CountTabs\s+ariaLabel="진행 단계"/);
+  assert.match(home, /value=\{filter\}\s+onChange=\{\(key\) => setFilter\(key as EventFilter\)\}/);
   assert.match(home, /FILTERS\.map\(\(item\) =>/);
   assert.match(home, /counts\[item\.id\]/);
   // Triage: the pending queue outranks the calendar when asked. Counts come

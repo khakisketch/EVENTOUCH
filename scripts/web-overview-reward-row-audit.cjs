@@ -62,8 +62,9 @@ async function main() {
     // 2) the same prizes are counted on the destination screen.
     await link.click();
     await page.waitForURL(/\/rewards$/);
-    await page.getByRole('heading', { level: 1, name: '경품 지급 현황', exact: true }).waitFor();
+    await page.getByRole('heading', { level: 1, name: '경품 지급', exact: true }).waitFor();
     await page.getByRole('region', { name: '경품 지급 목록' }).waitFor();
+    // Reopened 2026-11-20: the tiles became count tabs; the accessible name is still label + count.
     await page.getByRole('button', { name: /^확인 필요\s*3$/ }).waitFor();
     await page.getByRole('button', { name: /^지급 대기\s*1$/ }).waitFor();
     await page.screenshot({ path: path.join(out, 'rewards-1280.png'), fullPage: true });
