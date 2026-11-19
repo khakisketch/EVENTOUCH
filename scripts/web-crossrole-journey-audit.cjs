@@ -191,7 +191,8 @@ async function main() {
     await reg.getByText('승인 대기').first().waitFor({ timeout: 15000 });
     check('signup A lands on a pending receipt', true);
     check('pending receipt keeps Korean words intact at 390', (await splitKoreanWords(reg.getByText('신청이 접수되었습니다. 아래에서 진행 상태를 확인하세요.', { exact: true }))).length === 0);
-    check('pending explanation keeps Korean words intact at 390', (await splitKoreanWords(reg.getByText('신청이 접수되었습니다. 운영자 승인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다.', { exact: true }))).length === 0);
+    // Reopened 2026-11-20: the pending copy is a title (신청이 접수되었습니다.) plus this explanation line.
+    check('pending explanation keeps Korean words intact at 390', (await splitKoreanWords(reg.getByText('운영자 승인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다.', { exact: true }))).length === 0);
     await reg.screenshot({ path: path.join(OUT, 'a-ticket-pending-390-first.png') });
     await reg.screenshot({ path: path.join(OUT, 'a-ticket-pending-390-full.png'), fullPage: true });
     await geometry(reg, 'pending ticket 390', null);
@@ -223,7 +224,7 @@ async function main() {
     await regB.getByRole('button', { name: '신청하기', exact: true }).click();
     await regB.getByText('승인 대기').first().waitFor({ timeout: 15000 });
     check('pending receipt keeps Korean words intact at 320', (await splitKoreanWords(regB.getByText('신청이 접수되었습니다. 아래에서 진행 상태를 확인하세요.', { exact: true }))).length === 0);
-    check('pending explanation keeps Korean words intact at 320', (await splitKoreanWords(regB.getByText('신청이 접수되었습니다. 운영자 승인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다.', { exact: true }))).length === 0);
+    check('pending explanation keeps Korean words intact at 320', (await splitKoreanWords(regB.getByText('운영자 승인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다.', { exact: true }))).length === 0);
     await regB.screenshot({ path: path.join(OUT, 'b-ticket-pending-320-first.png') });
     await regB.screenshot({ path: path.join(OUT, 'b-ticket-pending-320-full.png'), fullPage: true });
     await geometry(regB, 'pending ticket 320', null);
@@ -697,7 +698,7 @@ async function main() {
     await lonePage.screenshot({ path: path.join(OUT, 'staff-hub-empty-320.png') });
     // Hub empty @320: wording keeps its source/contact/retry and wraps by
     // word (eojeol), never split mid-syllable like 문/의 or 스태/프.
-    check('hub empty names the assignment source and a contact', (await lonePage.getByText(/운영 콘솔.*현장 운영.*스태프 배정/).count()) > 0 && (await lonePage.getByText(/초대 메일·행사 안내의 문의처/).count()) > 0);
+    check('hub empty names the assignment source and a contact', (await lonePage.getByText(/운영 콘솔.*입장·스태프.*스태프 배정/).count()) > 0 && (await lonePage.getByText(/초대 메일·행사 안내의 문의처/).count()) > 0);
     check('hub empty retry stays findable', await lonePage.getByRole('button', { name: '다시 불러오기', exact: true }).isVisible());
     const hubKeepAll = await lonePage.locator('section.state-panel p').evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).wordBreak));
     check('hub empty wraps by word at 320 (keep-all)', hubKeepAll.length > 0 && hubKeepAll.every((mode) => mode === 'keep-all'));
@@ -1108,7 +1109,7 @@ async function main() {
       await page.getByRole('button', { name: '신청하기', exact: true }).click();
       await page.getByText('승인 대기').first().waitFor({ timeout: 15000 });
       check('combined receipt names both gates',
-        (await page.getByText('신청이 접수되었습니다. 운영자 승인과 결제 확인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다.').count()) === 1);
+        (await page.getByText('운영자 승인과 결제 확인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다.').count()) === 1);
       check('combined pending shows no entry QR', (await page.getByRole('img', { name: /님의 행사 입장 및 퇴장용 QR/ }).count()) === 0);
       await page.screenshot({ path: path.join(OUT, 'k-ticket-combined-pending-390.png'), fullPage: true });
       const stored = (await snapshot()).participants.find((p) => p.phone === '01055500602');
