@@ -43,7 +43,7 @@ const CONSOLE = [
   ['messages', '/console/events/:id/messages', '#history-heading'],
   ['operations', '/console/events/:id/operations', '#ops-desks'],
   ['live', '/console/events/:id/live', '[data-console-page="live"]'],
-  ['programs', '/console/events/:id/programs', 'button:has-text("콘텐츠 만들기")'],
+  ['programs', '/console/events/:id/programs', 'button:has-text("이벤트 만들기")'],
   ['draws', '/console/events/:id/draws', 'section[aria-label="무대"]'],
   ['photos', '/console/events/:id/photos', '#evidence-photo-sections'],
   ['content', '/console/events/:id/content', '#content-panel'],
@@ -225,7 +225,7 @@ async function main() {
               // 무대 ID는 선택 종류마다 달라지므로 이름 있는 영역과 별도 선택기를 확인한다.
               const picker = page.getByRole('heading', { name: '무대 선택', exact: true }).locator('xpath=following-sibling::ul[1]');
               await picker.getByRole('button', { pressed: true }).waitFor({ state: 'visible' });
-              const prerequisite = page.getByRole('link', { name: '참여 콘텐츠에서 추첨 무대를 만들고 공개하세요.', exact: true });
+              const prerequisite = page.getByRole('link', { name: '참여 이벤트에서 추첨 무대를 만들고 공개하세요.', exact: true });
               check(`draws@${width}: prerequisite action is separate from its explanation`,
                 await prerequisite.isVisible() && await prerequisite.evaluate(link => !link.closest('p')));
               check(`draws@${width}: prerequisite retains its destination`,

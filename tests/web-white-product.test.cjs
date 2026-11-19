@@ -160,7 +160,7 @@ test('draws and rewards markers wait on the actual named regions', () => {
   assert.doesNotMatch(audit, /#draws-programs|#rewards-list/);
   assert.ok(audit.includes("getByRole('heading', { name: '무대 선택', exact: true })"));
   assert.ok(audit.includes("picker.getByRole('button', { pressed: true })"));
-  assert.match(audit, /참여 콘텐츠에서 추첨 무대를 만들고 공개하세요/u);
+  assert.match(audit, /참여 이벤트에서 추첨 무대를 만들고 공개하세요/u);
 });
 
 test('white product readiness follows loaded content, design, settings and reports rather than closed editors', () => {

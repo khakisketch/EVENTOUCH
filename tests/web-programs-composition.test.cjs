@@ -1,6 +1,10 @@
 'use strict';
 
-// Reopened 2026-11-19: a four-card status strip (진행 중·준비 중·종료·받은 응답, big counts) tops the
+// Reopened 2026-11-20 (참여 이벤트): the programs screen is the home of every participation event. One list holds the
+// modules (투표·퀴즈·Q&A·설문·참여 사진·게시판 and 간단 추첨) and the stage draws, 순위 투표, 룰렛 and 럭키번호 that used to
+// live only on 추첨·투표. Each row carries a 4-segment life cycle (준비·진행·결과·경품) and a status pill; the four
+// status cards became count tabs; the amber review queue is a slim row; 이벤트 만들기 opens a template chooser; an
+// opened event shows a 5-step header. Reopened 2026-11-19: a four-card status strip (진행 중·준비 중·종료·받은 응답, big counts) tops the
 // list, the review doorway is an amber card, group titles carry counts and the status tabs are a segmented
 // control. The ledger itself and the single orange action are unchanged.
 // Approved programs composition (2026-11-14): a flat ledger grouped by run
@@ -24,21 +28,60 @@ test('approved programs design stays locked: ledger rows grouped by run state, o
   assert.match(workspace, /\{ key: "OPEN", label: "진행 중" \},\s*\{ key: "DRAFT", label: "준비 중" \},\s*\{ key: "CLOSED", label: "종료" \}/u, 'rows group as 진행 중 / 준비 중 / 종료');
   assert.match(workspace, /<ProgramTypeIcon type=\{module\.type\} state=\{state\} \/>/u, 'each row opens with its type tile and state dot');
   assert.match(workspace, /className=\{styles\.moduleSummary\}/u);
-  assert.ok((workspace.slice(0, workspace.indexOf('function ModuleDialog')).match(/variant="primary"/gu) || []).length === 1, 'the page has exactly one orange action: 콘텐츠 만들기 (the create dialog keeps its own submit)');
-  assert.match(workspace, /콘텐츠 만들기/u);
+  assert.ok((workspace.slice(0, workspace.indexOf('function ModuleDialog')).match(/variant="primary"/gu) || []).length === 1, 'the page has exactly one orange action: 이벤트 만들기 (the create dialog keeps its own submit)');
+  assert.match(workspace, /이벤트 만들기/u);
   assert.doesNotMatch(workspace, /styles\.typeBadge|styles\.status\b|statusOpen|statusDraft|workspacePurpose/u, 'type and state pills and the purpose paragraph stay gone');
   assert.match(workspace, /className=\{styles\.rowAction\}/u, '시작 / 다시 열기 sit at the row end, 종료 inside the expanded row');
   assert.match(workspace, /onClick=\{\(\) => props\.onRequestStatus\("CLOSED"\)\}>종료</u);
   assert.doesNotMatch(css, /\.moduleCard\s*\{[^}]*border-bottom/su, 'rows are divided by space, not hairlines');
 });
 
-test('reopened 2026-11-19: a status strip of counts tops the ledger and groups show their size', () => {
-  assert.match(workspace, /className=\{styles\.statStrip\} aria-label="콘텐츠 현황"/u);
-  for (const label of ['진행 중', '준비 중', '종료', '받은 응답']) assert.ok(workspace.includes(`"${label}"`), `${label} card`);
+test('reopened 2026-11-20: count tabs replace the status cards, the review queue is a slim amber row', () => {
+  const tabs = read('StatusTabs.tsx');
+  assert.match(workspace, /<StatusTabs\s+label="진행 상태별 보기"/u, 'the count tabs top the list');
+  assert.doesNotMatch(workspace, /styles\.statStrip|styles\.statCard|콘텐츠 현황/u, 'the four big status cards are gone');
+  assert.doesNotMatch(css, /\.statStrip|\.statCard/u);
+  assert.match(tabs, /aria-pressed=\{value === tab\.value\}/u);
+  assert.match(tabs, /<small>\{tab\.count\}<\/small>/u, 'every tab carries its count badge');
+  assert.match(tabs, /shared console-ui CountTabs/u, 'noted as swappable for the shared CountTabs');
   assert.match(workspace, /styles\.groupCount/u);
-  assert.match(css, /\.statCard dd\s*\{[^}]*font-size:\s*32px[^}]*tabular-nums/su);
-  assert.match(css, /\.reviewLine\s*\{[^}]*border:\s*1px solid var\(--warning-line\)/su, 'the review doorway is the amber card');
   assert.match(css, /\.statusTabs button\[aria-pressed="true"\]\s*\{[^}]*background:\s*var\(--ink\)/su);
+  assert.match(css, /\.reviewLine\s*\{[^}]*min-height:\s*48px/su, 'the review doorway is a slim row, not a card');
+  assert.match(css, /\.reviewLine\s*\{[^}]*background:\s*var\(--warning-soft\)/su);
+  assert.match(workspace, /<span>검토할 것 \{reviewTotal\}<small>/u);
+});
+
+test('reopened 2026-11-20: one list for modules and draw events, each row a life cycle and a status pill', () => {
+  const lifecycle = read('EventLifecycle.tsx');
+  const drawRow = read('DrawEventRow.tsx');
+  assert.match(workspace, /import \{ drawEventsSnapshot, eventPill, lifecycleSegments, lifecycleSteps/u, 'rows derive their life cycle from lib/participation-events');
+  assert.match(workspace, /drawEvents: drawEventsSnapshot\(workspace\)/u, 'draw items come from the same bootstrap read, no new request');
+  assert.match(workspace, /<LifecycleMeter segments=\{lifecycleSegments\(facts\)\} \/>/u, 'a module row shows the 4-segment meter');
+  assert.match(workspace, /<StatusPill tone=\{pill\.tone\} label=\{pill\.label\} \/>/u);
+  assert.match(workspace, /<DrawEventRow/u, 'stage draws, 순위 투표, 룰렛 and 럭키번호 are rows of the same list');
+  assert.match(drawRow, /<LifecycleMeter/u);
+  assert.match(drawRow, /<EventStepper/u, 'an opened draw item shows the same 5-step header');
+  assert.match(drawRow, /무대에서 진행·당첨 보기/u, 'running and winners stay on the draws stage, one click from the event');
+  assert.match(drawRow, /\/draws\$\{event\.hash\}/u, 'the stage keeps its #draw-program-<id> / #draws-vote hash handoff');
+  assert.match(lifecycle, /aria-label="이벤트 진행 단계"/u);
+  assert.match(lifecycle, /aria-label="이벤트 5단계"/u);
+  assert.match(lifecycle, /aria-current=\{step\.state === "current" \? "step" : undefined\}/u, 'the current step is announced');
+  assert.match(lifecycle, /rewardsHref/u, 'the reward step links to 경품 지급');
+  assert.match(workspace, /<EventStepper steps=\{lifecycleSteps\(facts\)\}/u, 'an opened module shows the 5-step header above its existing editors and results');
+  assert.match(css, /\.lifeMeter li\[data-state="na"\] i/u, 'a type with no reward path is drawn as not applicable, never an empty reward step');
+  assert.match(css, /\.statusPill\[data-tone="live"\]\s*\{[^}]*background:\s*var\(--ink\)/su, '진행 중 is the ink pill');
+  assert.match(css, /\.statusPill\[data-tone="review"\]\s*\{[^}]*var\(--warning-soft\)/su, '검토 N is amber');
+});
+
+test('reopened 2026-11-20: 이벤트 만들기 is a template chooser over the existing create flows', () => {
+  const chooser = read('TemplateChooser.tsx');
+  assert.match(workspace, /<TemplateChooser/u);
+  assert.match(workspace, /function openCreateOfType\(type: string\)[\s\S]*?setDraft\(\{ \.\.\.EMPTY_DRAFT, type \}\)/u, 'a module tile opens the existing create dialog with the type preselected');
+  assert.match(chooser, /TEMPLATE_GROUPS\.map/u);
+  assert.match(chooser, /closeHref\(`\/console\/events\/\$\{encodeURIComponent\(eventId\)\}\/draws/u, 'draw tiles open the draws screen settings (룰렛·럭키번호·순위 투표·무대 추첨)');
+  assert.match(chooser, /기획안 게임은 템플릿으로 추가됩니다/u);
+  assert.doesNotMatch(chooser, /스탬프|빙고/u, 'unbuilt game types get no tile');
+  assert.match(css, /\.templateGroup ul\s*\{[^}]*grid-template-columns/su);
 });
 
 test('review drawer: one doorway, modal presentation, same handlers as the lists', () => {
@@ -79,9 +122,16 @@ test('type tiles use tokens, a stroke family and an accessible text label elsewh
 test('targets stay 44px and phone rows keep one line each', () => {
   assert.match(css, /\.moduleSummary\s*\{[^}]*min-height:\s*72px/su);
   assert.match(css, /\.drawerItem :global\(\.product-action\)\s*\{\s*min-height:\s*44px/u);
-  assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.meterSpacer\s*\{\s*display:\s*none/u, 'the empty meter cell never pushes the count to a second line');
+  assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.moduleSummary > :nth-child\(4\)\s*\{\s*display:\s*none/u, 'the count column folds away on phones; the pill and the meter keep their own rows');
+  assert.match(css, /\.templateTile\.templateTile\s*\{[^}]*min-height:\s*72px/su, 'template tiles are large touch targets');
 });
 
 test('the manual-grading fold keeps a 44px touch target like the other disclosures', () => {
   assert.match(css, /\.resultDisclosure > summary,\s*\.rejectDisclosure > summary \{[^}]*min-height:\s*44px/su);
+});
+
+test('reopened 2026-11-20: the 경품 지급 link is plain because closeHref only accepts event-close destinations', () => {
+  const drawRow = read('DrawEventRow.tsx');
+  assert.doesNotMatch(workspace + drawRow, /closeHref\([^)]*\/rewards/u, 'closeHref throws on /rewards while a close handoff is active (the whole screen would fail)');
+  assert.match(drawRow, /const rewardsHref = `\$\{base\}\/rewards`/u);
 });

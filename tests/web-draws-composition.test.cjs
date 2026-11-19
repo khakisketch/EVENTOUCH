@@ -77,3 +77,13 @@ test('Reopened 2026-11-20: previews are device simulators drawn at real size', (
   assert.match(css, /\.board \{[^}]*padding: 58px 77px/su, 'the board is laid out at 1280x720 and scaled by the frame');
   assert.match(css, /\.phoneScreen \{[^}]*font-size: 15px/su, 'the phone scene is laid out at a real 390px width');
 });
+
+// Reopened 2026-11-20 (참여 이벤트 통합): the draws stage is where a draw-type event is run, reached from the
+// one event list. Its route, heading, ids and #hash selection stay for deep links, audits and handoffs.
+test('Reopened 2026-11-20: the stage links back to 참여 이벤트 and opens 추첨 프로그램 만들기 from the template', () => {
+  assert.match(workspace, /<ProductLink variant="ghost" href=\{closeHref\(`\/console\/events\/\$\{encodeURIComponent\(eventId\)\}\/programs`\)\}>참여 이벤트<\/ProductLink>/u, 'a back link to the one event list sits in the header');
+  assert.match(workspace, /pageId="draws"/u, 'the page keeps its id for audits');
+  assert.match(workspace, /get\("new"\) !== "program"/u, '/draws?new=program opens the existing program dialog once');
+  assert.match(workspace, /window\.history\.replaceState\(null, "", `\$\{window\.location\.pathname\}\$\{window\.location\.hash\}`\)/u, 'the one-shot query is removed after use');
+  for (const id of ['draws-vote', 'draws-roulette', 'draws-lucky', 'draw-program-']) assert.ok(workspace.includes(id), `#${id} still selects its item`);
+});

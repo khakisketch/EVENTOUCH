@@ -59,15 +59,17 @@ test("disabled run buttons stay readable while clearly disabled, tokens only", (
 
 test("program list filters client-side with a count and a zero-result reset", () => {
   // Search + status filter, same grammar as the rewards/clients lists.
-  assert.match(programs, /콘텐츠 이름·유형 검색/u);
+  // Reopened 2026-11-20 (참여 이벤트): modules and draw items share one list, so search, tabs and counts cover both.
+  assert.match(programs, /이벤트 이름·유형 검색/u);
   assert.match(programs, /type="search"/u);
   // Status views are ink-underline tabs with counts (no dropdown); the search and
   // tabs appear once the list is long or a filter is active.
-  assert.match(programs, /\["OPEN", "진행 중"\], \["DRAFT", "준비 중"\], \["CLOSED", "종료"\]/u);
-  assert.match(programs, /className=\{styles\.statusTabs\} role="group" aria-label="진행 상태별 보기"/u);
-  assert.match(programs, /state\.modules\.length > 8 \|\| hasProgramFilter/u);
+  assert.match(programs, /value: "OPEN", label: "진행 중"[^}]*\}[\s\S]*value: "DRAFT", label: "준비 중"[\s\S]*value: "CLOSED", label: "종료"/u);
+  assert.match(programs, /<StatusTabs\s+label="진행 상태별 보기"/u);
+  assert.match(read("console/events/[id]/programs/StatusTabs.tsx"), /className=\{styles\.statusTabs\} role="group" aria-label=\{label\}/u);
+  assert.match(programs, /totalEvents > 8 \|\| hasProgramFilter/u);
   // "전체 N개 중 M개" count with a status role.
-  assert.match(programs, /전체 \{state\.modules\.length\}개 중 \{Math\.min\(moduleLimit, visibleModules\.length\)\}개 표시/u);
+  assert.match(programs, /검색·필터 결과 \{visibleModules\.length \+ visibleDrawEvents\.length\}개 · 전체 \{totalEvents\}개/u);
   assert.match(programs, /className=\{styles\.resultCount\} role="status"/u);
   // Client-side only: filters the already-loaded modules, no new request.
   assert.match(programs, /visibleModules = state\.modules\.filter/u);
@@ -81,10 +83,10 @@ test("program list filters client-side with a count and a zero-result reset", ()
   const operationCheck = programs.slice(programs.indexOf("async function recoverProgramOperation"), programs.indexOf("async function submitGrade"));
   assert.match(operationCheck, /command-receipts\/\$\{encodeURIComponent\(attempt\.commandId\)\}[\s\S]*?cache: "no-store"/u);
   // Zero results guide back with a reset, without touching the real empty state.
-  assert.match(programs, /조건에 맞는 콘텐츠가 없습니다/u);
+  assert.match(programs, /조건에 맞는 이벤트가 없습니다/u);
   assert.match(programs, /검색어·상태 조건을 바꾸거나 지우고 다시 찾아보세요/u);
   assert.ok((programs.match(/검색·필터 지우기/gu) || []).length >= 2, "count line and zero-result both reset");
-  assert.match(programs, /등록된 콘텐츠가 없습니다\. 위에서 첫 콘텐츠를 만드세요\./u);
+  assert.match(programs, /첫 이벤트를 만들어 보세요/u);
 });
 
 test("draw surface stays stable and programs add response grading and question-edit decisions", () => {

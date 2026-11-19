@@ -52,7 +52,7 @@ async function main() {
     const retry = p.getByRole('button', { name: '같은 채점 다시 확인', exact: true }); await retry.waitFor();
     check('unconfirmed grading freezes all other grade actions', await card.getByRole('button', { name: '응답 1 오답 처리', exact: true }).isDisabled());
     // The list search only appears past eight rows; with fewer there is nothing to filter the recovery away.
-    const search = p.getByRole('searchbox', { name: '콘텐츠 검색', exact: true });
+    const search = p.getByRole('searchbox', { name: '이벤트 검색', exact: true });
     if (await search.count()) { await search.fill('검색 결과 없음'); check('filtering cannot hide the unconfirmed grade recovery', await retry.isVisible()); await search.fill(''); }
     else check('the unconfirmed grade recovery stays visible without a list filter', await retry.isVisible());
     const endpoint = `**/api/events/${f.eventId}/commands`; let faults = 0;

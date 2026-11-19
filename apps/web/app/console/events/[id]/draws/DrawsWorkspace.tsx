@@ -739,6 +739,19 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
     return () => window.removeEventListener("hashchange", applyHash);
   }, []);
 
+  // 참여 이벤트 → 무대 추첨 template: /draws?new=program opens the existing
+  // 추첨 프로그램 만들기 dialog once, for a writer on an unlocked event.
+  const newProgramHandledRef = useRef(false);
+  useEffect(() => {
+    if (newProgramHandledRef.current || state.kind !== "ready" || loadedDrawEventRef.current !== eventId) return;
+    newProgramHandledRef.current = true;
+    if (new URLSearchParams(window.location.search).get("new") !== "program") return;
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.hash}`);
+    const allowed = canWriteEvent({ role: state.role, userId: state.userId, memberships: state.memberships, eventId }, "draw.run");
+    if (allowed && state.drawEnabled && !state.archived && !writeLocked && busy === null) openCreateProgram();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, eventId]);
+
   async function postCommand(command: string, payload: Record<string, unknown>, intent = ""): Promise<Record<string, unknown>> {
     const attempt = JSON.stringify([eventId, command, payload, intent]);
     if (operationInFlightRef.current || (pendingOperationRef.current && pendingOperationRef.current.attempt !== attempt)) {
@@ -1578,9 +1591,14 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
       eventId={eventId}
       eventName={state.eventName}
       meta={state.eventMeta}
-      headerActions={canWriteDraws && state.drawEnabled ? (
-        <ProductButton type="button" variant="secondary" disabled={busy !== null || writeLocked} onClick={openCreateProgram}>추첨 프로그램 만들기</ProductButton>
-      ) : undefined}
+      headerActions={
+        <div className="console-header-group">
+          <ProductLink variant="ghost" href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 이벤트</ProductLink>
+          {canWriteDraws && state.drawEnabled ? (
+            <ProductButton type="button" variant="secondary" disabled={busy !== null || writeLocked} onClick={openCreateProgram}>추첨 프로그램 만들기</ProductButton>
+          ) : null}
+        </div>
+      }
       feedback={
         <>
           {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
@@ -1874,8 +1892,8 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                   {moduleNeedsPublishing ? (
                   <p className={styles.stagePrerequisite} id={`stage-module-prerequisite-${program.id}`}>
                     {!linkedModule
-                      ? <>연결된 추첨용 무대 프로그램이 없습니다. <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 추첨 무대를 만들고 연결하세요.</ProductLink></>
-                      : <>연결된 무대 프로그램이 비공개입니다. 기존 결과는 자동 공개되지 않습니다. <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 해당 무대의 운영을 시작해 공개하세요.</ProductLink></>}
+                      ? <>연결된 추첨용 무대 프로그램이 없습니다. <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 이벤트에서 추첨 무대를 만들고 연결하세요.</ProductLink></>
+                      : <>연결된 무대 프로그램이 비공개입니다. 기존 결과는 자동 공개되지 않습니다. <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 이벤트에서 해당 무대의 운영을 시작해 공개하세요.</ProductLink></>}
                   </p>
                   ) : null}
                   </>
@@ -2196,12 +2214,12 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
             {state.drawModules.length ? (
               <>
                 <p>무대 터치 실행에는 공개된 추첨 무대가 필요합니다. 기존 비공개 결과는 자동 공개하지 않습니다.</p>
-                <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 무대 운영을 시작해 공개하세요.</ProductLink>
+                <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 이벤트에서 무대 운영을 시작해 공개하세요.</ProductLink>
               </>
             ) : (
               <>
                 <p>공개 상태로 전환한 무대만 여기에 연결할 수 있습니다.</p>
-                <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 콘텐츠에서 추첨 무대를 만들고 공개하세요.</ProductLink>
+                <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 이벤트에서 추첨 무대를 만들고 공개하세요.</ProductLink>
               </>
             )}
           </div>

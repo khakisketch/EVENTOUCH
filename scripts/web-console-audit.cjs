@@ -62,7 +62,7 @@ const SCREENS = [
   { key: 'messages', path: '/console/events/:id/messages', title: '메시지 발송', scope: 'event', marker: { css: '#history-heading' } },
   { key: 'operations', path: '/console/events/:id/operations', title: '입장·스태프', scope: 'event', marker: { css: '#ops-desks' } },
   { key: 'live', path: '/console/events/:id/live', title: '현장 모드', scope: 'event', marker: { css: '[data-live-room]' } },
-  { key: 'programs', path: '/console/events/:id/programs', title: '참여 이벤트', scope: 'event', marker: { role: 'button', name: '콘텐츠 만들기' } },
+  { key: 'programs', path: '/console/events/:id/programs', title: '참여 이벤트', scope: 'event', marker: { role: 'button', name: '이벤트 만들기' } },
   { key: 'draws', path: '/console/events/:id/draws', title: '추첨·투표', scope: 'event', marker: { css: 'section[aria-label="무대"]' } },
   { key: 'photos', path: '/console/events/:id/photos', title: '현장 사진', scope: 'event', marker: { css: '#evidence-photo-sections' } },
   { key: 'content', path: '/console/events/:id/content', title: '공지·안내', scope: 'event', marker: { css: '#content-panel' } },
@@ -1350,8 +1350,9 @@ async function main() {
       const page = await context.newPage();
       try {
         await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/programs`, { waitUntil: 'networkidle', timeout: 30000 });
-        const opener = page.getByRole('button', { name: '콘텐츠 만들기' }).first();
+        const opener = page.getByRole('button', { name: '이벤트 만들기' }).first();
         await opener.click();
+        await page.getByRole('button', { name: /^투표/ }).click();
         await page.locator('#program-title').waitFor({ state: 'visible', timeout: 10000 });
         if (await page.evaluate(() => document.activeElement && document.activeElement.id) !== 'program-title') {
           throw new Error('initial focus is not on the dialog title input');
@@ -1385,7 +1386,7 @@ async function main() {
         await page.keyboard.press('Escape');
         await page.locator('#program-title').waitFor({ state: 'detached', timeout: 10000 });
         const restored = await page.evaluate(() => document.activeElement && document.activeElement.textContent);
-        if (!String(restored || '').includes('콘텐츠 만들기')) {
+        if (!String(restored || '').includes('이벤트 만들기')) {
           throw new Error('confirmed cancel did not restore focus to the opener');
         }
       } finally {
@@ -1870,7 +1871,7 @@ async function main() {
         await page.goto(`${baseUrl}/console/events/${eventId}/programs`, { waitUntil: 'networkidle', timeout: 30000 });
         await assertConsoleScreen(page, SCREENS.find((screen) => screen.key === 'programs'), eventId, eventName);
         // Stage draws live on 추첨·투표; the content list ends with one link there.
-        const link = page.getByRole('link', { name: '무대 추첨·순위 투표·룰렛 관리', exact: true });
+        const link = page.getByRole('link', { name: '무대 운영 화면 (추첨·룰렛·순위 투표)', exact: true });
         if (!await link.count() || !(await link.getAttribute('href')).endsWith('/draws')) {
           throw new Error('programs list does not link to the draws screen');
         }

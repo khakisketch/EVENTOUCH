@@ -49,7 +49,8 @@ async function main() {
     });
     const dialog = page.getByRole('dialog');
     const create = async (title) => {
-      await page.getByRole('button', { name: '콘텐츠 만들기', exact: true }).click();
+      await page.getByRole('button', { name: '이벤트 만들기', exact: true }).click();
+      await page.getByRole('button', { name: /^Q&A/ }).click();
       await page.locator('#program-title').fill(title);
       await page.locator('#program-type').selectOption('qa');
       await dialog.getByRole('button', { name: '만들기', exact: true }).click();
@@ -74,7 +75,7 @@ async function main() {
     await dialog.waitFor({ state: 'hidden' });
     const recovery = page.getByRole('region', { name: '콘텐츠 저장 확인 필요' });
     await recovery.waitFor();
-    assert.equal(await page.getByRole('button', { name: '콘텐츠 만들기', exact: true }).isDisabled(), true);
+    assert.equal(await page.getByRole('button', { name: '이벤트 만들기', exact: true }).isDisabled(), true);
     await recovery.getByRole('button', { name: '같은 요청 다시 시도' }).click();
     await recovery.getByRole('alert').waitFor();
     await recovery.getByRole('button', { name: '같은 요청 다시 시도' }).click();
@@ -101,10 +102,10 @@ async function main() {
     await page.reload({ waitUntil: 'networkidle' });
     const shared = page.getByRole('region', { name: '처리 결과 확인' });
     await shared.waitFor();
-    assert.equal(await page.getByRole('button', { name: '콘텐츠 만들기', exact: true }).isDisabled(), true);
+    assert.equal(await page.getByRole('button', { name: '이벤트 만들기', exact: true }).isDisabled(), true);
     const beforeReloadCheck = ids.length;
     await shared.getByRole('button', { name: '서버 처리 확인' }).click();
-    await page.waitForFunction(() => [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === '콘텐츠 만들기' && !button.disabled));
+    await page.waitForFunction(() => [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === '이벤트 만들기' && !button.disabled));
     assert.equal(ids.length, beforeReloadCheck);
     assert.equal((await workspace()).modules.filter((item) => item.title === '합성 새로고침 프로그램').length, 1);
     assert.deepEqual(errors, []);
