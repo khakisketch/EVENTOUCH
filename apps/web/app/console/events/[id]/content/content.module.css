@@ -12,7 +12,7 @@
   gap: var(--s2);
   padding: var(--s3);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-small);
+  border-radius: var(--r-ctl);
 }
 
 .recovery h2, .recovery p { margin: 0; }
@@ -27,9 +27,9 @@
   margin: 0;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--line);
-  border-radius: var(--radius-small);
+  border-radius: var(--r-ctl);
   background: var(--surface-muted);
-  font-size: var(--small);
+  font-size: var(--text-sm);
   overflow-wrap: break-word;
 }
 
@@ -37,25 +37,10 @@
   min-height: 44px;
 }
 
-/* Destructive row/confirm actions stay outlined (never filled primary):
-   danger text and line on the shared paper button. Focus, 44px height and
-   disabled dimming ride the global .button rules. Scoped to this workspace
-   only — other cancel/stop buttons keep their existing tone. */
-.empty {
-  margin: 0;
-  padding: var(--s5);
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--radius);
-  color: var(--muted);
-  text-align: center;
-  word-break: keep-all;
-  overflow-wrap: break-word;
-}
-
 .help {
   margin: 0;
   color: var(--muted);
-  font-size: var(--small);
+  font-size: var(--text-sm);
 }
 
 /* Form sub-groups (this workspace only): one task per group with its own
@@ -78,8 +63,8 @@
 
 .groupTitle {
   margin: 0 0 var(--s1);
-  font-size: var(--body);
-  font-weight: 700;
+  font-size: var(--text-md);
+  font-weight: var(--fw-strong);
   overflow-wrap: break-word;
 }
 
@@ -87,16 +72,16 @@
   margin: 0;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--warning-line);
-  border-radius: var(--radius-small);
+  border-radius: var(--r-ctl);
   background: var(--warning-soft);
   color: var(--warning);
-  font-size: var(--small);
+  font-size: var(--text-sm);
 }
 
 .fieldError {
   margin: 0;
   color: var(--danger);
-  font-size: var(--small);
+  font-size: var(--text-sm);
 }
 
 .check {
@@ -104,7 +89,7 @@
   align-items: center;
   gap: var(--s2);
   min-height: 44px;
-  font-size: var(--small);
+  font-size: var(--text-sm);
 }
 
 .check input {
@@ -146,7 +131,8 @@
   min-width: 0;
 }
 
-/* 재설계 2026-11-19: 탭은 분절 알약(선택은 ink 채움), 개수는 작은 칩이다. */
+/* Reopened 2026-11-20 (디자인 시스템 적용): 탭은 공용 CountTabs와 같은 모양(분절 알약,
+   선택은 ink 채움, 개수는 알약 배지)이다. role="tab" 의미와 방향키는 그대로라 지역 구현이다. */
 .tabBar {
   display: flex;
   align-items: center;
@@ -154,60 +140,53 @@
   gap: var(--s3);
 }
 
-.tabs { display: inline-flex; gap: 2px; min-width: 0; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-muted); }
+.tabs { display: inline-flex; gap: 2px; min-width: 0; max-width: 100%; padding: 3px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--surface-muted); }
 
 .tab {
   display: inline-flex;
   align-items: center;
   gap: var(--s2);
-  min-height: 44px;
-  padding: 0 var(--s4);
+  min-height: var(--control-min-size);
+  padding: 0 var(--s3) 0 var(--s4);
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-weight: 650;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
   cursor: pointer;
   white-space: nowrap;
+  word-break: keep-all;
 }
 
 .tab:hover:not([aria-selected="true"]) { background: var(--paper); color: var(--ink); }
-.tab[aria-selected="true"] { background: var(--ink); color: var(--paper); font-weight: 750; }
-.tab:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-.tabCount { min-width: 22px; padding: 0 7px; border-radius: 999px; background: var(--paper); color: var(--muted); font-size: var(--label); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 22px; text-align: center; }
-.tab[aria-selected="true"] .tabCount { background: color-mix(in srgb, var(--paper) 22%, transparent); color: var(--paper); }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+.tab:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.tabCount { min-width: 26px; padding: 0 var(--s2); border-radius: var(--r-pill); background: var(--line); color: var(--ink); font-size: var(--text-xs); font-weight: var(--fw-strong); font-variant-numeric: tabular-nums; line-height: 22px; text-align: center; }
+.tab[aria-selected="true"] .tabCount { background: var(--paper); color: var(--ink); }
 
 .phoneToggle { display: none; }
 
-.panel { min-width: 0; }
+.panel { display: grid; gap: var(--s2); min-width: 0; }
 
-.ledger { display: grid; margin: 0; padding: 0; list-style: none; }
-.ledgerItem + .ledgerItem { border-top: 1px solid var(--line); }
-
-.ledgerRow {
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) auto;
-  gap: var(--s4);
-  align-items: center;
-  width: 100%;
-  min-height: 80px;
-  padding: var(--s3) var(--s2);
-  border-radius: var(--radius-medium);
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  text-align: left;
+/* The ledger says what the attendee phone shows, so the list and the phone read as one thing. */
+.ledgerNote {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
 }
+.ledgerNote strong { color: var(--ink); font-weight: var(--fw-strong); }
 
-button.ledgerRow { cursor: pointer; }
-button.ledgerRow:hover:not(:disabled) { background: var(--surface-muted); }
-button.ledgerRow:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
-button.ledgerRow:disabled { cursor: not-allowed; opacity: 0.6; }
+.ledger { display: grid; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.ledgerItem[data-disabled="true"] { opacity: 0.6; cursor: not-allowed; }
+.ledgerItem[data-disabled="true"] > * { pointer-events: none; }
 
 /* 상태 점은 36px 원 안에 놓인다: 게시 중은 초록, 수정한 초안은 amber, 비공개는 속이 빈 회색. */
-.dot { position: relative; width: 36px; height: 36px; border-radius: 50%; background: var(--surface-muted); }
+.dot { position: relative; display: block; width: 36px; height: 36px; border-radius: 50%; background: var(--surface-muted); }
 .dot::after { content: ""; position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); transform: translate(-50%, -50%); }
 .dot[data-status="live"] { background: var(--success-soft); }
 .dot[data-status="live"]::after { background: var(--success); }
@@ -215,15 +194,7 @@ button.ledgerRow:disabled { cursor: not-allowed; opacity: 0.6; }
 .dot[data-status="edit"]::after { background: var(--warning); }
 .dot[data-status="off"]::after { background: transparent; box-shadow: inset 0 0 0 2px var(--muted); }
 
-.rowText { display: grid; gap: var(--s1); min-width: 0; }
-.rowTitle { font-size: var(--h3); font-weight: 750; overflow-wrap: anywhere; word-break: keep-all; }
-.rowSummary { color: var(--muted); font-size: var(--small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-.rowMeta { display: flex; align-items: center; gap: var(--s3); color: var(--muted); font-size: var(--small); font-weight: 650; white-space: nowrap; }
-.rowFlag { padding: 2px 8px; border-radius: 999px; background: var(--surface-muted); color: var(--ink); font-size: var(--label); }
-.rowStatus { padding: 4px 12px; border-radius: 999px; background: var(--surface-muted); color: var(--muted); font-size: var(--label); font-weight: 700; }
-.rowStatus[data-status="live"] { background: var(--success-soft); color: var(--success); }
-.rowStatus[data-status="edit"] { background: var(--warning-soft); color: var(--warning); }
+.rowSummary { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .editor { display: grid; gap: var(--s3); min-width: 0; }
 .editorHead { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
@@ -235,19 +206,20 @@ button.ledgerRow:disabled { cursor: not-allowed; opacity: 0.6; }
   margin-left: calc(var(--s1) * -1);
   padding: 0 var(--s2) 0 var(--s1);
   border: 0;
-  border-radius: var(--radius-small);
+  border-radius: var(--r-ctl);
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-weight: 650;
+  font-weight: var(--fw-strong);
   cursor: pointer;
 }
 .crumb:hover:not(:disabled) { color: var(--ink); background: var(--surface-muted); }
 .crumb:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .crumb:disabled { cursor: not-allowed; opacity: 0.6; }
 .crumbIcon { flex: none; }
-.editorTitle { margin: 0; font-size: var(--h2); letter-spacing: -0.02em; overflow-wrap: anywhere; word-break: keep-all; }
-.editorState { display: inline-flex; align-items: center; gap: var(--s2); color: var(--muted); font-size: var(--small); font-weight: 650; }
+.editorTitle { margin: 0; font-size: var(--text-xl); font-weight: var(--fw-heavy); letter-spacing: -0.02em; overflow-wrap: anywhere; word-break: keep-all; }
+.editorState { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s2); }
+.previewTie { margin: 0; padding: var(--s2) var(--s3); border-radius: var(--r-ctl); background: var(--surface-muted); color: var(--muted); font-size: var(--text-sm); }
 
 .venuePanel { display: grid; gap: var(--s3); max-width: 640px; min-width: 0; }
 
@@ -258,8 +230,7 @@ button.ledgerRow:disabled { cursor: not-allowed; opacity: 0.6; }
 }
 
 @media (max-width: 768px) {
-  .tabs { gap: var(--s4); }
-  .rowMeta { flex-direction: column; align-items: flex-end; gap: var(--s1); }
+  
 }
 
 .fieldNote { margin-top: var(--s1); }
@@ -267,7 +238,7 @@ button.ledgerRow:disabled { cursor: not-allowed; opacity: 0.6; }
 /* 재설계 2026-11-19: 좁은 화면에서는 폰 미리보기 버튼이 탭 아래로 내려가 가로 넘침이 없다. */
 @media (max-width: 768px) {
   .tabBar { flex-wrap: wrap; }
-  .tabs { max-width: 100%; }
-  .tab { padding: 0 var(--s3); gap: var(--s1); }
-  .ledgerRow { gap: var(--s3); padding-inline: 0; }
+  .tabs { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .tab { padding: 0 var(--s2) 0 var(--s3); gap: var(--s1); }
 }
+.venuePanel > [data-status-pill] { justify-self: start; }

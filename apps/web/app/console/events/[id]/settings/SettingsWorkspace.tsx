@@ -20,6 +20,8 @@ import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
 import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import StageTransitionConfirmation from "../../../console-ui/StageTransitionConfirmation";
+import StatusPill from "../../../console-ui/StatusPill";
+import SettingsToc from "./SettingsToc";
 import styles from "./settings.module.css";
 import { consoleFetch } from "../../../../../lib/console-api";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
@@ -1469,7 +1471,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         각 구역의 저장·게시·전환은 그 구역에만 적용됩니다.
       </p>
       {pendingSettings ? <section className={styles.recovery} aria-labelledby="settings-recovery-heading">
-        <h2 id="settings-recovery-heading" tabIndex={-1}>행사 설정 처리 확인 필요</h2>
+        <h2 id="settings-recovery-heading" tabIndex={-1} className={styles.blockTitle}>행사 설정 처리 확인 필요</h2>
         <p>{SETTINGS_COMMAND_LABEL[pendingSettings.command] ?? "이전 설정"} 요청이 반영됐을 수 있습니다. 서버 확인은 요청을 다시 보내지 않습니다.</p>
         {archived || !canWriteEvent(capabilities, pendingSettings.command) ? <p>현재 권한이나 행사 상태에서는 같은 요청을 다시 보낼 수 없습니다. 서버 처리 확인이나 담당자 확인을 이용하세요.</p> : null}
         {settingsRecoveryError ? <p role="alert">{settingsRecoveryError}</p> : null}
@@ -1502,6 +1504,14 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         /> : null}
       </section> : null}
       {otherSettingsReceipt ? <ConsoleFeedback kind="warning">이전 행사 설정의 처리 결과를 화면 위에서 먼저 확인하세요. 서버 확인은 요청을 다시 보내지 않습니다.</ConsoleFeedback> : null}
+      <div className={styles.layout}>
+      <SettingsToc items={[
+        { id: "basics", label: "기본 정보", hint: `정원 ${state.basics.capacity === "0" ? "제한 없음" : `${state.basics.capacity}명`}`, dirty: Boolean(basicsDirty), onSelect: () => setBasicsOpen(true), disabled: archived || !canWriteSettings },
+        { id: "stage", label: "진행 단계", hint: stageText, href: "#settings-stage" },
+        { id: "intake", label: "참가 접수", hint: state.registrationOpen ? "접수 중" : "접수 닫힘", dirty: Boolean(intakeDirty), href: "#settings-intake" },
+        { id: "features", label: "운영 기능", hint: `${(features ?? state.features).length}개 사용`, dirty: Boolean(featuresDirty), href: "#settings-features" },
+      ]} />
+      <div className={styles.main}>
       <section className={styles.eventCard} aria-label="행사 개요와 진행 단계">
         <div className={styles.eventTop} id="panel-settings-basics" data-settings-section="basics">
           <div className={styles.cal} aria-hidden="true">
@@ -1510,7 +1520,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             <span>{eventCalendar().weekday}</span>
           </div>
           <div className={styles.eventName}>
-            <h2 id="settings-basics">{state.basics.name}</h2>
+            <h2 id="settings-basics" className={styles.eventTitle}>{state.basics.name}</h2>
             <p className={styles.eventMetaLine}>{state.eventMeta}</p>
             <p className={styles.eventFlags}>
               정원 {state.basics.capacity === "0" ? "제한 없음" : `${state.basics.capacity}명`}
@@ -1529,7 +1539,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             </ProductButton>
             {basicsDirty ? (
               <span role="status" className={styles.unsavedTag}>
-                <span aria-hidden="true">● </span>저장 안 됨
+                <StatusPill tone="wait" size="sm" dot>저장 안 됨</StatusPill>
               </span>
             ) : null}
           </div>
@@ -1634,7 +1644,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           <p className={styles.help} role="note">{settingsNoWriteReason}</p>
         ) : null}
         {basicsConflict ? <section className={styles.conflict} aria-labelledby="basics-conflict-heading">
-          <h3 id="basics-conflict-heading" tabIndex={-1}>다른 작업에서 기본 정보가 변경됐습니다</h3>
+          <h3 id="basics-conflict-heading" tabIndex={-1} className={styles.blockTitle}>다른 작업에서 기본 정보가 변경됐습니다</h3>
           <p>이번 저장 요청은 반영되지 않았습니다. 작성 중인 내용은 그대로 있습니다. 최신 정보와 비교해 사용할 내용을 선택해 주세요.</p>
           {basicsConflict.error ? <p role="alert">{basicsConflict.error}</p> : null}
           {basicsConflict.latest ? <>
@@ -1824,7 +1834,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             </ProductButton>
             {basicsDirty ? (
               <span role="status" className={styles.unsavedTag}>
-                <span aria-hidden="true">● </span>저장 안 됨
+                <StatusPill tone="wait" size="sm" dot>저장 안 됨</StatusPill>
               </span>
             ) : null}
           </ConsoleFormActions>
@@ -1864,7 +1874,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       </div>
       {showScheduleReview ? (
         <section className={styles.scheduleReview} aria-labelledby="schedule-review-title">
-          <h3 id="schedule-review-title">참가자에게 보이는 안내도 확인해 주세요</h3>
+          <h3 id="schedule-review-title" className={styles.blockTitle}>참가자에게 보이는 안내도 확인해 주세요</h3>
           <p>행사 일시는 저장됐지만, 기존에 게시한 프로그램 일정과 공지·장소 안내는 그대로입니다. 여러 날짜에 진행하는 일정일 수 있으니 내용을 확인하고 필요한 경우에만 수정·게시하세요.</p>
           <div className={styles.scheduleReviewLinks}>
             {canWriteEvent(capabilities, "program.save") ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-program`}>프로그램 일정 확인</ProductLink> : null}
@@ -1880,7 +1890,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         data-settings-section="intake"
         className={highlight === "intake" ? styles.sectionFlash : undefined}
       >
-      <ConsoleSection headingId="settings-intake" title="참가 접수" width="form" surface="panel">
+      <ConsoleSection headingId="settings-intake" title="참가 접수" heading="rule" surface="panel">
+        <div className={styles.intakeGrid}>
+        <div className={styles.intakeStatus}>
         {!canWriteIntake ? (
           <p className={styles.help} role="note">{intakeNoWriteReason}</p>
         ) : null}
@@ -1919,7 +1931,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         {isRecoveryBlocked(verificationMode) && !state.recoveryContact ? (
           <ConsoleFeedback kind="warning">
             <p className={styles.intakeWarningText}>문자로 티켓을 다시 연결할 수 없고 참가자에게 표시되는 문의처도 없습니다. 탭을 잃은 참가자가 도움을 받을 수 있도록 장소 안내의 문의 정보와 참가자 페이지의 공개 설정을 확인하세요.</p>
-            <ProductLink className={`button button-quiet ${styles.intakeWarningLink}`} href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내의 문의 정보</ProductLink>
+            <ProductLink variant="ghost" className={styles.intakeWarningLink} href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내의 문의 정보</ProductLink>
           </ConsoleFeedback>
         ) : null}
         {currentStage === "DRAFT" && !state.registrationOpen ? (
@@ -1939,10 +1951,11 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             공개 접수: 닫힘 — 종료된 행사에서는 신청을 받을 수 없습니다. 공개 신청 화면은 닫혀 있습니다. 보관하려면 접수를 닫으세요.
           </p>
         ) : null}
+        </div>
         <section className={styles.formPreview} aria-label={formPreviewTitle}>
           <div className={styles.previewHead}>
             <b>{formPreviewTitle}</b>
-            <ProductLink className={`button button-quiet ${styles.intakeFieldsLink}`} href={`/console/events/${encodeURIComponent(eventId)}/settings/fields`}>신청 항목 편집</ProductLink>
+            <ProductLink variant="ghost" className={styles.intakeFieldsLink} href={`/console/events/${encodeURIComponent(eventId)}/settings/fields`}>신청 항목 편집</ProductLink>
           </div>
           {formPreviewFields?.length ? (
             <ul className={styles.previewFields}>
@@ -1954,8 +1967,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             <p className={styles.help}>{formPreviewFields ? "등록된 신청 항목이 없습니다. 항목 편집에서 추가하세요." : "게시된 항목을 확인하지 못했습니다. 신청 항목 편집에서 최신 게시본을 확인하세요."}</p>
           )}
         </section>
+        <div className={styles.intakeCompose}>
         {intakeConflict ? <section className={styles.conflict} aria-labelledby="intake-conflict-heading">
-          <h3 id="intake-conflict-heading" tabIndex={-1}>다른 작업에서 참가 접수 설정이 변경됐습니다</h3>
+          <h3 id="intake-conflict-heading" tabIndex={-1} className={styles.blockTitle}>다른 작업에서 참가 접수 설정이 변경됐습니다</h3>
           <p>이번 게시 요청은 반영되지 않았습니다. 작성 중인 안내는 그대로 있습니다. 최신 설정을 확인하고 사용할 안내를 선택해 주세요.</p>
           {intakeConflict.error ? <p role="alert">{intakeConflict.error}</p> : null}
           {intakeConflict.latest ? <>
@@ -2003,6 +2017,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               }}>기존 안내 되돌리기</ProductButton> : null}
             </> : null}
           </div>
+          <div className={styles.saveBar}>
           <ConsoleFormActions>
             {/* 게시 버튼은 항상 둔다. 신청 항목은 별도 페이지에서 바뀌어
                 동의 문구가 그대로어도 게시할 일이 있다(버전이 바뀌면 게시
@@ -2029,11 +2044,14 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             ) : null}
             {intakeDirty ? (
               <span role="status" className={styles.unsavedTag}>
-                <span aria-hidden="true">● </span>저장 안 됨
+                <StatusPill tone="wait" size="sm" dot>저장 안 됨</StatusPill>
               </span>
             ) : null}
           </ConsoleFormActions>
+          </div>
           {sectionStatusLine(intakeStatus, "intake")}
+        </div>
+        </div>
         </div>
       </ConsoleSection>
       </section>
@@ -2043,14 +2061,14 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         data-settings-section="features"
         className={highlight === "features" ? styles.sectionFlash : undefined}
       >
-      <ConsoleSection headingId="settings-features" title="운영 기능" width="form" surface="panel">
+      <ConsoleSection headingId="settings-features" title="운영 기능" heading="rule" surface="panel">
         {!canWriteSettings ? (
           <p className={styles.help} role="note">{settingsNoWriteReason}</p>
         ) : null}
         <p className={styles.help}>끈 기능은 콘솔 메뉴와 참가자 화면에서 함께 사라집니다. 기존 응답과 기록은 삭제되지 않습니다.</p>
         <p className={styles.help}>행사장 출력을 끄면 열린 전광판도 다음 확인 때 멈춥니다. 다시 켜면 저장된 출력을 표시합니다.</p>
         {featuresConflict ? <section className={styles.conflict} aria-labelledby="features-conflict-heading">
-          <h3 id="features-conflict-heading" tabIndex={-1}>다른 작업에서 운영 기능이 변경됐습니다</h3>
+          <h3 id="features-conflict-heading" tabIndex={-1} className={styles.blockTitle}>다른 작업에서 운영 기능이 변경됐습니다</h3>
           <p>이번 저장 요청은 반영되지 않았습니다. 선택 중인 기능은 그대로 있습니다. 최신 설정과 비교해 사용할 선택을 정해 주세요.</p>
           {featuresConflict.error ? <p role="alert">{featuresConflict.error}</p> : null}
           {featuresConflict.latest ? <>
@@ -2102,10 +2120,11 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             </div>
           ))}
         </fieldset>
+        <div className={styles.saveBar}>
         <ConsoleFormActions>
           {featuresDirty ? (
             <span role="status" className={styles.unsavedTag}>
-              <span aria-hidden="true">● </span>저장 안 된 변경
+              <StatusPill tone="wait" size="sm" dot>저장 안 된 변경</StatusPill>
             </span>
           ) : null}
           {featuresDirty ? (
@@ -2128,6 +2147,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             {busy ? "저장 중입니다" : "운영 기능 저장"}
           </ProductButton>
         </ConsoleFormActions>
+        </div>
         {sectionStatusLine(featuresStatus, "features")}
       </ConsoleSection>
       </section>
@@ -2181,6 +2201,8 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           </p>
         </div>
       </details>
+      </div>
+      </div>
     </ConsolePage>
   );
 }

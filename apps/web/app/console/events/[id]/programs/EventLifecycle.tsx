@@ -5,6 +5,7 @@
 // every segment and step also carries text.
 
 import type { LifecycleSegment, LifecycleStep, PillTone } from "../../../../../lib/participation-events";
+import type { StatusPillTone } from "../../../console-ui/StatusPill";
 import ProductLink from "../../../../ui/ProductLink";
 import styles from "./programs.module.css";
 
@@ -25,8 +26,14 @@ export function LifecycleMeter({ segments }: { segments: LifecycleSegment[] }) {
   );
 }
 
-export function StatusPill({ tone, label }: { tone: PillTone; label: string }) {
-  return <span className={styles.statusPill} data-tone={tone}>{label}</span>;
+// The row pill is the shared console StatusPill; only the tone vocabulary of
+// participation-events is mapped here: running = green, preparing / review =
+// amber (work waiting on a person), configured = blue, ended = quiet grey.
+const PILL_TONE: Record<PillTone, StatusPillTone> = {
+  live: "ok", review: "wait", prep: "wait", ready: "info", done: "neutral", check: "danger",
+};
+export function eventPillTone(tone: PillTone): StatusPillTone {
+  return PILL_TONE[tone];
 }
 
 export function EventStepper({ steps, rewardsHref, rewardCount }: { steps: LifecycleStep[]; rewardsHref: string; rewardCount: number | null }) {

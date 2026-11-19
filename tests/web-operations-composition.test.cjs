@@ -36,7 +36,14 @@ test("approved operations design stays locked", () => {
   assert.match(ops, /\{stampEnabled \? \(\s*<ConsoleSection\s+headingId="ops-booths"/u, "booths are an optional section, only with the feature on");
   assert.doesNotMatch(ops, /styles\.kpiStrip|styles\.kpiCard/u, "no big-number strip on a work screen");
   assert.equal(ops.match(/surface="panel"/g)?.length ?? 0, 0, "no panel around a list");
-  assert.match(css, /\.stepPill\[data-tone="warn"\]\s*\{[^}]*var\(--warning-soft\)/su, "a step with a gap turns amber");
+  // Reopened 2026-11-20 (디자인 시스템 적용): steps are white hairline cards; the step state is a StatusPill (amber = waiting on a person).
+  assert.match(css, /\.stepSection\s*\{[^}]*border:\s*1px solid var\(--line\)[^}]*border-radius:\s*var\(--r-card\)/su, "each step is a white hairline card");
+  assert.match(css, /\.stepAmber\s*\{[^}]*border-color:\s*var\(--warning-line\)/su, "a step with a gap turns its border amber");
+  assert.match(ops, /tone === "warn" \|\| tone === "todo" \? "wait"/u, "a waiting step is an amber pill");
+  assert.match(ops, /<StatusPill tone=\{pillTone\}/u);
+  assert.match(ops, /ConsoleEmptyState/u, "empty desk and booth lists use the shared empty state");
+  assert.doesNotMatch(ops, /className="empty-state"/u, "no global empty-state class");
+  assert.equal(ops.match(/heading="rule"/g)?.length ?? 0, 4, "the three steps and the booth card share the hairline heading");
 
   // A row is a name, one quiet line, faces and one control; it opens its detail.
   assert.match(parts, /export function LocationRow/u);
@@ -44,11 +51,12 @@ test("approved operations design stays locked", () => {
   assert.match(ops, /<LocationRow/u);
   assert.match(ops, /onOpen=\{\(\) => setDetail\(/u);
   assert.match(parts, /<Switch/u, "desks run through a switch");
-  assert.match(parts, /<Avatar/u, "who is on duty reads as faces");
+  // Reopened 2026-11-20 (디자인 시스템 적용): faces are the shared ConsoleAvatar (decorative, aria-hidden, no focus).
+  assert.match(parts, /<ConsoleAvatar/u, "who is on duty reads as faces");
   assert.match(parts, /styles\.locationTile/u, "a row opens on a tile for the kind of place");
   // axe: faces inside the row button must not be focusable (an avatar tooltip adds tabindex),
   // and the button's name comes from its visible text instead of an aria-label that omits it.
-  assert.match(parts, /<Avatar[^>]*tooltip=\{false\}/u, "decorative faces take no focus");
+  assert.doesNotMatch(parts, /<ConsoleAvatar[^>]*label=/u, "decorative faces take no focus");
   assert.doesNotMatch(parts, /<button[^>]*styles\.locationOpen[^>]*aria-label/u, "row name is its visible text");
   assert.match(ops, /<StatusDot tone=/u, "booths follow their schedule and show a state, never a switch");
 

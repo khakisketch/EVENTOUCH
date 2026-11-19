@@ -189,8 +189,10 @@ test("operations resources keep an explicit textual state, not color or a switch
   for (const copy of ["가동 중", "중지됨", "대기", "진행", "종료"]) {
     assert.match(source, new RegExp(copy, "u"), `${copy} copy survives`);
   }
-  assert.match(css, /\.statusDot\[data-tone="good"\]\s*\{[^}]*color:\s*var\(--success\)/su);
-  assert.match(css, /\.statusDot\[data-tone="wait"\]\s*\{[^}]*color:\s*var\(--info\)/su);
+  // Reopened 2026-11-20 (디자인 시스템 적용): the booth state is the shared StatusPill (dot plus word), not a local .statusDot.
+  const parts = read("console/events/[id]/operations/LocationParts.tsx");
+  assert.match(parts, /<StatusPill tone=\{tone === "good" \? "ok" : tone === "wait" \? "info" : "neutral"\} size="sm" dot>/u);
+  assert.doesNotMatch(css, /\.statusDot/u);
   assert.match(css, /\.locationDim \.locationText strong\s*\{[^}]*color:\s*var\(--muted\)/su, "a stopped row dims by muted text, never by opacity");
   assert.doesNotMatch(css, /\.location[A-Za-z]*\s*\{[^}]*opacity/su, "no row hides its words behind reduced opacity");
 });

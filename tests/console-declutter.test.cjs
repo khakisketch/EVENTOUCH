@@ -49,5 +49,8 @@ test('theme draft status lives in the save region, the single announcement', () 
   assert.equal((source.match(/aria-live="polite"/g) || []).length, 1);
   assert.match(source, /id="theme-save"[\s\S]*?className=\{styles.versionSummary\} aria-live="polite"[\s\S]*?저장되지 않은 변경/u);
   assert.match(source, /id="theme-save"[\s\S]*?게시 버전 \$\{state.publishedVersion\} · 초안 \$\{state.draftVersion\}/u);
-  assert.match(source, /badges=\{\s*state.publishedAt \? <span>최근 게시/u, 'unique last-publish evidence stays in the header');
+  // Reopened 2026-11-20 (디자인 시스템 적용): the header also carries a short, NON-live
+  // StatusPill (aria-live stays unique to the save region, asserted above); the unique
+  // last-publish evidence still lives in the header.
+  assert.match(source, /badges=\{\s*<>\s*<StatusPill tone=\{stateTone\} dot>\{headerStateLabel\}<\/StatusPill>\s*\{state.publishedAt \? <span>최근 게시/u, 'unique last-publish evidence stays in the header');
 });

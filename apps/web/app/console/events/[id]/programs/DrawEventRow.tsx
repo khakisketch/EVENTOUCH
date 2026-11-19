@@ -6,7 +6,8 @@
 import ProductLink from "../../../../ui/ProductLink";
 import { eventPill, lifecycleSegments, lifecycleSteps, type DrawEvent, type EventFacts } from "../../../../../lib/participation-events";
 import ProgramTypeIcon from "./ProgramIcons";
-import { EventStepper, LifecycleMeter, StatusPill } from "./EventLifecycle";
+import StatusPill from "../../../console-ui/StatusPill";
+import { EventStepper, LifecycleMeter, eventPillTone } from "./EventLifecycle";
 import styles from "./programs.module.css";
 
 const STATE_LABEL: Record<string, string> = { DRAFT: "준비 중", OPEN: "진행 중", CLOSED: "종료" };
@@ -33,7 +34,7 @@ export default function DrawEventRow({ event, eventId, featureOn, closeHref }: {
         <summary className={styles.moduleSummary}>
           <ProgramTypeIcon type={event.icon} state={state} />
           <span className={styles.moduleName}>
-            <h3 id={id} tabIndex={-1}>{event.title}</h3>
+            <h3 className={styles.moduleTitle} id={id} tabIndex={-1}>{event.title}</h3>
             <span className={styles.moduleLine}>
               <span>{event.line}</span>
               {event.schedule ? <span>{event.schedule}</span> : null}
@@ -44,7 +45,7 @@ export default function DrawEventRow({ event, eventId, featureOn, closeHref }: {
           </span>
           <LifecycleMeter segments={lifecycleSegments(facts)} />
           <span className={styles.moduleCount}>{event.status !== "DRAFT" || event.count > 0 ? <><b>{event.count}</b>{event.unit}</> : null}</span>
-          <StatusPill tone={pill.tone} label={pill.label} />
+          <StatusPill tone={eventPillTone(pill.tone)} dot={pill.tone === "live"} className={styles.rowPill}>{pill.label}</StatusPill>
         </summary>
         <div className={styles.moduleBody}>
           <EventStepper steps={lifecycleSteps(facts)} rewardsHref={rewardsHref} rewardCount={event.rewardCount} />

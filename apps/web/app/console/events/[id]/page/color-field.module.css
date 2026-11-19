@@ -1,4 +1,7 @@
-/* Color choice: curated swatches first, a real picker one tap away. */
+/* Color choice: curated swatches first, a real picker one tap away.
+   Color samples are the exception to the token rule: the swatches themselves are
+   inline-styled values, and the hue wheel / hue slider below are written as hsl()
+   stops because they ARE the colours being chosen. Everything else uses tokens. */
 .field { display: grid; gap: var(--s3); min-width: 0; }
 
 .swatches { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
@@ -23,11 +26,11 @@
   min-height: 44px;
   padding: 0 var(--s3) 0 var(--s1);
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--surface-muted);
   color: var(--ink);
   font: inherit;
-  font-weight: 700;
+  font-weight: var(--fw-strong);
   cursor: pointer;
 }
 .custom[data-active] { box-shadow: 0 0 0 2px var(--ink); }
@@ -36,7 +39,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: conic-gradient(#f66, #fc6, #6c6, #6cf, #96f, #f66);
+  background: conic-gradient(hsl(0 100% 70%), hsl(40 100% 70%), hsl(120 50% 60%), hsl(200 100% 70%), hsl(260 100% 70%), hsl(0 100% 70%));
 }
 
 .picker {
@@ -45,7 +48,7 @@
   max-width: 320px;
   padding: var(--s3);
   border: 1px solid var(--line);
-  border-radius: var(--radius-medium);
+  border-radius: var(--r-card);
   background: var(--paper);
   box-shadow: var(--shadow-raised);
 }
@@ -53,7 +56,7 @@
 .area {
   position: relative;
   height: 160px;
-  border-radius: var(--radius-small);
+  border-radius: var(--r-ctl);
   cursor: crosshair;
   touch-action: none;
 }
@@ -63,7 +66,7 @@
   position: absolute;
   width: 22px;
   height: 22px;
-  border: 3px solid #fff;
+  border: 3px solid var(--paper);
   border-radius: 50%;
   box-shadow: 0 1px 4px rgb(0 0 0 / 40%);
   transform: translate(-50%, -50%);
@@ -74,31 +77,31 @@
   width: 100%;
   height: 16px;
   margin: 0;
-  border-radius: 8px;
-  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  border-radius: var(--r-ctl);
+  background: linear-gradient(to right, hsl(0 100% 50%), hsl(60 100% 50%), hsl(120 100% 50%), hsl(180 100% 50%), hsl(240 100% 50%), hsl(300 100% 50%), hsl(0 100% 50%));
   -webkit-appearance: none;
   appearance: none;
   accent-color: var(--ink);
 }
-.hue::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border: 3px solid #fff; border-radius: 50%; background: transparent; box-shadow: 0 1px 4px rgb(0 0 0 / 40%); cursor: pointer; }
-.hue::-moz-range-thumb { width: 18px; height: 18px; border: 3px solid #fff; border-radius: 50%; background: transparent; box-shadow: 0 1px 4px rgb(0 0 0 / 40%); cursor: pointer; }
+.hue::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border: 3px solid var(--paper); border-radius: 50%; background: transparent; box-shadow: 0 1px 4px rgb(0 0 0 / 40%); cursor: pointer; }
+.hue::-moz-range-thumb { width: 18px; height: 18px; border: 3px solid var(--paper); border-radius: 50%; background: transparent; box-shadow: 0 1px 4px rgb(0 0 0 / 40%); cursor: pointer; }
 .hue:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 
 .hexRow { display: flex; gap: var(--s2); }
-.hex { flex: 1; min-width: 0; min-height: 44px; font-variant-numeric: tabular-nums; font-weight: 650; text-transform: uppercase; }
+.hex { flex: 1; min-width: 0; min-height: 44px; font-variant-numeric: tabular-nums; font-weight: var(--fw-strong); text-transform: uppercase; }
 .eye {
   display: grid;
   place-items: center;
   min-width: 44px;
   min-height: 44px;
   border: 0;
-  border-radius: var(--radius-small);
+  border-radius: var(--r-ctl);
   background: var(--surface-muted);
   color: var(--ink);
   cursor: pointer;
 }
 
 .more { display: grid; gap: var(--s2); }
-.more small { color: var(--muted); font-size: var(--small); font-weight: 650; }
+.more small { color: var(--muted); font-size: var(--text-sm); font-weight: var(--fw-strong); }
 .chips { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s1); }
 .chip { width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 18%); cursor: pointer; }

@@ -3,65 +3,57 @@
 .split { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--s5); align-items: start; }
 .listColumn { display: grid; gap: var(--s4); min-width: 0; }
 .listHead { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
-.count { margin: 0; color: var(--muted); font-size: var(--small); font-weight: 650; }
+.count { margin: 0; color: var(--muted); font-size: var(--text-sm); font-weight: var(--fw-strong); }
 .list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
-.row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--s3); min-height: 68px; padding: 0 var(--s1) 0 var(--s2); border-bottom: 1px solid var(--line); }
+.row { position: relative; }
 .rowSelected { background: var(--surface-muted); box-shadow: inset 3px 0 0 var(--ink); }
 /* The name is the button; its ::after stretches the tap target over the row. */
-.rowOpen { padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--body); font-weight: 700; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.rowOpen { padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-weight: var(--fw-strong); text-align: left; cursor: pointer; overflow-wrap: anywhere; }
 .rowOpen::after { position: absolute; inset: 0; content: ""; }
 .rowOpen:hover:not(:disabled)::after { background: var(--surface-muted); opacity: 0.6; }
 .rowOpen:focus-visible { outline: none; }
 .rowOpen:focus-visible::after { outline: 3px solid var(--focus); outline-offset: -3px; }
 .rowOpen:disabled { color: var(--muted); cursor: default; }
-.rowInfo { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
-.rowMeta, .help { margin: 0; color: var(--muted); font-size: var(--small); line-height: 1.5; font-weight: 500; }
-.reqOn, .reqOff { display: inline-flex; align-items: center; gap: var(--s1); margin: 0; font-size: var(--small); font-weight: 700; white-space: nowrap; }
-.reqOn { color: var(--ink); }
-.reqOff { color: var(--muted); font-weight: 600; }
-.reqOn::before, .reqOff::before { width: 8px; height: 8px; border-radius: 50%; background: var(--brand); content: ""; }
-.reqOff::before { background: var(--line-strong); }
+.help { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--lh-body); }
 .move { position: relative; z-index: 1; display: flex; gap: 2px; }
 .move :global(.product-action) { min-width: 44px; min-height: 44px; }
-.statePending, .statePublished { display: inline-flex; justify-self: start; width: fit-content; align-items: center; gap: var(--s2); min-height: 32px; margin: 0 0 var(--s4); padding: 0 var(--s3); border-radius: 999px; font-size: var(--small); font-weight: 750; }
-.statePending { background: var(--warning-soft); color: var(--warning); }
-.statePublished { background: var(--success-soft); color: var(--success); }
-.statePending::before, .statePublished::before { width: 8px; height: 8px; border-radius: 50%; background: currentColor; content: ""; }
+.stateLine { margin: 0 0 var(--s4); }
 .actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .actions :global(.product-action) { min-height: 44px; }
-.editor { display: grid; gap: var(--s3); padding: var(--s4); border: 1px solid var(--line); border-radius: 18px; background: var(--paper); box-shadow: var(--shadow-raised); }
-.editor h3, .editor p, .recovery h3, .recovery p { margin: 0; }
+.editor { display: grid; gap: var(--s3); padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-card); background: var(--paper); }
+.editor p, .recovery p { margin: 0; }
+.editorTitle { margin: 0; font-size: var(--text-md); font-weight: var(--fw-strong); line-height: var(--lh-tight); }
 .editorActions { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--line); }
 .actionSpacer { width: 0; margin: 0; }
 .field { display: grid; gap: var(--s1); min-width: 0; margin: 0; padding: 0; border: 0; }
-.field > label, .field legend { font-weight: 700; font-size: var(--small); }
+.field > label, .field legend { font-weight: var(--fw-strong); font-size: var(--text-sm); }
 .field input, .field select, .field textarea { width: 100%; }
 .check { display: flex; gap: var(--s2); align-items: center; min-height: 44px; }
 .check input { width: 20px; height: 20px; }
-.recovery { display: grid; gap: var(--s2); margin-bottom: var(--s4); padding: var(--s3); border: 1px solid var(--warning-line); border-radius: var(--radius-small); background: var(--warning-soft); }
+.recovery { display: grid; gap: var(--s2); margin-bottom: var(--s4); padding: var(--s3); border: 1px solid var(--warning-line); border-radius: var(--r-ctl); background: var(--warning-soft); }
 
 /* Phone preview for the public form and the editable draft: the real
    registration sheet (banner, facts, numbered sections) on the event's ground,
    drawn at 390px inside DeviceFrame and scaled down. */
 .previewRail { position: sticky; top: var(--s4); display: grid; gap: var(--s2); margin: 0; }
 .previewHead { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); }
-.previewCaption { margin: 0; color: var(--muted); font-size: var(--small); font-weight: 650; }
-.phoneStatus { color: var(--muted); font-size: var(--small); font-weight: 700; }
+.previewCaption { margin: 0; color: var(--muted); font-size: var(--text-sm); font-weight: var(--fw-strong); }
+.phoneStatus { color: var(--muted); font-size: var(--text-sm); font-weight: var(--fw-strong); }
 .previewModes { display: flex; flex-wrap: wrap; gap: var(--s1); }
 .previewModes :global(.product-action) { min-height: 40px; }
-.previewNote { margin: 0; color: var(--muted); font-size: var(--small); text-align: center; }
+.previewNote { margin: 0; color: var(--muted); font-size: var(--text-sm); text-align: center; }
 .phone { min-width: 0; min-height: 100%; margin: 0; padding: var(--s4); border: 0; background: var(--home-background-color, var(--paper)); color: var(--home-background-ink, var(--ink)); }
 .phone legend { padding: 0; }
-.phoneBar { display: flex; align-items: center; justify-content: space-between; min-height: 36px; padding-bottom: var(--s2); border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent); font-size: var(--small); }
-.phoneWordmark { font-size: 15px; font-weight: 800; letter-spacing: 0.04em; }
-.phoneContext { font-weight: 700; }
+.phoneBar { display: flex; align-items: center; justify-content: space-between; min-height: 36px; padding-bottom: var(--s2); border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent); font-size: var(--text-sm); }
+.phoneWordmark { font-size: var(--text-md); font-weight: var(--fw-heavy); letter-spacing: 0.04em; }
+.phoneContext { font-weight: var(--fw-strong); }
 .phoneSheet { margin-bottom: var(--s5); }
-.phoneEmpty { margin: 0; color: var(--muted); font-size: var(--small); }
+.phoneEmpty { margin: 0; color: var(--muted); font-size: var(--text-sm); }
 .phone input:disabled, .phone select:disabled { background-color: var(--paper); color: var(--muted); opacity: 1; }
 .phone .phoneFieldActive input:not([type="checkbox"]), .phone .phoneFieldActive select { border: 2px solid var(--ink); }
 .phone .phoneFieldActive input[type="checkbox"] { outline: 2px solid var(--ink); outline-offset: 2px; }
 .phoneFooter { padding: var(--s3) 0 var(--s4); border-top: 1px solid var(--line); }
-.phoneCta { display: grid; width: 100%; place-items: center; min-height: 56px; border-radius: 16px; background: var(--line); color: var(--muted); font-weight: 750; }
+.phoneCta { display: grid; width: 100%; place-items: center; min-height: 56px; border-radius: var(--r-card); background: var(--line); color: var(--muted); font-weight: var(--fw-strong); }
 
 @media (max-width: 1000px) {
   .split { grid-template-columns: minmax(0, 1fr); }

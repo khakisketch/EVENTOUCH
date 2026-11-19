@@ -1,7 +1,12 @@
+/* 입장·스태프 (Reopened 2026-11-20, 디자인 시스템 C1): three white step cards on a
+   hairline (1 데스크, 2 스태프, 3 스캔), booths as an optional fourth card. A card
+   with a gap turns its border amber; amber is work waiting on a person. Orange stays
+   with the page's one action. Tokens only: sizes, weights and radii come from tokens.css. */
+
 .hint {
   margin: 0;
   color: var(--muted);
-  font-size: var(--small);
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
@@ -25,16 +30,16 @@
   padding: var(--s4) 0;
   border-block: 1px solid var(--warning-line);
 }
-.deskConflict h3, .deskConflict p { margin: 0; overflow-wrap: anywhere; }
-.deskConflict h3 { font-size: var(--body); }
+.deskConflict > * { margin: 0; overflow-wrap: anywhere; }
+.conflictTitle { font-size: var(--text-md); font-weight: var(--fw-strong); }
 .deskConflict > button { justify-self: start; }
-.deskComparison { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--small); text-align: left; }
-.deskComparison caption { margin-bottom: var(--s2); text-align: left; font-weight: 700; }
+.deskComparison { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--text-sm); text-align: left; }
+.deskComparison caption { margin-bottom: var(--s2); text-align: left; font-weight: var(--fw-strong); }
 .deskComparison th, .deskComparison td { padding: var(--s2); border-bottom: 1px solid var(--line); overflow-wrap: anywhere; vertical-align: top; }
-.deskComparison thead th { color: var(--muted); font-weight: 650; }
+.deskComparison thead th { color: var(--muted); font-weight: var(--fw-strong); }
 .deskComparison th:first-child { width: 23%; }
 .comparisonChanged { background: var(--warning-soft); }
-.comparisonDifference { display: block; color: var(--warning); font-size: var(--small); font-weight: 600; }
+.comparisonDifference { display: block; color: var(--warning); font-size: var(--text-sm); font-weight: var(--fw-strong); }
 
 /* Booth map editor: image with normalized marker overlays. */
 .mapWrap {
@@ -42,7 +47,7 @@
   display: inline-block;
   max-width: 100%;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--r-ctl);
   background: var(--paper);
 }
 
@@ -58,11 +63,11 @@
   position: absolute;
   transform: translate(-50%, -50%);
   padding: var(--s1) var(--s2);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--brand);
   color: var(--on-brand);
-  font-size: var(--small);
-  font-weight: 800;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-heavy);
   white-space: nowrap;
   pointer-events: none;
 }
@@ -70,45 +75,6 @@
   scroll-margin-top: 0;
 }
 
-/* Before-the-day presets start folded (draws setup-details same
-   grammar): the summary always names the current value so a folded row
-   still answers "what is it now". Same-day controls stay unfolded. */
-.presetFold {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-small);
-  background: var(--paper);
-}
-
-.presetSummary {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  padding: var(--s2) var(--s3);
-  color: var(--ink);
-  font-size: var(--small);
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.presetFold[open] .presetSummary {
-  border-bottom: 1px solid var(--line);
-}
-
-.presetBody {
-  display: grid;
-  gap: var(--s3);
-  min-width: 0;
-  margin: var(--s3);
-}
-
-@media (max-width: 768px) {
-  /* Display picker stacks on phones: the select owns its row so the
-     적용 action and 행사장 link read as the next row, never squeezed
-     beside the select at 320px. */
-  .buttonRow > select {
-    flex-basis: 100%;
-  }
-}
 .dialogFields {
   display: grid;
   gap: var(--s4);
@@ -124,21 +90,37 @@
   margin: var(--s3) 0;
   padding: var(--s4);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: var(--r-ctl);
   background: var(--paper);
 }
 
-.recovery h2, .recovery h3, .recovery p { margin: 0; }
+.recovery > * { margin: 0; }
 .recoveryActions { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .uploadDisabled { opacity: 0.6; cursor: not-allowed; }
 
-
-/* Redesign 2026-11-19: rows read as places (tile, name, facts, who is on duty), the
-   gap list is amber work waiting for a person. (The dark display stage moved
-   to 현장 모드.) Orange stays with the page's one action. */
-
-/* Section heads on this page are a step larger than the shared default. */
-.anchorSection [data-console-section-head] h2 { font-size: var(--h3); font-weight: 700; letter-spacing: -0.01em; word-break: keep-all; }
+/* Step cards: white work surface, hairline, amber border when a step waits on a person. */
+.steps { display: grid; gap: var(--s4); min-width: 0; }
+.stepSection {
+  padding: var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface-work);
+}
+.stepAmber { border-color: var(--warning-line); }
+.stepPill { margin-top: var(--s1); padding-left: var(--s1); }
+.stepNo {
+  display: inline-grid;
+  place-items: center;
+  width: var(--s5);
+  height: var(--s5);
+  border-radius: var(--r-pill);
+  background: var(--muted);
+  color: var(--surface-work);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+.stepPill[data-status-pill="ok"] .stepNo { background: var(--success); }
+.stepPill[data-status-pill="wait"] .stepNo { background: var(--warning); }
 
 /* Locations (desks and booths): a row is a tile for the kind of place, its name
    and one quiet line, who is on duty, the run control. The row opens its
@@ -146,15 +128,16 @@
    (muted text, not reduced opacity). */
 .locations { display: grid; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
 .location { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s3); border-bottom: 1px solid var(--line); }
+.location:last-child { border-bottom: 0; }
 .locationOpen {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--s4);
-  min-height: 76px;
+  min-height: 72px;
   padding: var(--s3) var(--s2);
   border: 0;
-  border-radius: var(--radius-medium);
+  border-radius: var(--r-ctl);
   background: none;
   color: var(--ink);
   font: inherit;
@@ -162,35 +145,36 @@
   cursor: pointer;
   transition: background-color 0.12s;
 }
-.locationOpen:hover { background: var(--surface-muted); }
+.locationOpen:hover { background: var(--surface-sunken); }
 .locationOpen:hover .locationChevron { color: var(--ink); transform: translateX(2px); }
 .locationTile {
   display: inline-grid;
   place-items: center;
   width: 44px;
   height: 44px;
-  border-radius: var(--radius-medium);
-  background: var(--surface-muted);
+  border-radius: var(--r-ctl);
+  background: var(--surface-sunken);
   color: var(--muted);
 }
 .locationTile svg { width: 22px; height: 22px; }
 .locationTile[data-tone="on"] { background: var(--success-soft); color: var(--success); }
 .locationTile[data-tone="wait"] { background: var(--info-soft); color: var(--info); }
 .locationTile[data-tone="warn"] { background: var(--warning-soft); color: var(--warning); }
-.locationText { display: grid; gap: 2px; min-width: 0; }
-.locationText strong { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; overflow-wrap: anywhere; word-break: keep-all; }
-.locationSub { color: var(--muted); font-size: var(--small); word-break: keep-all; }
-.locationWarn { color: var(--warning); font-size: var(--small); font-weight: 700; }
+.locationText { display: grid; gap: var(--s1); min-width: 0; }
+.locationText strong { font-size: var(--text-md); font-weight: var(--fw-strong); letter-spacing: var(--ls-heading); overflow-wrap: anywhere; word-break: keep-all; }
+.locationSub { color: var(--muted); font-size: var(--text-sm); word-break: keep-all; }
+.locationWarn { color: var(--warning); font-size: var(--text-sm); font-weight: var(--fw-strong); }
 .locationDuty { display: inline-flex; align-items: center; gap: var(--s2); min-width: 0; }
-.dutyCaption { max-width: 9em; overflow: hidden; color: var(--ink); font-size: var(--small); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.dutyCaption[data-empty="true"] { color: var(--warning); font-weight: 700; }
+.dutyCaption { max-width: 9em; overflow: hidden; color: var(--ink); font-size: var(--text-sm); font-weight: var(--fw-strong); text-overflow: ellipsis; white-space: nowrap; }
+.dutyCaption[data-empty="true"] { color: var(--warning); }
 .locationChevron { display: inline-flex; color: var(--line-strong); transition: transform 0.12s, color 0.12s; }
 .locationChevron svg { width: 20px; height: 20px; }
 .locationControl { display: inline-flex; align-items: center; min-width: 44px; justify-content: flex-end; padding-right: var(--s2); }
 .locationDim .locationText strong { color: var(--muted); }
 .faces { display: inline-flex; align-items: center; }
-.faces > * + * { margin-left: -8px; }
-.facesMore { margin-left: var(--s1); color: var(--muted); font-size: var(--small); font-weight: 700; }
+.faces > * + * { margin-left: calc(var(--s2) * -1); }
+.face { box-shadow: 0 0 0 2px var(--surface-work); }
+.facesMore { margin-left: var(--s1); color: var(--muted); font-size: var(--text-sm); font-weight: var(--fw-strong); }
 .faceEmpty {
   display: inline-grid;
   place-items: center;
@@ -199,92 +183,91 @@
   border: 1.5px dashed var(--warning);
   border-radius: 50%;
   color: var(--warning);
-  font-weight: 700;
+  font-weight: var(--fw-strong);
 }
-.statusDot { display: inline-flex; align-items: center; gap: var(--s2); min-width: 4.5em; justify-content: flex-end; color: var(--muted); font-size: var(--small); font-weight: 700; white-space: nowrap; }
-.statusDot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
-.statusDot[data-tone="good"] { color: var(--success); }
-.statusDot[data-tone="good"]::before { background: var(--success); }
-.statusDot[data-tone="wait"] { color: var(--info); }
-.statusDot[data-tone="wait"]::before { background: var(--info); }
 
 /* Missing coverage is work waiting on a person: amber, with the way to fix it on each row. */
-.gapSurface { display: grid; gap: var(--s1); padding: var(--s4) var(--s5); border: 1px solid var(--warning-line); border-radius: var(--radius-large); background: var(--warning-soft); }
-.gapHead { display: flex; align-items: center; gap: var(--s2); margin: 0 0 var(--s1); color: var(--warning); font-size: var(--small); font-weight: 700; }
-.gapHead b { font-size: var(--h3); font-weight: 750; font-variant-numeric: tabular-nums; }
-.gapMark { width: 8px; height: 8px; border-radius: 50%; background: var(--warning); }
+.gapSurface { display: grid; gap: var(--s1); padding: var(--s4) var(--s5); border: 1px solid var(--warning-line); border-radius: var(--r-card); background: var(--warning-soft); }
+.gapHead { display: flex; align-items: center; gap: var(--s2); margin: 0 0 var(--s1); color: var(--warning); font-size: var(--text-sm); font-weight: var(--fw-strong); }
+.gapHead b { font-size: var(--text-lg); font-weight: var(--fw-heavy); font-variant-numeric: tabular-nums; }
+.gapMark { width: var(--s2); height: var(--s2); border-radius: 50%; background: var(--warning); }
 .gapRow { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 48px; border-top: 1px solid var(--warning-line); }
 .gapName { display: inline-flex; align-items: baseline; gap: var(--s2); min-width: 0; }
-.gapName strong { font-weight: 700; overflow-wrap: anywhere; word-break: keep-all; }
-.gapName em { color: var(--muted); font-size: var(--label); font-style: normal; font-weight: 650; }
-.gapRow > :global(.astryx-button) { flex: none; border: 1px solid var(--warning-line); border-radius: 999px; background: var(--paper); color: var(--ink); font-weight: 650; }
-.gapRow > :global(.astryx-button:hover:not(:disabled)) { border-color: var(--ink); }
-.gapCondition { margin: var(--s2) 0 0; color: var(--muted); font-size: var(--small); }
-.gapOk { display: flex; align-items: center; gap: var(--s3); margin: 0; padding: var(--s3) var(--s4); border-radius: var(--radius-large); background: var(--success-soft); color: var(--ink); font-weight: 600; }
+.gapName strong { font-weight: var(--fw-strong); overflow-wrap: anywhere; word-break: keep-all; }
+.gapName em { color: var(--muted); font-size: var(--text-xs); font-style: normal; font-weight: var(--fw-strong); }
+.gapRow > button, .gapRow > a { flex: none; }
+.gapCondition { margin: var(--s2) 0 0; color: var(--muted); font-size: var(--text-sm); }
+.gapOk { display: flex; align-items: center; gap: var(--s3); margin: 0; padding: var(--s3) var(--s4); border-radius: var(--r-card); background: var(--success-soft); color: var(--ink); font-weight: var(--fw-strong); }
 .gapOkMark { display: inline-grid; flex: none; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--paper); color: var(--success); }
 .gapSurface:has(.gapOk) { padding: 0; border: 0; background: transparent; }
-
-/* Display output: a dark stage, like the screen it drives. */
 
 /* Detail dialog: who is on duty, with their release. */
 .dutyList { display: grid; margin: 0; padding: 0; list-style: none; }
 .dutyRow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--s3); min-height: 52px; }
-.dutyName { font-weight: 700; overflow-wrap: anywhere; }
+.dutyName { font-weight: var(--fw-strong); overflow-wrap: anywhere; }
 .dutyEmpty { margin: 0; color: var(--muted); }
 
-/* Before-the-day presets sit side by side as two setting cards. */
+/* Step 3: how staff scan on their own phones. */
+.scanStep { display: grid; grid-template-columns: minmax(0, 1fr) 208px; align-items: center; gap: var(--s6); }
+.scanCopy { display: grid; gap: var(--s3); min-width: 0; }
+.scanList { display: grid; gap: var(--s2); margin: 0; padding-left: var(--s5); list-style: decimal; }
+.scanList li::marker { color: var(--muted); font-weight: var(--fw-strong); }
+.scanLink { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin: 0; color: var(--muted); font-size: var(--text-sm); }
+.scanLink code { padding: var(--s1) var(--s2); border-radius: var(--r-ctl); background: var(--surface-sunken); color: var(--ink); font-family: var(--mono-font); overflow-wrap: anywhere; }
+.scanActions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.scanPhone { width: 100%; max-width: 208px; justify-self: center; }
+.phoneScreen { display: grid; align-content: start; gap: var(--s3); height: 100%; padding: var(--s5) var(--s4); background: var(--paper); color: var(--ink); }
+.phoneScreen small { color: var(--muted); font-size: var(--text-md); font-weight: var(--fw-strong); }
+.phoneScreen strong { font-size: var(--text-xl); font-weight: var(--fw-heavy); letter-spacing: var(--ls-heading); }
+.phoneCamera { display: grid; place-items: center; height: 200px; border-radius: var(--r-card); background: var(--stage); color: var(--side-muted); font-size: var(--text-md); font-weight: var(--fw-strong); }
+.phoneButtons { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); }
+.phoneButtons i { display: grid; place-items: center; height: 54px; border: 1px solid var(--line-strong); border-radius: var(--r-ctl); font-size: var(--text-md); font-style: normal; font-weight: var(--fw-strong); }
+.optionalNote { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin: 0; color: var(--muted); font-size: var(--text-sm); }
+
+/* Before-the-day presets start folded (draws setup-details same grammar): the
+   summary always names the current value so a folded row still answers "what is
+   it now". They sit side by side as two setting cards. */
 .presetGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); align-items: start; margin-top: var(--s6); }
 .presetGrid:empty { display: none; }
-.presetFold { border-color: var(--line); border-radius: var(--radius-large); transition: border-color 0.12s; }
+.presetFold {
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--paper);
+  transition: border-color 0.12s;
+}
 .presetFold:hover { border-color: var(--line-strong); }
 .presetFold[open] { border-color: var(--ink); }
-.presetSummary { min-height: 56px; padding: var(--s3) var(--s4); font-size: var(--body); }
-.presetBody { margin: var(--s4); }
+.presetSummary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: var(--s3) var(--s4);
+  color: var(--ink);
+  font-size: var(--text-md);
+  font-weight: var(--fw-strong);
+  cursor: pointer;
+}
+.presetFold[open] .presetSummary { border-bottom: 1px solid var(--line); }
+.presetBody { display: grid; gap: var(--s3); min-width: 0; margin: var(--s4); }
 
 @media (max-width: 768px) {
-  .locationOpen { grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--s3); min-height: 72px; padding-inline: 0; }
+  /* Display picker stacks on phones: the select owns its row so the
+     적용 action and 행사장 link read as the next row, never squeezed
+     beside the select at 320px. */
+  .buttonRow > select { flex-basis: 100%; }
+  .stepSection { padding: var(--s4); }
+  .locationOpen { grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--s3); padding-inline: 0; }
   .locationOpen .locationChevron { display: none; }
   .dutyCaption { display: none; }
   .locationTile { width: 40px; height: 40px; }
   .presetGrid { grid-template-columns: minmax(0, 1fr); gap: var(--s4); margin-top: var(--s5); }
 }
+@media (max-width: 760px) {
+  .scanStep { grid-template-columns: minmax(0, 1fr); }
+  /* The phone preview is decorative: phones skip it so the three steps stay short. */
+  .scanPhone { display: none; }
+}
 @media (prefers-reduced-motion: reduce) {
   .locationOpen, .locationChevron, .presetFold { transition: none; }
   .locationOpen:hover .locationChevron { transform: none; }
-}
-
-
-/* Reopened 2026-11-20 (입장·스태프): three steps in one flow. 1 desks, 2 staff on
-   duty (amber while a place has no one), 3 scanning on the staff phone. Booths
-   are an optional section after them; the venue-display output moved to 현장 모드. */
-.steps { display: grid; gap: var(--s6); min-width: 0; }
-.stepSection { padding-top: var(--s5); border-top: 1px solid var(--line); }
-.stepSection:first-child { padding-top: 0; border-top: 0; }
-.stepPill { display: inline-flex; align-items: center; gap: var(--s2); min-height: 28px; padding: 2px var(--s3) 2px 2px; border-radius: 999px; background: var(--surface-muted); color: var(--ink); font-size: var(--small); font-weight: 700; }
-.stepPill b { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: var(--paper); font-size: var(--label); font-variant-numeric: tabular-nums; }
-.stepPill[data-tone="ok"] { background: var(--success-soft); color: var(--success); }
-.stepPill[data-tone="ok"] b { background: var(--success); }
-.stepPill[data-tone="warn"] { background: var(--warning-soft); color: var(--warning); }
-.stepPill[data-tone="warn"] b { background: var(--warning); }
-.stepPill[data-tone="todo"] { background: var(--brand-tint); color: var(--brand-text); }
-.stepPill[data-tone="todo"] b { background: var(--brand-text); }
-.stepPill[data-tone="wait"] b, .stepPill[data-tone="day"] b { background: var(--muted); }
-.scanStep { display: grid; grid-template-columns: minmax(0, 1fr) 208px; align-items: center; gap: var(--s6); }
-.scanCopy { display: grid; gap: var(--s3); min-width: 0; }
-.scanList { display: grid; gap: var(--s2); margin: 0; padding-left: var(--s5); list-style: decimal; }
-.scanList li::marker { color: var(--muted); font-weight: 700; }
-.scanLink { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin: 0; color: var(--muted); font-size: var(--small); }
-.scanLink code { padding: var(--s1) var(--s2); border-radius: var(--radius-small); background: var(--surface-muted); color: var(--ink); font-family: var(--mono-font); overflow-wrap: anywhere; }
-.scanActions { display: flex; flex-wrap: wrap; gap: var(--s2); }
-.scanPhone { width: 100%; max-width: 208px; justify-self: center; }
-.phoneScreen { display: grid; align-content: start; gap: 14px; height: 100%; padding: 24px 22px; background: var(--paper); color: var(--ink); }
-.phoneScreen small { color: var(--muted); font-size: 15px; font-weight: 600; }
-.phoneScreen strong { font-size: 26px; letter-spacing: -0.02em; }
-.phoneCamera { display: grid; place-items: center; height: 200px; border-radius: 18px; background: var(--stage); color: var(--side-muted); font-size: 15px; font-weight: 700; }
-.phoneButtons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.phoneButtons i { display: grid; place-items: center; height: 54px; border: 1px solid var(--line-strong); border-radius: 14px; font-size: 15px; font-style: normal; font-weight: 700; }
-.optionalNote { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin: 0; color: var(--muted); font-size: var(--small); }
-@media (max-width: 760px) {
-  .scanStep { grid-template-columns: minmax(0, 1fr); }
-  .scanPhone { justify-self: start; }
 }

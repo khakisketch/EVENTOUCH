@@ -29,6 +29,7 @@ import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import ConsoleFormActions from "../../../console-ui/ConsoleFormActions";
 import ConsoleDialog from "../../../console-ui/ConsoleDialog";
 import DeviceFrame from "../../../console-ui/DeviceFrame";
+import StatusPill, { type StatusPillTone } from "../../../console-ui/StatusPill";
 import { Switch } from "@astryxdesign/core/Switch";
 import ColorField from "./ColorField";
 import LayoutPicker from "./LayoutPicker";
@@ -1282,6 +1283,16 @@ export default function ThemeWorkspace({ eventId, publicBase = null }: { eventId
   const publishedStateLabel = publicAvailable ? "현재 초안 게시됨"
     : state.eventStage === "DRAFT" ? "페이지 게시됨 · 행사 비공개"
       : state.eventStage === "ARCHIVED" ? "페이지 게시됨 · 행사 보관" : "페이지 게시됨 · 공개 상태 확인 필요";
+  // Reopened 2026-11-20 (디자인 시스템 적용): one tone feeds the save region's pill and a
+  // short, non-live pill in the page header, so the draft/publish state reads at the
+  // top of the page, not only after the fields. Only the save region stays aria-live.
+  const stateTone: StatusPillTone = statusNeedsReview || dirty ? "wait"
+    : alreadyPublished ? (publicAvailable ? "ok" : "info")
+      : state.publishedAt ? "wait" : "neutral";
+  const headerStateLabel = statusNeedsReview ? "확인 필요"
+    : dirty ? "저장 전 변경"
+      : alreadyPublished ? (publicAvailable ? "게시됨" : "게시됨 · 비공개")
+        : state.publishedAt ? "게시본과 다름" : "게시 전 초안";
   // 보관된 행사는 서버가 모든 쓰기를 거부하므로(409) 저장·게시 affordance를
   // 잠그고 읽기·미리보기만 둡니다.
   const canSave = dirty && !uploadBlocked && !commandBusy && !conflict && !state.archived;
@@ -1448,13 +1459,16 @@ export default function ThemeWorkspace({ eventId, publicBase = null }: { eventId
         </>
       }
       badges={
-        state.publishedAt ? <span>최근 게시 {formatPublishedAt(state.publishedAt)}</span> : null
+        <>
+          <StatusPill tone={stateTone} dot>{headerStateLabel}</StatusPill>
+          {state.publishedAt ? <span>최근 게시 {formatPublishedAt(state.publishedAt)}</span> : null}
+        </>
       }
     >
       {conflict ? (
         <section className={styles.conflictPanel} aria-labelledby="page-conflict-title">
           <div>
-            <h2 id="page-conflict-title">{conflict.afterWrite ? conflict.contextChanged ? "게시 후 행사 공개 상태 또는 주소가 달라졌습니다" : "요청 후 페이지가 변경되었습니다" : conflict.contextChanged ? "행사 공개 상태 또는 주소가 달라졌습니다" : "최신 초안이 달라졌습니다"}</h2>
+            <h2 id="page-conflict-title" className={styles.panelTitle}>{conflict.afterWrite ? conflict.contextChanged ? "게시 후 행사 공개 상태 또는 주소가 달라졌습니다" : "요청 후 페이지가 변경되었습니다" : conflict.contextChanged ? "행사 공개 상태 또는 주소가 달라졌습니다" : "최신 초안이 달라졌습니다"}</h2>
             <p>{conflict.afterWrite ? conflict.contextChanged ? "게시 요청은 처리됐지만 이후 행사 공개 상태 또는 주소가 변경됐습니다. 최신 상태를 확인하세요." : "요청은 처리됐지만 그 후 다른 변경이 반영됐습니다. 현재 편집 내용을 보존했으니 최신 상태를 확인하세요." : conflict.contextChanged ? "게시하지 않았습니다. 최신 행사 상태를 불러와 반영 위치를 다시 확인하세요." : "다른 운영자가 먼저 저장했습니다. 현재 편집 내용은 그대로 보존했고, 확인 없이 덮어쓰지 않았습니다."}</p>
             {conflict.latest ? (
               <p className={styles.conflictDetails}>
@@ -1806,7 +1820,7 @@ export default function ThemeWorkspace({ eventId, publicBase = null }: { eventId
             {MENU_GROUPS.map((group) => {
               const ordered = state.form.homeMenus.order.filter((key) => group.keys.includes(key));
               return <div key={group.label} className={styles.menuGroup}>
-                <h3>{group.label}</h3>
+                <h3 className={styles.menuGroupTitle}>{group.label}</h3>
                 <ol className={styles.menuRows}>{ordered.map((key, index) => <li key={key} className={styles.menuRow}>
                   <label className={styles.check}>
                     <input type="checkbox" checked={!state.form.homeMenus.hidden.includes(key)} onChange={(event) => {
@@ -1824,7 +1838,7 @@ export default function ThemeWorkspace({ eventId, publicBase = null }: { eventId
               </div>;
             })}
             <div className={styles.menuGroup}>
-              <h3>개별 참여 콘텐츠</h3>
+              <h3 className={styles.menuGroupTitle}>개별 참여 콘텐츠</h3>
               <p className={styles.help}>선택한 프로그램으로 바로 가는 링크를 홈에 추가합니다.</p>
               {programOptions.length ? <ol className={styles.menuRows}>{programOptions.map((program) => {
                 const selected = state.form.homeMenus.programs.includes(program.id);
@@ -1874,9 +1888,9 @@ export default function ThemeWorkspace({ eventId, publicBase = null }: { eventId
           )}
           <div id="theme-save" tabIndex={-1} className={`${styles.saveAnchor} ${styles.saveBar}`}>
             <div className={styles.versionSummary} aria-live="polite">
-              <span className={styles.statePill} data-state={dirty || statusNeedsReview ? "dirty" : alreadyPublished && publicAvailable ? "published" : "draft"}>
+              <StatusPill tone={stateTone}>
                 {statusNeedsReview ? "최신 상태 확인 필요" : dirty ? "저장되지 않은 변경" : alreadyPublished ? publishedStateLabel : "저장된 초안"}
-              </span>
+              </StatusPill>
               <span>
                 {statusNeedsReview ? "편집 중인 초안은 최신 상태와 다를 수 있습니다" : state.publishedAt
                   ? `게시 버전 ${state.publishedVersion} · 초안 ${state.draftVersion}`
@@ -1940,7 +1954,7 @@ export default function ThemeWorkspace({ eventId, publicBase = null }: { eventId
             ) : null}
           </div>
           <section className={styles.recoveryGroup} aria-labelledby="page-recovery-heading">
-            <h2 id="page-recovery-heading">되돌리기</h2>
+            <h2 id="page-recovery-heading" className={styles.panelTitle}>되돌리기</h2>
             <p className={styles.help}>아래 동작은 편집기에만 적용됩니다. 저장과 게시를 따로 해야 참가자 화면이 바뀝니다.</p>
             <div className={styles.smallActions}>
               <ProductButton variant="secondary" type="button" onClick={requestLoadPublishedDesign} disabled={Boolean(commandBusy || conflict || state.archived || upload?.status === "uploading")}>게시된 디자인 불러오기</ProductButton>

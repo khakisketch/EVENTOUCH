@@ -19,16 +19,17 @@ function noNewHex(source, file) {
 
 // --- 1. Content ledger: flat rows with token rhythm + local danger outline ---
 
-test("content ledger rows are flat, token-spaced and state-dotted", () => {
+test("content ledger rows are shared ListRows with a state tile and a StatusPill", () => {
+  // Reopened 2026-11-20 (디자인 시스템 적용): rows are the shared ListRow; the hand-made ledgerRow grid
+  // and the tinted rowStatus pill are replaced by the console-ui StatusPill. The 36px state tile stays.
   const css = read("console/events/[id]/content/content.module.css");
-  assert.match(css, /\.ledgerItem \+ \.ledgerItem\s*\{[^}]*border-top:\s*1px solid var\(--line\)/s);
-  // Reopened 2026-11-19: the state dot sits in a 36px tinted circle and the status word is a tinted pill.
-  assert.match(css, /\.ledgerRow\s*\{[^}]*grid-template-columns:\s*36px minmax\(0,\s*1fr\) auto/s);
-  assert.match(css, /\.ledgerRow\s*\{[^}]*min-height:\s*80px/s);
-  assert.match(css, /\.rowText\s*\{[^}]*gap:\s*var\(--s1\)/s);
+  const tsx = read("console/events/[id]/content/ContentWorkspace.tsx");
+  assert.match(tsx, /<ListRow\s[\s\S]*?leading=\{<span className=\{styles\.dot\} data-status=\{status\} aria-hidden="true" \/>\}/u);
+  assert.match(tsx, /<StatusPill tone=\{STATUS_TONE\[status\]\}/u);
+  assert.doesNotMatch(css, /\.ledgerRow\b|\.rowStatus\b|\.rowFlag\b/u, "no hand-made row or pill classes");
+  assert.match(css, /\.dot\s*\{[^}]*width:\s*36px;[^}]*height:\s*36px/s);
   assert.match(css, /\.dot\[data-status="live"\]::after\s*\{[^}]*background:\s*var\(--success\)/s);
   assert.match(css, /\.dot\[data-status="edit"\]::after\s*\{[^}]*background:\s*var\(--warning\)/s);
-  assert.match(css, /\.rowStatus\[data-status="live"\]\s*\{[^}]*background:\s*var\(--success-soft\)/s);
   noNewHex(css, "content.module.css");
   noNewHex(read("console/events/[id]/content/content-preview.module.css"), "content-preview.module.css");
 });

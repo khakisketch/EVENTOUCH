@@ -239,7 +239,9 @@ test('unified-frame: theme status lives in header badges and save closes the edi
   const theme = read(THEME);
   assert.match(theme, /badges=\{/, 'version summary rides the shared badges slot');
   assert.match(theme, /className=\{styles\.versionSummary\}/, 'domain pill styles stay');
-  assert.match(theme, /className=\{styles\.statePill\}/, 'state pill stays');
+  // Reopened 2026-11-20 (디자인 시스템 적용): the domain pill is the shared StatusPill.
+  assert.match(theme, /<StatusPill tone=\{stateTone\}>/, 'state pill stays (shared StatusPill)');
+  assert.doesNotMatch(theme, /styles\.statePill/, 'the bespoke state pill is gone');
   assert.doesNotMatch(theme, /<ConsoleSectionNav/, 'the studio left the section nav for settings rows');
   assert.match(theme, /id="theme-edit"/, 'editing anchor wraps the controls column');
   assert.match(theme, /id="theme-save"/, 'save anchor wraps the relocated actions');
@@ -254,7 +256,7 @@ test('unified-frame: theme status lives in header badges and save closes the edi
   const css = read('app/console/events/[id]/page/page.module.css');
   assert.doesNotMatch(css, /\.actionRow/, 'dead action-row chrome removed');
   assert.doesNotMatch(css, /\.actions[\s,{]/, 'dead action chrome removed');
-  assert.match(css, /\.statePill/, 'pill styles retained');
+  assert.doesNotMatch(css, /\.statePill/, 'pill styles moved to the shared StatusPill');
 });
 
 test('unified-frame: theme keeps only locally changed leaves on newer drafts', () => {
@@ -448,7 +450,7 @@ test('engagement-growth: creating a program reveals and focuses the new card', (
   assert.match(programs, /createdFocusRef\.current =/, 'create parks a focus request for the new module');
   assert.match(programs, /__latest__/, 'a receipt without an id still lands on the appended last module');
   assert.match(programs, /id=\{`module-title-\$\{module\.id\}`\}/, 'card headings carry a stable focus target');
-  assert.match(programs, /<h3 id=\{`module-title-/, 'module headings sit under the group h2 without skipping a level; focus target stays');
+  assert.match(programs, /<h3 className=\{styles\.moduleTitle\} id=\{`module-title-/, 'module headings sit under the group h2 without skipping a level; focus target stays');
   assert.match(programs, /scrollIntoView\(\{ block: "nearest" \}\)/, 'create scrolls the new card into view');
   assert.match(programs, /ordered\.slice\(0, moduleLimit\)/, 'rows read in running order (진행 중, 준비 중, 종료), stable inside each group, then windowed');
   assert.match(programs, /onEdit=\{\(\) => openEdit\(module\)\}/, 'edit behavior stays wired per card');

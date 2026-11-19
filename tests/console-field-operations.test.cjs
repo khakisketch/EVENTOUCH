@@ -80,7 +80,7 @@ test("danger-adjacent presets keep their in-place confirm grammar and copy", () 
 test("staff assignment keeps its guidance and its release path", () => {
   const source = ops();
   assert.match(source, /배정된 스태프가 없습니다\. 진행 중으로 전환하려면 입장 데스크에 스태프를 배정하세요\./u);
-  assert.match(source, /배정하려면 먼저 데스크나 부스를 만드세요\./u);
+  assert.match(source, /배정하려면 먼저 데스크나 부스를 만드세요/u);
   assert.match(source, /진행 중 전환 조건: 등록 데스크 \{desks\.length\}개 · 데스크 배정 \{deskStaffCount\}건/u);
   assert.match(source, /staff\.assign/u);
   assert.match(source, /staff\.unassign/u);

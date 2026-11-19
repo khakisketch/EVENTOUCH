@@ -64,9 +64,10 @@ test("program list filters client-side with a count and a zero-result reset", ()
   assert.match(programs, /type="search"/u);
   // Status views are ink-underline tabs with counts (no dropdown); the search and
   // tabs appear once the list is long or a filter is active.
-  assert.match(programs, /value: "OPEN", label: "진행 중"[^}]*\}[\s\S]*value: "DRAFT", label: "준비 중"[\s\S]*value: "CLOSED", label: "종료"/u);
-  assert.match(programs, /<StatusTabs\s+label="진행 상태별 보기"/u);
-  assert.match(read("console/events/[id]/programs/StatusTabs.tsx"), /className=\{styles\.statusTabs\} role="group" aria-label=\{label\}/u);
+  assert.match(programs, /key: "OPEN", label: "진행 중"[^}]*\}[\s\S]*key: "DRAFT", label: "준비 중"[\s\S]*key: "CLOSED", label: "종료"/u);
+  // Reopened 2026-11-20 (디자인 시스템 적용): the local StatusTabs is the shared CountTabs.
+  assert.match(programs, /<CountTabs\s+ariaLabel="진행 상태별 보기"/u);
+  assert.match(read("console/console-ui/CountTabs.tsx"), /role="group" aria-label=\{ariaLabel\}/u);
   assert.match(programs, /totalEvents > 8 \|\| hasProgramFilter/u);
   // "전체 N개 중 M개" count with a status role.
   assert.match(programs, /검색·필터 결과 \{visibleModules\.length \+ visibleDrawEvents\.length\}개 · 전체 \{totalEvents\}개/u);

@@ -1,5 +1,8 @@
 'use strict';
 
+// Reopened 2026-11-20 (디자인 시스템 적용): the filter row is the shared CountTabs, the row pill is the shared StatusPill,
+// rows are hairline-divided, the review drawer uses CountTabs and ConsoleAvatar, empty results use ConsoleEmptyState and
+// the stylesheet is tokens only (no px font sizes, hex or raw radii).
 // Reopened 2026-11-20 (참여 이벤트): the programs screen is the home of every participation event. One list holds the
 // modules (투표·퀴즈·Q&A·설문·참여 사진·게시판 and 간단 추첨) and the stage draws, 순위 투표, 룰렛 and 럭키번호 that used to
 // live only on 추첨·투표. Each row carries a 4-segment life cycle (준비·진행·결과·경품) and a status pill; the four
@@ -33,19 +36,18 @@ test('approved programs design stays locked: ledger rows grouped by run state, o
   assert.doesNotMatch(workspace, /styles\.typeBadge|styles\.status\b|statusOpen|statusDraft|workspacePurpose/u, 'type and state pills and the purpose paragraph stay gone');
   assert.match(workspace, /className=\{styles\.rowAction\}/u, '시작 / 다시 열기 sit at the row end, 종료 inside the expanded row');
   assert.match(workspace, /onClick=\{\(\) => props\.onRequestStatus\("CLOSED"\)\}>종료</u);
-  assert.doesNotMatch(css, /\.moduleCard\s*\{[^}]*border-bottom/su, 'rows are divided by space, not hairlines');
+  assert.match(css, /\.moduleCard \+ \.moduleCard\s*\{[^}]*border-top:\s*1px solid var\(--line\)/su, 'Reopened 2026-11-20: C1 rows are divided by a hairline');
 });
 
 test('reopened 2026-11-20: count tabs replace the status cards, the review queue is a slim amber row', () => {
-  const tabs = read('StatusTabs.tsx');
-  assert.match(workspace, /<StatusTabs\s+label="진행 상태별 보기"/u, 'the count tabs top the list');
+  assert.match(workspace, /<CountTabs\s+ariaLabel="진행 상태별 보기"/u, 'the shared count tabs top the list');
+  assert.ok(!fs.existsSync(path.join(DIR, 'StatusTabs.tsx')), 'the local StatusTabs is replaced by console-ui CountTabs');
   assert.doesNotMatch(workspace, /styles\.statStrip|styles\.statCard|콘텐츠 현황/u, 'the four big status cards are gone');
   assert.doesNotMatch(css, /\.statStrip|\.statCard/u);
-  assert.match(tabs, /aria-pressed=\{value === tab\.value\}/u);
-  assert.match(tabs, /<small>\{tab\.count\}<\/small>/u, 'every tab carries its count badge');
-  assert.match(tabs, /shared console-ui CountTabs/u, 'noted as swappable for the shared CountTabs');
+  const countTabs = fs.readFileSync(path.join(__dirname, '..', 'apps/web/app/console/console-ui/CountTabs.tsx'), 'utf8');
+  assert.match(countTabs, /aria-pressed=\{value === item\.key\}/u);
+  assert.match(countTabs, /item\.count/u, 'every tab carries its count badge');
   assert.match(workspace, /styles\.groupCount/u);
-  assert.match(css, /\.statusTabs button\[aria-pressed="true"\]\s*\{[^}]*background:\s*var\(--ink\)/su);
   assert.match(css, /\.reviewLine\s*\{[^}]*min-height:\s*48px/su, 'the review doorway is a slim row, not a card');
   assert.match(css, /\.reviewLine\s*\{[^}]*background:\s*var\(--warning-soft\)/su);
   assert.match(workspace, /<span>검토할 것 \{reviewTotal\}<small>/u);
@@ -57,7 +59,7 @@ test('reopened 2026-11-20: one list for modules and draw events, each row a life
   assert.match(workspace, /import \{ drawEventsSnapshot, eventPill, lifecycleSegments, lifecycleSteps/u, 'rows derive their life cycle from lib/participation-events');
   assert.match(workspace, /drawEvents: drawEventsSnapshot\(workspace\)/u, 'draw items come from the same bootstrap read, no new request');
   assert.match(workspace, /<LifecycleMeter segments=\{lifecycleSegments\(facts\)\} \/>/u, 'a module row shows the 4-segment meter');
-  assert.match(workspace, /<StatusPill tone=\{pill\.tone\} label=\{pill\.label\} \/>/u);
+  assert.match(workspace, /<StatusPill tone=\{eventPillTone\(pill\.tone\)\}/u, 'the row pill is the shared StatusPill');
   assert.match(workspace, /<DrawEventRow/u, 'stage draws, 순위 투표, 룰렛 and 럭키번호 are rows of the same list');
   assert.match(drawRow, /<LifecycleMeter/u);
   assert.match(drawRow, /<EventStepper/u, 'an opened draw item shows the same 5-step header');
@@ -69,8 +71,8 @@ test('reopened 2026-11-20: one list for modules and draw events, each row a life
   assert.match(lifecycle, /rewardsHref/u, 'the reward step links to 경품 지급');
   assert.match(workspace, /<EventStepper steps=\{lifecycleSteps\(facts\)\}/u, 'an opened module shows the 5-step header above its existing editors and results');
   assert.match(css, /\.lifeMeter li\[data-state="na"\] i/u, 'a type with no reward path is drawn as not applicable, never an empty reward step');
-  assert.match(css, /\.statusPill\[data-tone="live"\]\s*\{[^}]*background:\s*var\(--ink\)/su, '진행 중 is the ink pill');
-  assert.match(css, /\.statusPill\[data-tone="review"\]\s*\{[^}]*var\(--warning-soft\)/su, '검토 N is amber');
+  assert.match(lifecycle, /review: "wait"/u, '검토 N is the amber (wait) pill');
+  assert.match(lifecycle, /live: "ok"/u, '진행 중 is the green pill');
 });
 
 test('reopened 2026-11-20: 이벤트 만들기 is a template chooser over the existing create flows', () => {
@@ -116,6 +118,7 @@ test('type tiles use tokens, a stroke family and an accessible text label elsewh
   }
   assert.match(icons, /aria-hidden="true"/u, 'tiles are decorative; the row text names type and state');
   assert.doesNotMatch(css, /#[0-9A-Fa-f]{3,8}\b/u, 'programs CSS uses tokens, never hex');
+  assert.doesNotMatch(css, /font-size:\s*[\d.]+px|font-weight:\s*(?:5|6|7)\d\d/u, 'Reopened 2026-11-20: sizes and weights come from the type tokens (400/600/800)');
   assert.match(workspace, /<span className="sr-only"> · \{statusLabel\(module\)\}<\/span>/u, 'state is also read aloud');
 });
 

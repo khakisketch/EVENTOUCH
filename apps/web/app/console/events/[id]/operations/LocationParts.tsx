@@ -1,7 +1,8 @@
-import { Avatar } from "@astryxdesign/core/Avatar";
 import { Switch } from "@astryxdesign/core/Switch";
 import type { ReactNode } from "react";
+import ConsoleAvatar from "../../../console-ui/ConsoleAvatar";
 import { ChevronRightIcon } from "../../../console-ui/ConsoleIcons";
+import StatusPill from "../../../console-ui/StatusPill";
 import { BoothIcon, DeskIcon, TabletIcon } from "./OpsIcons";
 import styles from "./operations.module.css";
 
@@ -15,7 +16,7 @@ export function StaffFaces({ staff }: { staff: Staffer[] }) {
   return (
     <span className={styles.faces} aria-hidden="true">
       {staff.slice(0, 3).map((person) => (
-        <Avatar key={person.assignmentId} name={person.name} size="sm" tooltip={false} />
+        <ConsoleAvatar key={person.assignmentId} name={person.name} tone="ok" size="sm" className={styles.face} />
       ))}
       {staff.length > 3 ? <span className={styles.facesMore}>+{staff.length - 3}</span> : null}
     </span>
@@ -103,6 +104,7 @@ export function RunSwitch({ name, on, disabled, reason, onToggle }: DeskSwitchPr
   );
 }
 
+/** Booth schedule state: the shared pill (dot plus word), never colour alone. */
 export function StatusDot({ tone, children }: { tone: "good" | "wait" | "muted"; children: ReactNode }) {
-  return <span className={styles.statusDot} data-tone={tone}>{children}</span>;
+  return <StatusPill tone={tone === "good" ? "ok" : tone === "wait" ? "info" : "neutral"} size="sm" dot>{children}</StatusPill>;
 }

@@ -1,3 +1,8 @@
+/* Attendee page editor (Reopened 2026-11-20, design-system C1).
+   Tokens only. The status pill is the shared StatusPill; the dead editor-layout,
+   jump-nav and preview-panel rules from earlier layouts are gone (the studio
+   grid lives in studio.module.css). */
+
 .versionSummary {
   display: flex;
   flex-wrap: wrap;
@@ -5,31 +10,7 @@
   gap: var(--s2) var(--s3);
   min-width: 0;
   color: var(--muted);
-  font-size: var(--small);
-}
-
-.statePill {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  padding: 3px 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: var(--surface-muted);
-  color: var(--ink);
-  font-weight: 700;
-}
-
-.statePill[data-state="dirty"] {
-  border-color: var(--warning-line);
-  background: var(--warning-soft);
-  color: var(--warning);
-}
-
-.statePill[data-state="published"] {
-  border-color: var(--success-line);
-  background: var(--success-soft);
-  color: var(--success);
+  font-size: var(--text-sm);
 }
 
 .smallActions,
@@ -43,17 +24,13 @@
 
 .inlineHelp {
   margin: 0;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  font-size: var(--small);
-  line-height: 1.45;
-}
-
-.inlineHelp {
-  border-color: var(--info-line);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--info-line);
+  border-radius: var(--r-ctl);
   background: var(--info-soft);
   color: var(--info);
+  font-size: var(--text-sm);
+  line-height: var(--lh-body);
 }
 
 .conflictPanel {
@@ -63,71 +40,29 @@
   gap: var(--s4);
   padding: var(--s4);
   border: 1px solid var(--warning-line);
-  border-radius: var(--radius);
+  border-radius: var(--r-card);
   background: var(--warning-soft);
   color: var(--ink);
 }
 
-.conflictPanel h2,
-.recoveryGroup h2 {
+.panelTitle {
   margin: 0 0 var(--s1);
-  font-size: var(--h3);
+  font-size: var(--text-lg);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-tight);
 }
 
 .conflictPanel > div { min-width: 0; max-width: 100%; }
-.conflictPanel h2, .conflictPanel p { word-break: keep-all; overflow-wrap: break-word; }
-.conflictPanel p { margin: 0; font-size: var(--small); line-height: 1.45; }
-.conflictDetails { margin-top: var(--s2) !important; font-weight: 700; }
+.conflictPanel .panelTitle, .conflictPanel p { word-break: keep-all; overflow-wrap: break-word; }
+.conflictPanel p { margin: 0; font-size: var(--text-sm); line-height: var(--lh-body); }
+.conflictDetails { margin-top: var(--s2) !important; font-weight: var(--fw-strong); }
 .conflictActions { flex: none; justify-content: flex-end; }
 
-.editorLayout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
-  align-items: start;
-  gap: var(--s7);
-  min-width: 0;
-}
-
-.controls {
-  display: grid;
-  gap: var(--s5);
-  min-width: 0;
-  scroll-margin-top: var(--s4);
-}
-
-/* In-form skip link to the save/publish actions. Unlike the global
-   off-canvas skip link it stays visible inside the form — the keyboard
-   audit showed operators never discover a hidden one here — while reusing
-   the same info-tone language so it reads as navigation, not content. */
-.editorSkip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  justify-self: start;
-  max-width: 100%;
-  min-height: 44px;
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--info-line);
-  border-radius: var(--radius);
-  background: var(--info-soft);
-  color: var(--info);
-  font-size: var(--small);
-  font-weight: 700;
-  text-underline-offset: 4px;
-}
-
-.editorSkip:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
-}
-
-/* Landing target of the in-form skip link. Tabbable only by script
-   (tabIndex -1) so the tab order is unchanged, but focusable so the jump
-   hands focus over: the next Tab stop after this region is the save
-   button itself. */
+/* Landing target of the save region. Tabbable only by script (tabIndex -1) so
+   the tab order is unchanged, but focusable so the jump hands focus over. */
 .saveAnchor {
   scroll-margin-top: var(--s4);
-  border-radius: var(--radius);
+  border-radius: var(--r-card);
 }
 
 .saveAnchor:focus {
@@ -135,49 +70,40 @@
   outline-offset: 2px;
 }
 
-/* The save/publish region sits in the normal form flow after the fields,
-   not over them: a sticky overlay would cover the last control and force
-   scroll-clearance hacks on every focus target below. */
+/* The save/publish region sits in the normal form flow after the fields, not
+   over them: a sticky overlay would cover the last control and force
+   scroll-clearance hacks on every focus target. White work surface + hairline
+   (C1), one card, never nested. */
 .saveBar {
   position: static;
   display: grid;
   gap: var(--s3);
   padding: var(--s4);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface-work);
   box-shadow: none;
 }
 
-/* The sticky bar reads as one compact row: the pill keeps its size while
-   the version text wraps inside its own lane. */
+/* The bar reads as one compact row: the pill keeps its size while the version
+   text wraps inside its own lane. */
 .saveBar .versionSummary {
   flex-wrap: nowrap;
   align-items: center;
 }
 
-.saveBar .statePill {
-  flex: none;
-}
-
 .saveBar .versionSummary > span:last-child {
   min-width: 0;
   overflow-wrap: anywhere;
-  font-weight: 600;
+  font-weight: var(--fw-strong);
 }
 
-/* Detail diff folds into one summary row; the full existing sentence stays
-   inside, unfolded on demand. */
-.diffFold {
-  min-width: 0;
-}
+/* Detail diff folds into one summary row; the full sentence stays inside. */
+.diffFold { min-width: 0; }
 
-/* Local button lane: the shared phone stacking rule is scoped out for the
-   sticky bar only, so both actions stay on one 44px row. The shared
+/* Local button lane: both actions stay on one 44px row on phones. The shared
    ConsoleFormActions implementation is untouched. */
-.saveButtons {
-  min-width: 0;
-}
+.saveButtons { min-width: 0; }
 
 @media (max-width: 768px) {
   .saveButtons :global(.product-action) {
@@ -186,40 +112,22 @@
   }
 }
 
-/* The save region is in-flow, so focused controls need no extra clearance
-   above a bar that no longer overlaps them. */
-.controls :is(a[href], button, input, select, summary, [tabindex]) {
-  scroll-margin-bottom: var(--s4);
-}
-
-/* Advanced banner controls fold into a native disclosure: the basic edit
-   (background, banner image, copy) stays on top. The summary is a real
-   keyboard control with a 44px target. Paper surface + strong border +
-   persistent chevron keep it reading as a collapsed control, never as a
-   disabled field. */
-.advanced {
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-small);
-  background: var(--paper);
-}
-
+/* A real keyboard disclosure: 44px target, persistent plus/minus marker so it
+   reads as a collapsed control, never as a disabled field. */
 .advancedSummary {
   display: flex;
   align-items: center;
   gap: var(--s2);
   min-height: 44px;
-  padding: var(--s2) var(--s3);
-  border-radius: var(--radius-small);
+  padding: var(--s2) 0;
   color: var(--ink);
-  font-size: var(--small);
-  font-weight: 700;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
   cursor: pointer;
   list-style: none;
 }
 
-.advancedSummary::-webkit-details-marker {
-  display: none;
-}
+.advancedSummary::-webkit-details-marker { display: none; }
 
 .advancedSummary::before {
   content: "+";
@@ -227,91 +135,29 @@
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: var(--surface-muted);
+  width: var(--s5);
+  height: var(--s5);
+  border-radius: var(--r-pill);
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
   color: var(--brand-text);
-  font-size: var(--small);
-  font-weight: 800;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-heavy);
 }
 
-.advanced[open] > .advancedSummary::before {
-  content: "−";
-  border-color: var(--brand);
-  background: var(--soft);
-}
-
-.advancedSummary:hover {
-  background: var(--surface-muted);
-}
-
-.advancedSummary::marker {
-  color: var(--muted);
-}
+details[open] > .advancedSummary::before { content: "−"; }
 
 .advancedSummary:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
 
-.advancedBody {
-  display: grid;
-  gap: var(--s3);
-  padding: 0 var(--s3) var(--s3);
-}
-
-.controlGroup {
-  display: grid;
-  gap: var(--s3);
-  min-width: 0;
-  margin: 0;
-  padding: var(--s5) 0 var(--s4);
-  border: 0;
-  border-top: 1px solid var(--line);
-}
-
-.controlGroup legend {
-  padding: 0 var(--s3) 0 0;
-  color: var(--ink);
-  font-size: var(--h3);
-  font-weight: 700;
-  word-break: keep-all;
-}
-
 .help {
   max-width: 68ch;
   margin: 0;
   color: var(--muted);
-  font-size: var(--small);
-  line-height: 1.45;
-}
-
-.colorRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s3);
-}
-
-.colorLabel { font-weight: 650; }
-.colorRow input[type="color"] {
-  width: 54px;
-  height: 44px;
-  padding: 3px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-small);
-  background: var(--paper);
-  cursor: pointer;
-}
-
-.colorRow output {
-  min-width: 82px;
-  color: var(--muted);
-  font-family: var(--mono-font);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+  line-height: var(--lh-body);
 }
 
 .imageStatus {
@@ -320,21 +166,22 @@
   align-items: center;
   gap: var(--s2);
   min-height: 44px;
-  padding: 9px 12px;
+  padding: var(--s2) var(--s3);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-small);
+  border-radius: var(--r-ctl);
   background: var(--paper);
 }
 
-.imageStatusName { min-width: 0; overflow-wrap: anywhere; font-weight: 700; color: var(--ink); }
+.imageStatusName { min-width: 0; overflow-wrap: anywhere; font-weight: var(--fw-strong); color: var(--ink); }
 .imageStatusMeta {
   margin-left: auto;
-  padding: 3px 10px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface-muted);
+  padding: 0 var(--s3);
+  border-radius: var(--r-pill);
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--text-xs);
+  line-height: 28px;
   white-space: nowrap;
 }
 
@@ -366,19 +213,19 @@
   gap: var(--s1);
   min-width: 0;
   color: var(--ink);
-  font-size: var(--small);
-  font-weight: 650;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
 }
 
-.field > span { color: var(--muted); font-weight: 450; }
+.field > span { color: var(--muted); font-weight: var(--fw-regular); }
 .field input,
 .field select {
   width: 100%;
   min-width: 0;
   min-height: 44px;
-  padding: 8px 10px;
+  padding: var(--s2) var(--s3);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-small);
+  border-radius: var(--r-ctl);
   background: var(--paper);
   color: var(--ink);
   font: inherit;
@@ -386,22 +233,9 @@
 
 .field input:focus-visible,
 .field select:focus-visible,
-.colorRow input:focus-visible,
 .viewportChoice:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
-}
-
-.fieldGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s3);
-}
-
-.toggleGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s1) var(--s3);
 }
 
 .check {
@@ -409,8 +243,8 @@
   align-items: center;
   gap: var(--s2);
   min-height: 44px;
-  font-size: var(--small);
-  font-weight: 650;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
 }
 
 .check input {
@@ -424,114 +258,51 @@
   gap: var(--s2);
   padding: var(--s3);
   border: 1px solid var(--danger-line);
-  border-radius: var(--radius-small);
+  border-radius: var(--r-ctl);
   background: var(--danger-soft);
   color: var(--danger);
 }
 
-.uploadError p { margin: 0; font-size: var(--small); }
+.uploadError p { margin: 0; font-size: var(--text-sm); }
 
 .recoveryGroup {
   display: grid;
   gap: var(--s2);
-  padding: var(--s3) 0 0;
+  padding: var(--s4) 0 0;
   border-top: 1px solid var(--line);
 }
 
-.previewPanel {
-  position: sticky;
-  top: var(--s4);
-  display: grid;
-  gap: var(--s3);
-  min-width: 0;
-  width: 100%;
-  max-width: 460px;
-  justify-self: end;
-  padding-left: var(--s5);
-  border-left: 1px solid var(--line);
-  scroll-margin-top: var(--s4);
-}
-
-.previewHeader {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--s2) var(--s3);
-}
-
-.previewHeader > div:first-child {
-  flex: 1 1 220px;
-  min-width: 0;
-}
-
-.previewHeader h2 { margin: 0 0 var(--s1); font-size: var(--h3); word-break: keep-all; overflow-wrap: anywhere; }
-.previewHeader p { margin: 0; color: var(--muted); font-size: 13px; }
-
-.liveMark {
+/* Draft / published switch above the phone: one pill track, the pressed side
+   reads as the active surface. */
+.sourceSwitch {
   display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 6px;
-  color: var(--success);
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.liveMark span {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--success);
-}
-
-.viewportChoices { display: flex; flex-wrap: wrap; gap: 6px; }
-
-.sourceSwitch { display: inline-flex; flex-wrap: wrap; gap: 0; width: max-content; max-width: 100%; border: 1px solid var(--line-strong); border-radius: 999px; padding: 3px; background: var(--paper); }
-
-.sourceSwitch .viewportChoice {
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-}
-
-.sourceSwitch .viewportChoice[aria-pressed="true"] {
-  border: 0;
-  background: var(--soft);
-  color: var(--brand-text);
-  font-weight: 800;
-}
-
-.viewportChoices .viewportChoice {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.viewportChoices .viewportChoice[aria-pressed="true"] {
-  border-color: var(--brand);
-  background: var(--soft);
-  color: var(--ink);
-  font-weight: 700;
+  flex-wrap: wrap;
+  width: max-content;
+  max-width: 100%;
+  padding: var(--s1);
+  border-radius: var(--r-pill);
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 
 .viewportChoice {
   min-height: 44px;
-  padding: 6px 9px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-small);
-  background: var(--paper);
-  color: var(--ink);
+  padding: 0 var(--s4);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--muted);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
   cursor: pointer;
 }
 
 .viewportChoice[aria-pressed="true"] {
-  border-color: var(--brand);
-  background: var(--soft);
-  color: var(--ink);
-  font-weight: 700;
+  background: var(--paper);
+  box-shadow: 0 1px 2px var(--shadow-color), inset 0 0 0 1px var(--line);
+  color: var(--brand-text);
+  font-weight: var(--fw-heavy);
 }
 
 .phoneStage {
@@ -549,140 +320,49 @@
 .publishedNote {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: var(--text-xs);
+  line-height: var(--lh-body);
 }
 
 .publishedNote { color: var(--info); }
 
-@media (max-width: 1080px) {
-  .editorLayout { grid-template-columns: minmax(0, 1fr); }
-  .previewPanel { position: static; max-width: none; justify-self: stretch; padding: var(--s5) 0 0; border: 0; border-top: 1px solid var(--line); }
-}
-
-@media (max-width: 680px) {
-  .conflictPanel { flex-direction: column; }
-  .conflictActions { justify-content: flex-start; }
-  .fieldGrid { grid-template-columns: minmax(0, 1fr); }
-  .toggleGrid { grid-template-columns: minmax(0, 1fr); }
-  .controlGroup { padding: var(--s4) 0 var(--s3); }
-  .previewPanel { padding: var(--s3) 0 0; }
-  .saveBar { padding: var(--s3); gap: var(--s2); }
-}
-
-/* Editing-head status mirror: one quiet row carrying the same pill + version
-   line as the save region, so the draft/publish state reads before the
-   field list instead of only after it. The mirrored text stays
-   aria-hidden in markup; the save region below keeps the live region. */
-.editStatus {
-  padding: var(--s2) var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
-}
-
-/* Per-group unsaved marker: an inline flag inside the group legend naming
-   which editing unit holds unsaved changes. Derived from the same saved
-   baselines as the save guard; warning soft/light/dark triplet only. */
-.groupFlag {
-  display: inline-block;
-  margin-left: var(--s2);
-  padding: 2px 10px;
-  border: 1px solid var(--warning-line);
-  border-radius: 999px;
-  background: var(--warning-soft);
-  color: var(--warning);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.4;
-  white-space: nowrap;
-  vertical-align: middle;
-  word-break: keep-all;
-}
-
-/* Preview switch blocks: each control row keeps a visible micro-label so
-   the two pill rows stop competing as one ambiguous cluster. The block
-   keeps label and row tight while the panel gap separates the blocks. */
-.switchBlock {
-  display: grid;
-  gap: var(--s1);
-  min-width: 0;
-}
-
-.switchLabel {
+.workflowHelp,
+.changeSummary {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.4;
-  word-break: keep-all;
+  font-size: var(--text-sm);
+  line-height: var(--lh-body);
 }
 
-/* The jump nav marks the section in view on its own link, so a long editor
-   page with the preview at the bottom still says where the operator is. */
-.navSticky {
-  display: grid;
-  gap: var(--s1);
-  min-width: 0;
-}
-
-/* Visible in-page index context: a quiet scope label above the shared
-   jump nav so the anchor row reads as a contents index, not app tabs.
-   aria-hidden: the nav's own aria-label carries screen-reader naming
-   once. Static wrapper — never covers the section it jumps to. */
-.navIndexLabel {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--small);
-  font-weight: 650;
-}
-
-/* The workflow starts with its current publication state and actions, not
-   a long list of fields. Both directions remain ordinary in-page links. */
-.workspaceIntro { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: var(--s3); }
-.workspaceIntro h2, .editHeading h2 { margin: 0 0 var(--s1); font-size: var(--h3); }
-.workspaceIntro p, .editHeading p, .workflowHelp, .changeSummary { margin: 0; color: var(--muted); font-size: var(--small); line-height: 1.5; }
 .changeSummary { color: var(--ink); overflow-wrap: anywhere; }
-.previewJump, .backToEdit { display: inline-flex; align-items: center; min-height: 44px; color: var(--brand-text); font-weight: 700; text-underline-offset: 4px; }
-.previewJump:focus-visible, .backToEdit:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.editHeading { padding-top: var(--s2); }
-.backToEdit { display: none; }
-@media (max-width: 1080px) { .backToEdit { display: inline-flex; justify-self: start; } }
+
 .reviewChanges { min-width: 0; border-top: 1px solid var(--line); }
-.reviewChanges summary { display: flex; align-items: center; min-height: 44px; color: var(--brand-text); cursor: pointer; font-size: var(--small); font-weight: 700; }
+.reviewChanges summary { display: flex; align-items: center; min-height: 44px; color: var(--brand-text); cursor: pointer; font-size: var(--text-sm); font-weight: var(--fw-strong); }
 .reviewChanges summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.reviewChanges p { margin: 0 0 var(--s2); color: var(--muted); font-size: var(--small); }
+.reviewChanges p { margin: 0 0 var(--s2); color: var(--muted); font-size: var(--text-sm); }
 .reviewChanges dl { display: grid; gap: var(--s2); margin: 0; }
-.reviewChanges dl > div { display: grid; grid-template-columns: minmax(90px, 0.35fr) minmax(0, 1fr); gap: var(--s2); font-size: var(--small); }
-.reviewChanges dt { font-weight: 700; }
+.reviewChanges dl > div { display: grid; grid-template-columns: minmax(90px, 0.35fr) minmax(0, 1fr); gap: var(--s2); font-size: var(--text-sm); }
+.reviewChanges dt { font-weight: var(--fw-strong); }
 .reviewChanges dd { margin: 0; overflow-wrap: anywhere; }
 .reviewChanges dd span { color: var(--muted); }
 
-/* On narrow screens the real preview and editor share a workspace. Neither
-   is unmounted, so inputs, upload state and disclosures survive switching. */
-.inlinePreview { display: none; }
-.editStatusLine { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--s2); color: var(--muted); font-size: var(--small); }
-.editStatusLine a { display: inline-flex; align-items: center; min-height: 44px; color: var(--brand-text); font-weight: 700; text-underline-offset: 4px; }
-.editStatusLine a:focus-visible, .inlinePreview:focus-visible, .backToEdit:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-@media (max-width: 1080px) {
-  .inlinePreview, .backToEdit { min-height: 44px; padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-small); background: var(--paper); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }
-  .inlinePreview { display: inline-flex; justify-self: start; align-items: center; }
-  .backToEdit { display: inline-flex; justify-self: start; align-items: center; }
-  .editorLayout[data-mobile-view="edit"] .previewPanel, .editorLayout[data-mobile-view="preview"] .controls { display: none; }
-  .editorLayout[data-mobile-view="preview"] .previewPanel { padding-top: 0; border-top: 0; }
-  .controls { gap: var(--s3); }
-}
-
-/* In the phone console, the fixed shell header must not cover a focused
-   preview heading, edit return control or save-review destination. */
-@media (max-width: 768px) {
-  .previewHeader h2, .inlinePreview, .controls, .saveAnchor { scroll-margin-top: 72px; }
-}
 .menuGroup { display: grid; gap: var(--s2); }
-.menuGroup h3 { margin: 0; font-size: var(--body); }
+.menuGroupTitle { margin: 0; font-size: var(--text-md); font-weight: var(--fw-strong); }
 .menuRows { list-style: none; display: grid; gap: var(--s1); margin: 0; padding: 0; }
 .menuRow { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; }
 .menuRow label { min-width: 0; flex-wrap: wrap; overflow-wrap: anywhere; }
 .menuMove { display: flex; gap: var(--s1); flex: none; }
 .menuMove :global(.product-action) { min-width: 44px; min-height: 44px; padding: 0; }
-.menuNote { color: var(--muted); font-size: var(--small); }
+.menuNote { color: var(--muted); font-size: var(--text-sm); }
+
+@media (max-width: 680px) {
+  .conflictPanel { flex-direction: column; }
+  .conflictActions { justify-content: flex-start; }
+  .saveBar { padding: var(--s3); gap: var(--s2); }
+}
+
+/* In the phone console the fixed shell header must not cover a focused
+   preview heading or the save-review destination. */
+@media (max-width: 768px) {
+  .saveAnchor { scroll-margin-top: 72px; }
+}

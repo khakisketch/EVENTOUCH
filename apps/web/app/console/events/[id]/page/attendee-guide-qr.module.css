@@ -10,9 +10,9 @@
 .eventName {
   max-width: 28ch;
   margin: 0;
-  font-size: var(--h3);
+  font-size: var(--text-lg);
   line-height: 1.35;
-  font-weight: 750;
+  font-weight: var(--fw-heavy);
   overflow-wrap: anywhere;
 }
 
@@ -24,8 +24,8 @@
   max-width: 100%;
   padding: var(--s6);
   border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: #fff;
+  border-radius: var(--r-card);
+  background: var(--paper);
 }
 
 .qrFrame svg {
@@ -38,8 +38,8 @@
 .addressLabel {
   justify-self: stretch;
   margin: var(--s1) 0 calc(var(--s1) * -1);
-  font-size: var(--small);
-  font-weight: 650;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
   text-align: start;
 }
 
@@ -48,11 +48,11 @@
   min-height: 48px;
   padding: var(--s2) var(--s3);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-small);
+  border-radius: var(--r-ctl);
   background: var(--paper);
   color: var(--ink);
   font: inherit;
-  font-size: var(--body);
+  font-size: var(--text-md);
   line-height: 1.4;
   overflow-wrap: anywhere;
   text-align: start;
@@ -69,7 +69,7 @@
   justify-content: center;
   min-height: 44px;
   color: var(--brand-text);
-  font-weight: 650;
+  font-weight: var(--fw-strong);
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
@@ -83,7 +83,7 @@
 .copyMessage {
   min-height: 1.5em;
   color: var(--ink);
-  font-size: var(--small);
+  font-size: var(--text-sm);
 }
 
 .actions {
@@ -126,8 +126,8 @@
     min-height: 287mm;
     margin: 0;
     padding: 24mm 20mm;
-    background: #fff !important;
-    color: #111318 !important;
+    background: var(--paper) !important;
+    color: var(--ink) !important;
     font-family: sans-serif;
     text-align: center;
     page: attendeeGuideQr;
@@ -141,10 +141,10 @@
 
   .printSheet h1 {
     margin: 0;
-    color: #111318;
+    color: var(--ink);
     font-size: 30pt;
     line-height: 1.2;
-    font-weight: 750;
+    font-weight: var(--fw-heavy);
     overflow-wrap: anywhere;
   }
 
@@ -170,7 +170,7 @@
     align-self: start;
     max-width: 100%;
     margin: 0;
-    color: #111318;
+    color: var(--ink);
     font-size: 10pt;
     line-height: 1.4;
     overflow-wrap: anywhere;

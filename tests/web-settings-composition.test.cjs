@@ -3,6 +3,10 @@
 // Reopened 2026-11-19: the stage row is a connected stepper (done = green check, current = ink
 // circle, next = outline) and the feature tiles carry a switch. Layout, drawer and behaviour below
 // are unchanged.
+// Reopened 2026-11-20 (디자인 시스템 적용): the page gains a left table of contents (SettingsToc,
+// 변경됨 pill per section), the two panels stack as full-width hairline section cards (heading="rule"),
+// each save row is a sticky bar (styles.saveBar), the dirty tag is a StatusPill, and the stage dot is ink.
+// Everything else below (event card, drawer, anchors, behaviour) is unchanged.
 // Approved 행사 설정 composition (2026-11-15, option A5): one workbench page
 // (event card with identity plus stage on top, intake and features panels
 // below, basics editing in a right-edge drawer). Behavior (per-section save,
@@ -26,7 +30,7 @@ test('one workbench page: event card on top, two panels below, no tabs', () => {
   // Event card: calendar, name, meta, saved policies, edit button, stage.
   assert.match(workspace, /className=\{styles\.eventCard\}/u);
   assert.match(workspace, /className=\{styles\.cal\}/u);
-  assert.match(workspace, /<h2 id="settings-basics">\{state\.basics\.name\}<\/h2>/u);
+  assert.match(workspace, /<h2 id="settings-basics" className=\{styles\.eventTitle\}>\{state\.basics\.name\}<\/h2>/u);
   assert.match(workspace, /\{state\.eventMeta\}/u);
   assert.match(workspace, /savedPolicyFlags\(\)/u);
   assert.match(workspace, /onClick=\{\(\) => setBasicsOpen\(true\)\}/u);
@@ -111,4 +115,25 @@ test('section and dialog chrome reuse tokens with 44px targets', () => {
   // ink fails contrast (caught by the preparation audit, 2026-11-15).
   const cal = css.slice(css.indexOf('.cal {'), css.indexOf('.eventName {'));
   assert.doesNotMatch(cal, /opacity/u);
+});
+
+// Reopened 2026-11-20 (디자인 시스템 적용)
+test('Reopened 2026-11-20: left contents list, hairline section cards and a sticky save bar', () => {
+  const toc = read('SettingsToc.tsx');
+  const tocCss = read('settings-toc.module.css');
+  assert.match(workspace, /<SettingsToc items=\{\[/u);
+  assert.match(toc, /aria-label="설정 목차"/u);
+  assert.match(toc, /<StatusPill tone="wait" size="sm" dot>변경됨<\/StatusPill>/u, 'each dirty section is named in the list');
+  assert.match(toc, /item\.href \? \(/u, 'sections are anchors, basics opens the drawer');
+  for (const flag of ['basicsDirty', 'intakeDirty', 'featuresDirty']) assert.ok(workspace.includes(`dirty: Boolean(${flag})`), `${flag} reaches the list`);
+  assert.match(workspace, /title="참가 접수" heading="rule" surface="panel"/u);
+  assert.match(workspace, /title="운영 기능" heading="rule" surface="panel"/u);
+  assert.equal((workspace.match(/className=\{styles\.saveBar\}/g) || []).length, 2, 'intake and features keep their save row in view');
+  assert.match(css, /\.saveBar \{[^}]*position: sticky;[^}]*bottom: 0/su);
+  assert.match(css, /\.layout \{[^}]*grid-template-columns: 188px/su);
+  assert.match(css, /\.workPanels \{[^}]*grid-template-columns: minmax\(0, 1fr\)/su, 'panels stack beside the list');
+  assert.match(workspace, /<StatusPill tone="wait" size="sm" dot>저장 안 됨<\/StatusPill>/u);
+  assert.match(css, /\.stageDot \{[^}]*background: var\(--ink\)/su, 'the stage dot is ink, not a second orange');
+  assert.doesNotMatch(tocCss, /#[0-9a-fA-F]{3,8}|font-size:\s*\d+px/u);
+  assert.doesNotMatch(css, /:global\(\[data-variant/u, 'no Astryx variant overrides');
 });
