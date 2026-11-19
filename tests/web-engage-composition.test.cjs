@@ -15,7 +15,10 @@ const css = fs.readFileSync(path.join(dir, 'engage.module.css'), 'utf8');
 
 test('the page sits on the event color and picks a readable ink', () => {
   assert.match(client, /normalizeHomeStyle\(.*homeStyle\)\.backgroundColor/su);
-  assert.match(client, /"--engage-ink": readableInk\(state\.ground\)/u);
+  // Reopened 2026-11-20: the ground and its ink come from AttendeeSurface (a1 white, a2 the event's own color).
+  assert.match(client, /attendeeLook\(/u);
+  assert.match(css, /--engage-ground:\s*var\(--ev-ground, var\(--paper\)\)/u);
+  assert.match(css, /--engage-ink:\s*var\(--ev-ground-ink, var\(--ink\)\)/u);
   assert.match(css, /\.page\s*\{[^}]*background:\s*var\(--engage-ground\)/su);
 });
 
@@ -25,7 +28,11 @@ test('kinds are tabs, shown only for kinds the event has and only with more than
   assert.match(client, /aria-label="참여 종류"/u);
   assert.match(client, /aria-pressed=\{type === currentType\}/u);
   assert.match(client, /requestedType \?\? typeOrder\[0\]/u, 'a ?program= link opens its own kind');
-  assert.match(client, /visibleModules\.map\(\(module, index\)/u);
+  // Reopened 2026-11-20: programs to do lead; finished ones (a submitted poll, quiz or survey, or a closed program) fold into one list.
+  assert.match(client, /activeModules\.map\(\(module, index\) => renderModule\(module, index, false\)\)/u);
+  assert.match(client, /doneModules\.map\(\(module, index\) => renderModule\(module, index, true\)\)/u);
+  assert.match(client, /완료한 참여 \{doneModules\.length\}개/u);
+  assert.match(client, /open=\{requestedProgram \? module\.id === requestedProgram : !folded && index === 0\}/u, 'a ?program= link still opens its own program');
 });
 
 test('an unfinished poll, quiz or survey is a dot on its tab, not a count', () => {
@@ -68,5 +75,7 @@ test('kind tabs and cards carry a kind icon; the way out is a quiet list on the 
   assert.match(client, /<AttendeeIcon name=\{typeIcon\(type\)\} size=\{18\} \/>\{typeLabel\(type\)\}/u);
   assert.match(client, /className=\{styles\.kindIcon\} aria-hidden="true"/u);
   assert.match(css, /summary span\[data-state\]\s*\{/u, 'the state chip rule no longer catches the icon');
-  assert.match(css, /\.pageFooter\s*\{[^}]*color-mix\(in srgb, var\(--engage-ink\)/su, 'the footer tint follows the page ink so it reads on any ground');
+  // Reopened 2026-11-20: the way out is AttendeeListRow rows in one soft card (white on an a2 ground).
+  assert.match(client, /<AttendeeListRow icon="ticket" title="내 티켓으로 이동"/u);
+  assert.match(css, /\.pageFooter\s*\{[^}]*color-mix\(in srgb, var\(--ink\) 5%/su);
 });

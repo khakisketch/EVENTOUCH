@@ -11,6 +11,12 @@ import styles from "./engage.module.css";
 import { normalizeHomeStyle, readableInk } from "../../../../lib/attendee-home";
 import EventBanner from "../EventBanner";
 import AttendeeIcon, { type AttendeeIconName } from "../AttendeeIcons";
+import AttendeeSurface from "../ui/AttendeeSurface";
+import AttendeeStateMessage from "../ui/AttendeeStateMessage";
+import { AttendeeList } from "../ui/AttendeeListRow";
+import AttendeeListRow from "../ui/AttendeeListRow";
+import BottomAction from "../ui/BottomAction";
+import { attendeeLook } from "../attendee-look";
 import { readAttendeeTheme, type AttendeeTheme } from "../event-theme";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
 import { readGuestReceipts, writeGuestReceipts, type GuestReceiptPointer } from "../../../../lib/receipt-recovery";
@@ -1150,13 +1156,22 @@ export default function EngageClient({ slug }: { slug: string }) {
     }
   }
 
+  // a1 white ground unless the agency picked a ground color (a2). Before the first read the look is the default.
+  const look = state.kind === "ready" || state.kind === "missing" || state.kind === "failed" ? attendeeLook(
+    state.kind === "ready" ? state.theme.homeStyle : undefined, state.kind === "ready" ? state.theme.accent : null) : attendeeLook(undefined, null);
+  const surface = (children: React.ReactNode, style?: React.CSSProperties) => (
+    <AttendeeSurface as="main" id="main-content" tabIndex={-1} color={look.color} mode={look.mode} ground={look.ground} className={styles.page} style={style}>
+      {children}
+    </AttendeeSurface>
+  );
+
   if (state.kind === "loading") {
-    return <main id="main-content" tabIndex={-1} className={styles.page}>{receiptRecovery}{pendingRecovery}<p className={styles.state} role="status">참여 콘텐츠를 불러오고 있습니다.</p></main>;
+    return surface(<>{receiptRecovery}{pendingRecovery}<AttendeeStateMessage kind="info" icon="clock" title="참여 콘텐츠를 불러오고 있습니다." className={styles.state} /></>);
   }
 
   if (state.kind === "missing") {
-    return (
-      <main id="main-content" tabIndex={-1} className={styles.page}>
+    return surface(
+      <>
         {receiptRecovery}{pendingRecovery}
         <header className={styles.pageHeader}>
           <span className={styles.wordmark}>EVENTOUCH</span>
@@ -1165,26 +1180,25 @@ export default function EngageClient({ slug }: { slug: string }) {
         </header>
         <section className={styles.noticeCard}>
           <h2>티켓이 확인되지 않습니다</h2>
-          {recoveryBlocked ? (
-            <p>참여 콘텐츠에는 본인 티켓이 필요합니다. 이 행사는 문자로 다시 연결할 수 없으므로 신청을 완료한 브라우저 탭을 확인하세요. 탭을 찾을 수 없다면 행사 주최 측에 문의하세요.</p>
-          ) : (
-            <p>참여 콘텐츠에는 본인 티켓이 필요합니다. 브라우저의 탭 보관이 차단되었거나 인증 세션이 없을 수 있습니다. 신청할 때 쓴 연락처를 인증해 티켓을 다시 연결하세요.</p>
-          )}
+          <AttendeeStateMessage kind="info" icon="ticket" title="참여 콘텐츠에는 본인 티켓이 필요합니다.">
+            {recoveryBlocked
+              ? "이 행사는 문자로 다시 연결할 수 없으므로 신청을 완료한 브라우저 탭을 확인하세요. 탭을 찾을 수 없다면 행사 주최 측에 문의하세요."
+              : "브라우저의 탭 보관이 차단되었거나 인증 세션이 없을 수 있습니다. 신청할 때 쓴 연락처를 인증해 티켓을 다시 연결하세요."}
+          </AttendeeStateMessage>
           <p className={styles.actions}>
-            <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/home`}>참가 메뉴로</ProductLink>
-            {recoveryBlocked ? null : (
-              <ProductLink className="button button-primary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</ProductLink>
-            )}
-            <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</ProductLink>
+            <ProductLink variant="ghost" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</ProductLink>
           </p>
         </section>
-      </main>
+        {recoveryBlocked
+          ? <BottomAction label="다음 행동" primary={{ label: "참가 메뉴로", href: `/event/${encodeURIComponent(slug)}/home` }} />
+          : <BottomAction label="다음 행동" primary={{ label: "내 티켓 찾기", href: `/event/${encodeURIComponent(slug)}/ticket/recover` }} secondary={{ label: "참가 메뉴로", href: `/event/${encodeURIComponent(slug)}/home` }} />}
+      </>,
     );
   }
 
   if (state.kind === "failed") {
-    return (
-      <main id="main-content" tabIndex={-1} className={styles.page}>
+    return surface(
+      <>
         {receiptRecovery}{pendingRecovery}
         <header className={styles.pageHeader}>
           <span className={styles.wordmark}>EVENTOUCH</span>
@@ -1193,26 +1207,17 @@ export default function EngageClient({ slug }: { slug: string }) {
         </header>
         <section className={styles.noticeCard}>
           <h2>참여 콘텐츠를 열 수 없습니다</h2>
-          <p role="alert">{state.message}</p>
+          <AttendeeStateMessage kind="error" title={state.message} />
           <p className={styles.actions}>
-            <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/home`}>참가 메뉴로</ProductLink>
-            <ProductButton
-              type="button"
-              className="button button-primary"
-              onClick={() => {
-                setState({ kind: "loading" });
-                setReloadTick((tick) => tick + 1);
-              }}
-            >
-              다시 시도
-            </ProductButton>
+            <ProductLink variant="ghost" href={`/event/${encodeURIComponent(slug)}/home`}>참가 메뉴로</ProductLink>
             {state.hasTicket ? null : recoveryBlocked ? null : (
-              <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</ProductLink>
+              <ProductLink variant="ghost" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</ProductLink>
             )}
-            <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</ProductLink>
+            <ProductLink variant="ghost" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</ProductLink>
           </p>
         </section>
-      </main>
+        <BottomAction label="다음 행동" primary={{ label: "다시 시도", onClick: () => { setState({ kind: "loading" }); setReloadTick((tick) => tick + 1); } }} />
+      </>,
     );
   }
 
@@ -1227,8 +1232,135 @@ export default function EngageClient({ slug }: { slug: string }) {
   const answerable = state.approved ? state.modules.filter((module) => ["poll", "quiz", "survey"].includes(module.type) && (module.status !== "CLOSED" || state.submittedModuleIds.includes(module.id))) : [];
   const progressTotal = answerable.length;
   const progressDone = answerable.filter((module) => state.submittedModuleIds.includes(module.id)).length;
-  return (
-    <main id="main-content" tabIndex={-1} className={styles.page} style={{ "--engage-ground": state.ground, "--engage-ink": readableInk(state.ground) } as React.CSSProperties}>
+  // Programs to do come first; the ones the attendee finished (a submitted poll, quiz or
+  // survey) or that closed fold into one list below.
+  const isDone = (module: PublicModule) => module.status === "CLOSED" || (["poll", "quiz", "survey"].includes(module.type) && state.submittedModuleIds.includes(module.id));
+  const activeModules = visibleModules.filter((module) => !isDone(module));
+  const doneModules = visibleModules.filter(isDone);
+  const renderModule = (module: PublicModule, index: number, folded: boolean) => (
+      <li key={module.id} className={styles.moduleCard}>
+        <section aria-labelledby={`engage-${module.id}`}>
+        <details className={styles.programDisclosure} open={requestedProgram ? module.id === requestedProgram : !folded && index === 0}>
+          <summary data-disclosure-indicator=""><span className={styles.kindIcon} aria-hidden="true"><AttendeeIcon name={typeIcon(module.type)} size={22} /></span><h2 id={`engage-${module.id}`} tabIndex={-1}>{module.title}</h2><span data-state={hasPending(`${state.eventId}:${module.id}`) ? "check" : state.submittedModuleIds.includes(module.id) ? "done" : module.status === "CLOSED" ? "end" : "todo"}>{typeLabel(module.type)} · {hasPending(`${state.eventId}:${module.id}`) ? "제출 확인 필요" : state.submittedModuleIds.includes(module.id) ? "제출 완료" : module.status === "CLOSED" ? "종료" : "참여하기"}</span></summary>
+        {(() => {
+          const formKey = `${state.eventId}:${module.id}`;
+          const responseType = ["poll", "quiz", "survey"].includes(module.type);
+          const requiresContentVersion = responseType || module.type === "qa";
+          const baseline = draftContentBaselines[formKey];
+          const isQuestionDraft = (baseline?.type ?? module.type) === "qa";
+          // A different form may have caused an unrelated refresh while
+          // this answer was being written. Do not silently rebase the
+          // draft onto a newer question just because that read arrived.
+          const staleDraft = baseline && baseline.version !== module.contentVersion && module.contentVersion !== null;
+          const conflict = contentConflicts[formKey] ?? (staleDraft ? {
+            formKey, moduleId: module.id, viewedVersion: baseline.version, latest: module,
+            latestSubmitted: state.submittedModuleIds.includes(module.id), loading: false, error: null,
+          } : null);
+          return <>
+          {(previousResponseDrafts[formKey] ?? []).map((draft, index) => <PreviousResponseDraft
+            key={`${draft.type}-${index}`} value={draft.text} question={draft.type === "qa"}
+            onDiscard={() => setPreviousResponseDrafts((previous) => {
+              const next = { ...previous };
+              const remaining = (next[formKey] ?? []).filter((_, itemIndex) => itemIndex !== index);
+              if (remaining.length) next[formKey] = remaining; else delete next[formKey];
+              return next;
+            })} />)}
+          {requiresContentVersion && (module.type === "qa" || !state.submittedModuleIds.includes(module.id)) && module.contentVersion === null ? <p className={styles.warning} role="alert">
+            {isQuestionDraft ? "참여 내용을 확인할 수 없어 제출을 잠시 중단했습니다. 화면을 다시 불러오거나 행사 운영자에게 문의하세요. 작성 중인 질문은 이 화면에 남아 있습니다." : "참여 내용을 확인할 수 없어 제출을 잠시 중단했습니다. 화면을 다시 불러오거나 행사 운영자에게 문의하세요. 작성 중인 답변은 이 화면에 남아 있습니다."}
+          </p> : null}
+          {conflict ? <section className={styles.warning} aria-labelledby={`content-conflict-${module.id}`}>
+            <h3 id={`content-conflict-${module.id}`} tabIndex={-1}>참여 내용이 변경됐습니다</h3>
+            <p>{isQuestionDraft ? "작성 중인 질문은 아직 제출되지 않았습니다. 입력은 그대로 있습니다. 최신 내용을 확인한 뒤 다시 제출하세요." : "작성 중인 답변은 아직 제출되지 않았습니다. 입력은 그대로 있습니다. 최신 내용을 확인한 뒤 다시 제출하세요."}</p>
+            {baseline ? <p>{isQuestionDraft ? "질문을 작성할 때의 제목:" : "답변을 작성할 때의 제목:"} {baseline.title}</p> : null}
+            {conflict.error ? <p role="alert">{conflict.error}</p> : null}
+            {conflict.latest ? <>
+              <p><strong>최신 제목:</strong> {conflict.latest.title}</p>
+              {baseline && baseline.type !== conflict.latest.type ? <>
+                <p>참여 유형이 {typeLabel(baseline.type)}에서 {typeLabel(conflict.latest.type)}(으)로 바뀌어 {isQuestionDraft ? "이전 질문을 제출할 수 없습니다. 필요한 경우 질문을 복사한 뒤 최신 콘텐츠를 확인하세요." : "이전 답변을 제출할 수 없습니다. 필요한 경우 답변을 복사한 뒤 최신 콘텐츠를 확인하세요."}</p>
+                {responseDraftText(module.id, baseline.type) ? <PreviousResponseDraft value={responseDraftText(module.id, baseline.type)} question={isQuestionDraft} /> : null}
+              </> : null}
+              {conflict.latest.type === "poll" ? <><p>최신 선택지</p><ul>{conflict.latest.options.map((option, index) => <li key={`${option}-${index}`}>{option}</li>)}</ul></> : null}
+              {conflict.latest.type === "survey" ? <><p>최신 설문 항목</p><ul>{conflict.latest.questions.map((question, index) => <li key={`${question}-${index}`}>{question}</li>)}</ul></> : null}
+              {conflict.latest.status !== "OPEN" ? <p>{isQuestionDraft ? "현재 참여가 종료되어 질문을 제출할 수 없습니다." : "현재 참여가 종료되어 답변을 제출할 수 없습니다."}</p> : null}
+              {conflict.latestSubmitted ? <p>이 참가자는 이미 답변을 제출했습니다.</p> : null}
+              <ProductButton type="button" className="button button-secondary" disabled={submitting !== null} onClick={() => acceptLatestContent(formKey, conflict.latest ?? undefined)}>{baseline && baseline.type !== conflict.latest.type ? "최신 콘텐츠 보기" : isQuestionDraft ? "최신 내용으로 질문 검토" : "최신 내용으로 답변 검토"}</ProductButton>
+              <p>확인만으로 제출되지 않습니다.</p>
+            </> : <ProductButton type="button" className="button button-secondary" disabled={conflict.loading || submitting !== null} onClick={() => void readLatestContent(formKey)}>{conflict.loading ? "최신 내용 확인 중…" : "최신 내용 확인"}</ProductButton>}
+          </section> : null}
+          <ModuleSection
+            formKey={formKey}
+            hasPending={hasPending(formKey)}
+            module={module}
+            canSubmit={state.approved && !conflict && (!requiresContentVersion || (module.contentVersion !== null && module.status === "OPEN"))}
+            canInteractWithQuestions={state.approved && !conflict}
+            approved={state.approved}
+            submitted={state.submittedModuleIds.includes(module.id)}
+            questions={state.questions.filter((question) => question.moduleId === module.id)}
+            photos={state.photos}
+            posts={state.posts}
+            slug={slug}
+            eventId={state.eventId}
+            submitting={submitting}
+            pollChoice={pollChoices[module.id] ?? ""}
+            setPollChoice={(value) => { markResponseDraft(formKey, module); setPollChoices((current) => ({ ...current, [module.id]: value })); }}
+            quizAnswer={quizAnswers[module.id] ?? ""}
+            setQuizAnswer={(value) => { markResponseDraft(formKey, module); setQuizAnswers((current) => ({ ...current, [module.id]: value })); }}
+            ratings={ratings[module.id] ?? {}}
+            setRating={(question, value) => {
+              markResponseDraft(formKey, module);
+              setRatings((current) => ({ ...current, [module.id]: { ...(current[module.id] ?? {}), [question]: value } }));
+            }}
+            surveyComment={surveyComments[module.id] ?? ""}
+            setSurveyComment={(value) => { markResponseDraft(formKey, module); setSurveyComments((current) => ({ ...current, [module.id]: value })); }}
+            questionText={questionTexts[module.id] ?? ""}
+            setQuestionText={(value) => { markResponseDraft(formKey, module); setQuestionTexts((current) => ({ ...current, [module.id]: value })); }}
+            postBody={postBodies[module.id] ?? ""}
+            setPostBody={(value) => setPostBodies((current) => ({ ...current, [module.id]: value }))}
+            caption={captions[module.id] ?? ""}
+            setCaption={(value) => setCaptions((current) => ({ ...current, [module.id]: value }))}
+            setPhotoSelected={(value) => setPhotoSelected((current) => ({ ...current, [module.id]: value }))}
+            setQuestionEditDirty={setQuestionEditDirty}
+            formMessage={(field) => formMessage(formKey, field)}
+            generalMessage={generalMessage(formKey)}
+            onSubmit={(command, payload, successMessage) => {
+              if (conflict) return;
+              if (command === "response.submit" || command === "question.submit") {
+                const currentBaseline = draftContentBaselinesRef.current[formKey];
+                if (module.contentVersion === null || conflict || module.status !== "OPEN" ||
+                    (currentBaseline && currentBaseline.version !== module.contentVersion)) return;
+                payload = { ...payload, expectedContentVersion: module.contentVersion };
+              }
+              void submitGuestForm(state.eventId, formKey, command, payload, successMessage);
+            }}
+            likeConflict={(questionId) => likeConflicts[questionId] ?? null}
+            likePending={(questionId) => hasPending(`${formKey}:like:${questionId}`)}
+            likeError={(questionId) => formError?.form === `${formKey}:like:${questionId}` ? formError.message : null}
+            onReadLatestLike={(questionId) => void readLatestLike(questionId)}
+            onLike={(question) => {
+              if (question.likedByMe === null || likeConflicts[question.id]) return;
+              const liked = !question.likedByMe;
+              void submitGuestForm(state.eventId, `${formKey}:like:${question.id}`, "question.like",
+                { id: question.id, expectedLiked: question.likedByMe, liked, expectedQuestionText: question.text },
+                liked ? "좋아요를 눌렀습니다." : "좋아요를 취소했습니다.");
+            }}
+            editPending={(questionId) => hasPending(`${formKey}:edit:${questionId}`)}
+            editError={(questionId) => formError?.form === `${formKey}:edit:${questionId}` ? formError.message : null}
+            onEditQuestion={(question, value) => {
+              const editKey = `${formKey}:edit:${question.id}`;
+              void submitGuestForm(state.eventId, editKey, "question.edit", {
+                id: question.id, text: value.trim(), expectedText: question.text,
+                expectedPendingId: question.pendingEdit?.id ?? "", expectedApproved: question.approved,
+              }, question.approved ? "수정안을 등록했습니다. 운영자 승인 후 공개됩니다." : "질문을 수정했습니다. 운영자 승인 후 공개됩니다.");
+            }}
+            onPhoto={(file) => void submitPhoto(state.eventId, module.id, formKey, file)}
+          /></>;
+        })()}
+        </details>
+        </section>
+      </li>
+  );
+  return surface(
+    <>
       <header className={styles.pageHeader}>
         <span className={styles.wordmark}>EVENTOUCH</span>
         <span className="eyebrow">참여 콘텐츠</span>
@@ -1237,9 +1369,9 @@ export default function EngageClient({ slug }: { slug: string }) {
       </header>
       {receiptRecovery}{pendingRecovery}
 
-      {notice ? <p className={styles.success} role="status">{notice}</p> : null}
+      {notice ? <AttendeeStateMessage kind="info" icon="check" title={notice} /> : null}
       {!state.approved ? (
-        <p className={styles.warning} role="note">참가 확정 후 참여할 수 있습니다. 프로그램 목록은 미리 확인할 수 있습니다.</p>
+        <AttendeeStateMessage kind="info" title="참가 확정 후 참여할 수 있습니다.">프로그램 목록은 미리 확인할 수 있습니다.</AttendeeStateMessage>
       ) : null}
 
       {progressTotal > 0 ? (
@@ -1266,139 +1398,32 @@ export default function EngageClient({ slug }: { slug: string }) {
 
       {state.modules.length ? (
         <ul className={styles.moduleList}>
-          {visibleModules.map((module, index) => (
-            <li key={module.id} className={styles.moduleCard}>
-              <section aria-labelledby={`engage-${module.id}`}>
-              <details className={styles.programDisclosure} open={requestedProgram ? module.id === requestedProgram : index === 0}>
-                <summary data-disclosure-indicator=""><span className={styles.kindIcon} aria-hidden="true"><AttendeeIcon name={typeIcon(module.type)} size={22} /></span><h2 id={`engage-${module.id}`} tabIndex={-1}>{module.title}</h2><span data-state={hasPending(`${state.eventId}:${module.id}`) ? "check" : state.submittedModuleIds.includes(module.id) ? "done" : module.status === "CLOSED" ? "end" : "todo"}>{typeLabel(module.type)} · {hasPending(`${state.eventId}:${module.id}`) ? "제출 확인 필요" : state.submittedModuleIds.includes(module.id) ? "제출 완료" : module.status === "CLOSED" ? "종료" : "참여하기"}</span></summary>
-              {(() => {
-                const formKey = `${state.eventId}:${module.id}`;
-                const responseType = ["poll", "quiz", "survey"].includes(module.type);
-                const requiresContentVersion = responseType || module.type === "qa";
-                const baseline = draftContentBaselines[formKey];
-                const isQuestionDraft = (baseline?.type ?? module.type) === "qa";
-                // A different form may have caused an unrelated refresh while
-                // this answer was being written. Do not silently rebase the
-                // draft onto a newer question just because that read arrived.
-                const staleDraft = baseline && baseline.version !== module.contentVersion && module.contentVersion !== null;
-                const conflict = contentConflicts[formKey] ?? (staleDraft ? {
-                  formKey, moduleId: module.id, viewedVersion: baseline.version, latest: module,
-                  latestSubmitted: state.submittedModuleIds.includes(module.id), loading: false, error: null,
-                } : null);
-                return <>
-                {(previousResponseDrafts[formKey] ?? []).map((draft, index) => <PreviousResponseDraft
-                  key={`${draft.type}-${index}`} value={draft.text} question={draft.type === "qa"}
-                  onDiscard={() => setPreviousResponseDrafts((previous) => {
-                    const next = { ...previous };
-                    const remaining = (next[formKey] ?? []).filter((_, itemIndex) => itemIndex !== index);
-                    if (remaining.length) next[formKey] = remaining; else delete next[formKey];
-                    return next;
-                  })} />)}
-                {requiresContentVersion && (module.type === "qa" || !state.submittedModuleIds.includes(module.id)) && module.contentVersion === null ? <p className={styles.warning} role="alert">
-                  {isQuestionDraft ? "참여 내용을 확인할 수 없어 제출을 잠시 중단했습니다. 화면을 다시 불러오거나 행사 운영자에게 문의하세요. 작성 중인 질문은 이 화면에 남아 있습니다." : "참여 내용을 확인할 수 없어 제출을 잠시 중단했습니다. 화면을 다시 불러오거나 행사 운영자에게 문의하세요. 작성 중인 답변은 이 화면에 남아 있습니다."}
-                </p> : null}
-                {conflict ? <section className={styles.warning} aria-labelledby={`content-conflict-${module.id}`}>
-                  <h3 id={`content-conflict-${module.id}`} tabIndex={-1}>참여 내용이 변경됐습니다</h3>
-                  <p>{isQuestionDraft ? "작성 중인 질문은 아직 제출되지 않았습니다. 입력은 그대로 있습니다. 최신 내용을 확인한 뒤 다시 제출하세요." : "작성 중인 답변은 아직 제출되지 않았습니다. 입력은 그대로 있습니다. 최신 내용을 확인한 뒤 다시 제출하세요."}</p>
-                  {baseline ? <p>{isQuestionDraft ? "질문을 작성할 때의 제목:" : "답변을 작성할 때의 제목:"} {baseline.title}</p> : null}
-                  {conflict.error ? <p role="alert">{conflict.error}</p> : null}
-                  {conflict.latest ? <>
-                    <p><strong>최신 제목:</strong> {conflict.latest.title}</p>
-                    {baseline && baseline.type !== conflict.latest.type ? <>
-                      <p>참여 유형이 {typeLabel(baseline.type)}에서 {typeLabel(conflict.latest.type)}(으)로 바뀌어 {isQuestionDraft ? "이전 질문을 제출할 수 없습니다. 필요한 경우 질문을 복사한 뒤 최신 콘텐츠를 확인하세요." : "이전 답변을 제출할 수 없습니다. 필요한 경우 답변을 복사한 뒤 최신 콘텐츠를 확인하세요."}</p>
-                      {responseDraftText(module.id, baseline.type) ? <PreviousResponseDraft value={responseDraftText(module.id, baseline.type)} question={isQuestionDraft} /> : null}
-                    </> : null}
-                    {conflict.latest.type === "poll" ? <><p>최신 선택지</p><ul>{conflict.latest.options.map((option, index) => <li key={`${option}-${index}`}>{option}</li>)}</ul></> : null}
-                    {conflict.latest.type === "survey" ? <><p>최신 설문 항목</p><ul>{conflict.latest.questions.map((question, index) => <li key={`${question}-${index}`}>{question}</li>)}</ul></> : null}
-                    {conflict.latest.status !== "OPEN" ? <p>{isQuestionDraft ? "현재 참여가 종료되어 질문을 제출할 수 없습니다." : "현재 참여가 종료되어 답변을 제출할 수 없습니다."}</p> : null}
-                    {conflict.latestSubmitted ? <p>이 참가자는 이미 답변을 제출했습니다.</p> : null}
-                    <ProductButton type="button" className="button button-secondary" disabled={submitting !== null} onClick={() => acceptLatestContent(formKey, conflict.latest ?? undefined)}>{baseline && baseline.type !== conflict.latest.type ? "최신 콘텐츠 보기" : isQuestionDraft ? "최신 내용으로 질문 검토" : "최신 내용으로 답변 검토"}</ProductButton>
-                    <p>확인만으로 제출되지 않습니다.</p>
-                  </> : <ProductButton type="button" className="button button-secondary" disabled={conflict.loading || submitting !== null} onClick={() => void readLatestContent(formKey)}>{conflict.loading ? "최신 내용 확인 중…" : "최신 내용 확인"}</ProductButton>}
-                </section> : null}
-                <ModuleSection
-                  formKey={formKey}
-                  hasPending={hasPending(formKey)}
-                  module={module}
-                  canSubmit={state.approved && !conflict && (!requiresContentVersion || (module.contentVersion !== null && module.status === "OPEN"))}
-                  canInteractWithQuestions={state.approved && !conflict}
-                  approved={state.approved}
-                  submitted={state.submittedModuleIds.includes(module.id)}
-                  questions={state.questions.filter((question) => question.moduleId === module.id)}
-                  photos={state.photos}
-                  posts={state.posts}
-                  slug={slug}
-                  eventId={state.eventId}
-                  submitting={submitting}
-                  pollChoice={pollChoices[module.id] ?? ""}
-                  setPollChoice={(value) => { markResponseDraft(formKey, module); setPollChoices((current) => ({ ...current, [module.id]: value })); }}
-                  quizAnswer={quizAnswers[module.id] ?? ""}
-                  setQuizAnswer={(value) => { markResponseDraft(formKey, module); setQuizAnswers((current) => ({ ...current, [module.id]: value })); }}
-                  ratings={ratings[module.id] ?? {}}
-                  setRating={(question, value) => {
-                    markResponseDraft(formKey, module);
-                    setRatings((current) => ({ ...current, [module.id]: { ...(current[module.id] ?? {}), [question]: value } }));
-                  }}
-                  surveyComment={surveyComments[module.id] ?? ""}
-                  setSurveyComment={(value) => { markResponseDraft(formKey, module); setSurveyComments((current) => ({ ...current, [module.id]: value })); }}
-                  questionText={questionTexts[module.id] ?? ""}
-                  setQuestionText={(value) => { markResponseDraft(formKey, module); setQuestionTexts((current) => ({ ...current, [module.id]: value })); }}
-                  postBody={postBodies[module.id] ?? ""}
-                  setPostBody={(value) => setPostBodies((current) => ({ ...current, [module.id]: value }))}
-                  caption={captions[module.id] ?? ""}
-                  setCaption={(value) => setCaptions((current) => ({ ...current, [module.id]: value }))}
-                  setPhotoSelected={(value) => setPhotoSelected((current) => ({ ...current, [module.id]: value }))}
-                  setQuestionEditDirty={setQuestionEditDirty}
-                  formMessage={(field) => formMessage(formKey, field)}
-                  generalMessage={generalMessage(formKey)}
-                  onSubmit={(command, payload, successMessage) => {
-                    if (conflict) return;
-                    if (command === "response.submit" || command === "question.submit") {
-                      const currentBaseline = draftContentBaselinesRef.current[formKey];
-                      if (module.contentVersion === null || conflict || module.status !== "OPEN" ||
-                          (currentBaseline && currentBaseline.version !== module.contentVersion)) return;
-                      payload = { ...payload, expectedContentVersion: module.contentVersion };
-                    }
-                    void submitGuestForm(state.eventId, formKey, command, payload, successMessage);
-                  }}
-                  likeConflict={(questionId) => likeConflicts[questionId] ?? null}
-                  likePending={(questionId) => hasPending(`${formKey}:like:${questionId}`)}
-                  likeError={(questionId) => formError?.form === `${formKey}:like:${questionId}` ? formError.message : null}
-                  onReadLatestLike={(questionId) => void readLatestLike(questionId)}
-                  onLike={(question) => {
-                    if (question.likedByMe === null || likeConflicts[question.id]) return;
-                    const liked = !question.likedByMe;
-                    void submitGuestForm(state.eventId, `${formKey}:like:${question.id}`, "question.like",
-                      { id: question.id, expectedLiked: question.likedByMe, liked, expectedQuestionText: question.text },
-                      liked ? "좋아요를 눌렀습니다." : "좋아요를 취소했습니다.");
-                  }}
-                  editPending={(questionId) => hasPending(`${formKey}:edit:${questionId}`)}
-                  editError={(questionId) => formError?.form === `${formKey}:edit:${questionId}` ? formError.message : null}
-                  onEditQuestion={(question, value) => {
-                    const editKey = `${formKey}:edit:${question.id}`;
-                    void submitGuestForm(state.eventId, editKey, "question.edit", {
-                      id: question.id, text: value.trim(), expectedText: question.text,
-                      expectedPendingId: question.pendingEdit?.id ?? "", expectedApproved: question.approved,
-                    }, question.approved ? "수정안을 등록했습니다. 운영자 승인 후 공개됩니다." : "질문을 수정했습니다. 운영자 승인 후 공개됩니다.");
-                  }}
-                  onPhoto={(file) => void submitPhoto(state.eventId, module.id, formKey, file)}
-                /></>;
-              })()}
+          {activeModules.map((module, index) => renderModule(module, index, false))}
+          {doneModules.length ? (
+            <li className={styles.doneGroup}>
+              {/* Finished programs fold away so the ones to do stay on top; a ?program= link keeps its own open. */}
+              <details open={doneModules.some((module) => module.id === requestedProgram) || undefined}>
+                <summary data-disclosure-indicator="">완료한 참여 {doneModules.length}개</summary>
+                <ul className={styles.moduleList}>
+                  {doneModules.map((module, index) => renderModule(module, index, true))}
+                </ul>
               </details>
-              </section>
             </li>
-          ))}
+          ) : null}
         </ul>
       ) : (
-        <p className={styles.state} role="status">게시된 프로그램이 없습니다.</p>
+        <AttendeeStateMessage kind="empty" title="게시된 프로그램이 없습니다." />
       )}
 
+      {/* The way out: one quiet list of rows. */}
       <footer className={styles.pageFooter}>
-        {state.modules.length || pendingKeys.length || savedReceipts.length ? <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/home`}>참가 메뉴로<AttendeeIcon name="arrow" size={16} /></ProductLink> : null}
-        <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket`}>내 티켓으로 이동<AttendeeIcon name="arrow" size={16} /></ProductLink>
-        <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로<AttendeeIcon name="arrow" size={16} /></ProductLink>
+        <AttendeeList label="다른 화면">
+          {state.modules.length || pendingKeys.length || savedReceipts.length ? <AttendeeListRow icon="board" title="참가 메뉴로" href={`/event/${encodeURIComponent(slug)}/home`} /> : null}
+          <AttendeeListRow icon="ticket" title="내 티켓으로 이동" href={`/event/${encodeURIComponent(slug)}/ticket`} />
+          <AttendeeListRow icon="info" title="행사 안내로" href={`/event/${encodeURIComponent(slug)}`} />
+        </AttendeeList>
       </footer>
-    </main>
+    </>,
   );
 }
 
