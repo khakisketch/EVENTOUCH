@@ -47,18 +47,23 @@ test('event-home-removes-redundant-advisory-and-readiness-blocks', () => {
 test('event-home-leads-with-action-and-keeps-stage-metrics-and-optional-design-copy', () => {
   // Reading order leads with the work queue, while desktop shows metrics in
   // a separate adjacent column. The basic design remains explicitly optional.
-  const metricsAt = overview.indexOf('headingId="event-metrics-heading"');
-  const scheduleAt = overview.indexOf('headingId="event-runbook-heading"');
-  const readinessAt = overview.indexOf('headingId="event-readiness-heading"');
-  assert.ok(metricsAt >= 0 && scheduleAt >= 0 && readinessAt >= 0);
-  const queueAt = overview.indexOf('currentStage !== "ARCHIVED" ? nowSection : null', overview.indexOf('return (\n    <ConsolePage'));
-  assert.ok(queueAt >= 0 && queueAt < metricsAt && metricsAt < scheduleAt && scheduleAt < readinessAt, 'active work queue, metrics, schedule and preparation follow the approved reading order');
+  // 2026-11-19 redesign: preparing opens with the readiness board (ring, counts, check cards) and
+  // live opens with the entry board; both come before the work queue, then the schedule.
+  const render = overview.slice(overview.indexOf('return (\n    <ConsolePage'));
+  const heroAt = render.indexOf('{prepHero}');
+  const liveAt = render.indexOf('{liveBoard}');
+  const cardsAt = render.indexOf('{prepCards}');
+  const scheduleAt = render.indexOf('headingId="event-runbook-heading"');
+  const queueAt = render.indexOf('currentStage !== "ARCHIVED" ? nowSection : null');
+  const finishedMetricsAt = render.indexOf('headingId="event-metrics-heading"');
+  assert.ok(heroAt >= 0 && heroAt < liveAt && liveAt < cardsAt && cardsAt < queueAt, 'the stage board and readiness cards lead, then the work queue');
+  assert.ok(queueAt < finishedMetricsAt && finishedMetricsAt < scheduleAt, 'finished stages keep their summary between the queue and the schedule');
+  assert.ok(overview.indexOf('headingId="event-readiness-heading"') >= 0, 'preparation keeps its readiness section');
   assert.match(overview, /currentStage !== "ARCHIVED" \? nowSection : null/u, 'archived events omit the queue while retaining metrics and close status');
   // Preparation still opens with the stage band above the counts; archived
   // events use their close status instead of an empty work queue.
-  const bandAt = overview.indexOf('stageBand');
-  assert.ok(bandAt >= 0 && bandAt < metricsAt, 'stage band tops the preparation flow');
-  assert.ok(overview.indexOf('headingId="event-close-status-heading"') < metricsAt, 'finished events keep close status ahead of metrics');
+  assert.ok(overview.indexOf('board.stageBand') >= 0 && overview.indexOf('board.stageBand') < overview.indexOf('board.chips'), 'stage band tops the preparation board above the counts');
+  assert.ok(render.indexOf('headingId="event-close-status-heading"') < finishedMetricsAt, 'finished events keep close status ahead of metrics');
   assert.match(overview, /href=\{`\$\{base\}\/analysis`\}/u, '기간 분석은 전용 화면으로 연결하는 한 줄만 둔다');
   assert.doesNotMatch(overview, /analysisDetails|<summary>기간 분석<\/summary>/u, '운영 현황에는 기간 분석 접이식을 두지 않는다');
   assert.match(overview, /recentCompact/u);

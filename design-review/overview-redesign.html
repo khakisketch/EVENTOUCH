@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>운영 현황 재설계 시안 A/B/C</title>
+<style>
+  :root {
+    --brand:#EA552E; --brand-hover:#C7441C; --brand-text:#8E351F; --brand-soft:#FFF1E8; --brand-tint:#FDEEE4;
+    --ink:#1E2026; --ink-2:#2B2E36; --muted:#61656C; --line:#E5E5E7; --line-strong:#8A939F;
+    --paper:#FFFFFF; --soft:#F6F7F9; --side:#101114;
+    --success:#2F6B4F; --success-soft:#E4EFE7; --warning:#81520E; --warning-soft:#FFF4E1; --info:#315B82; --info-soft:#EAF0F7;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#EDEEF1; color:var(--ink); font-family:'Pretendard Variable', Pretendard, 'Noto Sans KR', 'Segoe UI', 'Malgun Gothic', system-ui, sans-serif; font-size:15px; line-height:1.6; letter-spacing:-0.006em; word-break:keep-all; }
+  .sheet { max-width:1360px; margin:0 auto; padding:32px 24px 72px; }
+  .sheet > h1 { font-size:24px; margin:0 0 4px; }
+  .sheet > p.lead { margin:0 0 28px; color:var(--muted); max-width:80ch; }
+  .variant { margin-bottom:64px; }
+  .variant > header { display:flex; align-items:baseline; gap:12px; margin-bottom:8px; }
+  .variant > header h2 { font-size:20px; margin:0; }
+  .tag { font-size:12px; font-weight:700; padding:4px 12px; border-radius:999px; background:var(--brand-soft); color:var(--brand-text); }
+  .why { margin:0 0 16px; color:var(--muted); font-size:14px; max-width:90ch; }
+  .app { display:grid; grid-template-columns:208px 1fr; border-radius:20px; overflow:hidden; background:var(--paper); box-shadow:0 1px 2px #1E20260D, 0 20px 50px -20px #1E202633; }
+  .rail { background:var(--side); color:#fff; padding:20px 12px; font-size:13px; }
+  .rail b { display:block; font-size:16px; padding:0 8px 6px; }
+  .rail small { display:block; padding:0 8px 16px; color:#A9AEB6; font-size:12px; }
+  .rail span { display:block; padding:9px 12px; border-radius:8px; color:#A9AEB6; }
+  .rail span.on { background:#FFFFFF1F; color:#fff; box-shadow:inset 3px 0 var(--brand); }
+  .rail i { display:block; font-style:normal; padding:14px 12px 4px; font-size:11px; color:#7c818a; }
+  .main { padding:24px 32px 36px; min-width:0; background:#FBFBFC; }
+  .crumb { font-size:13px; color:var(--muted); }
+  .head { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin:6px 0 22px; flex-wrap:wrap; }
+  .head h3 { margin:0; font-size:30px; line-height:1.25; letter-spacing:-0.035em; }
+  .meta { margin-top:4px; color:var(--muted); font-size:14px; }
+  .actions { display:flex; gap:8px; align-items:center; }
+  .btn { display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:8px 18px; border-radius:12px; font-weight:700; font-size:14px; border:1px solid var(--line); background:#fff; color:var(--ink); }
+  .btn.pri { background:var(--brand); border-color:var(--brand); color:#19191C; box-shadow:0 8px 18px -8px #EA552E99; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:20px; padding:22px; }
+  .card h4 { margin:0 0 4px; font-size:16px; }
+  .sub { color:var(--muted); font-size:13px; }
+  .chip { display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:999px; font-size:12px; font-weight:700; }
+  .chip.warn { background:var(--warning-soft); color:var(--warning); }
+  .chip.ok { background:var(--success-soft); color:var(--success); }
+  .chip.dark { background:#ffffff1f; color:#fff; }
+  .dot { width:8px; height:8px; border-radius:50%; background:currentColor; display:inline-block; }
+  svg { display:block; }
+  /* shared bits */
+  .ring { --p:6; --c:var(--brand); width:var(--s,96px); height:var(--s,96px); border-radius:50%; background:conic-gradient(var(--c) calc(var(--p) * 1%), #EDEEF1 0); display:grid; place-items:center; flex:none; }
+  .ring > div { width:calc(100% - 20px); height:calc(100% - 20px); border-radius:50%; background:#fff; display:grid; place-items:center; text-align:center; line-height:1.15; }
+  .ring b { font-size:22px; letter-spacing:-0.03em; }
+  .bar { height:8px; border-radius:8px; background:#EDEEF1; overflow:hidden; }
+  .bar i { display:block; height:100%; border-radius:8px; background:var(--brand); }
+  .ico { display:grid; place-items:center; width:40px; height:40px; border-radius:12px; flex:none; }
+
+  /* ===== A: 상황판 ===== */
+  .A .stage { display:grid; grid-template-columns:1.15fr 1fr; gap:16px; }
+  .A .hero { background:radial-gradient(420px 220px at 90% 0%, #EA552E55, transparent 70%), var(--ink); color:#fff; border:0; display:grid; gap:18px; align-content:space-between; min-height:236px; }
+  .A .hero .d { display:flex; align-items:flex-end; gap:14px; }
+  .A .hero .d b { font-size:76px; line-height:.95; letter-spacing:-0.05em; }
+  .A .hero .d span { padding-bottom:10px; color:#ffffffb3; font-size:14px; line-height:1.4; }
+  .A .steps { display:flex; gap:6px; }
+  .A .steps div { flex:1; padding:12px 14px; border-radius:12px; background:#ffffff14; color:#ffffff99; font-size:13px; font-weight:700; }
+  .A .steps div.on { background:var(--brand); color:#19191C; }
+  .A .steps div.done { background:#ffffff26; color:#fff; }
+  .A .kpis { display:grid; grid-template-columns:repeat(2, 1fr); gap:12px; }
+  .A .kpi { padding:18px; border-radius:18px; display:grid; gap:2px; }
+  .A .kpi span { color:var(--muted); font-size:13px; font-weight:600; }
+  .A .kpi b { font-size:34px; letter-spacing:-0.04em; line-height:1.15; }
+  .A .kpi small { color:var(--muted); font-size:12px; }
+  .A .row2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px; }
+  .A .todo { display:grid; gap:10px; margin-top:12px; }
+  .A .act { display:flex; align-items:center; gap:14px; padding:14px; border-radius:16px; background:var(--warning-soft); }
+  .A .act b { display:block; font-size:15px; }
+  .A .act .btn { margin-left:auto; min-height:38px; padding:6px 14px; }
+  .A .tl { display:grid; gap:10px; margin-top:14px; }
+  .A .ev { display:grid; grid-template-columns:64px 1fr auto; gap:14px; align-items:center; padding:12px 0; border-top:1px solid var(--line); }
+  .A .ev:first-child { border-top:0; }
+  .A .ev time { font-weight:800; font-size:17px; letter-spacing:-0.02em; }
+  .A .ev b { display:block; font-size:15px; }
+
+  /* ===== B: 오늘의 흐름 ===== */
+  .B .cols { display:grid; grid-template-columns:1.5fr 1fr; gap:16px; align-items:start; }
+  .B .day { padding:22px; overflow:hidden; }
+  .B .day .top { display:flex; justify-content:space-between; align-items:center; padding:0 0 14px; }
+  .B .tabs { display:flex; gap:6px; }
+  .B .tabs span { padding:8px 16px; border-radius:999px; background:var(--soft); font-size:13px; font-weight:700; color:var(--muted); }
+  .B .tabs span.on { background:var(--ink); color:#fff; }
+  .B .grid { position:relative; margin:0; border-left:2px solid var(--line); padding-left:12px; display:grid; gap:0; }
+  .B .hr { display:grid; grid-template-columns:56px 1fr; min-height:64px; border-top:1px dashed var(--line); position:relative; }
+  .B .hr:first-child { border-top:0; }
+  .B .hr em { font-style:normal; font-size:12px; color:var(--muted); padding:4px 0 0 0; }
+  .B .blk { margin:6px 0 6px 8px; padding:12px 16px; border-radius:14px; background:var(--brand-tint); box-shadow:inset 0 0 0 1px #EA552E33; }
+  .B .blk b::before { content:""; display:inline-block; width:8px; height:8px; margin:0 8px 1px 0; border-radius:50%; background:var(--brand); }
+  .B .blk.alt { background:var(--info-soft); box-shadow:inset 0 0 0 1px #315B8233; }
+  .B .blk.alt b::before { background:var(--info); }
+  .B .blk.plain { background:var(--soft); box-shadow:inset 0 0 0 1px var(--line); }
+  .B .blk.plain b::before { background:var(--line-strong); }
+  .B .blk b { display:block; }
+  .B .blk span { color:var(--muted); font-size:13px; }
+  .B .now { position:absolute; left:-6px; right:0; top:26%; height:2px; background:var(--brand); }
+  .B .now::before { content:"D-23 · 아직 행사 전"; position:absolute; right:0; top:-22px; font-size:12px; font-weight:800; color:var(--brand-text); }
+  .B .side { display:grid; gap:16px; }
+  .B .mini { display:grid; grid-template-columns:repeat(3,1fr); gap:0; }
+  .B .mini div { padding:4px 16px; border-left:1px solid var(--line); }
+  .B .mini div:first-child { border:0; padding-left:0; }
+  .B .mini b { display:block; font-size:30px; letter-spacing:-0.04em; line-height:1.2; }
+  .B .mini span { font-size:12px; color:var(--muted); }
+  .B .todo .act { display:flex; align-items:center; gap:12px; padding:12px; border-radius:14px; background:var(--warning-soft); margin-top:10px; }
+  .B .todo .act b { display:block; font-size:14px; }
+
+  /* ===== C: 준비도 ===== */
+  .C .top { display:grid; grid-template-columns:auto 1fr; gap:28px; align-items:center; }
+  .C .ready { background:linear-gradient(135deg, #fff 55%, var(--brand-tint)); }
+  .C .ready h4 { font-size:22px; letter-spacing:-0.03em; margin-bottom:6px; }
+  .C .nums { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:16px; }
+  .C .nums div { padding:12px 14px; border-radius:14px; background:var(--soft); }
+  .C .nums b { display:block; font-size:26px; letter-spacing:-0.04em; line-height:1.2; }
+  .C .nums span { font-size:12px; color:var(--muted); font-weight:600; }
+  .C .list { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:16px; }
+  .C .item { display:grid; gap:10px; align-content:start; }
+  .C .item .hd { display:flex; align-items:center; justify-content:space-between; }
+  .C .item.todo { border-color:#D9BB84; background:linear-gradient(180deg, var(--warning-soft), #fff 70%); }
+  .C .item p { margin:0; color:var(--muted); font-size:13px; }
+  .C .item .btn { min-height:38px; padding:6px 14px; justify-self:start; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <h1>운영 현황 재설계 시안</h1>
+  <p class="lead">같은 시연 행사(2026 EVENTOUCH 시연 포럼, D-23, 신청 12, 데스크 배정 0) 데이터로 그렸습니다. 사이드바와 헤더의 뼈대는 그대로 두고, 본문의 "무엇이 중요하고 지금 무엇을 해야 하는가"를 글이 아니라 형태로 보이게 하는 세 가지 방향입니다.</p>
+
+  <!-- ================= A ================= -->
+  <section class="variant A">
+    <header><h2>A · 상황판</h2><span class="tag">숫자와 단계를 크게</span></header>
+    <p class="why">운영자가 화면을 열자마자 "며칠 남았고, 어느 단계이고, 몇 명이 왔는가"를 큰 형태로 읽습니다. 어두운 카운트다운 카드가 단계 진행을 보여주고, 지표는 카드 4개, 해야 할 일은 주황 경고 카드로 분리했습니다.</p>
+    <div class="app">
+      <aside class="rail"><b>EVENTOUCH</b><small>2026 EVENTOUCH 시연 포럼</small><i>운영</i><span class="on">운영 현황</span><span>참가자 명단</span><span>메시지</span><i>현장·참여</i><span>현장 운영</span><span>추첨·투표</span><span>경품 지급 현황</span><span>현장 사진</span><i>행사 준비</i><span>참가자 페이지</span><span>공지·안내</span></aside>
+      <div class="main">
+        <div class="crumb">행사 / 2026 EVENTOUCH 시연 포럼</div>
+        <div class="head"><div><h3>운영 현황</h3><div class="meta">시연 고객사 · 2026.12.12 (토) 09:30–17:00 · 코엑스 컨벤션홀 3층</div></div><div class="actions"><span class="sub">갱신 17:48</span><span class="btn">참가자 페이지 열기</span></div></div>
+        <div class="stage">
+          <div class="card hero">
+            <div style="display:flex;justify-content:space-between;align-items:center"><span class="chip dark"><span class="dot" style="color:#7CE0A8"></span>접수 중</span><span style="color:#ffffffb3;font-size:13px">12월 12일 (토) 09:30 시작</span></div>
+            <div class="d"><b>D-23</b><span>행사까지<br>남은 날</span></div>
+            <div class="steps"><div class="done">① 준비</div><div class="on">② 운영 준비</div><div>③ 진행 중</div><div>④ 종료·마감</div></div>
+          </div>
+          <div class="kpis">
+            <div class="card kpi"><span>신청</span><b>12<small style="font-size:14px;font-weight:600"> 명</small></b><div class="bar"><i style="width:6%"></i></div><small>정원 200명 중 6%</small></div>
+            <div class="card kpi"><span>참가 확정</span><b>12<small style="font-size:14px;font-weight:600"> 명</small></b><small>승인된 참가자</small></div>
+            <div class="card kpi"><span>승인 대기</span><b>0<small style="font-size:14px;font-weight:600"> 명</small></b><small>검토할 신청 없음</small></div>
+            <div class="card kpi"><span>누적 입장</span><b>0<small style="font-size:14px;font-weight:600"> 명</small></b><small style="color:var(--brand-text);font-weight:700">확정자 중 미입장 12명</small></div>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="card">
+            <h4>지금 할 일 <span class="chip warn" style="margin-left:6px">1</span></h4><div class="sub">진행 중으로 넘어가려면 필요합니다</div>
+            <div class="todo"><div class="act"><span class="ico" style="background:#fff;color:var(--warning)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 16H3L12 3zM12 10v4M12 17v.01"/></svg></span><div><b>데스크 배정이 필요합니다</b><span class="sub">등록 데스크 2개 · 배정 0건</span></div><span class="btn pri">현장 운영 열기</span></div></div>
+          </div>
+          <div class="card">
+            <h4>행사 일정</h4><div class="sub">12월 12일 (토) · 프로그램 3개</div>
+            <div class="tl">
+              <div class="ev"><time>10:00</time><div><b>개회 및 기조 발표</b><span class="sub">대강당 · 10:00–11:00</span></div><span class="chip ok">예정</span></div>
+              <div class="ev"><time>11:30</time><div><b>분과 세션 A · 데이터로 보는 현장</b><span class="sub">세션룸 A · 11:30–12:30</span></div><span class="chip ok">예정</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= B ================= -->
+  <section class="variant B">
+    <header><h2>B · 오늘의 흐름</h2><span class="tag">행사 하루를 시간표로</span></header>
+    <p class="why">행사는 결국 시간표입니다. 왼쪽 큰 면에 프로그램을 시간 블록으로 놓고 "지금 시각" 선을 그어, 행사 당일에는 지금 어디쯤인지가 바로 보입니다. 지표와 할 일은 오른쪽에 얇게 둡니다.</p>
+    <div class="app">
+      <aside class="rail"><b>EVENTOUCH</b><small>2026 EVENTOUCH 시연 포럼</small><i>운영</i><span class="on">운영 현황</span><span>참가자 명단</span><span>메시지</span><i>현장·참여</i><span>현장 운영</span><span>추첨·투표</span><span>경품 지급 현황</span><span>현장 사진</span><i>행사 준비</i><span>참가자 페이지</span><span>공지·안내</span></aside>
+      <div class="main">
+        <div class="crumb">행사 / 2026 EVENTOUCH 시연 포럼</div>
+        <div class="head"><div><h3>운영 현황</h3><div class="meta">시연 고객사 · 2026.12.12 (토) · 코엑스 컨벤션홀 3층 · <b style="color:var(--brand-text)">D-23</b> · 운영 준비 · 접수 중</div></div><div class="actions"><span class="sub">갱신 17:48</span><span class="btn">참가자 페이지 열기</span></div></div>
+        <div class="cols">
+          <div class="card day">
+            <div class="top"><div><h4>행사 일정</h4><div class="sub">프로그램 3개 · 대강당, 세션룸 A·B</div></div><div class="tabs"><span class="on">12.12 토</span><span>12.13 일</span></div></div>
+            <div class="grid">
+              <div class="hr"><em>09:30</em><div class="blk plain"><b>행사 시작</b><span>입장 시작 · 데스크 운영</span></div></div>
+              <div class="hr" style="min-height:84px"><em>10:00</em><div class="blk"><b>개회 및 기조 발표</b><span>대강당 · 김하늘 · 10:00–11:00</span></div></div>
+              <div class="hr" style="min-height:84px"><em>11:30</em><div class="blk alt"><b>분과 세션 A · 데이터로 보는 현장</b><span>세션룸 A · 이도윤 · 11:30–12:30</span></div></div>
+              <div class="hr"><em>12:30</em><div></div></div>
+              <div class="hr"><em>17:00</em><div class="blk plain"><b>행사 종료</b><span>퇴장 · 결과 정리</span></div></div>
+            </div>
+          </div>
+          <div class="side">
+            <div class="card">
+              <h4>한눈에</h4><div class="sub" style="margin-bottom:14px">정원 200명 중 12명 신청 (6%)</div>
+              <div class="mini"><div><b>12</b><span>신청</span></div><div><b>12</b><span>참가 확정</span></div><div><b>0</b><span>승인 대기</span></div></div>
+              <div class="bar" style="margin-top:16px"><i style="width:6%"></i></div>
+              <div class="mini" style="margin-top:16px"><div><b>0</b><span>누적 입장</span></div><div><b style="color:var(--brand-text)">12</b><span>미입장</span></div><div><b>0</b><span>현재 입장</span></div></div>
+            </div>
+            <div class="card todo">
+              <h4>지금 할 일 <span class="chip warn" style="margin-left:6px">1</span></h4>
+              <div class="act"><span class="ico" style="background:#fff;color:var(--warning);width:34px;height:34px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 16H3L12 3zM12 10v4M12 17v.01"/></svg></span><div><b>데스크 배정</b><span class="sub">등록 2개 · 배정 0건</span></div><span class="btn pri" style="margin-left:auto;min-height:36px;padding:4px 12px">열기</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= C ================= -->
+  <section class="variant C">
+    <header><h2>C · 준비도</h2><span class="tag">행사 전 운영에 가장 맞음</span></header>
+    <p class="why">행사 전에는 "다 준비됐나"가 가장 중요한 질문입니다. 준비도 링 하나로 답하고, 부족한 항목은 노란 카드로 따로 떠서 바로 해당 화면으로 갑니다. 행사가 시작되면 같은 자리가 입장 현황으로 바뀝니다.</p>
+    <div class="app">
+      <aside class="rail"><b>EVENTOUCH</b><small>2026 EVENTOUCH 시연 포럼</small><i>운영</i><span class="on">운영 현황</span><span>참가자 명단</span><span>메시지</span><i>현장·참여</i><span>현장 운영</span><span>추첨·투표</span><span>경품 지급 현황</span><span>현장 사진</span><i>행사 준비</i><span>참가자 페이지</span><span>공지·안내</span></aside>
+      <div class="main">
+        <div class="crumb">행사 / 2026 EVENTOUCH 시연 포럼</div>
+        <div class="head"><div><h3>운영 현황</h3><div class="meta">시연 고객사 · 2026.12.12 (토) 09:30–17:00 · 코엑스 컨벤션홀 3층 · <b style="color:var(--brand-text)">D-23</b></div></div><div class="actions"><span class="sub">갱신 17:48</span><span class="btn">참가자 페이지 열기</span></div></div>
+        <div class="card ready">
+          <div class="top">
+            <div class="ring" style="--s:132px;--p:67"><div><div><b style="font-size:32px">4/6</b><div class="sub" style="font-size:12px">준비 완료</div></div></div></div>
+            <div>
+              <h4>진행 중으로 넘어가기까지 2가지 남았습니다</h4>
+              <div class="sub">데스크 배정과 메시지 예약이 비어 있습니다. 나머지는 준비됐습니다.</div>
+              <div class="nums">
+                <div><b>12</b><span>신청</span></div><div><b>12</b><span>참가 확정</span></div><div><b>0</b><span>승인 대기</span></div><div><b>6%</b><span>정원 200명 대비</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="list">
+          <div class="card item todo"><div class="hd"><b>데스크 배정</b><span class="chip warn">필요</span></div><p>등록 데스크 2개에 스태프 배정이 0건입니다.</p><span class="btn pri">현장 운영 열기</span></div>
+          <div class="card item todo"><div class="hd"><b>안내 메시지</b><span class="chip warn">필요</span></div><p>예약된 메시지가 없습니다. 입장 안내를 예약해 두세요.</p><span class="btn">메시지 열기</span></div>
+          <div class="card item"><div class="hd"><b>참가 신청 양식</b><span class="chip ok">완료</span></div><p>게시됨 · 접수 중</p><div class="bar"><i style="width:100%;background:var(--success)"></i></div></div>
+          <div class="card item"><div class="hd"><b>참가자 페이지</b><span class="chip ok">완료</span></div><p>포스터형 · 게시 v1</p><div class="bar"><i style="width:100%;background:var(--success)"></i></div></div>
+          <div class="card item"><div class="hd"><b>공지·안내</b><span class="chip ok">완료</span></div><p>공지 2건 · 고정 1건</p><div class="bar"><i style="width:100%;background:var(--success)"></i></div></div>
+          <div class="card item"><div class="hd"><b>프로그램 일정</b><span class="chip ok">완료</span></div><p>3개 · 12.12–12.13</p><div class="bar"><i style="width:100%;background:var(--success)"></i></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

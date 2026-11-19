@@ -770,7 +770,7 @@ async function main() {
           const queue = rect('event-now-heading'), metric = rect('event-metrics-heading'), schedule = rect('event-runbook-heading');
           return { queueTop: queue?.top, queueBottom: queue?.bottom, metricTop: metric?.top, metricBottom: metric?.bottom, queueLeft: queue?.left, metricLeft: metric?.left, scheduleTop: schedule?.top };
         });
-        check(`${stage} presents its work and metrics ahead of the schedule`, headings[0] === '지금 할 일' && headings[1] === '주요 지표' && headings[2] === '행사 일정' && headings[3] === '행사 준비 확인' && Math.abs(geometry.queueTop - geometry.metricTop) <= 2 && geometry.scheduleTop >= Math.max(geometry.queueBottom, geometry.metricBottom) - 1, { headings, geometry });
+        check(`${stage} presents the readiness board and cards, then the work queue, then the schedule`, headings[0] === '준비 현황과 주요 지표' && headings[1] === '행사 준비 확인' && headings[2] === '지금 할 일' && headings[3] === '행사 일정' && geometry.metricTop < geometry.queueTop && geometry.queueTop < geometry.scheduleTop, headings);
       } else {
         check(`${stage} prioritizes its real task`, headings[0] === (stage === 'ARCHIVED' ? '보관된 행사 마감 확인' : '행사 마감'), headings[0]);
         check(`${stage} retains summary ahead of the schedule`, headings.indexOf('최종 요약') > 0 && headings.indexOf('최종 요약') < headings.indexOf('행사 일정'), headings);

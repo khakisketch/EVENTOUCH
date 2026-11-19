@@ -48,8 +48,14 @@ test('overview retains accurate filters, counts and recovery surfaces', () => {
   }
 });
 
-// Approved overview design (2026-11-13). See DESIGN.md "운영 현황 확정 구성"; change only with a new user decision.
+// Overview design: approved 2026-11-13, reopened and redesigned by the owner on 2026-11-19 (readiness board before the event, entry board during it). See DESIGN.md "운영 현황 확정 구성"; change only with a new user decision.
 test('approved overview design stays locked', () => {
+  // Stage boards (2026-11-19): preparing = ring + counts + cards, live = dark entry card + four KPI cards.
+  const boardCss = fs.readFileSync(path.join(root, 'event-overview-board.module.css'), 'utf8');
+  assert.match(source, /\{prepHero\}[\s\S]*?\{liveBoard\}[\s\S]*?\{prepCards\}/u);
+  assert.match(boardCss, /\.ring \{[^}]*conic-gradient\(var\(--brand\)/su, 'readiness reads as a ring');
+  assert.match(boardCss, /\.liveDark \{[^}]*var\(--ink\)/su, 'the live card is ink');
+  assert.match(boardCss, /\.boardLayout\.boardLayout \{[^}]*align-items: stretch/su, 'the board stretches across the page');
   const queue = fs.readFileSync(path.join(__dirname, '..', 'apps/web/app/console/console-ui/ConsoleTaskQueue.tsx'), 'utf8');
   // Entry: ink bar, one legend, one roster link, shared by live and finished summaries.
   assert.equal((source.match(/\{entryLegend\((true|currentStage !== "ARCHIVED")\)\}/g) || []).length, 2, 'live and finished share the legend');
@@ -66,7 +72,9 @@ test('approved overview design stays locked', () => {
   assert.match(queue, /variant=\{index === 0 && !liveOverview \? "primary" : "ghost"\}/u);
   // Utilities are ghost links, not white boxes.
   assert.match(source, /<Link variant="ghost" href=\{`\$\{base\}\/settings#settings-stage`\}>진행 단계 설정<\/Link>/u);
-  assert.equal((source.match(/<Link variant="ghost" className=\{styles\.readinessLink\}/g) || []).length, 4);
+  // 2026-11-19: preparation shows one check card per readiness item, each with its own link.
+  assert.match(source, /<Link className=\{board\.cardLink\} href=\{item\.href\}>/u);
+  assert.equal((source.match(/key: "(intake|desk|program|page|message)"/g) || []).length, 5, 'five readiness cards');
   assert.match(css, /\.stageBand \{\s*max-width: none;/u);
 });
 

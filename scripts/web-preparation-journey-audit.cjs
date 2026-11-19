@@ -105,7 +105,7 @@ async function main() {
       await capture('01-draft-overview');
       if (!BEFORE) {
         check(`${width} draft does not offer broken public link`, await page.getByRole('link', { name: '참가자 페이지 열기', exact: true }).count() === 0);
-        check(`${width} counts form exactly three peers`, await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"] [class*="metricCard"]').count() === 3);
+        check(`${width} counts form three peers plus the capacity share`, await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"] a[class*="_chip"]').count() === 4, await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"]').innerText());
       }
       await phase('DRAFT → READY → 현황 재확인', async act => {
         await toStage(act);
@@ -123,7 +123,7 @@ async function main() {
         check(`${width} overview return reads updated stage`, s.stage === 'READY' && (await page.locator('main').textContent()).includes('운영 준비'));
         if (!BEFORE) {
           check(`${width} sidebar and overview stage agree`, (await page.locator('.console-sidebar').textContent()).includes('운영 준비'));
-          check(`${width} next LIVE condition visible on overview`, (await page.locator('main').textContent()).includes('다음 진행 중 조건') && (await page.locator('main').textContent()).includes('등록 데스크 0개 · 데스크 배정 0건'));
+          check(`${width} next LIVE condition visible on overview`, (await page.locator('main').textContent()).includes('진행 중 단계로 넘어가기까지') && (await page.locator('main').textContent()).includes('등록 데스크 0개 · 배정 0건'));
         }
         await capture('04-ready-overview');
       });
@@ -295,9 +295,10 @@ async function main() {
         for (const size of [320, 390, 768, 1024, 1280]) {
           await page.setViewportSize({ width: size, height: 900 });
           await page.reload(); await overview();
-          const values = await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"] [class*="metricValue"]').allTextContents();
-          check(`${size} four-digit counts and full long capacity retained`, values.some(v => v.replaceAll(',', '').includes('1000')) && (await page.locator('main').textContent()).replaceAll(',', '').includes('1234567890'), values);
-          const numbers = await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"] [class*="metricValue"]').evaluateAll(nodes => nodes.map(e => {
+          await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"] a[class*="_chip"] strong').first().waitFor();
+          const values = await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"] a[class*="_chip"] strong').allTextContents();
+          check(`${size} four-digit counts and full long capacity retained`, values.some(v => v.replaceAll(',', '').includes('1000')) && (await page.locator('main').textContent()).replaceAll(',', '').includes('1234567890'), { values, section: await page.locator('main').innerText().then(t => t.slice(0, 700)) });
+          const numbers = await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"] a[class*="_chip"] strong').evaluateAll(nodes => nodes.map(e => {
             const range = document.createRange(); range.selectNodeContents(e);
             return { value: e.textContent, lines: range.getClientRects().length, textWidth: range.getBoundingClientRect().width, available: e.clientWidth };
           }));

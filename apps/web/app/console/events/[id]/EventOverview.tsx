@@ -2,7 +2,7 @@
 
 import ProductButton from "../../../ui/ProductButton";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import Link from "../../../ui/ProductLink";
 import { loginHrefForLocation } from "../../../auth-redirect";
@@ -18,6 +18,7 @@ import ConsoleStatePanel from "../../console-ui/ConsoleStatePanel";
 import { ArrowRightIcon, CopyIcon, CheckIcon, ExternalLinkIcon, PlusIcon, RefreshIcon } from "../../console-ui/ConsoleIcons";
 import { eventCloseHref, readCloseSnapshot } from "../../console-event-close";
 import styles from "./event-overview.module.css";
+import board from "./event-overview-board.module.css";
 import { consoleFetch, subscribeConsoleFreshness } from "../../../../lib/console-api";
 import { hasValidScheduledInstant, messageNeedsAttention } from "../../../../lib/message-attention";
 import { attendanceNeedsReview, attendanceNotEntered } from "../../../../lib/attendance-state.cjs";
@@ -822,9 +823,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
       : finished
         ? "접수 종료"
         : stageKnown ? "접수 닫힘" : "접수 상태 확인 필요";
-  const intakeShort = currentStage === "DRAFT"
-    ? overview.registrationOpen ? "접수 설정됨 · 공개 전" : "접수 닫힘 · 공개 전"
-    : publicIntakeOpen ? `접수 중 · 양식 버전 ${overview.formVersion}` : "접수 닫힘";
 
   const stageBadges = (
         <>
@@ -915,28 +913,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         href: overview.messageReviewIncomplete ? `${base}/messages` : `${base}/messages?attention=1`,
       });
     }
-    if (currentStage === "READY" && liveBlocked) {
-      nowItems.push({
-        key: "readiness",
-        title: "현장 준비",
-        count: null,
-        hint: `등록 데스크 ${overview.deskCount}개 · 데스크 배정 ${overview.deskAssignmentCount}건 — 부족합니다.`,
-        action: "현장 운영 확인",
-        href: `${base}/operations`,
-      });
-    }
-    if (currentStage === "DRAFT") {
-      nowItems.push({
-        key: "intake",
-        title: overview.registrationOpen ? "참가 접수 공개" : "참가 접수",
-        count: null,
-        hint: overview.registrationOpen
-          ? "접수 설정이 켜져 있습니다. 운영 준비로 전환하면 공개 접수가 열립니다."
-          : "접수를 받으려면 양식을 게시하고 운영 준비로 전환하세요.",
-        action: overview.registrationOpen ? "운영 준비 단계 확인" : "접수 설정",
-        href: overview.registrationOpen ? `${base}/settings#settings-stage` : `${base}/settings#settings-intake`,
-      });
-    }
+    // 접수와 현장 준비(데스크)는 준비 화면의 체크 카드가 맡는다. 같은 일을 두 번 띄우지 않는다.
     if (currentStage === "READY" && overview.participantsAvailable && !liveBlocked && !showApprovalAlert && !overview.allMessageDueAt.some((at) => at <= overview.messageClockAt)) {
       nowItems.push({
         key: "golive",
@@ -991,6 +968,178 @@ export default function EventOverview({ eventId }: { eventId: string }) {
     </ConsoleSection>
   );
 
+
+  // ---- 행사 전: 준비도. 한 번에 "다 준비됐나"에 답하고, 비어 있는 항목은 카드로 따로 띄운다. ----
+  type ReadyItem = { key: string; label: string; state: "done" | "todo" | "optional"; text: string; action: string; href: string };
+  const readyItems: ReadyItem[] = [
+    {
+      key: "intake",
+      label: "참가 접수",
+      state: publicIntakeOpen ? "done" : "todo",
+      text: publicIntakeOpen ? `접수 중 · 양식 버전 ${overview.formVersion}` : currentStage === "DRAFT"
+        ? (overview.registrationOpen ? "접수 설정됨 · 운영 준비로 전환하면 공개됩니다" : "양식을 게시하고 접수를 여세요") : "접수가 닫혀 있습니다",
+      action: currentStage === "DRAFT" && overview.registrationOpen ? "운영 준비 단계 확인" : "접수 설정",
+      href: currentStage === "DRAFT" && overview.registrationOpen ? `${base}/settings#settings-stage` : `${base}/settings#settings-intake`,
+    },
+    {
+      key: "desk",
+      label: "현장 준비",
+      state: !liveBlocked ? "done" : currentStage === "READY" ? "todo" : "optional",
+      text: `등록 데스크 ${overview.deskCount}개 · 배정 ${overview.deskAssignmentCount}건${liveBlocked ? " — 부족합니다" : ""}`,
+      action: "현장 운영 확인",
+      href: `${base}/operations`,
+    },
+    {
+      key: "program",
+      label: "프로그램 일정",
+      state: overview.programs.length ? "done" : "optional",
+      text: overview.programs.length ? `${overview.programs.length}개 등록` : "등록된 프로그램이 없습니다",
+      action: "일정 관리",
+      href: `${base}/content`,
+    },
+    {
+      key: "page",
+      label: "참가자 페이지",
+      state: overview.pagePublished ? "done" : "optional",
+      text: overview.pagePublished ? (overview.pageDraftDiffers ? "게시됨 · 새 초안 있음" : "게시됨") : "기본 디자인 사용 중 · 꾸미기는 선택 사항입니다",
+      action: "디자인 편집",
+      href: `${base}/page`,
+    },
+    {
+      key: "message",
+      label: "안내 발송",
+      state: overview.messageConnection === "connected" ? "done" : "optional",
+      text: overview.messageConnection === "connected" ? "발송 연결됨 · 도달은 별도 확인" : overview.messageConnection === "disconnected" ? "미연결 · 실제 발송 불가" : "발송 연결 상태 확인 필요",
+      action: "발송 확인",
+      href: `${base}/messages`,
+    },
+  ];
+  const readyDone = readyItems.filter((item) => item.state === "done").length;
+  const readyRequired = readyItems.filter((item) => item.state === "todo");
+  const readyOptional = readyItems.filter((item) => item.state === "optional").length;
+  const readyPercent = Math.round((readyDone / readyItems.length) * 100);
+  const readyHeadline = readyRequired.length
+    ? `${currentStage === "DRAFT" ? "접수를 열기까지" : `${nextStageText} 단계로 넘어가기까지`} ${readyRequired.length}가지 남았습니다`
+    : currentStage === "DRAFT" ? "접수를 열 준비가 됐습니다" : "진행 중으로 전환할 준비가 됐습니다";
+  const readySub = readyRequired.length
+    ? `${readyRequired.map((item) => item.label).join(", ")} 항목이 남았습니다.${readyOptional ? ` 선택 항목 ${readyOptional}가지는 나중에 해도 됩니다.` : ""}`
+    : readyOptional ? `선택 항목 ${readyOptional}가지가 남아 있지만 전환에는 필요하지 않습니다.` : "모든 항목이 준비됐습니다.";
+  const countsUnavailable = !overview.participantsAvailable;
+
+  const prepHero = preparing ? (
+    <section className={board.prepHero} aria-labelledby="event-metrics-heading">
+      <h2 id="event-metrics-heading" className="sr-only">준비 현황과 주요 지표</h2>
+      <div className={board.prepTop}>
+        <div className={board.ring} style={{ "--p": readyPercent } as CSSProperties} role="img" aria-label={`준비 항목 ${readyItems.length}개 중 ${readyDone}개 완료`}>
+          <div><strong>{readyDone}/{readyItems.length}</strong><span>준비 완료</span></div>
+        </div>
+        <div className={board.prepCopy}>
+          <p className={board.stageBand}>
+            <span>현재 <strong>{stageText}</strong><span aria-hidden="true"> → </span><span>다음 {nextStageText}</span></span>
+            <Link variant="ghost" href={`${base}/settings#settings-stage`}>진행 단계 설정</Link>
+          </p>
+          <p className={board.headline}>{readyHeadline}</p>
+          <p className={board.sub}>{readySub}</p>
+        </div>
+      </div>
+      {countsUnavailable ? (
+        <p className={styles.restrictedNote}>집계를 표시할 수 없습니다.</p>
+      ) : (
+        <>
+          <div className={board.chips}>
+            {metrics.map((metric) => (
+              <Link className={board.chip} href={metric.href} key={metric.label}>
+                <strong>{metric.value}</strong>
+                <span>{metric.label}</span>
+              </Link>
+            ))}
+            <Link className={board.chip} href={`${base}/settings`}>
+              <strong>{overview.capacityKnown && overview.capacity > 0 ? `${Math.min(100, Math.round((overview.registered / overview.capacity) * 100))}%` : "—"}</strong>
+              <span>{overview.capacityKnown ? (overview.capacity > 0 ? `정원 ${overview.capacity}명 대비` : "정원 제한 없음") : "정원 확인 필요"}</span>
+            </Link>
+          </div>
+          {overview.checksAvailable ? <p className={styles.metricConfig}>
+            누적 입장 <strong>{overview.everIn}명</strong> · {" "}
+            <Link href={`${base}/participants?status=APPROVED&attendance=NOT_ENTERED`}>{overview.cancellationReview ? "승인 상태 중 미입장" : "확정자 중 미입장"} {overview.confirmedNotEntered}명</Link>
+            {" "}· 대기 <strong>{overview.waitlist}명</strong>{overview.waitlist ? <>{" "}<Link href={`${base}/participants?status=WAITLIST`}>대기 명단</Link></> : null}
+          </p> : null}
+        </>
+      )}
+      {overview.checksAvailable && overview.attendanceReview > 0 ? (
+        <p className={styles.metricConfig}>
+          일부 출입 기록이 명확하지 않아 입장 수와 입장률이 실제와 다를 수 있습니다.
+          {" "}<Link href={`${base}/participants?attendance=REVIEW`}>출입 기록 확인 필요 {overview.attendanceReview}명</Link>
+        </p>
+      ) : null}
+    </section>
+  ) : null;
+
+  const prepCards = preparing ? (
+    <ConsoleSection headingId="event-readiness-heading" title="행사 준비 확인" className={styles.regionReadiness}>
+      <ul className={board.cards}>
+        {readyItems.map((item) => (
+          <li key={item.key} className={board.card} data-state={item.state}>
+            <div className={board.cardHead}>
+              <strong>{item.label}</strong>
+              <span className={board.state}>{item.state === "done" ? "완료" : item.state === "todo" ? "필요" : "선택"}</span>
+            </div>
+            <p>{item.text}</p>
+            <Link className={board.cardLink} href={item.href}>{item.action} <ArrowRightIcon /></Link>
+          </li>
+        ))}
+      </ul>
+    </ConsoleSection>
+  ) : null;
+
+  // ---- 행사 중: 상황판. 누적 입장을 가장 크게, 신청·확정·승인 대기·미입장은 카드로. ----
+  const liveAvailable = overview.participantsAvailable && overview.checksAvailable;
+  const liveBoard = live ? (
+    <section className={board.live} aria-labelledby="event-metrics-heading">
+      <h2 id="event-metrics-heading" className="sr-only">입장 진행</h2>
+      {!liveAvailable ? <p className={styles.restrictedNote}>집계를 표시할 수 없습니다.</p> : (
+        <>
+          <div className={board.liveMain}>
+            <div className={board.liveDark}>
+              <div className={board.liveTop}>
+                <span className={board.liveChip}><i aria-hidden="true" />진행 중{dDay === "D-day" ? " · 오늘" : ""}</span>
+                {fieldOperationsLink}
+              </div>
+              <p className={board.liveLabel}>누적 입장</p>
+              <p className={board.liveCount}>
+                <strong>{overview.everIn}<span>명</span></strong>
+                <span className={board.liveTotal}>/ {overview.registered}명</span>
+                <span className={board.liveRate}>{overview.entryRate}%</span>
+              </p>
+              <div className={board.liveTrack} role="progressbar"
+                aria-label={`입장 진행 ${overview.everIn}/${overview.registered}명, ${overview.cancellationReview ? "신청 상태 기준" : "취소 제외"} 등록 대비 ${overview.entryRate}%`}
+                aria-valuemin={0} aria-valuemax={100} aria-valuenow={entryProgress}>
+                <span style={{ width: `${entryProgress}%` }} />
+              </div>
+            </div>
+            <div className={board.liveFoot}>
+              {entryBasis}
+              {entryLegend(true)}
+            </div>
+          </div>
+          <div className={board.kpis}>
+            <Link className={board.kpi} href={`${base}/participants`}><span>신청</span><strong>{overview.registered}<small>명</small></strong><em>{overview.cancellationReview ? "신청 상태 기준" : "취소 제외 등록"}</em></Link>
+            <Link className={board.kpi} href={approvedRosterHref}><span>{overview.cancellationReview ? "승인 상태" : "참가 확정"}</span><strong>{overview.approved}<small>명</small></strong><em>{overview.cancellationReview ? "취소 확인 필요 인원 포함" : "승인된 참가자"}</em></Link>
+            <Link className={board.kpi} href={`${base}/participants?status=PENDING`} data-alert={overview.pendingApproval > 0 ? "true" : undefined}><span>승인 대기</span><strong>{overview.pendingApproval}<small>명</small></strong><em>검토가 필요한 신청</em></Link>
+            <Link className={board.kpi} href={notEnteredRosterHref} data-alert={overview.confirmedNotEntered > 0 ? "true" : undefined}><span>{overview.cancellationReview ? "승인 상태 중 미입장" : "확정자 중 미입장"}</span><strong>{overview.confirmedNotEntered}<small>명</small></strong><em>아직 입장하지 않음</em></Link>
+          </div>
+          {overview.attendanceReview > 0 ? (
+            <p className={`${styles.metricConfig} ${board.liveNote}`}>
+              일부 출입 기록이 명확하지 않아 입장 수와 입장률이 실제와 다를 수 있습니다.
+              {" "}<Link href={`${base}/participants?attendance=REVIEW`}>출입 기록 확인 필요 {overview.attendanceReview}명</Link>
+            </p>
+          ) : null}
+        </>
+      )}
+    </section>
+  ) : null;
+
+  const boardStage = preparing || live;
+
   return (
     <ConsolePage pageId="overview" eventId={eventId} eventName={overview.name || "이름 없는 행사"}
       meta={eventMeta} badges={stageBadges} headerActions={headerActions}
@@ -999,24 +1148,13 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         {overview.canManageEvent && (!overview.participantsAvailable || !overview.checksAvailable || !overview.modulesAvailable) ? <ConsoleFeedback kind="warning">{[!overview.participantsAvailable ? "참가자" : "", !overview.checksAvailable ? "출입 기록" : "", !overview.modulesAvailable ? "참여 콘텐츠" : ""].filter(Boolean).join(" · ")} 자료를 확인할 수 없어 일부 현황을 표시할 수 없습니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요.</ConsoleFeedback> : null}
         {overview.participantsAvailable && overview.cancellationReview > 0 ? <ConsoleFeedback kind="warning">취소 기록과 신청 상태가 다른 {overview.cancellationReview}명이 등록 집계에 포함돼 있습니다. 참가 여부를 확인해야 하며 승인 상태·입장 집계에도 반영될 수 있습니다. {finished ? "종료 이후에는 참가자 상태를 변경할 수 없습니다. " : ""}<Link href={`${base}/participants?ticket=review`}>티켓 확인 필요 명단 보기</Link></ConsoleFeedback> : null}
       </> : undefined}>
-      <div className={overview.canManageEvent ? [styles.overviewCanvas, currentStage === "LIVE" ? styles.liveOverview : "", currentStage === "ARCHIVED" ? styles.overviewArchived : ""].filter(Boolean).join(" ") : styles.overviewSingle}>
+      <div className={overview.canManageEvent ? [styles.overviewCanvas, boardStage ? board.boardLayout : "", currentStage === "LIVE" ? styles.liveOverview : "", currentStage === "ARCHIVED" ? styles.overviewArchived : ""].filter(Boolean).join(" ") : styles.overviewSingle}>
       {refreshError ? <p className={`${styles.refreshAlert} state-error`} role="alert">{refreshError} 이전에 불러온 내용은 유지됩니다.</p> : null}
       {overview.canManageEvent ? (
         <>
-          {preparing ? (
-            <div className={`${styles.topReadiness} ${styles.regionStatus}`}>
-              <p className={styles.stageBand}>
-                <span>현재 <strong>{stageText}</strong><span aria-hidden="true"> → </span><span className={styles.stageNext}>다음 {nextStageText}</span></span>
-                <Link variant="ghost" href={`${base}/settings#settings-stage`}>진행 단계 설정</Link>
-              </p>
-              {currentStage === "READY" ? (
-                <p className={`${styles.nextCondition} ${liveBlocked ? styles.nextConditionBlocked : ""}`}>
-                  <strong>다음 진행 중 조건</strong>
-                  <span>등록 데스크 {overview.deskCount}개 · 데스크 배정 {overview.deskAssignmentCount}건 · {liveBlocked ? "부족 — 현장 운영에서 등록·배정하세요" : "충족"}</span>
-                </p>
-              ) : null}
-            </div>
-          ) : null}
+          {prepHero}
+          {liveBoard}
+          {prepCards}
           {finished ? (
             <ConsoleSection headingId="event-close-status-heading" title={currentStage === "ARCHIVED" ? "보관된 행사 마감 확인" : "행사 마감"} description="자동으로 단계를 바꾸지 않습니다." className={styles.regionStatus}>
               <div className={styles.closeStatus}>
@@ -1026,7 +1164,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             </ConsoleSection>
           ) : null}
           {currentStage !== "ARCHIVED" ? nowSection : null}
-          <ConsoleSection
+          {!boardStage ? <ConsoleSection
             headingId="event-metrics-heading"
             title={currentStage === "LIVE" ? "입장 진행" : currentStage === "ENDED" || currentStage === "ARCHIVED" ? "최종 요약" : "주요 지표"}
             className={styles.regionMetrics}
@@ -1035,27 +1173,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             <div className={finished ? styles.entryMetricsLayout : undefined}>
             {!overview.participantsAvailable || ((live || finished) && !overview.checksAvailable) ? (
               <p className={styles.restrictedNote}>집계를 표시할 수 없습니다.</p>
-            ) : live ? (
-              <div className={styles.liveEntryPanel}>
-                <div className={styles.liveReadout}>
-                  <div className={styles.liveEntryFigures}>
-                    <div>
-                      <p className={styles.liveEntryLabel}>누적 입장</p>
-                      <p className={styles.liveEntryValues}>
-                        <strong className={styles.liveEntryCount}>{overview.everIn}<span>명</span></strong>{" "}
-                        <span className={styles.liveEntryTotal}>/ {overview.registered}명</span>
-                      </p>
-                    </div>
-                    <div className={styles.liveEntryRate}>
-                      <p className={styles.liveEntryLabel}>입장률</p>
-                      <strong>{overview.entryRate}%</strong>
-                    </div>
-                  </div>
-                  {entryTrack}
-                  {entryBasis}
-                </div>
-                {entryLegend(true)}
-              </div>
             ) : finished ? (
               <div className={styles.entryProgress}>
               <div className={styles.entrySummary}>
@@ -1134,7 +1251,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               </p>
             ) : null}
             </div>
-        </ConsoleSection>
+        </ConsoleSection> : null}
           <ConsoleSection
             headingId="event-runbook-heading"
             title={runbookIsToday ? "오늘의 일정" : "행사 일정"}
@@ -1174,32 +1291,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               </p>
             )}
           </ConsoleSection>
-          {preparing ? (
-            <ConsoleSection headingId="event-readiness-heading" title="행사 준비 확인" className={styles.regionReadiness}>
-              <ul className={styles.readinessIndex}>
-                <li>
-                  <span className={styles.readinessLabel}>참가 접수</span>
-                  <span className={styles.readinessStatus}>{intakeShort}</span>
-                  <Link variant="ghost" className={styles.readinessLink} href={`${base}/settings#settings-intake`}>접수 설정</Link>
-                </li>
-                <li>
-                  <span className={styles.readinessLabel}>현장 준비</span>
-                  <span className={styles.readinessStatus}>데스크 {overview.deskCount} · 배정 {overview.deskAssignmentCount}{liveBlocked ? " — 부족" : ""}</span>
-                  <Link variant="ghost" className={styles.readinessLink} href={`${base}/operations`}>현장 운영 확인</Link>
-                </li>
-                <li>
-                  <span className={styles.readinessLabel}>참가자 디자인 · 선택 사항</span>
-                  <span className={styles.readinessStatus}>{overview.pagePublished ? (overview.pageDraftDiffers ? "게시됨 · 새 초안 있음" : "게시됨") : "기본 디자인 사용 중 · 꾸미기는 선택 사항입니다"}</span>
-                  <Link variant="ghost" className={styles.readinessLink} href={`${base}/page`}>디자인 편집</Link>
-                </li>
-                {overview.canManageEvent ? <li>
-                  <span className={styles.readinessLabel}>안내 발송 · 선택 사항</span>
-                  <span className={styles.readinessStatus}>{overview.messageConnection === "connected" ? "발송 연결됨 · 도달은 별도 확인" : overview.messageConnection === "disconnected" ? "미연결 · 실제 발송 불가" : "발송 연결 상태 확인 필요"}</span>
-                  <Link variant="ghost" className={styles.readinessLink} href={`${base}/messages`}>발송 확인</Link>
-                </li> : null}
-              </ul>
-            </ConsoleSection>
-          ) : null}
           {schedule.length > 0 ? (
           <aside className={`${styles.rail} ${styles.regionSecondary}`}>
           {schedule.length > 0 ? (

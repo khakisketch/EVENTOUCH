@@ -22,7 +22,7 @@ test('the reward row is built from the shared count and only while the feature i
 test('the row is appended after every other task so it cannot become the primary action', () => {
   const rewardAt = overview.indexOf('key: "reward-attention"');
   assert.ok(rewardAt > 0);
-  for (const key of ['cancellation-review', 'approval', 'waitlist-review', 'message-attention', 'readiness', 'intake', 'golive', 'reports']) {
+  for (const key of ['cancellation-review', 'approval', 'waitlist-review', 'message-attention', 'golive', 'reports']) {
     assert.ok(overview.indexOf(`key: "${key}"`) < rewardAt, `${key} stays ahead of the reward row`);
   }
   assert.ok(overview.indexOf('for (const task of overview.modulesAvailable') < rewardAt, 'participation tasks stay ahead too');

@@ -210,14 +210,18 @@ Every `ProductButton` states its role with `variant`; the `button-*` legacy clas
 
 ## 운영 현황 확정 구성
 
-The owner approved this composition on 2026-11-13 (`apps/web/app/console/events/[id]/EventOverview.tsx`). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-event-overview-priority.test.cjs` ("approved overview design stays locked") guards it.
+The owner approved this composition on 2026-11-13 and reopened it on 2026-11-19, choosing "readiness before the event, an entry board during it" from the mockup `design-review/overview-redesign.html` (C and A; `EventOverview.tsx`, `event-overview-board.module.css`). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-event-overview-priority.test.cjs` ("approved overview design stays locked") guards it.
+
+- Before the event (운영 준비·준비 중): the top is one readiness board. A ring shows done/total of five items (참가 접수, 현장 준비, 프로그램 일정, 참가자 페이지, 안내 발송), a one-line headline says how many required items remain before the next stage (only 접수 and, from 운영 준비, 현장 준비 are required; the rest are marked 선택), and four count chips (신청, 참가 확정, 승인 대기, 정원 대비) link to the roster. The stage band keeps its "진행 단계 설정" ghost link. Below it, one check card per item (완료 green, 필요 warm, 선택 neutral) with its own link. The work queue no longer repeats 접수 or 현장 준비.
+- During the event (진행 중): the top is a dark entry card (누적 입장 at 84px, the rate in an orange pill, a light bar, "현장 운영 열기" as the page's one primary, and the single legend with "명단 보기" on a white foot) beside four KPI cards (신청, 참가 확정, 승인 대기, 확정자 중 미입장; the last two turn warm when above zero). The finished stages keep the earlier summary until their own pass.
+- The board is a single column that stretches across the page (`boardLayout`), so the old named grid areas stay only for the finished stages.
 
 - Header: one stage pill. Intake state and D-day read as plain text, not chips.
 - 기간 분석 (owner decision 2026-11-18, option A): the collapsible period block is gone. The bottom of the page keeps one line (today's applications and entries, last-7-day applications, "기간 분석 보기 →"); the analysis itself is its own screen in the 결과 group (`analysis/PeriodAnalysisWorkspace.tsx`): period buttons (오늘·어제·최근 7일·행사 전체·직접 선택), three totals, one bar chart, a daily table, and a "집계 기준" note behind a button. The date inputs appear only under 직접 선택.
 - Phone header (owner decision 2026-11-18): the open-page link and copy are icons on the title row, and the check time (prefix dropped) sits at the right end of the stage row, so the header stays three rows tall instead of adding an action row under it.
-- Entry progress: the bar and the rate are ink, not orange. Below the bar sit one legend (입장 / 확정자 중 미입장) and one "명단 보기" link. The live and finished summaries share this block. The default basis lives in the bar's accessible name; visible basis copy appears only during cancellation review. Archived events link to the confirmed roster.
+- Entry progress (finished summary): the bar and the rate are ink, not orange. Below the bar sit one legend (입장 / 확정자 중 미입장) and one "명단 보기" link. The live card and the finished summary share the legend block. The default basis lives in the bar's accessible name; visible basis copy appears only during cancellation review. Archived events link to the confirmed roster.
 - One primary per page. During live, "현장 운영 열기" owns it and the task queue adds none. Archived pages have none.
-- Utilities are ghost links: the stage band's "진행 단계 설정" and the four readiness links. The stage band and readiness rows are not white boxes.
+- Utilities are ghost or plain text links: the stage band's "진행 단계 설정" and the readiness card links. Nothing in the board is a white box with a boxed button.
 - An empty schedule slot keeps the height of its sibling card.
 - 최근 입퇴장 is a timeline: time, then a rail dot (in = green, out = ink outline, other = muted), then details.
 
