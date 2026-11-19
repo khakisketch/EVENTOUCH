@@ -12,6 +12,7 @@ import type { PublishedField } from "./register-data";
 import styles from "./register.module.css";
 import { useUnsavedNavigationGuard } from "../../../../lib/use-unsaved-navigation-guard";
 import { postAttendeeRequest } from "../attendee-request";
+import AttendeeIcon from "../AttendeeIcons";
 
 type Props = {
   slug: string;
@@ -608,6 +609,8 @@ export default function RegisterForm(initial: Props) {
       <section className={styles.stepSection} aria-label="신청 결과 안내">
         <h2 className="sr-only">신청하면 어떻게 되나요</h2>
         <p className={styles.outcomeNote} role="note">
+          <span className={styles.outcomeIcon}><AttendeeIcon name="ticket" size={18} /></span>
+          <span>
           {approvalRequired && paymentPending
             ? "신청 접수 후 운영자 승인과 결제 확인이 모두 끝나면 입장 QR이 표시됩니다."
             : approvalRequired
@@ -619,10 +622,11 @@ export default function RegisterForm(initial: Props) {
           {recoveryBlocked ? (
             <> 문자 복구가 불가능하므로 신청을 마친 브라우저 탭을 닫지 마세요. {recoveryContact ? `문의: ${recoveryContact}` : "탭을 찾을 수 없다면 행사 주최 측에 문의하세요."}</>
           ) : null}
+          </span>
         </p>
       </section>
       <section className={styles.stepSection} aria-label="신청 정보 입력">
-        <h2 className="sr-only">누가 참가하나요</h2>
+        <h2 className={styles.stepTitle}>참가자 정보</h2>
         {fields.map(renderField)}
       </section>
       {verificationRequired && !signupSuperseded && !recoveryBlocked ? (

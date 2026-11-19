@@ -1,54 +1,136 @@
-/* One application document: event, outcome, fields, verification and consent. */
+/* The application is a white sheet on the event's own ground. The published
+   banner carries the event name, the facts say when and where, then three
+   numbered sections (참가자 정보, 연락처 인증, 정보 수집 동의) and one strong
+   submit that stays in reach with the keyboard up. */
 .page:global(.registration-page) {
-  max-width: var(--web-form-max);
+  width: 100%;
+  max-width: 520px;
+  padding: var(--s4) var(--s4) max(var(--s7), env(safe-area-inset-bottom, 0px));
+  background: var(--home-background-color, #b9def0);
+  color: var(--home-background-ink, var(--ink));
+  /* On a wide screen the column sits on the event's color, not a white page. */
+  box-shadow: 0 0 0 100vmax var(--home-background-color, #b9def0);
+  clip-path: inset(0 -100vmax);
+}
+
+.page :global(.public-page-header) {
+  padding-bottom: var(--s2);
+  border-bottom-color: color-mix(in srgb, currentColor 20%, transparent);
+}
+
+.page :global(.compact-wordmark) {
+  color: inherit;
 }
 
 .pageContext {
   margin: 0 0 0 auto;
-  color: var(--muted);
+  color: inherit;
   font-size: var(--small);
-  font-weight: 600;
-}
-
-.page .pageTitle {
-  margin: 0 0 var(--s2);
-  font-size: clamp(26px, 8vw, 34px);
-  font-weight: 800;
-  line-height: 1.2;
-  letter-spacing: -0.04em;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-  font-variant-numeric: tabular-nums;
+  font-weight: 700;
 }
 
 .backLink {
-  margin: var(--s2) 0;
+  margin: var(--s1) 0 var(--s2);
+  color: inherit;
 }
 
 /* A quiet way back: the page's job is the form. */
-.backLink a {
+.page .backLink a {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--muted);
+  color: inherit;
   font-size: var(--small);
-  font-weight: 650;
+  font-weight: 700;
   text-decoration: none;
 }
 
-.backLink a:hover {
-  color: var(--ink);
+.page .backLink a:hover {
+  color: inherit;
   background: transparent;
   text-decoration: underline;
+}
+
+/* No overflow clip on the sheet: the submit bar sticks to the viewport. */
+.sheet {
+  margin-top: var(--s3);
+  border-radius: 28px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 22px 44px -26px rgb(16 17 20 / 58%), 0 2px 8px rgb(16 17 20 / 12%);
+}
+
+.sheetBanner {
+  min-height: 148px;
+  border-radius: 28px 28px 0 0;
+}
+
+.sheetBody {
+  display: grid;
+  gap: var(--s5);
+  padding: var(--s5) var(--s4) 0;
+}
+
+/* Closed intake and unavailable verification keep the sheet and end it. */
+.sheetBodyEnd {
+  padding-bottom: var(--s5);
+}
+
+.stateNote {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--h3);
+  font-weight: 750;
+  line-height: 1.4;
+  word-break: keep-all;
+}
+
+.stateActions {
+  margin-top: var(--s1);
+  display: grid;
+  gap: var(--s2);
+}
+
+.stateActions :global(.button) {
+  min-height: 56px;
+  border-radius: 16px;
+  font-size: var(--body);
+}
+
+.stateActions p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.6;
+  word-break: keep-all;
+}
+
+.sheet :global(.verification-unavailable) {
+  margin: 0;
+}
+
+.sheet :global(.verification-unavailable) p {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.ticketChoice {
+  margin: calc(var(--s2) * -1) 0 0;
 }
 
 .form:global(.registration-form) {
   grid-template-columns: minmax(0, 1fr);
   gap: var(--s5);
   padding: 0;
+  counter-reset: step;
+}
+
+.form :global(.form-validation) {
+  border-radius: 14px;
+  font-size: var(--small);
 }
 
 .form :global(.form-validation) button {
@@ -66,14 +148,37 @@
   padding: 0;
 }
 
-.stepTitle {
+/* A numbered section title: the count is a quiet ink disc. */
+.stepTitle,
+.stepSection :global(.verification-panel) > h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
   margin: 0;
   font-size: var(--h3);
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1.4;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.01em;
   overflow-wrap: anywhere;
   word-break: keep-all;
+  counter-increment: step;
+}
+
+.stepTitle::before,
+.stepSection :global(.verification-panel) > h2::before {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  content: counter(step);
 }
 
 .stepSection :global(.form-field) {
@@ -100,6 +205,7 @@
   padding-inline: var(--s4);
   border-color: var(--line-strong);
   border-radius: 14px;
+  background-color: var(--paper);
   font-size: var(--body);
 }
 
@@ -112,45 +218,100 @@
   border: 2px solid var(--danger);
 }
 
-/* Ordinary outcome guidance is a lead line under the title, not an alert;
-   actual failure states retain their warning/danger treatment. */
+/* A yes/no field reads as one tappable row. */
+.stepSection :global(.checkbox-field) > label {
+  min-height: 52px;
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--paper);
+  font-size: var(--body);
+  font-weight: 700;
+}
+
+.stepSection :global(.checkbox-field) input[type="checkbox"],
+.consentPanel input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  accent-color: var(--brand);
+}
+
+/* What happens next, as one soft line with its icon. */
 .outcomeNote {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
   margin: 0;
-  color: var(--muted);
+  padding: var(--s3) var(--s4);
+  border-radius: 14px;
+  background: var(--info-soft);
+  color: var(--ink);
   font-size: var(--small);
+  font-weight: 600;
   line-height: 1.6;
   overflow-wrap: anywhere;
   word-break: keep-all;
 }
 
-.consentPanel {
-  display: grid;
+.outcomeIcon {
+  display: inline-flex;
+  flex: none;
+  margin-top: 2px;
+  color: var(--info);
+}
+
+.stepSection :global(.verification-panel) {
   gap: var(--s3);
   padding: 0;
   border: 0;
   background: transparent;
 }
 
+.stepSection :global(.verification-panel) > :global(.button) {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 14px;
+  font-size: var(--small);
+}
+
+.stepSection :global(.verification-panel) > p {
+  font-size: var(--small);
+  line-height: 1.6;
+  word-break: keep-all;
+}
+
+.consentPanel {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-muted);
+}
+
 .consentPanel label {
   min-height: 52px;
   padding: var(--s2) var(--s3);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 14px;
   background: var(--paper);
   font-size: var(--small);
-  font-weight: 650;
+  font-weight: 750;
 }
 
 .consentPanel :global(.preserve-lines) {
   margin: 0;
   color: var(--ink);
   line-height: 1.7;
+  word-break: keep-all;
 }
 
 .consentPanel :global(.consent-meta) {
   margin: 0;
   font-size: 13px;
   line-height: 1.6;
+  word-break: keep-all;
 }
 
 .phoneHint {
@@ -163,9 +324,10 @@
   bottom: 0;
   z-index: 2;
   display: grid;
-  gap: var(--s3);
+  gap: var(--s2);
   padding: var(--s3) 0 max(var(--s4), env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
+  border-radius: 0 0 28px 28px;
   background: var(--paper);
 }
 
@@ -214,6 +376,16 @@
   min-height: 56px;
   border-radius: 16px;
   font-size: var(--body);
+}
+
+@media (max-width: 480px) {
+  .page:global(.registration-page) {
+    padding-inline: var(--s3);
+  }
+
+  .sheetBody {
+    padding-inline: var(--s4);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

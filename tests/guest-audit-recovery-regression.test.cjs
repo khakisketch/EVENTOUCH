@@ -30,7 +30,7 @@ function loadingView() {
   visit(parsed);
   assert.ok(block, 'production ticket loading branch');
   let tick = 0;
-  const sandbox = { exports: {}, require: name => { assert.equal(name, 'react/jsx-runtime'); return jsx; }, styles: { ticketLoadingRetry: 'loading-retry' }, setReloadTick: update => { tick = update(tick); } };
+  const sandbox = { exports: {}, require: name => { assert.equal(name, 'react/jsx-runtime'); return jsx; }, styles: { ticketLoadingRetry: 'loading-retry', passMessage: 'pass-message' }, pass: true, setReloadTick: update => { tick = update(tick); } };
   vm.createContext(sandbox);
   vm.runInContext(compile(`globalThis.renderLoading = () => ${block}`), sandbox);
   const element = sandbox.renderLoading();
@@ -83,6 +83,8 @@ function engageWorld(settlement) {
     clearSessionForTab() {}, clearTicketRejected() {}, allowSessionForTab() {}, markTicketRejected: () => writes.push('rejected'), REJECTED_TICKET_BEARER: 'rejected',
     // The page reads the event's home color for its ground; these races do not care which.
     normalizeHomeStyle: () => ({ backgroundColor: '#B9DEF0' }),
+    // Reopened 2026-11-19: the page header also wears the published banner.
+    readAttendeeTheme: () => ({}),
     window: {
       location, history: { replaceState(_state, _title, url) { location.search = new URL(url, 'https://fixture.invalid').search; } },
       sessionStorage: {
