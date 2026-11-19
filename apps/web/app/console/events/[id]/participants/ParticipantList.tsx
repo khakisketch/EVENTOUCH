@@ -46,6 +46,9 @@ import TicketReissue from "./TicketReissue";
 import ReviewedExit from "./ReviewedExit";
 import CancellationConflictReview from "./CancellationConflictReview";
 import CountTabs from "../../../console-ui/CountTabs";
+import ConsoleAvatar from "../../../console-ui/ConsoleAvatar";
+import ConsoleEmptyState from "../../../console-ui/ConsoleEmptyState";
+import StatusPill, { type StatusPillTone } from "../../../console-ui/StatusPill";
 
 // Shared dirty-dismiss copy for the roster dialogs: the guard asks on
 // navigation, canClose asks on Escape/backdrop/Cancel.
@@ -232,6 +235,26 @@ function matchesAttendance(person: Person, attendance: string): boolean {
       return person.everIn === true && person.inside !== true;
     default:
       return true;
+  }
+}
+
+/** Pending approval is the only amber state; waitlist reads as info, cancelled as danger. */
+function statusTone(status: string): StatusPillTone {
+  switch (status) {
+    case "APPROVED": return "ok";
+    case "PENDING": return "wait";
+    case "WAITLIST": return "info";
+    case "CANCELLED": return "danger";
+    default: return "neutral";
+  }
+}
+
+function avatarTone(status: string): "ok" | "wait" | "info" | "neutral" {
+  switch (status) {
+    case "APPROVED": return "ok";
+    case "PENDING": return "wait";
+    case "WAITLIST": return "info";
+    default: return "neutral";
   }
 }
 
@@ -1378,6 +1401,9 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   // filter total versus the whole roster; the range below names this page.
   const totalPages = Math.max(1, Math.ceil(visiblePeople.length / PAGE_SIZE));
   const safePage = Math.min(Math.max(1, page), totalPages);
+  // Reopened 2026-11-20: people waiting for approval are marked (amber edge and tint) instead of
+  // being re-ordered, so a row never jumps away under the pointer while an operator approves,
+  // selects or pages; the 승인 대기 tab is the queue view.
   const orderedPeople = nameSort === "original" ? visiblePeople : [...visiblePeople].sort((a, b) =>
     nameSort === "ascending" ? a.name.localeCompare(b.name, "ko") : b.name.localeCompare(a.name, "ko")
   );
@@ -2304,14 +2330,13 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
             <tbody>
               {pagePeople.map((person) => {
                 const detailsOpen = toolsOpenId === person.id;
-                const tone = person.status === "APPROVED" ? "good" : person.status === "WAITLIST" ? "wait" : person.status === "CANCELLED" ? "bad" : "info";
-                return <tr key={person.id} className={styles.rosterRow} data-selected={effectiveSelection.includes(person.id) ? "true" : undefined} data-inspected={detailsOpen ? "true" : undefined} onClick={(event) => openDetailsFromRow(event, person.id)}>
+                return <tr key={person.id} className={styles.rosterRow} data-pending={person.status === "PENDING" ? "true" : undefined} data-selected={effectiveSelection.includes(person.id) ? "true" : undefined} data-inspected={detailsOpen ? "true" : undefined} onClick={(event) => openDetailsFromRow(event, person.id)}>
                   {canAssignGroup ? <td className={styles.selectColumn}><label className={styles.participantSelectTarget}>
                     <input type="checkbox" className={styles.participantSelect} aria-label={`${person.name} 선택`} checked={effectiveSelection.includes(person.id)} onChange={() => togglePerson(person.id)} />
                   </label></td> : null}
-                  <td><span className={styles.nameCell}><span className={styles.avatar} data-status={person.status} aria-hidden="true">{[...person.name.trim()][0] ?? "?"}</span><span className={styles.tableIdentity}><strong id={`roster-name-desktop-${person.id}`}>{person.name}</strong><small>{person.company || "소속 미입력"}</small>{emailLooksValid(person.email) ? null : <small className={styles.ticketReviewLabel}>이메일 확인 필요</small>}</span></span></td>
+                  <td><span className={styles.nameCell}><ConsoleAvatar name={person.name} tone={avatarTone(person.status)} /><span className={styles.tableIdentity}><strong id={`roster-name-desktop-${person.id}`}>{person.name}</strong><small>{person.company || "소속 미입력"}</small>{emailLooksValid(person.email) ? null : <small className={styles.ticketReviewLabel}>이메일 확인 필요</small>}</span></span></td>
                   <td className={styles.rosterContact}>{maskPhone(person.phone)}</td><td className={styles.rosterGroup}>{person.group || "미지정"}</td>
-                  <td><span className={`status-chip ${tone} ${styles.participantStatus}`}>{statusLabel(person.status)}</span>{["PENDING", "WAITLIST"].includes(person.status) && person.ticketReview === "cancelled" ? <small className={styles.ticketReviewLabel}>취소 상태 확인 필요</small> : null}{["PENDING", "WAITLIST"].includes(person.status) && person.ticketNeedsExplicitReissue ? <small className={styles.ticketReviewLabel}>승인 후 티켓 재발급 필요</small> : null}</td>
+                  <td><StatusPill className={styles.participantStatus} tone={statusTone(person.status)}>{statusLabel(person.status)}</StatusPill>{["PENDING", "WAITLIST"].includes(person.status) && person.ticketReview === "cancelled" ? <small className={styles.ticketReviewLabel}>취소 상태 확인 필요</small> : null}{["PENDING", "WAITLIST"].includes(person.status) && person.ticketNeedsExplicitReissue ? <small className={styles.ticketReviewLabel}>승인 후 티켓 재발급 필요</small> : null}</td>
                   <td><span className={person.inside ? styles.presenceInside : styles.presence}>{presenceLabel(person)}</span></td>
                   {ticketFilter ? <td><span className={styles.ticketReviewLabel}>{ticketReviewLabel(person.ticketReview)}</span></td> : null}
                   {showRowActions ? <td className={styles.actionColumn}><div className={styles.participantActions}>
@@ -2328,12 +2353,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           </div>
           <ul className={styles.participantList}>
             {pagePeople.map((person) => {
-              const tone = person.status === "APPROVED" ? "good" : person.status === "WAITLIST" ? "wait" : person.status === "CANCELLED" ? "bad" : "info";
               const detailsOpen = toolsOpenId === person.id;
               const detailsId = `participant-details-${person.id}`;
               return (
                 <li
                   className={rowClass}
+                  data-pending={person.status === "PENDING" ? "true" : undefined}
                   data-selected={effectiveSelection.includes(person.id) ? "true" : undefined}
                   data-inspected={detailsOpen ? "true" : undefined}
                   key={person.id}
@@ -2358,7 +2383,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                     {["PENDING", "WAITLIST"].includes(person.status) && person.ticketNeedsExplicitReissue ? <small className={styles.ticketReviewLabel}>승인 후 티켓 재발급 필요</small> : null}
                   </span>
                   <span className={styles.rosterContact}>{maskPhone(person.phone)}</span>
-                  <span className={`status-chip ${tone} ${styles.participantStatus}`}>{statusLabel(person.status)}</span>
+                  <StatusPill className={styles.participantStatus} tone={statusTone(person.status)}>{statusLabel(person.status)}</StatusPill>
                   {showRowActions ? (
                     <div className={styles.participantActions}>
                       {/* One always-visible primary per row: PENDING and
@@ -2418,9 +2443,9 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                     <ProductButton type="button" variant="ghost" className={styles.sheetStep} aria-label="다음 참가자"
                       disabled={sheetIndex < 0 || sheetIndex >= orderedPeople.length - 1 || savingId === selectedPerson.id} endContent={<ChevronRightIcon />} onClick={(event) => stepSheet(1, event.currentTarget)}>다음</ProductButton>
                   </div>
-                  <span className={`${styles.avatar} ${styles.sheetAvatar}`} data-status={selectedPerson.status} aria-hidden="true">{[...selectedPerson.name.trim()][0] ?? "?"}</span>
+                  <ConsoleAvatar className={styles.sheetAvatar} name={selectedPerson.name} tone={avatarTone(selectedPerson.status)} size="lg" />
                   <p className={styles.sheetBadges}>
-                    <span className={`status-chip ${selectedPerson.status === "APPROVED" ? "good" : selectedPerson.status === "WAITLIST" ? "wait" : selectedPerson.status === "CANCELLED" ? "bad" : "info"} ${styles.participantStatus}`}>{statusLabel(selectedPerson.status)}</span>
+                    <StatusPill className={styles.participantStatus} tone={statusTone(selectedPerson.status)}>{statusLabel(selectedPerson.status)}</StatusPill>
                     <span className={selectedPerson.inside ? styles.presenceInside : styles.presence}>{presenceLabel(selectedPerson)}</span>
                   </p>
                   {["PENDING", "WAITLIST"].includes(selectedPerson.status) && selectedPerson.ticketReview !== "cancelled" && canMutateStatus ? (
@@ -2625,35 +2650,29 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
             </nav>
         </>
       ) : state.people.length ? (
-        <div className={`${styles.emptyState} ${isAttendanceReviewOnly ? styles.reviewComplete : ""}`}>
-          {isAttendanceReviewOnly ? <CheckIcon className={styles.reviewCompleteIcon} /> : null}
-          <h3>{isAttendanceReviewOnly ? "확인이 필요한 출입 기록이 없습니다." : "조건에 맞는 참가자가 없습니다."}</h3>
-          <p>{isAttendanceReviewOnly ? "취소된 신청을 제외한 참가자에게 확인할 출입 기록이 없습니다." : "검색어·상태·그룹·출입 조건에 맞는 사람이 없습니다. 조건을 하나씩 지워보세요."}</p>
-          {hasAnyFilter ? (
-            <p>
-              <ProductButton type="button" className="button button-secondary" onClick={() => { clearRosterFilters(); window.requestAnimationFrame(() => document.getElementById("roster-search")?.focus({ preventScroll: true })); }}>
-                {isAttendanceReviewOnly ? "전체 참가자 보기" : "검색·필터 초기화"}
-              </ProductButton>
-            </p>
-          ) : null}
-        </div>
+        <ConsoleEmptyState
+          kind="filtered"
+          titleAs="h3"
+          icon={isAttendanceReviewOnly ? <CheckIcon /> : undefined}
+          title={isAttendanceReviewOnly ? "확인이 필요한 출입 기록이 없습니다." : "조건에 맞는 참가자가 없습니다."}
+          description={isAttendanceReviewOnly ? "취소된 신청을 제외한 참가자에게 확인할 출입 기록이 없습니다." : "검색어·상태·그룹·출입 조건에 맞는 사람이 없습니다. 조건을 하나씩 지워보세요."}
+          action={hasAnyFilter ? (
+            <ProductButton type="button" className="button button-secondary" onClick={() => { clearRosterFilters(); window.requestAnimationFrame(() => document.getElementById("roster-search")?.focus({ preventScroll: true })); }}>
+              {isAttendanceReviewOnly ? "전체 참가자 보기" : "검색·필터 초기화"}
+            </ProductButton>
+          ) : undefined}
+        />
       ) : (
-        <div className={styles.emptyState}>
-          <h3>아직 등록된 참가자가 없습니다.</h3>
-          <p>참가자 추가로 한 명씩 등록하거나 명단 가져오기로 여러 명을 등록하세요.</p>
-          <p>
-            참가자가 스스로 신청하게 하려면 행사 설정의 참가 접수를 열어 주세요.
-            {canMutateStatus ? (
-              <>
-                {" "}
-                <ProductButton type="button" className="button button-secondary" onClick={copyRegistrationLink} icon={<CopyIcon />}>
-
-                  참가 신청 링크 복사
-                </ProductButton>
-              </>
-            ) : null}
-          </p>
-        </div>
+        <ConsoleEmptyState
+          titleAs="h3"
+          title="아직 등록된 참가자가 없습니다."
+          description="참가자 추가로 한 명씩 등록하거나 명단 가져오기로 여러 명을 등록하세요. 참가자가 스스로 신청하게 하려면 행사 설정의 참가 접수를 열어 주세요."
+          action={canMutateStatus ? (
+            <ProductButton type="button" className="button button-secondary" onClick={copyRegistrationLink} icon={<CopyIcon />}>
+              참가 신청 링크 복사
+            </ProductButton>
+          ) : undefined}
+        />
       )}
       {editTargetId ? <ParticipantEditor key={`${eventId}-${editTargetId}`} eventId={eventId} participantId={editTargetId} companyCounts={companyCounts} onClose={() => { setEditTargetId(null); window.requestAnimationFrame(() => inspectorHeadingRef.current?.focus({ preventScroll: true })); }} onRefresh={() => load(true)} /> : null}
       {reviewedExitTarget ? <ReviewedExit key={`${eventId}-${reviewedExitTarget}`} eventId={eventId} participantId={reviewedExitTarget}

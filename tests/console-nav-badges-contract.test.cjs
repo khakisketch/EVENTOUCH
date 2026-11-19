@@ -139,5 +139,6 @@ test('recent activity refresh stays icon-only, accessible and reduced-motion awa
   assert.match(css, /\.refreshButton\s*\{[\s\S]*?width: 44px/);
   assert.match(css, /\.refreshButton svg[\s\S]*?width: 20px/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
-  assert.match(css, /\.checkDot \{/);
+  // Reopened 2026-11-20 (디자인 시스템 적용): the feed rows are the shared ListRow with a ConsoleAvatar and a StatusPill.
+  assert.match(overview, /<ListRow[\s\S]*?<ConsoleAvatar[\s\S]*?<StatusPill/u);
 });

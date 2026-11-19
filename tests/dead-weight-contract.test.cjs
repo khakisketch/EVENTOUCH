@@ -40,12 +40,14 @@ test('event-overview-keeps-live-metrics-drops-dead-chip-kit', () => {
     assert.doesNotMatch(css, new RegExp(`\\.${name}[\\s.{:]`, 'u'), `.${name} stays removed`);
   }
   assert.doesNotMatch(css, /\.metricCard\.primary\s*\{/u, '.metricCard.primary stays removed');
-  // The live contract stays: the importer still renders these.
+  // Reopened 2026-11-20 (디자인 시스템 적용): the unreachable metric-card grid was removed with its CSS;
+  // only the label used by the finished summary stays.
   const view = read('apps/web/app/console/events/[id]/EventOverview.tsx');
-  for (const name of ['metricCard', 'metricGrid', 'metricValue', 'metricLabel', 'metricDetail']) {
-    assert.match(view, new RegExp(`styles\\.${name}`, 'u'), `EventOverview still renders ${name}`);
+  assert.match(view, /styles\.metricLabel/u, 'EventOverview still renders metricLabel');
+  for (const name of ['metricCard', 'metricGrid', 'metricValue', 'metricDetail']) {
+    assert.doesNotMatch(view, new RegExp(`styles\\.${name}`, 'u'), `EventOverview no longer renders ${name}`);
+    assert.doesNotMatch(css, new RegExp(`\\.${name}[\\s.{:]`, 'u'), `.${name} stays removed`);
   }
-  assert.match(css, /\.metricCard\s*\{/u, '.metricCard stays exported');
 });
 
 test('participant-list-keeps-roster-drops-dead-toolbar-dialog-kit', () => {
@@ -59,9 +61,12 @@ test('participant-list-keeps-roster-drops-dead-toolbar-dialog-kit', () => {
   }
   assert.doesNotMatch(css, /^\.dialog\s*\{/mu, 'module .dialog stays removed (the global .dialog owns dialogs)');
   const list = read('apps/web/app/console/events/[id]/participants/ParticipantList.tsx');
-  for (const name of ['participantList', 'participantRow', 'rosterHead', 'emptyState']) {
+  for (const name of ['participantList', 'participantRow', 'rosterHead']) {
     assert.match(list, new RegExp(`styles\\.${name}`, 'u'), `ParticipantList still renders ${name}`);
   }
+  // Reopened 2026-11-20 (디자인 시스템 적용): the empty states are the shared ConsoleEmptyState.
+  assert.match(list, /<ConsoleEmptyState/u, 'ParticipantList renders the shared empty state');
+  assert.doesNotMatch(list, /styles\.emptyState/u, 'the local emptyState box is gone');
 });
 
 test('draws-drops-foreign-module-copies-programs-drops-dead-selector', () => {

@@ -96,5 +96,6 @@ test('cleanup-kept-live-neighbours-and-added-no-hex', () => {
   // The file carries no hex literals; colours come from tokens.css variables.
   assert.doesNotMatch(globals, /#[0-9a-fA-F]{3,8}\b/u, 'no hex colour literals in globals.css');
   const list = read('apps/web/app/console/events/[id]/participants/ParticipantList.tsx');
-  assert.match(list, /status-chip/u, 'ParticipantList still renders the live status-chip edge');
+  // Reopened 2026-11-20 (디자인 시스템 적용): the roster renders the shared StatusPill; globals keep .status-chip for the remaining legacy edges.
+  assert.match(list, /StatusPill/u, 'ParticipantList renders the shared StatusPill');
 });

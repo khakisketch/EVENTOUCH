@@ -65,6 +65,8 @@ async function main() {
     await setWorkbook('누락가능.xlsx', workbook([['이름', '연락처'], ...Array.from({ length: 5 }, (_, i) => [`합성정상${i}`, `0109000200${i}`]), ['합성누락', 1090002009]]));
     await ready(6);
     // 2026-11-19: a spreadsheet-dropped leading 0 is restored and listed, never a gate.
+    // Reopened 2026-11-20: auto-fixed rows sit in a closed group; open it, then read the list.
+    await review.getByText('자동으로 맞춘 항목 1건').click();
     await review.getByText('연락처 1건은 앞자리 0을 붙여 등록해요').waitFor();
     const list = review.getByRole('list', { name: '앞자리 0을 붙인 연락처 목록' });
     assert.match(await list.innerText(), /파일 7행 · 합성누락/); assert.match(await list.innerText(), /1090002009 → 010-9000-2009/);
@@ -95,6 +97,7 @@ async function main() {
     assert.match(await review.innerText(), /010-9000-2020/);
     await setWorkbook('빈행.xlsx', workbook([['이름', '연락처'], [], ['합성빈행', 1090002021], ['합성오류', 123]]));
     await skipped(1);
+    await review.getByText('자동으로 맞춘 항목 1건').click();
     assert.match(await review.getByRole('list', { name: '앞자리 0을 붙인 연락처 목록' }).innerText(), /파일 3행 · 합성빈행/);
     assert.match(await review.getByRole('list', { name: '가져오기 오류 목록' }).innerText(), /파일 4행/);
     await pick({ name: '합성.txt', mimeType: 'text/plain', buffer: Buffer.from('첫번째,123\n\n두번째,01090002019\n') });
@@ -124,6 +127,7 @@ async function main() {
     await roster.getByRole('button', { name: '명단 가져오기' }).click();
     const dialog = roster.getByRole('dialog', { name: '명단 가져오기' });
     await dialog.locator('input[type=file]').setInputFiles({ name: '모달.csv', mimeType: 'text/csv', buffer: Buffer.from('이름,연락처\n모달검토,1090002099\n') });
+    await dialog.getByText('자동으로 맞춘 항목 1건').click();
     await dialog.getByText('연락처 1건은 앞자리 0을 붙여 등록해요').waitFor();
     const modalSubmit = dialog.getByRole('button', { name: /^1명 등록$/ });
     assert.equal(await modalSubmit.isEnabled(), true);

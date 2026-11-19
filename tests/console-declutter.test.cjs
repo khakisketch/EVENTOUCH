@@ -9,9 +9,10 @@ test('overview explains registration and approval once beside their values', () 
   const source = read('console/events/[id]/EventOverview.tsx');
   assert.match(source, /label: "신청"[^\n]*detail: overview\.cancellationReview \? "신청 상태 기준" : "취소 제외 등록"/u);
   assert.match(source, /label: overview\.cancellationReview \? "승인 상태" : "참가 확정"[^\n]*detail: overview\.cancellationReview \? "취소 확인 필요 인원 포함" : "승인된 참가자"/u);
-  assert.match(source, /className=\{styles.metricDetail\}>\{metric.detail\}/u);
+  // Reopened 2026-11-20 (디자인 시스템 적용): the dead metric-card grid is gone; the preparation chips keep the label.
+  assert.match(source, /<span>\{metric\.label\}<\/span>/u);
   assert.doesNotMatch(source, /신청은 취소 제외 · 확정은 승인된 참가자/u);
-  assert.match(source, /정원 제한 없음 · 대기/u, 'capacity and waitlist remain separate configuration facts');
+  assert.match(source, /"정원 제한 없음"[\s\S]*?· 대기 <strong>/u, 'capacity and waitlist remain separate configuration facts');
 });
 
 test('finished overview has one close entry beside its preconditions', () => {

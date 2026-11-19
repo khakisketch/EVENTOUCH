@@ -129,7 +129,9 @@ test('approved messages design stays locked', () => {
   // Reopened 2026-11-20: the three filter cards (전체·예약·확인 필요) became one row of count tabs.
   assert.match(CSS, /\.composeSteps button\[aria-current="step"\]\s*\{[^}]*border-color:\s*var\(--ink\)[^}]*background:\s*var\(--ink\)/u, 'active step is an ink-filled pill');
   assert.doesNotMatch(CSS, /\.historyOverview/u, 'the history filter cards are gone');
-  assert.match(CSS, /\.status::before\s*\{[^}]*border-radius:\s*50%/u, 'status pills carry a dot, not colour alone');
+  // Reopened 2026-11-20 (디자인 시스템 적용): history status is the shared StatusPill (always a visible label, never colour alone).
+  assert.match(SOURCE, /<StatusPill tone=\{resultMatchUnconfirmed \? "wait" : statusTone\(campaign\.status\)\}>/u, 'history status is a StatusPill');
+  assert.doesNotMatch(SOURCE, /styles\.status\b/u, 'the local status pill classes are gone');
   assert.match(SOURCE, /<CountTabs\s+className=\{styles\.historyTabs\}\s+ariaLabel="발송 빠른 필터"/u, 'history filters are count tabs');
   for (const key of ['all', 'scheduled', 'attention']) assert.match(SOURCE, new RegExp(`\\{ key: "${key}", label: `, 'u'), `${key} history tab`);
   assert.match(SOURCE, /key: "attention", label: "확인 필요", count: attentionCampaigns\.length, tone: "wait"/u, 'only the waiting work is amber');

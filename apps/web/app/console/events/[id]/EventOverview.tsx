@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import Link from "../../../ui/ProductLink";
 import { loginHrefForLocation } from "../../../auth-redirect";
-import { eventStageClassName, eventStageLabel } from "../../../event-stage";
+import { eventStageLabel } from "../../../event-stage";
 import { formatConsoleEventMeta } from "../../console-ui/ConsolePageHeader";
 import ConsolePage from "../../console-ui/ConsolePage";
 import ConsoleFeedback from "../../console-ui/ConsoleFeedback";
@@ -15,6 +15,10 @@ import ConsoleRefreshButton from "../../console-ui/ConsoleRefreshButton";
 import ConsoleTaskQueue, { type ConsoleTask } from "../../console-ui/ConsoleTaskQueue";
 import { participationSnapshot, type ParticipationSnapshot } from "../../../../lib/participation-work";
 import ConsoleStatePanel from "../../console-ui/ConsoleStatePanel";
+import ConsoleAvatar from "../../console-ui/ConsoleAvatar";
+import ConsoleEmptyState from "../../console-ui/ConsoleEmptyState";
+import ListRow from "../../console-ui/ListRow";
+import StatusPill, { type StatusPillTone } from "../../console-ui/StatusPill";
 import { ArrowRightIcon, CopyIcon, CheckIcon, ExternalLinkIcon, PlusIcon, RefreshIcon } from "../../console-ui/ConsoleIcons";
 import { eventCloseHref, readCloseSnapshot } from "../../console-event-close";
 import styles from "./event-overview.module.css";
@@ -305,6 +309,16 @@ function runbookCues(programs: ScheduledProgram[], eventDate: string, now: Date)
       }
       return { ...program, status };
     });
+}
+
+/** Stage pill colour: live reads as the brand, ended as ink, planning as info. */
+function stageTone(stage: string): StatusPillTone {
+  switch (stage) {
+    case "LIVE": return "live";
+    case "READY": return "info";
+    case "ENDED": return "ink";
+    default: return "neutral";
+  }
 }
 
 function getReportStatus(overview: Overview): string {
@@ -826,7 +840,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
 
   const stageBadges = (
         <>
-          <span className={`${eventStageClassName(currentStage)} ${styles.stagePill}`}>{stageText}</span>
+          <StatusPill tone={stageTone(currentStage)} dot={live}>{stageText}</StatusPill>
           <span className={`${styles.intakeBadge} ${publicIntakeOpen ? styles.intakeOpen : styles.intakeClosed}`}>
             {intakeBadgeText}
           </span>
@@ -1058,6 +1072,9 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               <span>{overview.capacityKnown ? (overview.capacity > 0 ? `정원 ${overview.capacity}명 대비` : "정원 제한 없음") : "정원 확인 필요"}</span>
             </Link>
           </div>
+          {!overview.capacityKnown ? (
+            <p className={styles.metricConfig}>정원을 확인할 수 없습니다. <Link href={`${base}/settings`}>행사 설정 확인</Link></p>
+          ) : null}
           {overview.checksAvailable ? <p className={styles.metricConfig}>
             누적 입장 <strong>{overview.everIn}명</strong> · {" "}
             <Link href={`${base}/participants?status=APPROVED&attendance=NOT_ENTERED`}>{overview.cancellationReview ? "승인 상태 중 미입장" : "확정자 중 미입장"} {overview.confirmedNotEntered}명</Link>
@@ -1076,16 +1093,17 @@ export default function EventOverview({ eventId }: { eventId: string }) {
 
   const prepCards = preparing ? (
     <ConsoleSection headingId="event-readiness-heading" title="행사 준비 확인" className={styles.regionReadiness}>
-      <ul className={board.cards}>
+      <ul className={board.checklist}>
         {readyItems.map((item) => (
-          <li key={item.key} className={board.card} data-state={item.state}>
-            <div className={board.cardHead}>
-              <strong>{item.label}</strong>
-              <span className={board.state}>{item.state === "done" ? "완료" : item.state === "todo" ? "필요" : "선택"}</span>
-            </div>
-            <p>{item.text}</p>
-            <Link className={board.cardLink} href={item.href}>{item.action} <ArrowRightIcon /></Link>
-          </li>
+          <ListRow
+            as="li"
+            key={item.key}
+            className={board.checkRow}
+            title={item.label}
+            meta={item.text}
+            leading={<StatusPill tone={item.state === "done" ? "ok" : item.state === "todo" ? "wait" : "neutral"}>{item.state === "done" ? "완료" : item.state === "todo" ? "필요" : "선택"}</StatusPill>}
+            trailing={<Link className={board.cardLink} href={item.href}>{item.action} <ArrowRightIcon /></Link>}
+          />
         ))}
       </ul>
     </ConsoleSection>
@@ -1121,11 +1139,11 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               {entryLegend(true)}
             </div>
           </div>
-          <div className={board.kpis}>
-            <Link className={board.kpi} href={`${base}/participants`}><span>신청</span><strong>{overview.registered}<small>명</small></strong><em>{overview.cancellationReview ? "신청 상태 기준" : "취소 제외 등록"}</em></Link>
-            <Link className={board.kpi} href={approvedRosterHref}><span>{overview.cancellationReview ? "승인 상태" : "참가 확정"}</span><strong>{overview.approved}<small>명</small></strong><em>{overview.cancellationReview ? "취소 확인 필요 인원 포함" : "승인된 참가자"}</em></Link>
-            <Link className={board.kpi} href={`${base}/participants?status=PENDING`} data-alert={overview.pendingApproval > 0 ? "true" : undefined}><span>승인 대기</span><strong>{overview.pendingApproval}<small>명</small></strong><em>검토가 필요한 신청</em></Link>
-            <Link className={board.kpi} href={notEnteredRosterHref} data-alert={overview.confirmedNotEntered > 0 ? "true" : undefined}><span>{overview.cancellationReview ? "승인 상태 중 미입장" : "확정자 중 미입장"}</span><strong>{overview.confirmedNotEntered}<small>명</small></strong><em>아직 입장하지 않음</em></Link>
+          <div className={board.kpis} role="group" aria-label="신청과 입장 현황">
+            <ListRow as="div" href={`${base}/participants`} chevron title="신청" meta={overview.cancellationReview ? "신청 상태 기준" : "취소 제외 등록"} trailing={<strong className={board.kpiValue}>{overview.registered}<small>명</small></strong>} />
+            <ListRow as="div" href={approvedRosterHref} chevron title={overview.cancellationReview ? "승인 상태" : "참가 확정"} meta={overview.cancellationReview ? "취소 확인 필요 인원 포함" : "승인된 참가자"} trailing={<strong className={board.kpiValue}>{overview.approved}<small>명</small></strong>} />
+            <ListRow as="div" href={`${base}/participants?status=PENDING`} chevron title="승인 대기" meta="검토가 필요한 신청" trailing={<><StatusPill tone="wait" size="sm">{overview.pendingApproval > 0 ? "검토 필요" : "없음"}</StatusPill><strong className={board.kpiValue}>{overview.pendingApproval}<small>명</small></strong></>} />
+            <ListRow as="div" href={notEnteredRosterHref} chevron title={overview.cancellationReview ? "승인 상태 중 미입장" : "확정자 중 미입장"} meta="아직 입장하지 않음" trailing={<strong className={board.kpiValue}>{overview.confirmedNotEntered}<small>명</small></strong>} />
           </div>
           {overview.attendanceReview > 0 ? (
             <p className={`${styles.metricConfig} ${board.liveNote}`}>
@@ -1217,34 +1235,6 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                   </Link>
                 </div>
             </div>
-          ) : metrics.length ? (
-            <>
-            <div className={styles.metricGrid}>
-              {metrics.map((metric) => (
-                <Link className={styles.metricCard} href={metric.href} key={metric.label}>
-                  <span className={styles.metricLabel}>{metric.label}</span>
-                  <strong className={styles.metricValue}>{metric.value}</strong>
-                  <span className={styles.metricDetail}>{metric.detail}</span>
-                </Link>
-              ))}
-            </div>
-            {overview.checksAvailable ? <p className={styles.metricConfig}>
-              누적 입장 <strong>{overview.everIn}명</strong> · {" "}
-              <Link href={`${base}/participants?status=APPROVED&attendance=NOT_ENTERED`}>{overview.cancellationReview ? "승인 상태 중 미입장" : "확정자 중 미입장"} {overview.confirmedNotEntered}명</Link>
-            </p> : null}
-            <p className={styles.metricConfig}>
-              {!overview.capacityKnown ? (
-                <span>정원을 확인할 수 없습니다. <Link href={`${base}/settings`}>행사 설정 확인</Link></span>
-              ) : overview.capacity > 0 ? (
-                <span>
-                  정원 <strong>{overview.capacity}명</strong> · 대기 <strong>{overview.waitlist}명</strong>
-                  {" "}<Link href={`${base}/participants?status=WAITLIST`}>대기 명단</Link>
-                </span>
-              ) : (
-                <span>정원 제한 없음 · 대기 <strong>{overview.waitlist}명</strong>{overview.waitlist ? <>{" "}<Link href={`${base}/participants?status=WAITLIST`}>대기 명단</Link></> : null}</span>
-              )}
-            </p>
-            </>
           ) : (
             <p className={styles.restrictedNote}>확인 가능한 단계 지표가 없습니다.</p>
           )}
@@ -1284,9 +1274,9 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                       <strong>{cue.title}</strong>
                       <span>{cue.place || "장소 미정"} · {formatProgramTime(cue)}</span>
                     </div>
-                    <span className={styles.runbookStatus}>
+                    <StatusPill className={styles.runbookStatus} tone={cue.status === "current" ? "live" : cue.status === "done" ? "ok" : "neutral"} dot={cue.status === "current"}>
                       {cue.status === "current" ? "현재 시간" : cue.status === "done" ? "지난 일정" : "예정"}
-                    </span>
+                    </StatusPill>
                   </li>
                 ))}
               </ol>
@@ -1316,7 +1306,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                       <strong>{program.title}</strong>
                       {program.place ? <span>{program.place}</span> : null}
                     </div>
-                    <span className={styles.scheduledBadge}>예정</span>
+                    <StatusPill tone="neutral">예정</StatusPill>
                   </li>
                 ))}
               </ol>
@@ -1378,41 +1368,37 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         )}
       >
         {refreshing ? <p className={styles.refreshStatus} role="status">최신 운영 현황을 불러오고 있습니다.</p> : null}
-        {!overview.checksAvailable ? <p className="empty-state">출입 기록을 확인할 수 없습니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요.</p> : overview.recent.length ? (
+        {!overview.checksAvailable ? <ConsoleEmptyState kind="error-soft" title="출입 기록을 확인할 수 없습니다" description="새로고침해도 계속되면 시스템 관리자에게 문의하세요." /> : overview.recent.length ? (
           <ul className={styles.activityList}>
             {overview.recent.map((check) => {
               const when = checkClock(check.at, now);
               const ago = relativeAgo(check.at, now);
               const where = [check.deskName, ago].filter(Boolean).join(" · ");
-              const tone = check.action === "IN" ? "In" : check.action === "OUT" ? "Out" : "Other";
+              const kind = check.action === "IN" ? "입장" : check.action === "OUT" ? "퇴장" : "기록";
               return (
-                <li key={check.id}>
-                  <time className={styles.checkTime} dateTime={check.at || undefined}>
-                    {when ? <><span>{when.clock}</span>{when.day ? <small>{when.day}</small> : null}</> : formatCheckTime(check.at)}
-                  </time>
-                  <span className={styles.checkRail} aria-hidden="true">
-                    <i className={`${styles.checkDot} ${styles[`checkDot${tone}`]}`} />
-                  </span>
-                  <span className={styles.checkAvatar} data-tone={tone} aria-hidden="true">{[...(check.name || "?").trim()][0] ?? "?"}</span>
-                  <div className={styles.checkDetails}>
-                    <p className={styles.checkLine}>
-                      <strong>{check.name || "이름 없음"}</strong>
-                      <span className={`${styles.checkAction} ${styles[`check${tone}`]}`}>
-                        {check.action === "IN" ? "입장" : check.action === "OUT" ? "퇴장" : "기록"}
-                      </span>
-                    </p>
-                    {where ? <span className={styles.deskName}>{where}</span> : null}
-                  </div>
-                </li>
+                <ListRow
+                  as="li"
+                  key={check.id}
+                  density="dense"
+                  leading={<ConsoleAvatar name={check.name || "?"} tone={check.action === "IN" ? "ok" : "neutral"} />}
+                  title={<span className={styles.checkLine}><strong>{check.name || "이름 없음"}</strong><StatusPill tone={check.action === "IN" ? "ok" : "neutral"} size="sm">{kind}</StatusPill></span>}
+                  meta={where || undefined}
+                  trailing={(
+                    <time className={styles.checkTime} dateTime={check.at || undefined}>
+                      {when ? <><span>{when.clock}</span>{when.day ? <small>{when.day}</small> : null}</> : formatCheckTime(check.at)}
+                    </time>
+                  )}
+                />
               );
             })}
           </ul>
         ) : (
-          <p className="empty-state">
-            {overview.canManageEvent
-              ? "아직 입퇴장 기록이 없습니다. 입장·스태프의 데스크에서 입장을 기록하면 여기에 표시됩니다."
-              : "배정된 데스크에 아직 입퇴장 기록이 없습니다. 담당 데스크에서 입장 기록이 생기면 여기에 표시됩니다."}
-          </p>
+          <ConsoleEmptyState
+            title="아직 입퇴장 기록이 없습니다"
+            description={overview.canManageEvent
+              ? "입장·스태프의 데스크에서 입장을 기록하면 여기에 표시됩니다."
+              : "담당 데스크에서 입장 기록이 생기면 여기에 표시됩니다."}
+          />
         )}
       </ConsoleSection>
       )}
