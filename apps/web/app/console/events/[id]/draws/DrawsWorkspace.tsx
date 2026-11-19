@@ -19,6 +19,8 @@ import { Switch } from "@astryxdesign/core/Switch";
 import ProgramTypeIcon from "../programs/ProgramIcons";
 import StagePreview, { type StageScene } from "./StagePreview";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
+import ConsoleEmptyState from "../../../console-ui/ConsoleEmptyState";
+import StatusPill from "../../../console-ui/StatusPill";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import styles from "./draws.module.css";
 import { consoleFetch } from "../../../../../lib/console-api";
@@ -1619,7 +1621,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
       {otherOperationReceipt && !pendingOperation ? <ConsoleFeedback kind="warning">이전 추첨·투표 요청의 처리 결과를 화면 위의 ‘처리 결과 확인’에서 먼저 확인하세요. 번호 배정을 중간에 떠났다면 확인 후 남은 참가자를 다시 선택하세요.</ConsoleFeedback> : null}
       {refreshingOtherOperation ? <ConsoleFeedback kind="info">최신 추첨·투표 내용을 불러오고 있습니다.</ConsoleFeedback> : null}
       {pendingOperation ? <section className={styles.drawRecovery} aria-labelledby="draw-operation-recovery-heading">
-        <h2 id="draw-operation-recovery-heading" tabIndex={-1}>추첨·투표 처리 확인 필요</h2>
+        <h2 id="draw-operation-recovery-heading" tabIndex={-1} className={styles.noticeTitle}>추첨·투표 처리 확인 필요</h2>
         <p>{DRAW_OPERATION_LABELS[pendingOperation.command]} 요청이 반영됐을 수 있습니다. 서버 처리 확인은 요청을 다시 보내지 않습니다.</p>
         {state.archived || !canWriteEvent(capabilities, pendingOperation.command) ? <p>현재 권한이나 행사 상태에서는 같은 요청을 다시 보낼 수 없습니다. 서버 처리 확인을 이용하세요.</p> : null}
         {operationRecoveryError ? <p role="alert">{operationRecoveryError}</p> : null}
@@ -1641,7 +1643,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
       </section> : null}
 
       {luckyProgress ? <section className={styles.luckyProgress} aria-labelledby="lucky-progress-heading">
-        <h2 id="lucky-progress-heading">럭키번호 배정 진행</h2>
+        <h2 id="lucky-progress-heading" className={styles.noticeTitle}>럭키번호 배정 진행</h2>
         <p role="status" aria-live="polite">확인된 대상 {luckyProgress.processed} / {luckyProgress.total}명 · {luckyProgress.phase === "uncertain" ? "현재 요청 확인 필요" : luckyProgress.phase === "stopping" ? "현재 요청 확인 후 중단" : "순차 처리 중"}</p>
         <progress max={luckyProgress.total} value={luckyProgress.processed} aria-label="번호 배정 확인 진행률" />
         <p>이미 확인된 배정은 유지됩니다. 화면을 떠나면 현재 요청을 확인한 뒤 남은 참가자를 다시 선택하세요.</p>
@@ -1655,7 +1657,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
 
       {pendingDraw || drawReceipt || rememberedDrawReceipt ? (
         <section className={styles.drawRecovery} aria-labelledby="draw-recovery-heading">
-          <h2 id="draw-recovery-heading">추첨 처리 확인 필요</h2>
+          <h2 id="draw-recovery-heading" className={styles.noticeTitle}>추첨 처리 확인 필요</h2>
           <p>이전 추첨이 처리됐을 수 있어 새 작업을 잠시 잠갔습니다. 서버 처리 확인은 추첨을 다시 실행하지 않습니다.</p>
           {operationRecoveryError ? <p role="alert">{operationRecoveryError}</p> : null}
           <div className={styles.drawRecoveryActions}>
@@ -1792,7 +1794,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
             <>
               <div className={styles.stageInfo}>
                 <div className={styles.stageMain}>
-                  <span className={styles.stageKicker} data-state={program.status === "OPEN" ? "live" : program.status === "DRAFT" ? "prep" : "done"}>{program.status === "OPEN" ? "지금 무대에서" : program.status === "DRAFT" ? "준비 중" : "종료"}</span>
+                  <StatusPill tone={program.status === "OPEN" ? "live" : program.status === "DRAFT" ? "wait" : "neutral"} dot className={styles.stageStatus}>{program.status === "OPEN" ? "지금 무대에서" : program.status === "DRAFT" ? "준비 중" : "종료"}</StatusPill>
                   <h2 className={styles.stageTitle}>{program.name}</h2>
                   <p className={styles.stageMeta}>{[program.eligibility === "COMPANY" ? "업체 추첨" : "개인 추첨", program.prizeTiers.length ? program.prizeTiers.map((tier) => `${tier.name} ${tier.count}`).join(" · ") : "", program.overlap === "EVENT" ? "행사 중복 제외" : program.overlap === "PROGRAM" ? "프로그램 중복 제외" : "중복 허용", program.published ? "참가자 공개" : "결과 비공개", moduleTitle].filter(Boolean).join(" · ")}</p>
                   <div className={styles.stageBig}><b>{program.winners.length}</b><span>/ {program.quota}명 당첨 · 남은 {remaining}명</span></div>
@@ -1841,6 +1843,11 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                 ) : null}
 
                 {program.winners.length ? (
+                  <div className={styles.winners}>
+                  <div className={styles.winnersHead}>
+                    <p className={styles.winnersTitle}>당첨자</p>
+                    <StatusPill tone={remaining > 0 ? "wait" : "ok"}>{program.winners.length}/{program.quota}명{remaining > 0 ? ` · 남은 ${remaining}명` : " · 완료"}</StatusPill>
+                  </div>
                   <ul className={styles.winnerList} aria-label={`${program.name} 당첨 결과`}>
                     {program.winners.map((winner, index) => {
                       const reward = state.rewards.find((entry) => entry.sourceKind === "draw" && entry.sourceProgramId === program.id && entry.winnerIndex === index);
@@ -1879,7 +1886,8 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                       );
                     })}
                   </ul>
-                ) : <p className={styles.programWinners}>아직 추첨 결과가 없습니다.</p>}
+                  </div>
+                ) : <ConsoleEmptyState title="아직 추첨 결과가 없습니다." description={canWriteDraws && program.status === "OPEN" && remaining > 0 ? "추첨을 실행하면 당첨자가 이곳에 카드로 쌓입니다." : undefined} />}
 
                 {canWriteDraws && program.status === "OPEN" && remaining > 0 ? (
                   <>
@@ -1906,7 +1914,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
             <>
               <div className={styles.stageInfo}>
                 <div className={styles.stageMain}>
-                  <span className={styles.stageKicker} data-state={state.voteConfig.status === "OPEN" ? "live" : "done"}>{state.voteConfig.status === "OPEN" ? "투표 받는 중" : "마감"}</span>
+                  <StatusPill tone={state.voteConfig.status === "OPEN" ? "live" : "neutral"} dot className={styles.stageStatus}>{state.voteConfig.status === "OPEN" ? "투표 받는 중" : "마감"}</StatusPill>
                   <h2 className={styles.stageTitle}>순위 투표</h2>
                   <p className={styles.stageMeta}>팀 {state.teams.length} · 참가자당 {state.voteConfig.pickCount}명 선택 · 참가자 결과 {state.voteConfig.resultsPublished ? "공개" : "비공개"}</p>
                   <div className={styles.stageBig}><b>{state.voteTotal}</b><span>표 접수</span></div>
@@ -1927,7 +1935,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                   );
                 })}
               </ul>
-            ) : <p className={styles.empty}>등록된 투표 팀이 없습니다.</p>}
+            ) : <ConsoleEmptyState title="등록된 투표 팀이 없습니다." description={canWriteDraws ? "아래 ‘투표 팀 등록’에서 팀을 추가하면 참가자 폰에 투표 후보로 나타납니다." : undefined} />}
             {canWriteDraws ? (
               <div className={styles.tallyActions}>
                 <ProductButton type="button" variant="secondary" onClick={refreshVoteTally} disabled={tallyLoading || writeLocked || state.teams.length === 0}>
@@ -2004,7 +2012,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
             <>
               <div className={styles.stageInfo}>
                 <div className={styles.stageMain}>
-                  <span className={styles.stageKicker} data-state={state.rouletteConfig.status === "OPEN" ? "live" : state.rouletteConfig.status === "DRAFT" ? "prep" : "done"}>{state.rouletteConfig.status === "OPEN" ? "운영 중" : state.rouletteConfig.status === "DRAFT" ? "준비" : "마감"}</span>
+                  <StatusPill tone={state.rouletteConfig.status === "OPEN" ? "live" : state.rouletteConfig.status === "DRAFT" ? "wait" : "neutral"} dot className={styles.stageStatus}>{state.rouletteConfig.status === "OPEN" ? "운영 중" : state.rouletteConfig.status === "DRAFT" ? "준비" : "마감"}</StatusPill>
                   <h2 className={styles.stageTitle}>모바일 룰렛</h2>
                   <p className={styles.stageMeta}>경품 {roulettePrizes.length}종 · 무대 추첨과 별도로 운영</p>
                   <div className={styles.stageBig}><b>{state.rouletteSpun}</b><span>회 참여</span></div>
@@ -2014,7 +2022,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                     {prizeRows.map(({ prize, used, left }) => (
                       <li key={prize.id}>
                         <span>{prize.label || "경품"}</span>
-                        <span className="bar" aria-hidden="true"><i style={{ width: `${prize.unlimited ? (state.rouletteSpun ? Math.round((used / state.rouletteSpun) * 100) : 0) : Number(prize.quantity) ? Math.round((used / Number(prize.quantity)) * 100) : 0}%` }} /></span>
+                        <span className={styles.bar} aria-hidden="true"><i style={{ width: `${prize.unlimited ? (state.rouletteSpun ? Math.round((used / state.rouletteSpun) * 100) : 0) : Number(prize.quantity) ? Math.round((used / Number(prize.quantity)) * 100) : 0}%` }} /></span>
                         <span>{prize.unlimited ? `${used}회` : `${used}/${Number(prize.quantity) || 0}`}</span>
                       </li>
                     ))}
@@ -2028,11 +2036,11 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
         <summary className={styles.setupSummary} data-disclosure-indicator="">룰렛 운영 설정 · {rouletteConflict ? "변경 내용 확인 필요" : rouletteScheduleNeedsReview && rouletteStatus === "OPEN" ? "시간 확인 필요 · 참여 보류" : `${rouletteStatus === "OPEN" ? "운영 중" : rouletteStatus === "DRAFT" ? "준비" : "마감"}${rouletteScheduleNeedsReview ? " · 시간 확인 필요" : ""}`}</summary>
 <ValidatedForm className={styles.programForm} onSubmit={saveRouletteConfig}>
                 {rouletteConflict ? <section className={styles.rouletteConflict} aria-labelledby="roulette-conflict-heading">
-                  <h3 id="roulette-conflict-heading" tabIndex={-1}>다른 작업에서 룰렛 설정이 변경됐습니다</h3>
+                  <h3 id="roulette-conflict-heading" tabIndex={-1} className={styles.noticeTitle}>다른 작업에서 룰렛 설정이 변경됐습니다</h3>
                   <p>이번 저장은 반영되지 않았습니다. 작성한 내용은 그대로 있습니다. 최신 설정과 비교해 주세요.</p>
                   {rouletteConflict.error ? <p role="alert">{rouletteConflict.error}</p> : null}
                   {rouletteConflict.latest ? <>
-                    <h4>최신 설정과 내 작성 내용 비교</h4>
+                    <h4 className={styles.subTitle}>최신 설정과 내 작성 내용 비교</h4>
                     <dl className={styles.rouletteComparison}>
                       {[
                         { label: "운영 상태", latest: ({ OPEN: "운영 중", DRAFT: "준비", CLOSED: "마감" })[rouletteConflict.latest.config.status], draft: ({ OPEN: "운영 중", DRAFT: "준비", CLOSED: "마감" })[rouletteStatus] },
@@ -2130,7 +2138,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
               </ValidatedForm>
       </details>
             ) : null}
-            {!roulettePrizes.length ? <p className={styles.empty}>등록된 경품이 없습니다.</p> : null}
+            {!roulettePrizes.length ? <ConsoleEmptyState title="등록된 경품이 없습니다." /> : null}
 
               </div>
             </>
@@ -2140,7 +2148,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
             <>
               <div className={styles.stageInfo}>
                 <div className={styles.stageMain}>
-                  <span className={styles.stageKicker} data-state={selectedLucky.eligible.length > 0 && missingLuckyCount === 0 ? "done" : "prep"}>사전 배정</span>
+                  <StatusPill tone={selectedLucky.eligible.length > 0 && missingLuckyCount === 0 ? "ok" : "wait"} dot className={styles.stageStatus}>사전 배정</StatusPill>
                   <h2 className={styles.stageTitle}>럭키번호 사전 배정</h2>
                   <p className={styles.stageMeta}>범위 {state.luckyMin}–{state.luckyMax} · 승인 참가자 {selectedLucky.eligible.length}명</p>
                   <div className={styles.stageBig}><b>{state.luckyIssued}</b><span>명 발급 · 미발급 {missingLuckyCount}명</span></div>
@@ -2159,7 +2167,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                 </div>
                 {!luckyRangeConflict && (luckyMin !== String(state.luckyMin) || luckyMax !== String(state.luckyMax)) && <p className={styles.hint}>입력한 범위는 아직 저장되지 않았습니다. 현재 저장된 범위는 {state.luckyMin}–{state.luckyMax}입니다.</p>}
                 {luckyRangeConflict ? <section className={styles.drawRecovery} aria-labelledby="lucky-range-conflict-heading">
-                  <h3 id="lucky-range-conflict-heading">번호 범위가 변경됐습니다</h3>
+                  <h3 id="lucky-range-conflict-heading" className={styles.noticeTitle}>번호 범위가 변경됐습니다</h3>
                   {luckyRangeConflict.loading ? <p role="status">최신 범위를 확인하고 있습니다.</p> : !luckyRangeConflict.ready ? <><p role="alert">최신 범위를 불러오지 못했습니다. 입력한 값은 유지됩니다.</p><ProductButton type="button" variant="secondary" onClick={() => void refreshLuckyRangeConflict()}>최신 범위 다시 확인</ProductButton></> : <>
                     <p role="alert">현재 저장된 범위는 {state.luckyMin}–{state.luckyMax}, 입력한 범위는 {luckyMin || "미입력"}–{luckyMax || "미입력"}입니다. 입력을 유지하면 다음 저장에서 현재 범위를 덮어씁니다.</p>
                     <div className={styles.drawRecoveryActions}>
@@ -2304,7 +2312,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                 <div className={styles.tierEditor}>
                   <div className={styles.tierHeading}>
                     <div>
-                      <h4>경품 등급 (선택)</h4>
+                      <h4 className={styles.subTitle}>경품 등급 (선택)</h4>
                       <p className={styles.hint}>등급을 쓰면 인원 합계가 총 당첨 인원과 같아야 합니다. 비워두면 등급 없는 추첨입니다.</p>
                     </div>
                     <ProductButton type="button" variant="secondary" disabled={programTiers.length >= 20} onClick={() => setProgramTiers((tiers) => [...tiers, { key: randomId("tier"), name: "", count: "" }])}>등급 추가</ProductButton>

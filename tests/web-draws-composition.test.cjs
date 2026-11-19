@@ -52,8 +52,11 @@ test('every safety rule of the old sections survives inside the stage card', () 
 });
 
 test('phone widths keep rows on one line and targets at 44px', () => {
-  assert.match(css, /\.pickRow\s*\{[^}]*min-height:\s*68px/su);
-  assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.pickSpacer\s*\{\s*display:\s*none/u);
+  // Reopened 2026-11-20 (디자인 시스템 적용): the layered overrides are folded into one rule set; the picker cards
+  // stay at least 68px tall (96px on phones) and keep their meter slot (.pickSpacer) so the two-up grid lines up.
+  assert.match(css, /\.pickRow\s*\{[^}]*min-height:\s*(?:6[89]|[7-9]\d|1\d\d)px/su);
+  assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.pickRow \{ min-height: 96px;/u);
+  assert.match(css, /\.pickSpacer \{ display: block; \}/u);
   assert.match(css, /\.actFoot :global\(\.product-action\)\s*\{\s*min-height:\s*44px/u);
   assert.match(css, /\.stepper :global\(\.product-action\)\s*\{[^}]*min-height:\s*56px/su);
 });
@@ -86,4 +89,19 @@ test('Reopened 2026-11-20: the stage links back to 참여 이벤트 and opens �
   assert.match(workspace, /get\("new"\) !== "program"/u, '/draws?new=program opens the existing program dialog once');
   assert.match(workspace, /window\.history\.replaceState\(null, "", `\$\{window\.location\.pathname\}\$\{window\.location\.hash\}`\)/u, 'the one-shot query is removed after use');
   for (const id of ['draws-vote', 'draws-roulette', 'draws-lucky', 'draw-program-']) assert.ok(workspace.includes(id), `#${id} still selects its item`);
+});
+
+// Reopened 2026-11-20 (디자인 시스템 적용): stage state is a StatusPill, empty blocks are ConsoleEmptyState, the run
+// action and the winner cards come before everything else (settings stay folded), and the stylesheet speaks tokens.
+test('Reopened 2026-11-20: shared parts and tokens, run action and winners first, no element-selector overrides', () => {
+  assert.match(workspace, /import StatusPill from "\.\.\/\.\.\/\.\.\/console-ui\/StatusPill"/u);
+  assert.match(workspace, /import ConsoleEmptyState from "\.\.\/\.\.\/\.\.\/console-ui\/ConsoleEmptyState"/u);
+  assert.doesNotMatch(workspace, /styles\.stageKicker|styles\.empty\b|styles\.programWinners/u, 'hand-made kicker and empty blocks are gone');
+  assert.match(workspace, /<ConsoleEmptyState title="아직 추첨 결과가 없습니다\."/u, 'the empty winners state keeps its text');
+  assert.match(workspace, /<p className=\{styles\.winnersTitle\}>당첨자<\/p>/u, 'winners are a titled card group');
+  assert.ok(workspace.indexOf('className={styles.stageAct}') < workspace.indexOf('className={styles.winners}'), 'run action precedes the winners');
+  assert.match(css, /\.stagePreview \{ order: 3; \}/u, 'on phones the facts, run button and winners come before the audience preview');
+  assert.doesNotMatch(css, /^\.(?:drawRecovery|luckyProgress|rouletteConflict) h[1-6]/mu, 'headings carry a class instead of an element-selector override');
+  assert.doesNotMatch(css, /font-weight:\s*(?:5\d\d|6[0-4]\d|65\d|7\d\d)\b/u, 'weights are 400/600/800 only');
+  assert.doesNotMatch(css, /border-radius:\s*\d+px/u, 'radii are tokens');
 });
