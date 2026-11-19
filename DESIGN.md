@@ -224,6 +224,7 @@ The owner approved this composition on 2026-11-13 and reopened it on 2026-11-19,
 - Utilities are ghost or plain text links: the stage band's "진행 단계 설정" and the readiness card links. Nothing in the board is a white box with a boxed button.
 - An empty schedule slot keeps the height of its sibling card.
 - 최근 입퇴장 is a timeline: time, then a rail dot (in = green, out = ink outline, other = muted), then details.
+- Reopened 2026-11-19 (stage decks): below the stage board the page splits by stage, and every block is a card. Before the event: the schedule (wide) beside a 신청 흐름 card (오늘·어제·최근 7일 신청 tiles), with no empty entry log for managers. During the event: the schedule and the 신청·입장 흐름 card on the left, the live entry feed (avatar, name, 입장/퇴장 pill, desk · time ago) on the right. After the event: the close status is one card, and 최종 요약 opens with a final entry-rate ring. Schedule cues are bordered rows with a large time, and the current cue is ink.
 
 ## 참가자 명단 확정 구성
 

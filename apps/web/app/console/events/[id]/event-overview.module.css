@@ -1300,3 +1300,119 @@
   .liveOverview .regionRecent { padding: var(--s4); }
 }
 .liveOverview .regionAnalysis { margin-top: var(--s4); }
+
+/* 2026-11-19 stage decks. Below the stage board every stage reads as cards, and
+   each stage keeps only what it needs: before the event the schedule sits beside
+   the signup flow (no empty entry log); during the event the day's schedule sits
+   beside the live entry feed; after the event the summary leads with a result ring. */
+.cardDeck .regionRunbook,
+.cardDeck .regionRecent,
+.cardDeck .regionAnalysis,
+.cardDeck .rail {
+  padding: var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-large);
+  background: var(--paper);
+  box-shadow: none;
+}
+.cardDeck .rail { position: static; }
+.cardDeck .regionSecondary { margin-bottom: 0; }
+
+/* Layout for the board stages: wide schedule on the left, the stage's companion cards on the right. */
+.overviewCanvas.cardDeck[data-stage="prep"],
+.overviewCanvas.cardDeck[data-stage="live"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  grid-auto-flow: row dense;
+  align-items: start;
+  column-gap: var(--s4);
+}
+.cardDeck[data-stage="prep"] > *,
+.cardDeck[data-stage="live"] > * { grid-area: auto; grid-column: 1 / -1; margin-bottom: 0; }
+@media (min-width: 1101px) {
+.cardDeck[data-stage="prep"] > .regionRunbook { grid-column: 1; grid-row: span 3; }
+.cardDeck[data-stage="prep"] > .regionSecondary,
+.cardDeck[data-stage="prep"] > .regionAnalysis { grid-column: 2; }
+/* During the event the live feed is the tall companion; schedule and flow stack beside it. */
+.cardDeck[data-stage="live"] > .regionRunbook,
+.cardDeck[data-stage="live"] > .regionSecondary,
+.cardDeck[data-stage="live"] > .regionAnalysis { grid-column: 1; }
+.cardDeck[data-stage="live"] > .regionRecent { grid-column: 2; grid-row: span 3; }
+}
+
+/* Schedule: time column, title, place and a status pill; the current cue is ink. */
+.cardDeck .runbookList { border-top: 0; display: grid; gap: var(--s2); }
+.cardDeck .runbookList::before { display: none; }
+.cardDeck .runbookCue {
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  min-height: 64px;
+  margin: 0;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
+}
+.cardDeck .runbookCue:last-child { border-bottom: 1px solid var(--line); }
+.cardDeck .runbookDot { display: none; }
+.cardDeck .runbookCue time { color: var(--ink); font-family: inherit; font-size: var(--h3); font-weight: 750; letter-spacing: -0.02em; text-align: left; }
+.cardDeck .runbookCopy strong { font-size: var(--body); word-break: keep-all; }
+.cardDeck .runbookCopy span { font-size: var(--small); white-space: normal; }
+.cardDeck .runbookStatus { padding: var(--s1) var(--s3); border-radius: 999px; background: var(--surface-muted); color: var(--muted); font-size: var(--label); }
+.cardDeck .runbookCue.done { background: var(--surface-muted); }
+.cardDeck .runbookCue.done time, .cardDeck .runbookCue.done .runbookCopy strong { color: var(--muted); }
+.cardDeck .runbookCue.done .runbookStatus { background: var(--paper); color: var(--success); }
+.cardDeck .runbookCue.current { margin: 0; padding-inline: var(--s4); border-color: var(--ink); background: var(--ink); }
+.cardDeck .runbookCue.current time, .cardDeck .runbookCue.current .runbookCopy strong { color: var(--paper); }
+.cardDeck .runbookCue.current .runbookCopy span { color: var(--side-muted); }
+.cardDeck .runbookCue.current .runbookStatus { background: var(--brand); color: var(--paper); }
+
+/* Entry feed: avatar, name and an action pill, desk and time ago, clock on the right. */
+.cardDeck .activityList li {
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  grid-template-areas: "avatar details time";
+  align-items: center;
+  gap: var(--s3);
+  padding-block: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+.cardDeck .activityList li:last-child { border-bottom: 0; }
+.cardDeck .checkRail { display: none; }
+.cardDeck .checkTime { grid-area: time; color: var(--muted); font-size: var(--small); font-weight: 650; text-align: right; }
+.cardDeck .checkDetails { grid-area: details; }
+.checkAvatar { display: none; }
+.cardDeck .checkAvatar { grid-area: avatar; display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; background: var(--surface-muted); color: var(--ink); font-size: var(--small); font-weight: 700; }
+.cardDeck .checkAvatar[data-tone="In"] { background: var(--success-soft); color: var(--success); }
+.cardDeck .checkLine { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
+.cardDeck .checkAction { padding: 2px var(--s2); border-radius: 999px; background: var(--surface-muted); font-size: var(--label); font-weight: 700; }
+.cardDeck .checkIn { background: var(--success-soft); }
+
+/* Signup / entry flow: three number tiles and the analysis link. */
+.cardDeck .regionAnalysis .periodLine { display: grid; gap: var(--s3); padding: 0; }
+.periodTitle { margin: 0; color: var(--ink); font-size: var(--h3); font-weight: 750; }
+.periodStats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2); }
+.periodStat { display: grid; gap: var(--s1); padding: var(--s3); border-radius: var(--radius-medium); background: var(--surface-muted); }
+.periodStat small { color: var(--muted); font-size: var(--label); font-weight: 600; word-break: keep-all; }
+.periodStat strong { display: inline-flex; align-items: baseline; gap: 2px; font-size: 26px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.periodStat em { color: var(--muted); font-size: var(--small); font-style: normal; font-weight: 600; }
+.cardDeck .regionAnalysis .periodLink { margin-left: 0; justify-self: start; }
+
+/* After the event: the final summary opens with the result ring. */
+.endTop { display: flex; align-items: center; gap: var(--s5); }
+.endTop > :last-child { flex: 1 1 auto; min-width: 0; }
+
+@media (max-width: 1100px) {
+  .overviewCanvas.cardDeck[data-stage="prep"],
+  .overviewCanvas.cardDeck[data-stage="live"] { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .cardDeck .regionRunbook, .cardDeck .regionRecent, .cardDeck .regionAnalysis, .cardDeck .rail { padding: var(--s4); }
+  .cardDeck .runbookCue { grid-template-columns: 52px minmax(0, 1fr); }
+  .cardDeck .runbookStatus { grid-column: 2; justify-self: start; }
+  .periodStat strong { font-size: 22px; }
+  .endTop { flex-direction: column; align-items: flex-start; }
+}
+
+/* Close status after the event: one card with the facts and its single entry. */
+.cardDeck .regionStatus { padding: var(--s4) var(--s5); border: 1px solid var(--line); border-radius: var(--radius-large); background: var(--surface-muted); }
+.cardDeck .closeStatus { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s3); }
+.cardDeck .closeStatus p { margin: 0; font-weight: 600; word-break: keep-all; }

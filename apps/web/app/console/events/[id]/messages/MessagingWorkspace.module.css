@@ -1408,11 +1408,15 @@
 .selectionSummary[data-empty="true"] .selectionCount { color: var(--muted); }
 .recipientList { border-radius: var(--radius-large); }
 .recipientRow:hover { background: var(--surface-muted); }
-.recipientName { display: flex; align-items: center; gap: var(--s3); }
+/* The avatar is a decorative sibling of the name (the name text stays exact for search and assistive tech). */
+.recipientRow { grid-template-columns: 20px 32px minmax(0, 1fr); column-gap: var(--s3); row-gap: 2px; }
+.recipientRow > input[type="checkbox"] { grid-column: 1; grid-row: 1 / span 2; }
+.recipientRow > .recipientAvatar { grid-column: 2; grid-row: 1 / span 2; font-style: normal; }
+.recipientRow > .recipientName { grid-column: 3; grid-row: 1; }
 .recipientAvatar { display: inline-grid; flex: none; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--surface-muted); color: var(--ink); font-size: var(--small); font-weight: 700; }
 .recipientAvatar[data-status="APPROVED"] { background: var(--success-soft); color: var(--success); }
 .recipientAvatar[data-status="PENDING"], .recipientAvatar[data-status="WAITLIST"] { background: var(--warning-soft); color: var(--warning); }
-.recipientMeta { padding-left: calc(32px + var(--s3)); }
+.recipientRow > .recipientMeta { grid-column: 3; grid-row: 2; padding-left: 0; }
 
 /* 작성 단계: 번호 원이 이어진 알약 3개. 현재 단계는 ink 채움. */
 .composeSteps { gap: var(--s2); padding-bottom: var(--s3); border-bottom: 0; }

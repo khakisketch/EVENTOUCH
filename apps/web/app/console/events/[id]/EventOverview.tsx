@@ -1148,7 +1148,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         {overview.canManageEvent && (!overview.participantsAvailable || !overview.checksAvailable || !overview.modulesAvailable) ? <ConsoleFeedback kind="warning">{[!overview.participantsAvailable ? "참가자" : "", !overview.checksAvailable ? "출입 기록" : "", !overview.modulesAvailable ? "참여 콘텐츠" : ""].filter(Boolean).join(" · ")} 자료를 확인할 수 없어 일부 현황을 표시할 수 없습니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요.</ConsoleFeedback> : null}
         {overview.participantsAvailable && overview.cancellationReview > 0 ? <ConsoleFeedback kind="warning">취소 기록과 신청 상태가 다른 {overview.cancellationReview}명이 등록 집계에 포함돼 있습니다. 참가 여부를 확인해야 하며 승인 상태·입장 집계에도 반영될 수 있습니다. {finished ? "종료 이후에는 참가자 상태를 변경할 수 없습니다. " : ""}<Link href={`${base}/participants?ticket=review`}>티켓 확인 필요 명단 보기</Link></ConsoleFeedback> : null}
       </> : undefined}>
-      <div className={overview.canManageEvent ? [styles.overviewCanvas, boardStage ? board.boardLayout : "", currentStage === "LIVE" ? styles.liveOverview : "", currentStage === "ARCHIVED" ? styles.overviewArchived : ""].filter(Boolean).join(" ") : styles.overviewSingle}>
+      <div className={overview.canManageEvent ? [styles.overviewCanvas, styles.cardDeck, boardStage ? board.boardLayout : "", currentStage === "LIVE" ? styles.liveOverview : "", currentStage === "ARCHIVED" ? styles.overviewArchived : ""].filter(Boolean).join(" ") : styles.overviewSingle} data-stage={preparing ? "prep" : live ? "live" : "done"}>
       {refreshError ? <p className={`${styles.refreshAlert} state-error`} role="alert">{refreshError} 이전에 불러온 내용은 유지됩니다.</p> : null}
       {overview.canManageEvent ? (
         <>
@@ -1175,6 +1175,10 @@ export default function EventOverview({ eventId }: { eventId: string }) {
               <p className={styles.restrictedNote}>집계를 표시할 수 없습니다.</p>
             ) : finished ? (
               <div className={styles.entryProgress}>
+              <div className={styles.endTop}>
+              <div className={board.ring} style={{ "--p": overview.entryRate } as CSSProperties} role="img" aria-label={`최종 입장률 ${overview.entryRate}%`}>
+                <div><strong>{overview.entryRate}%</strong><span>최종 입장률</span></div>
+              </div>
               <div className={styles.entrySummary}>
                 <div className={styles.entryMain}>
                   <span className={styles.metricLabel}>최종 누적 입장</span>
@@ -1189,6 +1193,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                 {currentStage === "ARCHIVED" ? (
                   <span className={styles.readOnlyNote}>보관된 행사는 읽기 전용입니다.</span>
                 ) : null}
+              </div>
               </div>
               {entryTrack}
               {entryBasis}
@@ -1324,7 +1329,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         <p className={styles.restrictedNote}>행사 지표는 행사 운영자에게 표시됩니다.</p>
       )}
 
-      {preparing && overview.checksAvailable && overview.recent.length === 0 ? (
+      {preparing && overview.canManageEvent && overview.checksAvailable && overview.recent.length === 0 ? null : preparing && overview.checksAvailable && overview.recent.length === 0 ? (
         <div className={`${styles.recentCompact} ${styles.regionRecent}`}>
           <h2 id="event-recent-heading" className={styles.recentCompactTitle}>
             {overview.canManageEvent ? "최근 입퇴장" : "배정 데스크 최근 입퇴장"}
@@ -1388,6 +1393,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
                   <span className={styles.checkRail} aria-hidden="true">
                     <i className={`${styles.checkDot} ${styles[`checkDot${tone}`]}`} />
                   </span>
+                  <span className={styles.checkAvatar} data-tone={tone} aria-hidden="true">{[...(check.name || "?").trim()][0] ?? "?"}</span>
                   <div className={styles.checkDetails}>
                     <p className={styles.checkLine}>
                       <strong>{check.name || "이름 없음"}</strong>
@@ -1415,10 +1421,16 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           <div className={styles.periodLine}>
             {overview.participantsAvailable && overview.checksAvailable ? (
               <>
-                <span className={styles.periodMuted}>오늘</span>
-                <span>신청 <strong>{overview.periods.today.applications}명</strong></span>
-                <span>입장 <strong>{overview.periods.today.entries}명</strong></span>
-                <span className={styles.periodMuted}>최근 7일 신청 <strong>{overview.periods.last7.applications}명</strong></span>
+                <p className={styles.periodTitle}>{preparing ? "신청 흐름" : "신청·입장 흐름"}</p>
+                <div className={styles.periodStats}>
+                  <span className={styles.periodStat}><small>오늘 신청</small><strong>{overview.periods.today.applications}<em>명</em></strong></span>
+                  {preparing ? (
+                    <span className={styles.periodStat}><small>어제 신청</small><strong>{overview.periods.yesterday.applications}<em>명</em></strong></span>
+                  ) : (
+                    <span className={styles.periodStat}><small>오늘 입장</small><strong>{overview.periods.today.entries}<em>명</em></strong></span>
+                  )}
+                  <span className={styles.periodStat}><small>최근 7일 신청</small><strong>{overview.periods.last7.applications}<em>명</em></strong></span>
+                </div>
               </>
             ) : <span className={styles.periodMuted}>참가자 또는 출입 기록을 확인할 수 없어 기간 집계를 표시할 수 없습니다.</span>}
             <Link className={styles.periodLink} href={`${base}/analysis`}>

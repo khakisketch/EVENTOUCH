@@ -3171,7 +3171,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                                 checked={selectedSet.has(person.id)}
                                 onChange={() => toggleRecipient(person.id)}
                               />
-                              <span className={styles.recipientName}><span className={styles.recipientAvatar} data-status={person.status} aria-hidden="true">{[...person.name.trim()][0] ?? "?"}</span>{person.name}</span>
+                              <span className={styles.recipientName}>{person.name}</span><i className={styles.recipientAvatar} data-status={person.status} aria-hidden="true">{[...person.name.trim()][0] ?? "?"}</i>
                               <span className={styles.recipientMeta} data-recipient-meta>
                                 {person.company ? `${person.company} · ` : ""}{person.group} · {maskPhone(person.phone)} · {participantStatusLabel(person.status)}
                               </span>

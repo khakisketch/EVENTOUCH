@@ -95,3 +95,13 @@ test('compact work rows and mobile page action retain readable names and control
   const shared = fs.readFileSync(path.join(__dirname, "..", "apps/web/app/console/console-ui/console-ui.module.css"), "utf8");
   assert.match(shared, /grid-template-areas: "back back" "context context" "title actions" "meta meta" "badges updated";/, "phone overview header keeps actions beside the title and the check time in the badge row");
 });
+
+// 2026-11-19: below the stage board each stage keeps only its own companions, as cards.
+test('stage decks split the lower overview by event stage', () => {
+  assert.match(source, /data-stage=\{preparing \? "prep" : live \? "live" : "done"\}/u, 'the canvas names its stage');
+  assert.match(source, /preparing && overview\.canManageEvent && overview\.checksAvailable && overview\.recent\.length === 0 \? null/u, 'no empty entry log before the event');
+  assert.match(source, /className=\{styles\.periodStat\}><small>오늘 신청<\/small>/u, 'the signup flow is number tiles');
+  assert.match(source, /aria-label=\{`최종 입장률 \$\{overview\.entryRate\}%`\}/u, 'the final summary leads with the result ring');
+  assert.match(css, /\.cardDeck\[data-stage="live"\] > \.regionRecent \{ grid-column: 2; grid-row: span 3; \}/u, 'live feed sits beside the schedule on desktop');
+  assert.match(css, /@media \(min-width: 1101px\) \{\s*\.cardDeck\[data-stage="prep"\] > \.regionRunbook/u, 'two-column placement is desktop-only');
+});
