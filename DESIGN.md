@@ -241,6 +241,10 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 - A photo is a button that opens a viewer drawer (`ConsoleDialog presentation="drawer"`): large photo, 이전/다음 (and arrow keys), file name and time, 원본 다운로드, 보관 구간 변경, 보관함에서 제외, each behind the existing confirmation. After a move or removal the viewer shows the neighbour or closes.
 - "사진 올리기" is the one orange action; "＋ 사진 추가" ends the gallery; dropping files anywhere on the gallery works. Upload preview, upload history and retry notices keep their existing places and rules.
 
+Reopened 2026-11-19 (owner: 얇은 선·작은 회색 글씨). 구성은 그대로, 표현만 보강했다. 이 항목이 위 설명과 다르면 이 항목이 우선한다.
+- 구간 현황은 옅은 회색 요약 띠(48px 합계 + 12px 8칸 막대 + 비어 있는 구간 이름)다. 구간 타일의 장수는 표지 사진 위 알약 칩(선택된 구간은 잉크 채움, 빈 구간은 앰버 "비어 있음")이고 선택된 타일은 잉크 3px 외곽선이다.
+- 갤러리 머리는 24px 구간 이름과 헤어라인, ZIP 다운로드는 잉크 외곽선 알약, 업로드 안내문은 한 덩어리의 정보 상자다. 사진 모서리는 더 둥글다.
+
 ## 경품 지급 현황 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/rewards/`, option V1). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-rewards-composition.test.cjs` guards it. This is the operator oversight list (blocked prizes, missing recipients, uncertain outcomes); handing a prize to a person at the venue belongs to the staff exit desk.

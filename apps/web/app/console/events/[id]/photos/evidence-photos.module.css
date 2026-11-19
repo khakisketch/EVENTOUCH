@@ -789,3 +789,78 @@
   .sectionTiles { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s2); }
   .tileName { font-size: 12px; }
 }
+
+/* ------------------------------------------------------------------
+   Reopened 2026-11-19: the coverage strip becomes a summary band, the count
+   moves onto each tile as a chip (amber when the section is empty), the
+   selected tile is solid ink, the ZIP link is an outlined pill and the upload
+   guidance is one quiet capsule instead of a grey paragraph.
+   ------------------------------------------------------------------ */
+.coverage {
+  gap: var(--s3) var(--s6);
+  padding: var(--s4) var(--s5);
+  border-radius: var(--radius-large);
+  background: var(--surface-muted);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.coverageNumber { display: flex; align-items: baseline; }
+.coverageNumber b { font-size: 48px; }
+.coverageBar { max-width: 460px; }
+.coverageBar i { height: 12px; border-radius: 6px; }
+.coverageNote { font-size: var(--small); }
+
+.sectionTile { position: relative; gap: var(--s2); }
+.tileCover { border-radius: var(--radius-large); transition: box-shadow 0.12s, transform 0.12s; }
+.sectionTile:hover .tileCover { box-shadow: 0 0 0 2px var(--line-strong); }
+.sectionTile[aria-pressed="true"] .tileCover { box-shadow: 0 0 0 3px var(--ink); }
+.tileName { font-size: var(--small); font-weight: 800; }
+.sectionTile[aria-pressed="true"] .tileName { text-decoration: none; }
+.tileCount {
+  position: absolute;
+  top: var(--s2);
+  left: var(--s2);
+  padding: 2px var(--s2);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--label);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 4px var(--shadow-color);
+}
+.tileCount[data-empty] { background: var(--warning-soft); color: var(--warning); box-shadow: none; }
+.sectionTile[aria-pressed="true"] .tileCount:not([data-empty]) { background: var(--ink); color: var(--paper); }
+
+.galleryHead { padding-bottom: var(--s2); border-bottom: 1px solid var(--line); }
+.galleryHead h2 { font-size: var(--h2); font-weight: 800; }
+.galleryHead h2 small { font-size: var(--small); }
+.galleryHead a[data-native-control="download"] {
+  padding-inline: var(--s4);
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  color: var(--ink);
+  font-weight: 700;
+}
+.galleryHead a[data-native-control="download"]:hover { box-shadow: inset 0 0 0 2px var(--ink); text-decoration: none; }
+
+.galleryArea > .guidance {
+  justify-self: start;
+  padding: var(--s2) var(--s4);
+  border-radius: var(--radius-medium);
+  background: var(--info-soft);
+  color: var(--info);
+  font-size: var(--label);
+  font-weight: 600;
+}
+.galleryArea > .guidance strong { color: inherit; font-weight: 800; }
+.galleryCell { border-radius: var(--radius-large); }
+
+@media (max-width: 768px) {
+  .coverage { padding: var(--s4); }
+  .coverageNumber b { font-size: 40px; }
+  .tileCount { top: 4px; left: 4px; padding: 1px 6px; font-size: 11px; }
+  .tileName { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tileCover { transition: none; }
+}
