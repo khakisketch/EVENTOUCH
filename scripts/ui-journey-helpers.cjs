@@ -96,4 +96,17 @@ async function selectDrawStage(page, name) {
   await page.waitForFunction((el) => el.getAttribute('aria-pressed') === 'true', await row.elementHandle());
 }
 
-module.exports = { openStudioPanel, selectDrawStage, openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, waitForDialogExitFocus };
+// Reopened 2026-11-20: the console previews (DeviceFrame) now scale their device with a ResizeObserver, so the
+// frame right after a viewport change still carries the previous scale. Measuring overflow or running axe at that
+// instant reports a width nobody ever sees. Wait for the layout to settle (three frames, running transitions
+// finished) before measuring; the assertions themselves are unchanged.
+async function settleLayout(page) {
+  await page.evaluate(() => new Promise((resolve) => {
+    let frames = 0;
+    const tick = () => (++frames >= 3 ? resolve() : requestAnimationFrame(tick));
+    requestAnimationFrame(tick);
+  }));
+  await page.evaluate(() => Promise.allSettled(document.getAnimations().map((animation) => animation.finished)));
+}
+
+module.exports = { settleLayout, openStudioPanel, selectDrawStage, openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, waitForDialogExitFocus };

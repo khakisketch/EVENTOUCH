@@ -1,7 +1,7 @@
 'use strict';
 // Real UI and command path with isolated synthetic event data.
 const assert = require('node:assert/strict');
-const { selectDrawStage } = require('./ui-journey-helpers.cjs');
+const { selectDrawStage, settleLayout } = require('./ui-journey-helpers.cjs');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -41,6 +41,8 @@ async function main() {
     await page.evaluate(axeSource);
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
+      // Reopened 2026-11-20: 미리보기 기기 배율이 새 폭에 맞춰진 뒤 측정한다(ResizeObserver 반영 전의 한 프레임은 실제 화면이 아님).
+      await settleLayout(page);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
       assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious', 'critical'].includes(v.impact)).map(v => v.id)), []);
       if (width === 390) await page.screenshot({ path: path.join(out, 'conflict-390.png'), fullPage: true });
