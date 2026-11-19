@@ -783,13 +783,12 @@
 .stepper { background: var(--paper); }
 
 .runBlocker {
-  border: 0;
-  border-left: 4px solid var(--warning);
+  border: 1px solid var(--warning-line);
   border-radius: var(--radius);
   background: var(--warning-soft);
   color: var(--warning);
 }
-.stagePrerequisite { border: 0; border-left: 4px solid var(--info); border-radius: var(--radius); }
+.stagePrerequisite { border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--info-soft); }
 .stagePrerequisite a {
   min-height: 44px;
   padding: 0;

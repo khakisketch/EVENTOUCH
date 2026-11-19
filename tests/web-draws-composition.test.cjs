@@ -66,5 +66,5 @@ test('Reopened 2026-11-19: picker cards lead, wide screens put the preview besid
   assert.match(css, /\.pickRow \{[^}]*grid-template-areas: "icon name name" "meter meter count"/su);
   assert.match(css, /@media \(min-width: 1200px\) \{\s*\.stageCard \{ grid-template-columns: minmax\(0, 1\.08fr\) minmax\(0, 1fr\);/u);
   assert.match(css, /\.winnerItem::before \{\s*content: counter\(winner\);/u, 'winners carry a rank mark');
-  assert.match(css, /\.runBlocker \{[^}]*border-left: 4px solid var\(--warning\)/su, 'run limits read as amber notes, not white buttons');
+  assert.match(css, /\.runBlocker \{[^}]*border: 1px solid var\(--warning-line\)[^}]*background: var\(--warning-soft\)/su, 'run limits read as amber notes, not white buttons');
 });
