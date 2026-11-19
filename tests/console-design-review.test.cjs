@@ -22,11 +22,13 @@ function noNewHex(source, file) {
 test("content ledger rows are flat, token-spaced and state-dotted", () => {
   const css = read("console/events/[id]/content/content.module.css");
   assert.match(css, /\.ledgerItem \+ \.ledgerItem\s*\{[^}]*border-top:\s*1px solid var\(--line\)/s);
-  assert.match(css, /\.ledgerRow\s*\{[^}]*grid-template-columns:\s*14px minmax\(0,\s*1fr\) auto/s);
-  assert.match(css, /\.ledgerRow\s*\{[^}]*min-height:\s*72px/s);
+  // Reopened 2026-11-19: the state dot sits in a 36px tinted circle and the status word is a tinted pill.
+  assert.match(css, /\.ledgerRow\s*\{[^}]*grid-template-columns:\s*36px minmax\(0,\s*1fr\) auto/s);
+  assert.match(css, /\.ledgerRow\s*\{[^}]*min-height:\s*80px/s);
   assert.match(css, /\.rowText\s*\{[^}]*gap:\s*var\(--s1\)/s);
-  assert.match(css, /\.dot\[data-status="live"\]\s*\{[^}]*background:\s*var\(--success\)/s);
-  assert.match(css, /\.dot\[data-status="edit"\]\s*\{[^}]*background:\s*var\(--warning\)/s);
+  assert.match(css, /\.dot\[data-status="live"\]::after\s*\{[^}]*background:\s*var\(--success\)/s);
+  assert.match(css, /\.dot\[data-status="edit"\]::after\s*\{[^}]*background:\s*var\(--warning\)/s);
+  assert.match(css, /\.rowStatus\[data-status="live"\]\s*\{[^}]*background:\s*var\(--success-soft\)/s);
   noNewHex(css, "content.module.css");
   noNewHex(read("console/events/[id]/content/content-preview.module.css"), "content-preview.module.css");
 });

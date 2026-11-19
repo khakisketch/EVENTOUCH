@@ -271,6 +271,12 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 - Drawer rows use `review-*` ids; list rows keep `moderation-*`. Recovery banners close the drawer so they are never behind the scrim.
 - Search and status tabs appear only for long lists (more than 8) or while a filter is active.
 
+Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behaviour and the one-orange-action rule):
+
+- Four status cards top the list (진행 중, 준비 중, 종료, 받은 응답; 32px counts, a dot for the state, green number for running). They are read-only; the filter tabs stay for long lists and are a segmented control with an ink-filled choice.
+- "검토할 것 N" is an amber-tinted card with the count in heading size and a white "열기" pill; the calm state is a soft band. Group titles carry a count chip (green running, amber preparing).
+- Rows get a rounded hover surface, 48px type tiles, an 8px meter and a 24px count. 시작 / 다시 열기 are outlined pills at the row end.
+
 ## 공지·안내 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/content/`, option C: an always-on attendee phone). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-content-composition.test.cjs` guards it. This is where notices, the schedule and the venue guide that attendees read are written; draft, publish review and unpublish rules are unchanged.
@@ -281,6 +287,11 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 - Editors open in place of the ledger (not a modal): a quiet crumb (‹ 공지 / ‹ 일정; pressing the open tab again does the same), the item's title as the heading with its state dot, fields, then actions. The editor stays open after 초안 저장 on the saved item. The one orange action moves between 초안 저장 (unsaved or new) and 게시 검토 (saved with changes); 게시 검토 and 게시 내리기 need a saved draft; 전광판 출력 and 삭제 keep their confirmations. The venue tab is one always-open form.
 - The notice body is a rich editor (Tiptap in `RichEditor.tsx`, external library, not hand-built) on a deliberately small schema: bold, italic, bullet and numbered lists, links, pictures. It is stored as Markdown in the existing `body` field (3000 characters including marks), so an old plain-text notice opens and reads unchanged. A picture is an uploaded event file written `![alt](file:<id>)`; phone photos shrink in the browser to the 600KB limit before upload; the server checks every reference is this event's image (6 per notice) and the public file route serves exactly the pictures in published notices. `lib/rich-text.ts` parses the subset to data and `ui/RichText.tsx` renders it with no HTML injection (links only http(s)/mail/phone); the event page and attendee home render it, the venue board shows words only. The 게시 검토 comparison still shows the raw Markdown text.
 - The header carries one orange add action for the open tab (공지 작성 / 일정 추가) and hides it while that tab's editor is open.
+
+Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behaviour and the one-orange-action rule):
+
+- The 공지 / 일정 / 장소 안내 tabs are a segmented pill control (the chosen tab is ink-filled) with the count as a chip, not an underline.
+- A ledger row keeps hairlines and the whole-row hit target, but its state dot sits in a 36px tinted circle (green published, amber edited draft, hollow private) and the state word is a tinted pill. 고정 and PDF are small chips. The phone rail is unchanged.
 
 ## 참가자 페이지 확정 구성
 

@@ -146,32 +146,37 @@
   min-width: 0;
 }
 
+/* 재설계 2026-11-19: 탭은 분절 알약(선택은 ink 채움), 개수는 작은 칩이다. */
 .tabBar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--s3);
-  border-bottom: 1px solid var(--line);
 }
 
-.tabs { display: flex; gap: var(--s5); min-width: 0; }
+.tabs { display: inline-flex; gap: 2px; min-width: 0; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-muted); }
 
 .tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
   min-height: 44px;
-  margin-bottom: -1px;
-  padding: 0;
+  padding: 0 var(--s4);
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-radius: 999px;
   background: transparent;
   color: var(--muted);
   font: inherit;
   font-weight: 650;
   cursor: pointer;
+  white-space: nowrap;
 }
 
-.tab[aria-selected="true"] { border-bottom-color: var(--ink); color: var(--ink); }
+.tab:hover:not([aria-selected="true"]) { background: var(--paper); color: var(--ink); }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--paper); font-weight: 750; }
 .tab:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-.tabCount { margin-left: var(--s1); font-weight: 600; }
+.tabCount { min-width: 22px; padding: 0 7px; border-radius: 999px; background: var(--paper); color: var(--muted); font-size: var(--label); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 22px; text-align: center; }
+.tab[aria-selected="true"] .tabCount { background: color-mix(in srgb, var(--paper) 22%, transparent); color: var(--paper); }
 
 .phoneToggle { display: none; }
 
@@ -182,12 +187,13 @@
 
 .ledgerRow {
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) auto;
-  gap: var(--s3);
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: var(--s4);
   align-items: center;
   width: 100%;
-  min-height: 72px;
-  padding: var(--s2) 0;
+  min-height: 80px;
+  padding: var(--s3) var(--s2);
+  border-radius: var(--radius-medium);
   border: 0;
   background: transparent;
   color: var(--ink);
@@ -200,18 +206,24 @@ button.ledgerRow:hover:not(:disabled) { background: var(--surface-muted); }
 button.ledgerRow:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 button.ledgerRow:disabled { cursor: not-allowed; opacity: 0.6; }
 
-.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
-.dot[data-status="live"] { background: var(--success); }
-.dot[data-status="edit"] { background: var(--warning); }
-.dot[data-status="off"] { background: transparent; box-shadow: inset 0 0 0 2px var(--muted); }
+/* 상태 점은 36px 원 안에 놓인다: 게시 중은 초록, 수정한 초안은 amber, 비공개는 속이 빈 회색. */
+.dot { position: relative; width: 36px; height: 36px; border-radius: 50%; background: var(--surface-muted); }
+.dot::after { content: ""; position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); transform: translate(-50%, -50%); }
+.dot[data-status="live"] { background: var(--success-soft); }
+.dot[data-status="live"]::after { background: var(--success); }
+.dot[data-status="edit"] { background: var(--warning-soft); }
+.dot[data-status="edit"]::after { background: var(--warning); }
+.dot[data-status="off"]::after { background: transparent; box-shadow: inset 0 0 0 2px var(--muted); }
 
 .rowText { display: grid; gap: var(--s1); min-width: 0; }
 .rowTitle { font-size: var(--h3); font-weight: 750; overflow-wrap: anywhere; word-break: keep-all; }
 .rowSummary { color: var(--muted); font-size: var(--small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .rowMeta { display: flex; align-items: center; gap: var(--s3); color: var(--muted); font-size: var(--small); font-weight: 650; white-space: nowrap; }
-.rowFlag { color: var(--ink); }
-.rowStatus[data-status="edit"] { color: var(--warning); }
+.rowFlag { padding: 2px 8px; border-radius: 999px; background: var(--surface-muted); color: var(--ink); font-size: var(--label); }
+.rowStatus { padding: 4px 12px; border-radius: 999px; background: var(--surface-muted); color: var(--muted); font-size: var(--label); font-weight: 700; }
+.rowStatus[data-status="live"] { background: var(--success-soft); color: var(--success); }
+.rowStatus[data-status="edit"] { background: var(--warning-soft); color: var(--warning); }
 
 .editor { display: grid; gap: var(--s3); min-width: 0; }
 .editorHead { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
@@ -251,3 +263,11 @@ button.ledgerRow:disabled { cursor: not-allowed; opacity: 0.6; }
 }
 
 .fieldNote { margin-top: var(--s1); }
+
+/* 재설계 2026-11-19: 좁은 화면에서는 폰 미리보기 버튼이 탭 아래로 내려가 가로 넘침이 없다. */
+@media (max-width: 768px) {
+  .tabBar { flex-wrap: wrap; }
+  .tabs { max-width: 100%; }
+  .tab { padding: 0 var(--s3); gap: var(--s1); }
+  .ledgerRow { gap: var(--s3); padding-inline: 0; }
+}

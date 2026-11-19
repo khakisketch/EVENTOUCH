@@ -859,3 +859,51 @@ button.drawerItemMain { cursor: pointer; min-height: 44px; align-content: center
 .moduleLine {
   word-break: keep-all;
 }
+
+/* ---- 재설계 2026-11-19 ----
+   위에 현황 카드 4칸(큰 숫자), 검토할 것은 amber 카드, 행은 둥근 호버 면과 더 큰 유형 타일·진행 막대로 읽히게 한다. */
+.statStrip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s3); margin: 0 0 var(--s2); }
+.statCard { display: grid; align-content: space-between; gap: var(--s2); min-height: 92px; margin: 0; padding: var(--s3) var(--s4); border: 1px solid var(--line); border-radius: var(--radius-large); background: var(--paper); }
+.statCard dt { color: var(--muted); font-size: var(--small); font-weight: 650; word-break: keep-all; }
+.statCard dt::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: var(--s2); border-radius: 50%; background: var(--line-strong); }
+.statCard[data-tone="live"] dt::before { background: var(--success); }
+.statCard[data-tone="prep"] dt::before { background: var(--warning); }
+.statCard[data-tone="done"] dt::before { background: var(--paper); box-shadow: inset 0 0 0 2px var(--line-strong); }
+.statCard[data-tone="resp"] dt::before { background: var(--ink); }
+.statCard dd { margin: 0; font-size: 32px; font-weight: 750; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.statCard[data-tone="live"] dd { color: var(--success); }
+
+.reviewLine { min-height: 64px; margin-bottom: var(--s3); border: 1px solid var(--warning-line); border-radius: var(--radius-large); background: linear-gradient(90deg, var(--warning-soft), var(--paper) 90%); }
+.reviewToggle { min-height: 64px; padding: var(--s3) var(--s5); font-size: var(--h3); }
+.reviewToggle > span:last-child { padding: 6px 14px; border-radius: 999px; background: var(--paper); box-shadow: inset 0 0 0 1px var(--warning-line); font-size: var(--small); }
+.reviewLineCalm { min-height: 52px; padding: 0 var(--s4); border: 1px solid var(--line); border-radius: var(--radius-large); background: var(--surface-muted); }
+
+.groupTitle { display: flex; align-items: center; gap: var(--s2); margin: var(--s5) 0 var(--s1); color: var(--ink); font-size: var(--body); font-weight: 750; letter-spacing: -0.01em; }
+.groupCount { min-width: 24px; padding: 1px 8px; border-radius: 999px; background: var(--surface-muted); color: var(--muted); font-size: var(--small); font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
+.groupTitle[data-group="OPEN"] .groupCount { background: var(--success-soft); color: var(--success); }
+.groupTitle[data-group="DRAFT"] .groupCount { background: var(--warning-soft); color: var(--warning); }
+
+.moduleSummary { padding: var(--s3) var(--s3); border-radius: var(--radius-large); transition: background-color 0.12s; }
+.moduleSummary:hover { background: var(--surface-muted); }
+.moduleSummary[data-has-action="true"] { padding-right: 112px; }
+.rowAction { right: var(--s3); top: 18px; }
+.typeTile { width: 48px; height: 48px; border-radius: 14px; }
+.meter { height: 8px; border-radius: 999px; }
+.moduleCount b { font-size: 24px; font-weight: 750; }
+.statusTabs { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-muted); }
+.statusTabs button { padding: 0 var(--s4); border: 0; border-radius: 999px; }
+.statusTabs button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.listTools input[type="search"] { border-radius: 999px; padding-inline: var(--s4); }
+.empty { border-radius: var(--radius-large); background: var(--surface-muted); }
+
+@media (max-width: 768px) {
+  .statStrip { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); }
+  .statCard { min-height: 80px; padding: var(--s3); }
+  .statCard dd { font-size: 28px; }
+  .moduleSummary { padding-inline: var(--s2); }
+}
+@media (prefers-reduced-motion: reduce) { .moduleSummary { transition: none; } }
+
+/* 시작·다시 열기는 윤곽 알약으로, 흰 버튼 더미가 되지 않게 한 줄에 하나만 둔다. */
+.rowAction { padding-inline: var(--s4); border: 1px solid var(--line-strong); border-radius: 999px; background: var(--paper); font-weight: 700; }
+.rowAction:hover:not(:disabled) { background: var(--surface-muted); }
