@@ -1,9 +1,9 @@
 {
   "note": "Ratchet baseline for tests/web-design-tokens-guard.test.cjs. Counts may only go down. Refresh with: node tests/web-design-tokens-guard.test.cjs --update",
   "totals": {
-    "fontSizePx": 175,
-    "radius": 122,
-    "hex": 182
+    "fontSizePx": 140,
+    "radius": 98,
+    "hex": 148
   },
   "files": {
     "console/clients/clients.module.css": {
@@ -88,7 +88,7 @@
     },
     "console/events/[id]/content/content-preview.module.css": {
       "fontSizePx": 0,
-      "radius": 2,
+      "radius": 0,
       "hex": 0
     },
     "console/events/[id]/content/content.module.css": {
@@ -102,8 +102,8 @@
       "hex": 0
     },
     "console/events/[id]/draws/draws.module.css": {
-      "fontSizePx": 25,
-      "radius": 7,
+      "fontSizePx": 14,
+      "radius": 0,
       "hex": 0
     },
     "console/events/[id]/event-overview-board.module.css": {
@@ -127,39 +127,39 @@
       "hex": 0
     },
     "console/events/[id]/operations/operations.module.css": {
-      "fontSizePx": 5,
-      "radius": 2,
+      "fontSizePx": 0,
+      "radius": 0,
       "hex": 0
     },
     "console/events/[id]/page/attendee-guide-qr.module.css": {
       "fontSizePx": 0,
       "radius": 0,
-      "hex": 5
+      "hex": 0
     },
     "console/events/[id]/page/color-field.module.css": {
       "fontSizePx": 0,
-      "radius": 1,
-      "hex": 16
+      "radius": 0,
+      "hex": 0
     },
     "console/events/[id]/page/layout-picker.module.css": {
       "fontSizePx": 0,
-      "radius": 1,
+      "radius": 0,
       "hex": 0
     },
     "console/events/[id]/page/page.module.css": {
-      "fontSizePx": 9,
+      "fontSizePx": 0,
       "radius": 0,
       "hex": 0
     },
     "console/events/[id]/page/studio-controls.module.css": {
       "fontSizePx": 0,
-      "radius": 1,
+      "radius": 0,
       "hex": 0
     },
     "console/events/[id]/page/studio.module.css": {
       "fontSizePx": 0,
-      "radius": 4,
-      "hex": 13
+      "radius": 0,
+      "hex": 0
     },
     "console/events/[id]/participants/import/import.module.css": {
       "fontSizePx": 0,
@@ -177,8 +177,8 @@
       "hex": 0
     },
     "console/events/[id]/programs/programs.module.css": {
-      "fontSizePx": 6,
-      "radius": 4,
+      "fontSizePx": 0,
+      "radius": 0,
       "hex": 0
     },
     "console/events/[id]/reports/reports.module.css": {
@@ -192,12 +192,17 @@
       "hex": 0
     },
     "console/events/[id]/settings/fields/fields.module.css": {
-      "fontSizePx": 1,
-      "radius": 2,
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "console/events/[id]/settings/settings-toc.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
       "hex": 0
     },
     "console/events/[id]/settings/settings.module.css": {
-      "fontSizePx": 3,
+      "fontSizePx": 0,
       "radius": 0,
       "hex": 0
     },
@@ -255,6 +260,41 @@
       "fontSizePx": 4,
       "radius": 10,
       "hex": 8
+    },
+    "event/[slug]/ui/AttendeeCard.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "event/[slug]/ui/AttendeeListRow.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "event/[slug]/ui/AttendeeSectionHeader.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "event/[slug]/ui/AttendeeStateMessage.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "event/[slug]/ui/AttendeeStep.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "event/[slug]/ui/AttendeeSurface.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
+    "event/[slug]/ui/BottomAction.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
     }
   }
 }

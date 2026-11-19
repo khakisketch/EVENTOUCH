@@ -302,6 +302,7 @@ Reopened 2026-11-20 (owner: 미리보기가 평평한 상자라 별로, 모바�
 Reopened 2026-11-20 (참여 이벤트 통합; the menu "추첨·투표" merged into 참여 이벤트). 이 항목이 위 설명과 다르면 이 항목이 우선한다.
 - The draws screen is no longer a rail menu: the rail lights 참여 이벤트 here, and every stage draw, 순위 투표, 룰렛 and 럭키번호 is also a row of the one event list. This screen stays at `/draws` as the stage where a draw-type event is run (실행, 무대 터치, 결과 공개, winners, settings).
 - The header carries a ghost back link "참여 이벤트" beside 추첨 프로그램 만들기. The heading, `pageId="draws"`, `#draws-vote` / `#draws-roulette` / `#draws-lucky` / `#draw-program-<id>` selection and every confirmation, blocker line and permission lock are unchanged; the event list links into them.
+- Reopened 2026-11-20 (디자인 시스템 적용): 무대 상태는 `StatusPill`, 빈 상태는 `ConsoleEmptyState`, 당첨자는 "당첨자 n/m명" 알약이 달린 순번 카드로 실행 영역 바로 뒤에 둔다. 모바일(≤768px)은 사실→실행 버튼→당첨자→청중 화면 미리보기 순으로 읽고(미리보기 `order: 3`), 데스크톱은 좌측 미리보기·우측 실행의 확정 구성을 유지한다. 선택 카드는 모바일에서 "아이콘+개수/이름/막대"로 쌓는다. 설정(투표·룰렛·럭키·프로그램)은 계속 접힘이나 대화창이다. CSS는 `--text-*`·`--fw-*`(400/600/800)·`--r-*` 토큰만 쓰고, 청중 화면 시뮬레이터(전광판 1280×720, 폰 390px) 안의 실제 기기 px만 남긴다.
 
 ## 참여 콘텐츠 확정 구성
 
@@ -326,6 +327,7 @@ Reopened 2026-11-20 (참여 이벤트 통합; owner approved proposal B in `desi
 - The four status cards are gone: count tabs (전체 · 진행 중 · 준비 중 · 종료, a segmented control with count badges, `StatusTabs.tsx`, swappable for the shared `console-ui` CountTabs) top the list, with 받은 응답 as a quiet number beside them. "검토할 것 N" is a slim amber row that still opens the review drawer.
 - "이벤트 만들기" (the one orange action) opens a template chooser grouped 참여형 (투표 · 퀴즈 · Q&A · 설문), 추첨형 (룰렛 · 럭키번호 · 간단 추첨 · 무대 추첨 · 순위 투표) and 미션형 (참여 사진 · 참여 게시판). A module tile opens the existing create dialog with the type preselected; a draw tile opens that item's existing settings on the draws screen (`?new=program` opens 추첨 프로그램 만들기 once). Only types that exist get a tile; 기획안 게임 are a dashed hint line.
 - An opened event starts with a 5-step header (문항·설정 준비 → 화면·공개 → 진행 → 결과 → 경품 연결) whose current step comes from real state, followed by the existing editors and results. A draw-type item links "무대에서 진행·당첨 보기" to its `/draws#…` selection; its reward step links to 경품 지급.
+- Reopened 2026-11-20 (디자인 시스템 적용): 필터 줄은 공용 `CountTabs`(진행 중 점, 준비 중 amber, 받은 응답은 aside), 행 상태는 공용 `StatusPill`(진행 중 녹색·준비/검토 amber·준비 완료 파랑·종료 회색), 행은 헤어라인으로 나누고 4칸 생명주기 막대와 개수는 유지한다. 필터 결과 없음은 `ConsoleEmptyState`(filtered), 검토 드로어는 `CountTabs`와 `ConsoleAvatar`를 쓴다. 스타일은 토큰만 쓴다(글자 크기·굵기 400/600/800·모서리 3종). 드로어 구성과 단일 주황 행동(이벤트 만들기)은 그대로다.
 
 ## 공지·안내 확정 구성
 
@@ -345,6 +347,7 @@ Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behav
 
 Reopened 2026-11-20 (owner: 미리보기를 모바일 껍데기 시뮬레이션으로):
 - The phone is the shared `DeviceFrame` (390px layout scaled to its host; the scrolling screen stays a labelled region). 공지·일정·장소 screens now start with the real `HomeHero` banner and show white cards under quiet section labels like the real event guide; a real phone's full view is still the bare screen with no frame.
+- Reopened 2026-11-20 (디자인 시스템 적용): 공지·일정 행은 공용 `ListRow`+`StatusPill`(게시 중=ok, 수정본 있음=wait, 비공개=neutral), 빈 상태는 `ConsoleEmptyState`. 탭은 `CountTabs`와 같은 모양을 `role="tab"` 시맨틱으로 유지한다. 목록 위에 "참가자 폰에는 게시 중 N개만 보입니다" 안내를, 편집기 머리에 상태·저장 전 변경 알약과 폰 미리보기 윤곽선 안내를 둬 편집과 미리보기를 한 흐름으로 묶었다. 폰 미리보기·디자인 연동 구조(C안)는 그대로다. CSS는 글자 크기·모서리·굵기를 토큰으로 정리해 수치 0.
 
 ## 참가자 페이지 확정 구성
 
@@ -358,6 +361,7 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 
 Reopened 2026-11-20 (owner: 미리보기를 모바일 껍데기 시뮬레이션으로):
 - The editor's home preview (and its "크게 보기" stage) is the shared `DeviceFrame` phone: the home renders at the chosen screen size (320×568, 390×700, 390×844) with a status bar and home indicator, scaled to the column, instead of a squeezed 340px box.
+- Reopened 2026-11-20 (디자인 시스템 적용): 페이지 머리와 저장 줄이 하나의 `StatusPill`을 공유한다. 머리의 문구는 aria-live가 아닌 짧은 상태(게시 전 초안·저장 전 변경·게시됨·게시본과 다름·확인 필요)이고, 저장 영역만 live 영역으로 남는다. 저장 영역은 흰 헤어라인 카드, 편집기 CSS는 토큰만 쓴다. 색 선택기의 색상환·슬라이더는 사용자가 고르는 색 자체라 `hsl()` 정지점을 예외로 둔다.
 
 ## 행사 설정 확정 구성
 
@@ -374,6 +378,7 @@ Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behav
 
 - The event card's head carries a soft brand tint and a larger name; the stage block is a connected five-step stepper (finished steps green with a check, the current step an ink circle with a 현재 chip, the next step an outlined circle with a 다음 chip). Orange stays on the primary actions only.
 - Each 운영 기능 tile shows a switch (ink track when on). The real checkbox stays inside the tile, transparent over it, so keyboard and screen readers are unchanged.
+- Reopened 2026-11-20 (디자인 시스템 적용): 구조(탭 없음, 기본 정보 드로어, 참가비·진행 형태 없음)는 그대로 두고, 왼쪽에 설정 목차(`SettingsToc`: 번호·현재 상태 한 줄·"변경됨" 알약, 폰은 가로 칩 줄)를 붙였다. 행사 카드·참가 접수·운영 기능은 목차 오른쪽 한 열의 흰 카드+헤어라인(`heading="rule"`)으로 쌓고, 참가 접수는 상태 띠 아래에서 신청서 미리보기와 동의 안내를 나란히 둔다. 게시·저장 줄은 카드 아래에 붙는 sticky 바라 스크롤해도 같은 자리다. 저장 안 됨 표시는 `StatusPill`, 진행 단계 점은 주황이 아니라 잉크다. 운영 기능 타일은 데스크톱 3열.
 
 ## 메시지 확정 구성
 
@@ -421,6 +426,7 @@ Reopened 2026-11-20 (입장·스태프 + 현장 모드; owner approved proposal 
 - A state is shown by its control or one word, not by a chip beside a button that says the same thing.
 - A link or action appears once per page unless two entry points do different jobs.
 - Rows are not wrapped in cards, and dimming never lowers text contrast.
+- Reopened 2026-11-20 (디자인 시스템 적용): 입장·스태프의 3단계를 흰 헤어라인 카드 3장(1 데스크, 2 스태프 배정, 3 스태프 폰 스캔)과 선택 카드 1장(부스)으로 다시 짰다. 단계 상태는 공용 `StatusPill`이고, 비어 있거나 담당이 없는 단계는 앰버 알약과 앰버 카드 테두리로 보인다. 담당자는 `ConsoleAvatar`, 빈 목록은 `ConsoleEmptyState`다. 글자 크기·굵기·모서리는 토큰으로 옮겨 하드코딩이 0이 됐다. 폰에서는 스캔 폰 목업을 숨긴다. A3의 위치 행(타일·이름·담당자·가동 스위치), 담당 없는 곳 목록, 접힌 프리셋 2개는 그대로다.
 
 ## 현장 모드 확정 구성
 
@@ -576,6 +582,7 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/console/events/
 
 Reopened 2026-11-20 (owner: 미리보기를 모바일 껍데기 시뮬레이션으로, 실제 신청서를 따를 것):
 - The preview is the real registration sheet inside the shared `DeviceFrame` phone: the published event banner (`EventBanner`), when and where (`EventFacts`), then numbered sections 참가자 정보, 연락처 인증 (only when the event asks for a phone check) and 정보 수집 동의 (only when a consent notice exists), on the event's ground color. The field being edited scrolls into view and stays outlined. Still decorative (`aria-hidden`, `inert`), still no second orange.
+- Reopened 2026-11-20 (디자인 시스템 적용): 항목 행은 `ListRow`(이름 버튼의 `::after`가 행 전체를 누르는 대상으로 유지), 필수/선택과 게시 상태는 `StatusPill`(필수=잉크, 선택=중립, 게시 안 된 변경=앰버, 같음=초록), 섹션 제목은 `heading="rule"`. 폰 미리보기·편집 패널·쓰기 계약은 그대로.
 
 ## 참여하기 확정 구성
 
