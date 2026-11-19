@@ -829,9 +829,11 @@
 .winnerSummary strong { font-size: var(--h3); }
 
 @media (max-width: 768px) {
-  .picker { display: flex; gap: var(--s3); overflow-x: auto; scroll-snap-type: x proximity; scroll-padding-inline: var(--s4); padding-bottom: var(--s2); margin-inline: calc(var(--s4) * -1); padding-inline: var(--s4); scrollbar-width: none; }
-  .picker > li { flex: 0 0 236px; scroll-snap-align: start; }
-  .pickRow { min-height: 104px; padding: var(--s3); }
+  .picker { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); }
+  .picker > li:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .pickRow { min-height: 96px; padding: var(--s3); grid-template-columns: 36px minmax(0, 1fr) auto; gap: var(--s2); }
+  .pickName span { font-size: var(--label); }
+  .pickCount b { font-size: var(--h3); }
   .pickMeter { display: flex; }
   .pickSpacer { display: block; }
 }
