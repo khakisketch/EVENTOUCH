@@ -57,7 +57,7 @@ test('navigation registry covers all seventeen menu pages as metadata only', () 
   assert.ok(unionBlock, 'ConsolePageId union is exported');
   assert.deepEqual(quotedList(unionBlock[1]), [
     'events', 'clients', 'team', 'overview', 'participants', 'participantImport',
-    'messages', 'operations', 'programs', 'draws', 'photos', 'content',
+    'messages', 'operations', 'live', 'programs', 'draws', 'photos', 'content',
     'attendeePage', 'rewards', 'settings', 'reports', 'analysis',
   ]);
 
@@ -66,9 +66,9 @@ test('navigation registry covers all seventeen menu pages as metadata only', () 
   const labels = {
     events: '행사', clients: '고객사', team: '팀·권한', overview: '운영 현황',
     participants: '참가자 명단', participantImport: '명단 가져오기', messages: '메시지',
-    operations: '현장 운영', programs: '참여 콘텐츠', draws: '추첨·투표',
+    operations: '입장·스태프', live: '현장 모드', programs: '참여 이벤트', draws: '추첨·투표',
     photos: '현장 사진', content: '공지·안내', attendeePage: '참가자 페이지',
-    rewards: '경품 지급 현황', settings: '행사 설정', reports: '결과 보고서', analysis: '기간 분석',
+    rewards: '경품 지급', settings: '행사 설정', reports: '결과 보고서', analysis: '기간 분석',
   };
   for (const [id, label] of Object.entries(labels)) {
     const scope = ['events', 'clients', 'team'].includes(id) ? 'organization' : 'event';
@@ -87,11 +87,14 @@ test('navigation exposes rail order, root ids and existing routes', () => {
   assert.match(nav, /export const EVENT_PAGE_IDS: readonly ConsolePageId\[\] = EVENT_HUBS\.flatMap\(\(hub\) => hub\.pageIds\);/u, 'hubs own the order');
   for (const pages of [
     'pageIds: ["overview", "participants", "messages"]',
-    'pageIds: ["operations", "draws", "rewards", "photos"]',
-    'pageIds: ["attendeePage", "content", "programs", "settings"]',
-    'pageIds: ["reports", "analysis"]',
+    'pageIds: ["attendeePage", "content", "programs", "operations", "settings"]',
+    'pageIds: ["live"]',
+    'pageIds: ["reports", "rewards", "photos", "analysis"]',
   ]) assert.ok(nav.includes(pages), `work group keeps ${pages}`);
-  const hubOrder = ['"today"', '"onsite"', '"prepare"', '"results"'].map((id) => nav.indexOf(`{ id: ${id}`));
+  // Reopened 2026-11-20 (현장·참여 재구성): preparation, then the day-of mode, then results;
+  // 추첨·투표 and 기간 분석 resolve but have no rail item of their own.
+  assert.ok(nav.includes('RAIL_HIDDEN_PAGE_IDS: readonly ConsolePageId[] = ["draws", "analysis"]'));
+  const hubOrder = ['"today"', '"prepare"', '"onsite"', '"results"'].map((id) => nav.indexOf(`{ id: ${id}`));
   assert.ok(hubOrder.every((position) => position >= 0));
   assert.deepEqual(hubOrder, [...hubOrder].sort((a, b) => a - b));
 

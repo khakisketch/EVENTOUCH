@@ -19,6 +19,7 @@ export type ConsolePageId =
   | "participantImport"
   | "messages"
   | "operations"
+  | "live"
   | "programs"
   | "draws"
   | "photos"
@@ -70,13 +71,14 @@ export const CONSOLE_PAGES: Record<ConsolePageId, ConsolePageMeta> = {
   participants: { label: "참가자 명단", title: "참가자 명단", scope: "event", layout: "workspace" },
   participantImport: { label: "명단 가져오기", title: "명단 가져오기", scope: "event", layout: "workspace" },
   messages: { label: "메시지", title: "메시지 발송", scope: "event", layout: "workspace" },
-  operations: { label: "현장 운영", title: "현장 운영", scope: "event", layout: "workspace" },
-  programs: { label: "참여 콘텐츠", title: "참여 콘텐츠", scope: "event", layout: "workspace" },
+  operations: { label: "입장·스태프", title: "입장·스태프", scope: "event", layout: "workspace" },
+  live: { label: "현장 모드", title: "현장 모드", scope: "event", layout: "workspace" },
+  programs: { label: "참여 이벤트", title: "참여 이벤트", scope: "event", layout: "workspace" },
   draws: { label: "추첨·투표", title: "추첨·투표", scope: "event", layout: "workspace" },
   photos: { label: "현장 사진", title: "현장 사진", scope: "event", layout: "workspace" },
   content: { label: "공지·안내", title: "공지·안내", scope: "event", layout: "workspace" },
   attendeePage: { label: "참가자 페이지", title: "참가자 페이지", scope: "event", layout: "workspace" },
-  rewards: { label: "경품 지급 현황", title: "경품 지급 현황", scope: "event", layout: "workspace" },
+  rewards: { label: "경품 지급", title: "경품 지급", scope: "event", layout: "workspace" },
   settings: { label: "행사 설정", title: "행사 설정", scope: "event", layout: "workspace" },
   reports: { label: "결과 보고서", title: "결과 보고서", scope: "event", layout: "workspace" },
   analysis: { label: "기간 분석", title: "기간 분석", scope: "event", layout: "workspace" },
@@ -90,24 +92,38 @@ export const CONSOLE_PAGES: Record<ConsolePageId, ConsolePageMeta> = {
  */
 export const EVENT_HUBS: readonly ConsoleHub[] = [
   { id: "today", label: "운영", pageIds: ["overview", "participants", "messages"], defaultPageId: "overview" },
-  { id: "onsite", label: "현장·참여", pageIds: ["operations", "draws", "rewards", "photos"], defaultPageId: "operations" },
-  { id: "prepare", label: "행사 준비", pageIds: ["attendeePage", "content", "programs", "settings"], defaultPageId: "attendeePage" },
-  { id: "results", label: "결과", pageIds: ["reports", "analysis"], defaultPageId: "reports" },
+  { id: "prepare", label: "행사 준비", pageIds: ["attendeePage", "content", "programs", "operations", "settings"], defaultPageId: "attendeePage" },
+  { id: "onsite", label: "당일", pageIds: ["live"], defaultPageId: "live" },
+  { id: "results", label: "결과", pageIds: ["reports", "rewards", "photos", "analysis"], defaultPageId: "reports" },
 ];
+
+/**
+ * Pages that exist and resolve but have no rail item of their own. 추첨·투표
+ * lives inside 참여 이벤트 (the same list and life cycle), and 기간 분석 opens
+ * from the report page. Deep links, titles and the active group keep working.
+ */
+export const RAIL_HIDDEN_PAGE_IDS: readonly ConsolePageId[] = ["draws", "analysis"];
+
+/** The rail item a hidden page lights up, so the operator still sees where they are. */
+export function railPageFor(pageId: ConsolePageId): ConsolePageId {
+  if (pageId === "draws") return "programs";
+  if (pageId === "analysis") return "reports";
+  return pageId;
+}
 
 /** Flattened order for callers that only need a page list. */
 export const EVENT_PAGE_IDS: readonly ConsolePageId[] = EVENT_HUBS.flatMap((hub) => hub.pageIds);
 
 const EVENT_MENU_TERMS: Partial<Record<ConsolePageId, string>> = {
+  live: "당일 진행 무대 전광판 행사장 화면 컨트롤 룸 큐시트",
   overview: "대시보드 오늘 할 일 입장률",
   participants: "승인 대기 참석자 검색 명찰 티켓 등록자 엑셀 CSV",
   messages: "문자 발송 SMS LMS MMS 알림톡 예약",
-  operations: "체크인 입장 퇴장 데스크 부스 스태프 전광판",
-  draws: "투표 추첨 당첨 룰렛",
+  operations: "체크인 입장 퇴장 데스크 부스 스태프 현장 운영",
+  programs: "이벤트 퀴즈 투표 추첨 당첨 룰렛 럭키번호 설문 질문 게시판 사진 게임",
   rewards: "경품 수령 지급",
   photos: "증빙 보관함 사진 ZIP",
   content: "공지사항 일정 시간표 장소 오시는 길",
-  programs: "참여 설문 퀴즈 질문 게시판",
   attendeePage: "안내 QR 안내판 배너 디자인 인쇄",
   settings: "신청 접수 양식 진행 단계 정원",
   reports: "결과 보고서 PDF 인쇄 마감",
@@ -141,7 +157,8 @@ export function eventMenuShortcuts(pageId: ConsolePageId, eventId: string | unde
 
 /** Finds the hub that owns a page. Organization pages return undefined. */
 export function consoleHubForPage(pageId: ConsolePageId): ConsoleHub | undefined {
-  return EVENT_HUBS.find((hub) => hub.pageIds.includes(pageId));
+  const railPage = railPageFor(pageId);
+  return EVENT_HUBS.find((hub) => hub.pageIds.includes(pageId) || hub.pageIds.includes(railPage));
 }
 
 /** Organization root destinations. Team lives in the operator menu. */
@@ -165,6 +182,7 @@ export function consolePageHref(pageId: ConsolePageId, eventId?: string): string
     case "participantImport":
     case "messages":
     case "operations":
+    case "live":
     case "programs":
     case "draws":
     case "photos":
@@ -188,6 +206,8 @@ export function consolePageHref(pageId: ConsolePageId, eventId?: string): string
           return `${base}/messages`;
         case "operations":
           return `${base}/operations`;
+        case "live":
+          return `${base}/live`;
         case "programs":
           return `${base}/programs`;
         case "draws":
@@ -254,6 +274,8 @@ export function resolveConsolePage(pathname: string): ConsolePageResolution | nu
         return { pageId: "messages", eventId };
       case "operations":
         return { pageId: "operations", eventId };
+      case "live":
+        return { pageId: "live", eventId };
       case "programs":
         return { pageId: "programs", eventId };
       case "draws":

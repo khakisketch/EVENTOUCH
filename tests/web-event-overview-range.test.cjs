@@ -148,7 +148,7 @@ test('overview keeps one summary line and the screen is reachable from the resul
   assert.doesNotMatch(overview, /function CustomRangeAnalysis|function PeriodDetails|RANGE_DAYS_CAP/, '운영 현황은 분석 본문을 갖지 않는다');
   assert.match(overview, /href=\{`\$\{base\}\/analysis`\}/);
   const nav = read('apps/web/app/console/console-navigation.ts');
-  assert.match(nav, /pageIds: \["reports", "analysis"\], defaultPageId: "reports"/);
+  assert.match(nav, /pageIds: \["reports", "rewards", "photos", "analysis"\], defaultPageId: "reports"/);
   assert.match(nav, /analysis: \{ label: "기간 분석", title: "기간 분석", scope: "event", layout: "workspace" \}/);
   assert.match(read('apps/web/app/console/events/[id]/analysis/page.tsx'), /PeriodAnalysisWorkspace eventId=\{id\}/);
 });

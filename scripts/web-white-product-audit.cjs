@@ -42,6 +42,7 @@ const CONSOLE = [
   ['import', '/console/events/:id/participants/import', '#participant-import-file-heading'],
   ['messages', '/console/events/:id/messages', '#history-heading'],
   ['operations', '/console/events/:id/operations', '#ops-desks'],
+  ['live', '/console/events/:id/live', '[data-console-page="live"]'],
   ['programs', '/console/events/:id/programs', 'button:has-text("콘텐츠 만들기")'],
   ['draws', '/console/events/:id/draws', 'section[aria-label="무대"]'],
   ['photos', '/console/events/:id/photos', '#evidence-photo-sections'],

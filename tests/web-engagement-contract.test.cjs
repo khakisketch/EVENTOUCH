@@ -118,16 +118,17 @@ test('web-console-shell-links-programs-between-operations-and-settings', () => {
   assert.match(shell, /nav-badge/);
   assert.match(shell, /eventFeatures\.includes\("reward"\)/);
   const navigation = read('app/console/console-navigation.ts');
-  assert.match(navigation, /programs: \{ label: "참여 콘텐츠"/);
+  assert.match(navigation, /programs: \{ label: "참여 이벤트"/);
   assert.match(navigation, /return `\$\{base\}\/programs`/);
   // Hub order is the operator's setup-to-live sequence: preparation (settings
   // through programs) before the onsite hub that holds operations.
-  assert.match(navigation, /pageIds: \["attendeePage", "content", "programs", "settings"\]/);
-  assert.match(navigation, /pageIds: \["operations", "draws", "rewards", "photos"\]/);
+  assert.match(navigation, /pageIds: \["attendeePage", "content", "programs", "operations", "settings"\]/);
+  assert.match(navigation, /pageIds: \["live"\]/);
   const hubsBlock = navigation.slice(navigation.indexOf('EVENT_HUBS'));
   const prepareAt = hubsBlock.indexOf('"prepare"');
   const onsiteAt = hubsBlock.indexOf('"onsite"');
-  assert.ok(prepareAt >= 0 && onsiteAt >= 0 && onsiteAt < prepareAt);
+  // Reopened 2026-11-20: preparation comes before the day-of group.
+  assert.ok(prepareAt >= 0 && onsiteAt >= 0 && prepareAt < onsiteAt);
 });
 
 test('web-engage-reads-the-public-projection-and-reuses-the-ticket-key', () => {

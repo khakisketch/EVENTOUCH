@@ -39,7 +39,7 @@ test('the queue still gives only its first row the primary role', () => {
 });
 
 test('the rail names the screen as an oversight view and the action keeps its own name', () => {
-  assert.match(navigation, /rewards: \{ label: "경품 지급 현황", title: "경품 지급 현황"/);
+  assert.match(navigation, /rewards: \{ label: "경품 지급", title: "경품 지급"/);
   const screen = fs.readFileSync(path.join(root, 'apps/web/app/console/events/[id]/rewards/RewardsWorkspace.tsx'), 'utf8');
   assert.match(screen, /aria-label="경품 지급 목록"/, 'the list region must not share the page heading name');
   assert.doesNotMatch(screen, /aria-label="경품 지급 현황"/);

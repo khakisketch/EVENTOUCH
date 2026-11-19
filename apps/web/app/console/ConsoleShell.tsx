@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 import Link from "../ui/ProductLink";
 import { usePathname, useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../auth-redirect";
-import { CONSOLE_PAGES, EVENT_HUBS, consoleHubForPage, consolePageHref, eventMenuShortcuts, matchesEventMenu, resolveConsolePage, type ConsolePageId } from "./console-navigation";
+import { CONSOLE_PAGES, EVENT_HUBS, RAIL_HIDDEN_PAGE_IDS, consoleHubForPage, consolePageHref, eventMenuShortcuts, matchesEventMenu, railPageFor, resolveConsolePage, type ConsolePageId } from "./console-navigation";
 import { BarsIcon } from "./console-ui/ConsoleIcons";
 import EventMenuSearch from "./console-ui/EventMenuSearch";
 import { useConsoleLeaveConfirmation } from "./console-draft-guard";
@@ -133,6 +133,8 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const currentPage = resolveConsolePage(pathname);
   const eventId = currentPage?.eventId ?? null;
   const currentPageId = currentPage?.pageId;
+  // Pages without a rail item light the item that holds them (추첨·투표 → 참여 이벤트).
+  const railPageId = currentPageId ? railPageFor(currentPageId) : undefined;
   const isHome = currentPage?.pageId === "events";
   const isClients = currentPage?.pageId === "clients";
   const isTeam = currentPage?.pageId === "team";
@@ -848,7 +850,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
 
   const matchingHubs = EVENT_HUBS.map((hub) => ({
     hub,
-    pages: hub.pageIds.filter((id) => isPageVisible(id) && matchesEventMenu(id, hub.label, eventMenuQuery)),
+    pages: hub.pageIds.filter((id) => !RAIL_HIDDEN_PAGE_IDS.includes(id) && isPageVisible(id) && matchesEventMenu(id, hub.label, eventMenuQuery)),
     shortcuts: hub.pageIds.flatMap((id) => isPageVisible(id) ? eventMenuShortcuts(id, eventId ?? undefined, eventMenuQuery) : []),
   })).filter(({ pages, shortcuts }) => pages.length + shortcuts.length > 0);
   const menuResultCount = matchingHubs.reduce((count, { pages, shortcuts }) => count + pages.length + shortcuts.length, 0);
@@ -886,8 +888,8 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           {pages.map((pageId) => {
             const href = pageHref(pageId);
             if (!href) return null;
-            return <Link key={pageId} className={`console-nav-item console-workspace-link${currentPageId === pageId ? " active" : ""}`}
-              href={href} aria-current={currentPageId === pageId ? "page" : undefined}>
+            return <Link key={pageId} className={`console-nav-item console-workspace-link${railPageId === pageId ? " active" : ""}`}
+              href={href} aria-current={railPageId === pageId ? "page" : undefined}>
               <span>{CONSOLE_PAGES[pageId].label}</span>{renderPageBadges(pageId)}
             </Link>;
           })}
@@ -926,7 +928,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
                   {pages.map((pageId) => {
                     const pageLink = pageHref(pageId);
                     if (!pageLink) return null;
-                    const active = currentPageId === pageId;
+                    const active = railPageId === pageId;
                     return (
                       <Link
                         key={pageId}
