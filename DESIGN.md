@@ -466,6 +466,10 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/screen/[slug]/`
 - The program lists time, title and place. The session in progress is orange with "진행 중": it needs a start and an end on a known day (a missing day takes the event's date) and is read as the venue's local time against the server's clock (the offset from the response's `Date` header, refreshed on every poll and re-evaluated every 30 seconds), so a screen with a drifting clock highlights the right line. Row size follows the number of sessions shown so ten still fit.
 - Selection rules (the operator's choice first, otherwise a rotation of what exists), quiz answers only after reveal, four questions and six photos at most, words only for notices, the "연결 확인 중 · 마지막 화면입니다" notice and reduced-motion handling are unchanged, and so are the class names the audits read (`.display-frame h2`).
 
+Reopened 2026-11-19 (owner: plain; `tests/web-venue-screen-composition.test.cjs` asserts it; markup and the pinned sizes are unchanged):
+- The stage gets depth: a brand-orange glow from the top-right corner, a short orange mark above the event name, the wordmark's orange E, the date in a pill, and a venue footer with an orange dot over a hairline.
+- The program is a ledger with padded rows and white times; the session in progress is a lit orange band with a left bar and white title. A poll's leading count is orange like its bar; bars are fully rounded. Questions sit on a faint panel.
+
 ## 스태프 목록과 로그인 확정 구성
 
 The owner approved this composition on 2026-11-16 (`apps/web/app/staff/StaffHub.tsx` and `apps/web/app/login/`, mockups `staff-entry-a3.html` for the hub and `staff-entry-a2.html` for the login). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-staff-entry-composition.test.cjs` guards it.

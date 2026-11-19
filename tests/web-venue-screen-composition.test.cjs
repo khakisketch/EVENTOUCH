@@ -67,3 +67,12 @@ test('selection rules, the draw scene and the stale notice are unchanged', () =>
     assert.ok(board.includes(text), `${text} stays`);
   }
 });
+
+// Reopened 2026-11-19: depth and hierarchy over the same markup and sizes.
+test('the stage carries a brand glow, an orange mark and a banded current session', () => {
+  assert.match(css, /\.dark:global\(\.display-board\)\s*\{[^}]*background-image:\s*[^;]*radial-gradient/su);
+  assert.match(css, /\.display-content\) > h1::before\s*\{[^}]*background:\s*var\(--brand\)/su, 'an orange mark leads the event name');
+  assert.match(css, /\.display-brand\)::first-letter\s*\{[^}]*var\(--brand\)/su, 'the wordmark keeps its orange E');
+  assert.match(css, /\.program-item\[data-live="true"\]\)\s*\{[^}]*background:\s*color-mix\([^}]*var\(--brand\)/su, 'the session in progress is a lit band');
+  assert.match(css, /\.poll-row\[data-leader="true"\]\) strong\s*\{[^}]*var\(--brand\)/su, 'the leader count is lit with its bar');
+});
