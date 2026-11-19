@@ -1,9 +1,9 @@
 {
   "note": "Ratchet baseline for tests/web-design-tokens-guard.test.cjs. Counts may only go down. Refresh with: node tests/web-design-tokens-guard.test.cjs --update",
   "totals": {
-    "fontSizePx": 175,
-    "radius": 122,
-    "hex": 182
+    "fontSizePx": 104,
+    "radius": 68,
+    "hex": 39
   },
   "files": {
     "console/clients/clients.module.css": {
@@ -207,54 +207,54 @@
       "hex": 0
     },
     "event/[slug]/engage/engage.module.css": {
-      "fontSizePx": 2,
-      "radius": 11,
-      "hex": 7
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
     },
     "event/[slug]/event-banner.module.css": {
-      "fontSizePx": 3,
+      "fontSizePx": 0,
       "radius": 0,
-      "hex": 5
+      "hex": 0
     },
     "event/[slug]/event-facts.module.css": {
       "fontSizePx": 0,
-      "radius": 2,
+      "radius": 0,
       "hex": 0
     },
     "event/[slug]/home/home-layouts.module.css": {
-      "fontSizePx": 15,
-      "radius": 4,
-      "hex": 28
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
     },
     "event/[slug]/home/home.module.css": {
-      "fontSizePx": 16,
-      "radius": 2,
-      "hex": 39
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
     },
     "event/[slug]/public-event-context.module.css": {
       "fontSizePx": 0,
       "radius": 0,
-      "hex": 1
+      "hex": 0
     },
     "event/[slug]/public-event.module.css": {
-      "fontSizePx": 17,
-      "radius": 10,
-      "hex": 40
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
     },
     "event/[slug]/public-program-schedule.module.css": {
-      "fontSizePx": 12,
-      "radius": 3,
-      "hex": 12
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
     },
     "event/[slug]/register/register.module.css": {
-      "fontSizePx": 2,
-      "radius": 12,
-      "hex": 3
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
     },
     "event/[slug]/ticket/ticket.module.css": {
-      "fontSizePx": 4,
-      "radius": 10,
-      "hex": 8
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
     }
   }
 }
