@@ -18,6 +18,9 @@ import { ArrowRightIcon, BackIcon, DocumentIcon, DownloadIcon, PencilIcon, PlusI
 import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
 import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleRefreshButton from "../../../console-ui/ConsoleRefreshButton";
+import StatCard, { StatRow } from "../../../console-ui/StatCard";
+import StatusPill from "../../../console-ui/StatusPill";
+import ConsoleEmptyState from "../../../console-ui/ConsoleEmptyState";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import ui from "../../../console-ui/console-ui.module.css";
@@ -1340,9 +1343,9 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                 className={styles.reportTab} onClick={() => openReport(report.id)}>
                 <span className={styles.reportSwatch} style={{ background: report.color }} aria-hidden="true" />
                 <span className={styles.reportTabTitle}>{report.title}</span>
-                <span className={`${styles.badge} ${report.status === "PUBLISHED" ? styles.badgePublished : styles.badgeDraft}`}>
+                <StatusPill tone={report.status === "PUBLISHED" ? "ok" : "wait"} size="sm" dot>
                   {report.status === "PUBLISHED" ? "공유 완료" : "초안"}
-                </span>
+                </StatusPill>
               </button>
             ))}
           </div>
@@ -1571,154 +1574,13 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                 </div>
               </>
             ) : (
-              <p className={styles.help}>{state.reports.length ? "보고서를 선택해 내용을 확인하세요." : "아직 보고서가 없습니다. 보고서 만들기 버튼으로 첫 버전을 생성하세요."}</p>
+              <ConsoleEmptyState
+                title={state.reports.length ? "보고서를 선택해 내용을 확인하세요." : "아직 보고서가 없습니다."}
+                description={state.reports.length ? undefined : "보고서 만들기 버튼으로 첫 버전을 생성하세요."}
+              />
             )}
           </div>
           <aside className={styles.railSide}>
-            <div className={styles.analysisBox} id="reports-analysis" data-workspace-section="reports-analysis" aria-label="결과 분석 (조회 기준)">
-              <div className={styles.analysisBoxHead}>
-                <h3 className={styles.analysisBoxTitle}>결과 분석</h3>
-                <ConsoleRefreshButton label="결과 분석 새로고침" busy={refreshing} onRefresh={() => setReloadTick((tick) => tick + 1)} />
-              </div>
-              <p className={styles.stamp}>{state.metrics.cancellationReview > 0 ? "신청 상태 기준 · 취소 기록 확인 필요 인원 포함" : "취소 제외 등록 기준"} · 조회 기준 시각 {loadedAt ? capturedLabel(loadedAt) : "확인 중"}</p>
-              {attendanceAvailable && !reportSourcesAvailable ? <ConsoleFeedback kind="warning">{missingSourceText} 자료를 확인할 수 없습니다. 다른 집계는 확인 가능한 자료를 표시합니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요.</ConsoleFeedback> : null}
-              <div className={styles.analysisSubheads}>
-              {/* Headline first: the outcome rate leads at double width, the
-                  supporting counts follow. Same five values, same labels, only
-                  reading order and proportion change. */}
-              {attendanceAvailable ? <div className={styles.metricGrid}>
-                <div className={`${styles.metricCard} ${styles.metricLead}`}>
-                  <RateRing value={state.metrics.rate} size={76} />
-                  <div className={styles.leadText}>
-                    <strong>{state.metrics.rate}<span aria-hidden="true">%</span></strong><span>누적 입장률</span>
-                  </div>
-                </div>
-                <div className={styles.metricCard}><strong>{state.metrics.checked}</strong><span>누적 입장 (명)</span></div>
-                <div className={styles.metricCard}><strong>{state.metrics.total}</strong><span>{state.metrics.cancellationReview > 0 ? "신청 상태 기준 등록 (명)" : "취소 제외 등록 (명)"}</span></div>
-                <div className={styles.metricCard}><strong>{state.metrics.inside}</strong><span>현재 입장 (명)</span></div>
-                {state.metrics.pending > 0 ? (
-                  <div className={`${styles.metricCard} ${styles.metricWaiting}`}>
-                    <strong>{state.metrics.pending}</strong>
-                    <span>승인 대기 (명)</span>
-                  </div>
-                ) : null}
-              </div> : <ConsoleFeedback kind="warning">참가·입장 자료를 확인할 수 없어 집계를 표시할 수 없습니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요.</ConsoleFeedback>}
-              {attendanceAvailable && state.metrics.attendanceReview > 0 ? (
-                <ConsoleFeedback kind="warning">
-                  일부 출입 기록이 명확하지 않아 입장 수와 입장률이 실제와 다를 수 있습니다.{" "}
-                  <ProductLink href={`/console/events/${encodeURIComponent(eventId)}/participants?attendance=REVIEW`}>출입 기록 확인 필요 {state.metrics.attendanceReview}명</ProductLink>
-                </ConsoleFeedback>
-              ) : null}
-              {attendanceAvailable && state.metrics.cancellationReview > 0 ? (
-                <ConsoleFeedback kind="warning">취소 기록과 신청 상태가 다른 {state.metrics.cancellationReview}명이 등록 집계에 포함돼 있습니다. 참가 여부를 확인해야 하며 승인 상태·입장 집계에도 반영될 수 있습니다. <ProductLink href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인 필요 명단 보기</ProductLink></ConsoleFeedback>
-              ) : null}
-              <details className={styles.analysisNote}>
-                <summary>집계 기준</summary>
-                <p>누적 입장은 한 번 이상 입장한 참가자 기준이며 재입장을 중복 집계하지 않습니다. 신청 상태가 취소인 신청은 제외합니다.{state.metrics.cancellationReview > 0 ? " 신청 상태와 취소 기록이 다른 사람은 확인 전까지 신청 상태 기준 집계에 포함합니다." : ""}</p>
-              </details>
-              <details className={styles.analysisDetails}>
-                <summary>그룹·부스·프로그램별 상세 집계</summary>
-              <div className={styles.subgroup}>
-              <h3>등록 그룹</h3>
-              {!sources.participants || !sources.groups ? <p className={styles.help}>참가자 그룹 집계를 확인할 수 없습니다.</p> : state.groups.length ? (
-                <div className={styles.tableScroll} role="region" tabIndex={0} aria-label="등록 그룹별 인원 표">
-                  <table className={styles.dataTable}>
-                    <thead><tr><th scope="col">그룹</th><th scope="col" className={styles.num}>인원</th></tr></thead>
-                    <tbody>
-                      {state.groups.map((group) => (
-                        <tr key={group.name}><td>{group.name}</td><td className={styles.num}>{group.count}명</td></tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className={styles.help}>등록 그룹이 없습니다.</p>
-              )}
-              </div>
-              <div className={styles.subgroup}>
-              <h3>부스 이용</h3>
-              {!sources.booths ? <p className={styles.help}>부스 집계를 확인할 수 없습니다.</p> : state.booths.length ? (
-                <>
-                <div className={styles.tableScroll} role="region" tabIndex={0} aria-label="부스별 인증 수 표">
-                  <table className={styles.dataTable}>
-                    <thead><tr><th scope="col">부스</th><th scope="col" className={styles.num}>인증</th></tr></thead>
-                    <tbody>
-                      {state.booths.map((booth) => (
-                        <tr key={booth.name}><td>{booth.name}</td><td className={styles.num}>{booth.used}건</td></tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {boothCapacityRows.length ? (
-                  <div className={styles.boothBarList} aria-label="부스 이용률 — 정원 대비">
-                    {boothCapacityRows.map((booth) => (
-                      <div key={booth.name} className={styles.boothBarRow}>
-                        <span>{booth.name}</span>
-                        <span className={styles.boothBarTrack}><i style={{ width: `${Math.min(100, (booth.used / booth.capacity) * 100)}%` }} /></span>
-                        <span className={styles.boothBarValue}>{booth.used} / {booth.capacity}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-                </>
-              ) : (
-                <p className={styles.help}>부스 데이터가 없습니다.</p>
-              )}
-              </div>
-              <div className={styles.subgroup}>
-              <h3>프로그램 응답</h3>
-              {!sources.modules || !sources.responses || !sources.questions || !sources.draw ? <p className={styles.help}>참여 콘텐츠 집계를 확인할 수 없습니다.</p> : state.programs.length ? (
-                <div className={styles.tableScroll} role="region" tabIndex={0} aria-label="프로그램별 응답 표">
-                  <table className={styles.dataTable}>
-                    <thead><tr><th scope="col">프로그램</th><th scope="col">종류</th><th scope="col" className={styles.num}>응답</th></tr></thead>
-                    <tbody>
-                      {state.programs.map((program) => (
-                        <tr key={`${program.type}-${program.name}`}>
-                          <td>{program.name}</td>
-                          <td>{MODULE_TYPE_LABELS[program.type] ?? "항목 확인 필요"}</td>
-                          <td className={styles.num}>{program.responses}건</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className={styles.help}>참여 기록이 없습니다.</p>
-              )}
-              </div>
-              <div className={styles.subgroup}>
-              <h3>만족도</h3>
-              {!sources.modules || !sources.responses || !sources.survey ? <p className={styles.help}>만족도 집계를 확인할 수 없습니다.</p> : state.surveys.length ? (
-                state.surveys.map((survey) => (
-                  <div key={survey.name} className={styles.surveyGroup}>
-                    <p><strong>{survey.name}</strong> · 응답 {survey.count}명 · 평균 {survey.average === null ? "응답 없음" : `${survey.average} / 5`}</p>
-                    <div className={styles.tableScroll} role="region" tabIndex={0} aria-label={`${survey.name} 만족도 항목별 결과 표`}>
-                      <table className={styles.dataTable}>
-                        <thead><tr><th scope="col">항목</th><th scope="col" className={styles.num}>평균</th><th scope="col" className={styles.num}>응답</th></tr></thead>
-                        <tbody>
-                          {survey.questions.map((question) => (
-                            <tr key={question.name}>
-                              <td>{question.name}</td>
-                              <td className={styles.num}>{question.average === null ? "—" : `${question.average} / 5`}</td>
-                              <td className={styles.num}>{question.count}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className={styles.help}>만족도 데이터가 없습니다.</p>
-              )}
-              </div>
-              <div className={styles.subgroup}>
-                <h3>행사 사진</h3>
-                <p className={styles.help}>{sources.photos ? <>승인 사진 {state.photoCount}건{state.photoCaptions.length ? ` · ${state.photoCaptions.slice(0, 3).join(" · ")}` : ""}</> : "사진 자료를 확인할 수 없습니다."}</p>
-              </div>
-              </details>
-              </div>
-            </div>
             {detail ? (
               <div className={styles.actionBox}>
                 <div className={styles.nextAction}>
@@ -1887,7 +1749,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                     <span className="sr-only">보기: {printLayout === "wide" ? "발표용 16:9" : "A4 세로"}</span>
                     <button
                       type="button"
-                      className={`pill ${styles.viewPill}`}
+                      className={styles.viewPill}
                       aria-pressed={printLayout === "a4"}
                       onClick={() => setPrintLayout("a4")}
                     >
@@ -1895,7 +1757,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                     </button>
                     <button
                       type="button"
-                      className={`pill ${styles.viewPill}`}
+                      className={styles.viewPill}
                       aria-pressed={printLayout === "wide"}
                       onClick={() => setPrintLayout("wide")}
                     >
@@ -1915,6 +1777,147 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                 </div>
               </div>
             ) : null}
+            <div className={styles.analysisBox} id="reports-analysis" data-workspace-section="reports-analysis" aria-label="결과 분석 (조회 기준)">
+              <div className={styles.analysisBoxHead}>
+                <h3 className={styles.analysisBoxTitle}>결과 분석</h3>
+                <ConsoleRefreshButton label="결과 분석 새로고침" busy={refreshing} onRefresh={() => setReloadTick((tick) => tick + 1)} />
+              </div>
+              <p className={styles.stamp}>{state.metrics.cancellationReview > 0 ? "신청 상태 기준 · 취소 기록 확인 필요 인원 포함" : "취소 제외 등록 기준"} · 조회 기준 시각 {loadedAt ? capturedLabel(loadedAt) : "확인 중"}</p>
+              {attendanceAvailable && !reportSourcesAvailable ? <ConsoleFeedback kind="warning">{missingSourceText} 자료를 확인할 수 없습니다. 다른 집계는 확인 가능한 자료를 표시합니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요.</ConsoleFeedback> : null}
+              <div className={styles.analysisSubheads}>
+              {/* Headline first: the outcome rate leads at double width, the
+                  supporting counts follow. Same five values, same labels, only
+                  reading order and proportion change. */}
+              {attendanceAvailable ? <div className={styles.metricGrid}>
+                <div className={`${styles.metricCard} ${styles.metricLead}`}>
+                  <RateRing value={state.metrics.rate} size={76} />
+                  <div className={styles.leadText}>
+                    <strong>{state.metrics.rate}<span aria-hidden="true">%</span></strong><span>누적 입장률</span>
+                  </div>
+                </div>
+                <StatRow columns={2} className={styles.metricRow}>
+                  <StatCard label="누적 입장" value={state.metrics.checked} unit="명" />
+                  <StatCard label={state.metrics.cancellationReview > 0 ? "신청 상태 기준 등록" : "취소 제외 등록"} value={state.metrics.total} unit="명" />
+                  <StatCard label="현재 입장" value={state.metrics.inside} unit="명" />
+                  {state.metrics.pending > 0 ? <StatCard tone="wait" label="승인 대기" value={state.metrics.pending} unit="명" /> : null}
+                </StatRow>
+              </div> : <ConsoleFeedback kind="warning">참가·입장 자료를 확인할 수 없어 집계를 표시할 수 없습니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요.</ConsoleFeedback>}
+              {attendanceAvailable && state.metrics.attendanceReview > 0 ? (
+                <ConsoleFeedback kind="warning">
+                  일부 출입 기록이 명확하지 않아 입장 수와 입장률이 실제와 다를 수 있습니다.{" "}
+                  <ProductLink href={`/console/events/${encodeURIComponent(eventId)}/participants?attendance=REVIEW`}>출입 기록 확인 필요 {state.metrics.attendanceReview}명</ProductLink>
+                </ConsoleFeedback>
+              ) : null}
+              {attendanceAvailable && state.metrics.cancellationReview > 0 ? (
+                <ConsoleFeedback kind="warning">취소 기록과 신청 상태가 다른 {state.metrics.cancellationReview}명이 등록 집계에 포함돼 있습니다. 참가 여부를 확인해야 하며 승인 상태·입장 집계에도 반영될 수 있습니다. <ProductLink href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인 필요 명단 보기</ProductLink></ConsoleFeedback>
+              ) : null}
+              <details className={styles.analysisNote}>
+                <summary>집계 기준</summary>
+                <p>누적 입장은 한 번 이상 입장한 참가자 기준이며 재입장을 중복 집계하지 않습니다. 신청 상태가 취소인 신청은 제외합니다.{state.metrics.cancellationReview > 0 ? " 신청 상태와 취소 기록이 다른 사람은 확인 전까지 신청 상태 기준 집계에 포함합니다." : ""}</p>
+              </details>
+              <details className={styles.analysisDetails}>
+                <summary>그룹·부스·프로그램별 상세 집계</summary>
+              <div className={styles.subgroup}>
+              <h3>등록 그룹</h3>
+              {!sources.participants || !sources.groups ? <p className={styles.help}>참가자 그룹 집계를 확인할 수 없습니다.</p> : state.groups.length ? (
+                <div className={styles.tableScroll} role="region" tabIndex={0} aria-label="등록 그룹별 인원 표">
+                  <table className={styles.dataTable}>
+                    <thead><tr><th scope="col">그룹</th><th scope="col" className={styles.num}>인원</th></tr></thead>
+                    <tbody>
+                      {state.groups.map((group) => (
+                        <tr key={group.name}><td>{group.name}</td><td className={styles.num}>{group.count}명</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className={styles.help}>등록 그룹이 없습니다.</p>
+              )}
+              </div>
+              <div className={styles.subgroup}>
+              <h3>부스 이용</h3>
+              {!sources.booths ? <p className={styles.help}>부스 집계를 확인할 수 없습니다.</p> : state.booths.length ? (
+                <>
+                <div className={styles.tableScroll} role="region" tabIndex={0} aria-label="부스별 인증 수 표">
+                  <table className={styles.dataTable}>
+                    <thead><tr><th scope="col">부스</th><th scope="col" className={styles.num}>인증</th></tr></thead>
+                    <tbody>
+                      {state.booths.map((booth) => (
+                        <tr key={booth.name}><td>{booth.name}</td><td className={styles.num}>{booth.used}건</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {boothCapacityRows.length ? (
+                  <div className={styles.boothBarList} aria-label="부스 이용률 — 정원 대비">
+                    {boothCapacityRows.map((booth) => (
+                      <div key={booth.name} className={styles.boothBarRow}>
+                        <span>{booth.name}</span>
+                        <span className={styles.boothBarTrack}><i style={{ width: `${Math.min(100, (booth.used / booth.capacity) * 100)}%` }} /></span>
+                        <span className={styles.boothBarValue}>{booth.used} / {booth.capacity}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                </>
+              ) : (
+                <p className={styles.help}>부스 데이터가 없습니다.</p>
+              )}
+              </div>
+              <div className={styles.subgroup}>
+              <h3>프로그램 응답</h3>
+              {!sources.modules || !sources.responses || !sources.questions || !sources.draw ? <p className={styles.help}>참여 콘텐츠 집계를 확인할 수 없습니다.</p> : state.programs.length ? (
+                <div className={styles.tableScroll} role="region" tabIndex={0} aria-label="프로그램별 응답 표">
+                  <table className={styles.dataTable}>
+                    <thead><tr><th scope="col">프로그램</th><th scope="col">종류</th><th scope="col" className={styles.num}>응답</th></tr></thead>
+                    <tbody>
+                      {state.programs.map((program) => (
+                        <tr key={`${program.type}-${program.name}`}>
+                          <td>{program.name}</td>
+                          <td>{MODULE_TYPE_LABELS[program.type] ?? "항목 확인 필요"}</td>
+                          <td className={styles.num}>{program.responses}건</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className={styles.help}>참여 기록이 없습니다.</p>
+              )}
+              </div>
+              <div className={styles.subgroup}>
+              <h3>만족도</h3>
+              {!sources.modules || !sources.responses || !sources.survey ? <p className={styles.help}>만족도 집계를 확인할 수 없습니다.</p> : state.surveys.length ? (
+                state.surveys.map((survey) => (
+                  <div key={survey.name} className={styles.surveyGroup}>
+                    <p><strong>{survey.name}</strong> · 응답 {survey.count}명 · 평균 {survey.average === null ? "응답 없음" : `${survey.average} / 5`}</p>
+                    <div className={styles.tableScroll} role="region" tabIndex={0} aria-label={`${survey.name} 만족도 항목별 결과 표`}>
+                      <table className={styles.dataTable}>
+                        <thead><tr><th scope="col">항목</th><th scope="col" className={styles.num}>평균</th><th scope="col" className={styles.num}>응답</th></tr></thead>
+                        <tbody>
+                          {survey.questions.map((question) => (
+                            <tr key={question.name}>
+                              <td>{question.name}</td>
+                              <td className={styles.num}>{question.average === null ? "—" : `${question.average} / 5`}</td>
+                              <td className={styles.num}>{question.count}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className={styles.help}>만족도 데이터가 없습니다.</p>
+              )}
+              </div>
+              <div className={styles.subgroup}>
+                <h3>행사 사진</h3>
+                <p className={styles.help}>{sources.photos ? <>승인 사진 {state.photoCount}건{state.photoCaptions.length ? ` · ${state.photoCaptions.slice(0, 3).join(" · ")}` : ""}</> : "사진 자료를 확인할 수 없습니다."}</p>
+              </div>
+              </details>
+              </div>
+            </div>
           </aside>
         </div>
       </ConsoleSection>

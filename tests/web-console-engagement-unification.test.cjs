@@ -117,8 +117,8 @@ test('unified-frame: reports navigate through the shared nav, selected report st
   // The saved-report switcher (ink-underline tabs) carries the same shared
   // published/draft state the old record row did.
   assert.match(reports, /role="tablist" aria-label="보고서 선택"/, 'reports pick a saved version through a tab switcher');
-  assert.match(reports, /badgePublished/, 'shared state stays visible on frozen records');
-  assert.match(reports, /badgeDraft/, 'draft state stays visible on frozen records');
+  assert.match(reports, /<StatusPill tone=\{report\.status === "PUBLISHED" \? "ok" : "wait"\}/, 'shared state stays visible on frozen records (StatusPill, 2026-11-20)');
+  assert.match(reports, /공유 완료" : "초안"/, 'draft state stays visible on frozen records');
 });
 
 test('unified-frame: dialogs use the shared shell with dismissal gates, not bespoke chrome', () => {
