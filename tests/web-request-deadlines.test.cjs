@@ -171,6 +171,8 @@ function engageReadWorld(fetch) {
     REJECTED_TICKET_BEARER: 'rejected', state: { kind: 'loading' },
     // The page reads the event's home color for its ground; the deadline tests do not care which.
     normalizeHomeStyle: () => ({ backgroundColor: '#B9DEF0' }),
+    // Reopened 2026-11-19: the header also wears the published banner.
+    readAttendeeTheme: () => ({}),
     questionTexts: { module: 'keep my unsent draft' },
   });
   stateSetters(world.sandbox, ['state', 'questionTexts']);
