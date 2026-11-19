@@ -36,18 +36,17 @@ async function sectionKeyboardPath(page) {
   let tabs = 1;
   for (let n = 0; n < 40; n++) {
     await page.keyboard.press('Tab'); tabs++;
-    if (await page.evaluate(() => document.activeElement?.getAttribute('href') === '#ops-display')) break;
-    assert.ok(n < 39, 'display section link reachable within unchanged 40 cap');
+    if (await page.evaluate(() => document.activeElement?.id === 'live-display-pick')) break;
+    assert.ok(n < 39, 'display picker reachable within unchanged 40 cap');
   }
-  await page.keyboard.press('Enter');
-  assert.equal(await page.evaluate(() => document.activeElement.id), 'ops-display');
+  // Reopened 2026-11-20: the picker lives in 현장 모드 and is reached directly; no section link to activate.
   let continuation = 0;
   for (; continuation < 40; continuation++) {
     await page.keyboard.press('Tab');
     if (await page.getByRole('button', { name: '출력 적용', exact: true }).evaluate(e => e === document.activeElement)) break;
   }
   assert.ok(continuation < 40);
-  return { tabs: tabs + continuation + 1, activations: 2, stopsWithSectionActivation: tabs + continuation + 2 };
+  return { tabs: tabs + continuation + 1, activations: 1, stopsWithSectionActivation: tabs + continuation + 1 };
 }
 
 async function main() {
@@ -94,13 +93,13 @@ async function main() {
     };
     const goto = async route => { await page.goto(baseUrl + route, { waitUntil: 'networkidle' }); };
     const eventRoute = `/console/events/${eventId}`;
-    await goto(`${eventRoute}/operations`);
-    await page.locator('#ops-display-pick').selectOption(`notice|${noticeId}`);
+    await goto(`${eventRoute}/live`);
+    await page.locator('#live-display-pick').selectOption(`notice|${noticeId}`);
     const keyboard = await sectionKeyboardPath(page);
     pass('display-section-keyboard', keyboard);
     await shot('display-keyboard-1280.png');
     await page.keyboard.press('Enter');
-    await page.getByText('전광판 출력을 바꿨습니다。'.replace('。', '.')).waitFor();
+    await page.getByText('행사장 화면 출력을 바꿨습니다.').waitFor();
     assert.equal((await read()).workspaces[eventId].display.noticeId, noticeId);
     pass('display-keyboard-command-persisted', { noticeId });
 

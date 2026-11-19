@@ -20,14 +20,13 @@ import ConsoleFormActions from "../../../console-ui/ConsoleFormActions";
 import ConsolePage from "../../../console-ui/ConsolePage";
 import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
 import ConsoleSection from "../../../console-ui/ConsoleSection";
-import ConsoleTaskQueue from "../../../console-ui/ConsoleTaskQueue";
-import { PARTICIPATION_TYPES, participationSnapshot, participationTypeLabel, type ParticipationSnapshot } from "../../../../../lib/participation-work";
+import DeviceFrame from "../../../console-ui/DeviceFrame";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import uiStyles from "../../../console-ui/console-ui.module.css";
 import styles from "./operations.module.css";
 import { LocationRow, RunSwitch, StaffFaces, StatusDot, type Staffer } from "./LocationParts";
-import { ArrowRightIcon, ExternalLinkIcon, PlusIcon } from "../../../console-ui/ConsoleIcons";
-import { CrewIcon, ScreenIcon } from "./OpsIcons";
+import { CheckIcon, CopyIcon, PlusIcon } from "../../../console-ui/ConsoleIcons";
+import { CrewIcon } from "./OpsIcons";
 import { consoleFetch } from "../../../../../lib/console-api";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
 import { abandonOperatorAttempt, acknowledgeOperatorReceipt, confirmsOperationsCommand, isOrganizationContextBlock } from "../../../../../lib/operator-context";
@@ -91,31 +90,19 @@ type State =
       memberships: Array<{ accountId: string; eventId: string; write?: unknown }>;
       eventMeta?: string;
       eventId: string;
-      participation: ParticipationSnapshot;
-      participationEnabled: boolean;
       stampEnabled: boolean;
       stampMode: "STAFF" | "SELF" | null;
       visitsCount: number | null;
       boothMap: BoothMapState;
-      screenEnabled: boolean;
-      display: DisplayOutput;
-      displayOptions: {
-        notices: Array<{ id: string; title: string; published: boolean }>;
-        modules: Array<{ id: string; title: string; type: string; published: boolean; revealed: boolean; draws: DisplayDraw[] }>;
-        approvedPhotos: number;
-        approvedQuestions: number;
-      };
       desks: Desk[];
       booths: Booth[];
       assignments: Assignment[];
       accounts: Account[];
     };
 
-type DisplayOutput = { type: string; moduleId: string; noticeId: string; drawId: string };
-type DisplayDraw = { id: string; name: string; at: string };
 type Failure = { message: string; field?: string };
 type OperationAttempt = { eventId: string; command: string; payload: Record<string, unknown>; successMessage: string; fingerprint: string; commandId: string };
-const OPERATION_COMMANDS = new Set(["desk.save", "desk.set-open", "booth.save", "booth.mode", "booth.map.save", "booth.map.publish", "booth.map.unpublish", "staff.assign", "staff.unassign", "display.set"]);
+const OPERATION_COMMANDS = new Set(["desk.save", "desk.set-open", "booth.save", "booth.mode", "booth.map.save", "booth.map.publish", "booth.map.unpublish", "staff.assign", "staff.unassign"]);
 
 function randomCommandId(): string {
   if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
@@ -124,20 +111,6 @@ function randomCommandId(): string {
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : "";
-}
-
-function displayKey(display: DisplayOutput): string {
-  const target = display.type === "notice" ? display.noticeId : display.moduleId;
-  return display.drawId ? `${display.type}|${target}|${display.drawId}` : `${display.type}|${target}`;
-}
-
-const DRAW_TIME_FORMAT = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
-});
-
-function drawDisplayLabel(draw: DisplayDraw, moduleTitle: string): string {
-  const at = Date.parse(draw.at);
-  return `추첨 결과 · ${draw.name || moduleTitle}${Number.isFinite(at) ? ` · ${DRAW_TIME_FORMAT.format(at)}` : ""}`;
 }
 
 const DESK_ACTION_LABEL: Record<string, string> = { IN: "입장", OUT: "퇴장" };
@@ -219,6 +192,10 @@ function boothScheduleNeedsReview(start: string, end: string): boolean {
 // while programmatic jumps — which fire none of them — keep the chosen
 // section without any timeout.
 
+function StepPill({ n, tone, children }: { n: number; tone: "ok" | "warn" | "todo" | "wait" | "day"; children: ReactNode }) {
+  return <span className={styles.stepPill} data-tone={tone}><b aria-hidden="true">{n}</b>{children}</span>;
+}
+
 export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const router = useRouter();
   const [state, setState] = useState<State>({ kind: "loading" });
@@ -227,6 +204,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const [failure, setFailure] = useState<Failure | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  const [staffLinkCopied, setStaffLinkCopied] = useState(false);
   const [deskOpen, setDeskOpen] = useState(false);
   const [editingDesk, setEditingDesk] = useState<Desk | null>(null);
   const [deskConflict, setDeskConflict] = useState<DeskConflict | null>(null);
@@ -265,7 +243,6 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const [mapPlacing, setMapPlacing] = useState<string>("");
   const [mapDraftPoints, setMapDraftPoints] = useState<BoothMapPoint[] | null>(null);
   const [mapImageOverride, setMapImageOverride] = useState<BoothMapDraft["image"] | null>(null);
-  const [displayChoice, setDisplayChoice] = useState("");
   const [stampModePending, setStampModePending] = useState<{ mode: "SELF" | "STAFF"; expectedMode: "SELF" | "STAFF" } | null>(null);
   const [mapUnpublishPending, setMapUnpublishPending] = useState(false);
   const [deskDirty, setDeskDirty] = useState(false);
@@ -336,7 +313,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         // The actor comes from the session (/api/auth/me), concurrent with
         // the scoped event bootstrap: this console 403s STAFF writes on the
         // server, so the write affordances below gate per command scope
-        // (desks/staff onsite, booths/map booth, display programs) through
+        // (desks/staff onsite, booths/map booth, no display: that moved to 현장 모드) through
         // the capability helper on the raw membership grants.
         const [meRes, bootRes] = await Promise.all([
           consoleFetch("/api/auth/me", { cache: "no-store" }),
@@ -375,7 +352,6 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               boothVisitsAvailable?: unknown;
               stampMode?: unknown;
               boothMap?: unknown;
-              display?: unknown;
               notices?: unknown;
               modules?: unknown;
               photos?: unknown;
@@ -522,7 +498,6 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         const venue = workspace.venue && typeof workspace.venue === "object"
           ? workspace.venue as Record<string, unknown>
           : {};
-        const display = workspace.display as Record<string, unknown> | undefined;
         setState({
           kind: "ready",
           eventName: text(event.name),
@@ -539,55 +514,10 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             venue: text(venue.name),
           }),
           eventId,
-          participation: participationSnapshot(workspace, features),
-          participationEnabled: PARTICIPATION_TYPES.some(type => features.includes(type.id)),
           stampEnabled: features.includes("stamp"),
           stampMode: workspace.stampMode === "SELF" || workspace.stampMode === "STAFF" ? workspace.stampMode : null,
           visitsCount: workspace.boothVisitsAvailable === true && Array.isArray(workspace.visits) ? workspace.visits.length : null,
           boothMap: parseBoothMap(workspace.boothMap),
-          screenEnabled: features.includes("screen"),
-          display: {
-            type: text(display?.type) || "idle",
-            moduleId: text(display?.moduleId),
-            noticeId: text(display?.noticeId),
-            drawId: display?.type === "draw" ? text(display.drawId) : "",
-          },
-          displayOptions: {
-            notices: Array.isArray(workspace.notices)
-              ? workspace.notices.flatMap((item) => {
-                  if (typeof item !== "object" || item === null) return [];
-                  const notice = item as Record<string, unknown>;
-                  if (typeof notice.id !== "string") return [];
-                  return [{ id: notice.id, title: text(notice.title), published: notice.published === true }];
-                })
-              : [],
-            modules: Array.isArray(workspace.modules)
-              ? workspace.modules.flatMap((item) => {
-                  if (typeof item !== "object" || item === null) return [];
-                  const module = item as Record<string, unknown>;
-                  if (typeof module.id !== "string" || typeof module.type !== "string") return [];
-                  return [{
-                    id: module.id,
-                    title: text(module.title),
-                    type: module.type,
-                    published: module.published === true,
-                    revealed: module.revealed === true,
-                    draws: module.type === "draw" && features.includes("draw") && module.status !== "DRAFT" && Array.isArray(module.drawHistory)
-                      ? module.drawHistory.flatMap((item) => {
-                          const draw = item as Record<string, unknown> | null;
-                          return draw?.published === true && typeof draw.id === "string" && draw.id
-                            ? [{ id: draw.id, name: text(draw.programName), at: text(draw.at) }] : [];
-                        }) : [],
-                  }];
-                })
-              : [],
-            approvedPhotos: Array.isArray(workspace.photos)
-              ? workspace.photos.filter((photo) => (photo as Record<string, unknown>)?.status === "APPROVED").length
-              : 0,
-            approvedQuestions: Array.isArray(workspace.questions)
-              ? workspace.questions.filter((question) => (question as Record<string, unknown>)?.approved === true).length
-              : 0,
-          },
           desks,
           booths,
           assignments,
@@ -696,14 +626,10 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
 
   // Draft-guard dirty state, evaluated before every early return below. Only
   // true diffs and truthful pending intent: dialog input diffs, unsaved map
-  // points/image overrides, an unapplied display choice, in-flight uploads,
+  // points/image overrides, in-flight uploads,
   // and command receipts kept after ambiguous responses. Merely opening a
   // pristine dialog is not dirty — its own canClose already closes those
   // silently — so a reload with a pristine dialog warns nothing.
-  const guardDisplayDirty =
-    state.kind === "ready" &&
-    displayChoice !== "" &&
-    displayChoice !== displayKey(state.display);
   useConsoleDraftGuard(
     deskDirty ||
       Boolean(deskConflict) ||
@@ -712,14 +638,13 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       assignDirty ||
       mapDraftPoints !== null ||
       mapImageOverride !== null ||
-      guardDisplayDirty ||
       mapUploading ||
       mapUploadUncertain ||
       commandBusyRef.current ||
       commandIdCache.current.size > 0,
     mapUploadUncertain
       ? "지도 파일이 이미 올라갔을 수 있습니다. 화면을 떠나면 같은 파일 요청을 다시 시도할 수 없습니다."
-      : "작성 중인 현장 운영 내용이나 저장하지 않은 지도·출력이 있습니다. 페이지를 떠나면 사라집니다."
+      : "작성 중인 현장 운영 내용이나 저장하지 않은 지도가 있습니다. 페이지를 떠나면 사라집니다."
   );
 
   const staffAccounts = useMemo(
@@ -728,6 +653,16 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       : []),
     [state]
   );
+
+  async function copyStaffLink() {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/staff`);
+      setStaffLinkCopied(true);
+      window.setTimeout(() => setStaffLinkCopied(false), 2500);
+    } catch {
+      setFailure({ message: "주소를 복사하지 못했습니다. 위의 주소를 직접 선택해 복사하세요." });
+    }
+  }
 
   function reload() {
     setReloadTick((tick) => tick + 1);
@@ -835,11 +770,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             message: typeof data?.error === "string" ? data.error : "처리하지 못했습니다.",
             field: typeof data?.field === "string" ? data.field : undefined,
           });
-          if (attempt.command === "display.set" && res.status === 409 && typeof attempt.payload.drawId === "string") {
-            setDisplayChoice("");
-            reload();
-          }
-        } else {
+                } else {
           markUnconfirmed();
         }
         return false;
@@ -879,7 +810,6 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     if (attempt.command === "staff.assign") { setAssignDirty(false); setAssignOpen(false); setAssignPreset(null); }
     if (attempt.command === "booth.map.save") { setMapDraftPoints(null); setMapImageOverride(null); setMapPlacing(""); setMapWarning(null); }
     if (attempt.command === "booth.map.publish") setMapDraftPoints(null);
-    if (attempt.command === "display.set") setDisplayChoice("");
   }
 
   async function checkOperation() {
@@ -1100,15 +1030,14 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const archived = state.stage === "ARCHIVED";
   const archivedReason = "보관된 행사는 읽기 전용입니다";
   // Write gates mirror the server scope map per section: desks and staff
-  // assignment are onsite, booths/map/mode are booth, the display picker is
-  // programs (display.set). Archived events reject every command server-side,
+  // assignment are onsite, booths/map/mode are booth (the venue-display picker moved
+  // to 현장 모드). Archived events reject every command server-side,
   // and STAFF console writes 403 server-side (their staff work routes are
   // separate and unaffected). Reads, placement previews and downloads keep
   // working. Neither gate invents access; the server re-checks every command.
   const capabilities = { role: state.role, userId: state.userId, memberships: state.memberships, eventId };
   const canWriteOnsite = canWriteEvent(capabilities, "desk.save");
   const canWriteBooth = canWriteEvent(capabilities, "booth.save");
-  const canWriteDisplay = canWriteEvent(capabilities, "display.set");
   const operationLocked = Boolean(pendingOperation) || otherOperationReceipt || busy || checkingOperation;
   const operationLockReason = pendingOperation || otherOperationReceipt ? "이전 현장 운영 요청의 처리 결과를 먼저 확인하세요" : "현장 운영 요청을 처리 중입니다";
   const onsiteBlocked = archived || !canWriteOnsite || operationLocked;
@@ -1120,10 +1049,6 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     ? archivedReason
     : "부스·스탬프 지도를 변경할 부스 권한이 없습니다. 필요하면 담당 행사 운영자에게 요청하세요.";
   const mapControlsBlocked = boothBlocked || mapUploadUncertain || mapUploading;
-  const displayBlocked = archived || !canWriteDisplay || operationLocked;
-  const displayNoWriteReason = operationLocked ? operationLockReason : archived
-    ? archivedReason
-    : "전광판 출력을 변경할 프로그램 권한이 필요합니다. 필요하면 담당 행사 운영자에게 요청하세요.";
   // Per-command guard for the shared writer: the button gates above already
   // prevent the call, this only mirrors the same scope map. Called after
   // render, so the render-scope gates it closes over are initialized.
@@ -1175,10 +1100,6 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const stampMode = state.stampMode;
   const visitsCount = state.visitsCount;
   const boothMap = state.boothMap;
-  const display = state.display;
-  const displayOptions = state.displayOptions;
-  const screenEnabled = state.screenEnabled;
-
   // Same-day sections state their status in the description slot; the
   // before-the-day presets state theirs in the folded summary instead, the
   // always-visible keyboard-operable reading point for those rows.
@@ -1216,58 +1137,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const mapNeedsAttention =
     mapDraftPoints !== null || mapImageOverride !== null || mapUploading || mapUnpublishPending;
 
-  // Output choices mirror the server contract exactly; impossible choices are
-  // not offered (unpublished notices, unrevealed quizzes, unmocked draws).
-  const displayChoices = (() => {
-    const options: Array<{ value: string; label: string }> = [
-      { value: "idle|", label: "유휴 화면 (안내 없음)" },
-    ];
-    for (const notice of displayOptions.notices) {
-      if (notice.published) options.push({ value: `notice|${notice.id}`, label: `공지 · ${notice.title}` });
-    }
-    for (const module of displayOptions.modules) {
-      if (!module.published) continue;
-      if (module.type === "poll") options.push({ value: `poll|${module.id}`, label: `투표 · ${module.title}` });
-      if (module.type === "quiz" && module.revealed) options.push({ value: `quiz|${module.id}`, label: `퀴즈 정답 · ${module.title}` });
-      if (module.type === "draw" && module.draws[0]) {
-        const draw = module.draws[0];
-        options.push({ value: `draw|${module.id}|${draw.id}`, label: drawDisplayLabel(draw, module.title) });
-      }
-      if (module.type === "qa" && displayOptions.approvedQuestions > 0) options.push({ value: `qa|${module.id}`, label: `Q&A · ${module.title}` });
-    }
-    if (displayOptions.approvedPhotos > 0) options.push({ value: "photo|", label: `사진 · 승인 ${displayOptions.approvedPhotos}장` });
-    return options;
-  })();
-  const currentDisplayValue = displayKey(display);
-  const activeDrawModule = display.type === "draw"
-    ? displayOptions.modules.find((module) => module.id === display.moduleId && module.type === "draw" && module.published)
-    : undefined;
-  const activeDraw = display.drawId
-    ? activeDrawModule?.draws.find((draw) => draw.id === display.drawId)
-    : activeDrawModule?.draws[0];
-  const currentDisplayLabel = display.type === "idle"
-    ? "유휴 화면"
-    : activeDraw && activeDrawModule ? drawDisplayLabel(activeDraw, activeDrawModule.title)
-    : display.type === "draw" && display.drawId ? "기본 화면 · 선택한 추첨 결과 출력 불가"
-    : displayChoices.find((choice) => choice.value === currentDisplayValue)?.label ?? "출력 확인 필요";
-  const displaySummary = `현재 ${currentDisplayLabel}`;
   const mapPoints = mapDraftPoints ?? boothMap.draft?.points ?? [];
   const pointFor = (boothId: string) => mapPoints.find((point) => point.boothId === boothId) ?? null;
-
-  async function applyDisplayChoice() {
-    const [type, target, drawId] = displayChoice.split("|");
-    if (!type) return;
-    const payload: Record<string, unknown> = { type };
-    if (type === "notice") payload.noticeId = target;
-    else if (type !== "idle" && type !== "photo") payload.moduleId = target;
-    if (type === "draw") payload.drawId = drawId;
-    const ok = await runCommand(
-      "display.set",
-      payload,
-      type === "idle" ? "전광판을 유휴 화면으로 바꿨습니다." : "전광판 출력을 바꿨습니다."
-    );
-    if (ok) setDisplayChoice("");
-  }
 
   // Booth-map draft edits stay local until 저장; mapDraftPoints holds the
   // working set, and each placement is normalized to 0..1 so the published
@@ -1379,24 +1250,19 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             <ConsoleFeedback kind="warning">
               보관된 행사는 읽기 전용입니다. 운영 현황은 볼 수 있지만 추가·변경·게시할 수 없습니다.
             </ConsoleFeedback>
-          ) : !canWriteOnsite && !canWriteBooth && !canWriteDisplay ? (
+          ) : !canWriteOnsite && !canWriteBooth ? (
             <ConsoleFeedback kind="warning">
               현장 운영을 변경할 운영 권한이 없습니다. 현황 조회는 그대로 볼 수 있습니다.
             </ConsoleFeedback>
           ) : null}
-          {(canWriteOnsite || canWriteBooth || canWriteDisplay) && !canWriteOnsite ? (
+          {(canWriteOnsite || canWriteBooth) && !canWriteOnsite ? (
             <ConsoleFeedback kind="warning">
               데스크·스태프 배정 변경은 현장 운영 권한이 없습니다. 다른 구역은 그대로 변경할 수 있습니다.
             </ConsoleFeedback>
           ) : null}
-          {(canWriteOnsite || canWriteBooth || canWriteDisplay) && !canWriteBooth ? (
+          {(canWriteOnsite || canWriteBooth) && !canWriteBooth ? (
             <ConsoleFeedback kind="warning">
               부스·스탬프 지도 변경은 부스 권한이 없습니다. 다른 구역은 그대로 변경할 수 있습니다.
-            </ConsoleFeedback>
-          ) : null}
-          {(canWriteOnsite || canWriteBooth || canWriteDisplay) && !canWriteDisplay ? (
-            <ConsoleFeedback kind="warning">
-              전광판 출력 변경은 프로그램 권한이 필요합니다. 다른 구역은 그대로 변경할 수 있습니다.
             </ConsoleFeedback>
           ) : null}
           {failure && !(deskOpen || boothOpen || assignOpen) ? (
@@ -1411,34 +1277,12 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       {pendingOperation && !((deskOpen && pendingOperation.command === "desk.save") || (boothOpen && pendingOperation.command === "booth.save") || (assignOpen && pendingOperation.command === "staff.assign")) ? operationRecovery() : null}
       {otherOperationReceipt ? <ConsoleFeedback kind="warning">이전 현장 운영 요청의 처리 결과를 화면 위에서 먼저 확인하세요. 서버 확인은 요청을 다시 보내지 않습니다.</ConsoleFeedback> : null}
 
-      {assignableTargets > 0 ? (
-        <div className={styles.kpiStrip} role="group" aria-label="현장 운영 요약">
-          <div className={styles.kpiCard}>
-            <span className={styles.kpiLabel}>데스크</span>
-            <div className={styles.heroFigure}><b>{deskOpenCount}</b><span>/ {desks.length} 가동</span></div>
-            <div className={styles.heroBar} role="presentation"><i style={{ width: `${desks.length ? Math.round((deskOpenCount / desks.length) * 100) : 0}%` }} /></div>
-          </div>
-          {stampEnabled ? (
-            <div className={styles.kpiCard}>
-              <span className={styles.kpiLabel}>부스</span>
-              <div className={styles.heroFigure}><b>{boothOpenCount}</b><span>/ {booths.length} 운영</span></div>
-              <div className={styles.heroBar} role="presentation"><i style={{ width: `${booths.length ? Math.round((boothOpenCount / booths.length) * 100) : 0}%` }} /></div>
-            </div>
-          ) : null}
-          <div className={styles.kpiCard} data-alert={gapTargets.length ? "true" : undefined}>
-            <span className={styles.kpiLabel}>담당 배정</span>
-            <div className={styles.heroFigure}><b>{assignableTargets - gapTargets.length}</b><span>/ {assignableTargets}곳</span></div>
-            <div className={styles.heroBar} role="presentation"><i style={{ width: `${Math.round(((assignableTargets - gapTargets.length) / assignableTargets) * 100)}%` }} /></div>
-          </div>
-        </div>
-      ) : null}
-
-      <div className={styles.opsGrid}>
-        <div className={styles.opsMain}>
+      <div className={styles.steps}>
           <ConsoleSection
             headingId="ops-desks"
-            title="데스크"
-            className={styles.anchorSection}
+            title="입장 데스크 만들기"
+            description={<StepPill n={1} tone={desks.length ? "ok" : "todo"}>{desks.length ? `완료 · 데스크 ${desks.length}곳${deskOpenCount === desks.length ? "" : ` (가동 ${deskOpenCount}곳)`}` : "데스크를 만드세요"}</StepPill>}
+            className={`${styles.anchorSection} ${styles.stepSection}`}
             action={(
               <ProductButton
                 type="button"
@@ -1525,69 +1369,11 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           </ConsoleSection>
 
           <ConsoleSection
-            headingId="ops-booths"
-            title="부스"
-            description={boothSummary}
-            className={styles.anchorSection}
-            action={stampEnabled ? (
-              <ProductButton
-                type="button"
-                variant="ghost"
-                disabled={busy || boothBlocked}
-                title={boothBlocked ? boothNoWriteReason : undefined}
-                onClick={() => { setEditingBooth(null); setBoothOpen(true); setFailure(null); }}
-              >
-                부스 추가
-              </ProductButton>
-            ) : (
-              <ProductLink
-                className="button button-ghost"
-                href={`/console/events/${encodeURIComponent(eventId)}/settings#settings-features`}
-              >
-                부스 인증 기능 켜기
-              </ProductLink>
-            )}
+            headingId="ops-staff"
+            title="스태프 배정"
+            description={<StepPill n={2} tone={assignableTargets === 0 ? "wait" : gapTargets.length ? "warn" : "ok"}>{assignableTargets === 0 ? "1단계를 먼저" : gapTargets.length ? `${gapTargets.length}곳 담당 필요` : `완료 · 배정 ${assignments.length}건`}</StepPill>}
+            className={`${styles.anchorSection} ${styles.stepSection}`}
           >
-            {!stampEnabled ? (
-              <p className="notice" role="status">
-                이 행사에서 부스 인증 기능을 먼저 켜야 부스를 사용할 수 있습니다. 행사 설정의 기능에서 켜면
-                여기서 부스를 만들고 현장에 열 수 있습니다.
-              </p>
-            ) : booths.length ? (
-              <ul className={styles.locations}>
-                {booths.map((booth) => {
-                  const boothStaff = staffAt("BOOTH", booth.id);
-                  return (
-                    <LocationRow
-                      key={booth.id}
-                      name={booth.name}
-                      sub={`${booth.zone || "구역 미지정"} · ${booth.capacity
-                        ? `인증 ${booth.used}회 · 잔여 ${Math.max(0, booth.capacity - booth.used)} / ${booth.capacity}`
-                        : `인증 ${booth.used}회 · 잔여 제한 없음`}`}
-                      staff={boothStaff}
-                      staffSummary={staffLabel(boothStaff)}
-                      warning={boothScheduleNeedsReview(booth.startsAt, booth.endsAt) ? "운영 시간 확인 필요 · 확인 전에는 부스 인증을 받을 수 없습니다." : null}
-                      kind="booth"
-                      tone={booth.status === "OPEN" ? "on" : booth.status === "WAITING" ? "wait" : "off"}
-                      openLabel="상세"
-                      onOpen={() => setDetail({ type: "BOOTH", id: booth.id })}
-                      control={(
-                        <StatusDot tone={booth.status === "OPEN" ? "good" : booth.status === "WAITING" ? "wait" : "muted"}>
-                          {BOOTH_STATUS_LABEL[booth.status] ?? "상태 미정"}
-                        </StatusDot>
-                      )}
-                    />
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className="empty-state">등록된 부스가 없습니다.</p>
-            )}
-          </ConsoleSection>
-        </div>
-
-        <div className={styles.opsSide}>
-          <ConsoleSection headingId="ops-staff" title="스태프 배정" className={styles.anchorSection} density="compact">
             {assignableTargets === 0 ? (
               <p className="notice" role="status">배정하려면 먼저 데스크나 부스를 만드세요.</p>
             ) : gapTargets.length ? (
@@ -1627,81 +1413,98 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             ) : null}
           </ConsoleSection>
 
-          {screenEnabled ? (
-            <ConsoleSection headingId="ops-display" title="전광판 출력" description={displaySummary} className={`${styles.anchorSection} ${styles.displayBoard}`}>
-              <div className={styles.buttonRow}>
-            <label className="sr-only" htmlFor="ops-display-pick">전광판 출력 선택</label>
-            <select
-              id="ops-display-pick"
-              value={displayChoice}
-              disabled={operationLocked}
-              onChange={(event) => setDisplayChoice(event.target.value)}
-            >
-              <option value="">출력 고르기</option>
-              {displayChoices.map((choice) => (
-                <option key={choice.value} value={choice.value}>{choice.label}</option>
-              ))}
-            </select>
-            <ProductButton
-              type="button"
-              className="button button-primary"
-              disabled={busy || !displayChoice || displayChoice === currentDisplayValue || displayBlocked}
-              title={
-                displayBlocked
-                  ? displayNoWriteReason
-                  : !displayChoice
-                    ? "출력을 먼저 고르세요"
-                    : displayChoice === currentDisplayValue
-                      ? "이미 적용된 출력입니다"
-                      : undefined
-              }
-              onClick={() => void applyDisplayChoice()}
-            >
-              {busy ? "적용 중입니다" : displayChoice && displayChoice !== currentDisplayValue ? (displayChoice.startsWith("idle") ? "유휴로 내리기" : "출력 적용") : "출력 적용"}
-            </ProductButton>
-          </div>
-          {displayChoice && displayChoice !== currentDisplayValue ? (
-            <p className="notice" role="status">선택한 출력은 아직 적용되지 않았습니다. ‘출력 적용’을 누르면 행사장 화면에 나옵니다.</p>
-          ) : null}
-          <p className={styles.hint}>
-            추첨은 무대별 최근 공개 결과를 고를 수 있습니다. 공개 중인 결과는 다른 출력을 적용할 때까지 유지됩니다.
-          </p>
-          {state.eventSlug ? (
-                <p className={styles.hint}>
-                  <ProductLink
-                    className={`button button-secondary ${styles.screenLink}`}
-                    href={`/screen/${encodeURIComponent(state.eventSlug)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <ScreenIcon />행사장 화면 열기<ExternalLinkIcon />
-                  </ProductLink>
+          <ConsoleSection
+            headingId="ops-scan"
+            title="스태프 폰에서 스캔"
+            description={<StepPill n={3} tone="day">당일</StepPill>}
+            className={`${styles.anchorSection} ${styles.stepSection}`}
+          >
+            <div className={styles.scanStep}>
+              <div className={styles.scanCopy}>
+                <ol className={styles.scanList}>
+                  <li>스태프가 자기 폰에서 <b>스태프 로그인</b> 주소를 엽니다.</li>
+                  <li>배정된 데스크가 바로 열립니다.</li>
+                  <li>티켓 QR을 카메라에 비추거나 번호를 입력해 입장을 처리합니다.</li>
+                </ol>
+                <p className={styles.scanLink}>
+                  <span>로그인 주소</span>
+                  <code>{typeof window === "undefined" ? "/staff" : `${window.location.origin}/staff`}</code>
                 </p>
-              ) : null}
-            </ConsoleSection>
-          ) : null}
-
-          {state.participationEnabled ? (
-            <ConsoleSection headingId="ops-participation" title="참여 진행" className={styles.anchorSection}>
-              <div className={styles.participationGrid}>
-                <div className={styles.participationColumn}>
-                  <h3>검토할 응답</h3>
-                  <ConsoleTaskQueue label="참여 응답 확인" items={state.participation.tasks.map(task => ({ ...task, href: `/console/events/${encodeURIComponent(eventId)}/programs?review=${task.review}&from=operations` }))} empty="확인할 질문이나 참여 응답이 없습니다." />
+                <div className={styles.scanActions}>
+                  <ProductButton type="button" variant="ghost" icon={staffLinkCopied ? <CheckIcon /> : <CopyIcon />} onClick={() => void copyStaffLink()}>{staffLinkCopied ? "복사했습니다" : "주소 복사"}</ProductButton>
+                  <ProductLink variant="ghost" href="/staff" target="_blank" rel="noreferrer">스태프 화면 열기<span className="sr-only"> (새 탭)</span></ProductLink>
+                  {staffAccounts.length === 0 ? <ProductLink variant="ghost" href="/console/team">스태프 초대하기</ProductLink> : null}
                 </div>
-                <div className={styles.participationColumn}>
-                  <h3>진행 중 콘텐츠 <span className={styles.participationCount}>{state.participation.open.length}개</span></h3>
-                  {state.participation.open.length ? <ul className={styles.liveContents}>
-                    {state.participation.open.slice(0, 6).map(module => <li key={module.id}>
-                      <div><strong>{module.title}</strong><p>{participationTypeLabel(module.type)}</p></div>
-                      <ProductLink href={`/console/events/${encodeURIComponent(eventId)}/programs?module=${encodeURIComponent(module.id)}&from=operations`}>진행 관리<span className="sr-only"> · {module.title}</span></ProductLink>
-                    </li>)}
-                  </ul> : <p className={styles.help}>진행 중인 참여 콘텐츠가 없습니다.</p>}
-                  <ProductLink className={`button button-ghost ${styles.moreLink}`} href={`/console/events/${encodeURIComponent(eventId)}/programs${state.participation.open.length ? "?status=OPEN" : ""}`}>{state.participation.open.length > 6 ? "진행 중 콘텐츠 모두 보기" : "참여 콘텐츠 보기"}<ArrowRightIcon /></ProductLink>
-                </div>
+                <p className={styles.hint} role="status">{staffAccounts.length ? `스태프 계정 ${staffAccounts.length}명 · 데스크에 배정된 사람만 스캔할 수 있습니다.` : "스태프 계정이 없습니다. 팀·권한에서 스태프를 초대한 뒤 데스크에 배정하세요."}</p>
               </div>
-            </ConsoleSection>
-          ) : null}
-        </div>
+              <div className={styles.scanPhone} aria-hidden="true">
+                <DeviceFrame variant="phone" fixed maxDisplayWidth={196} viewportHeight={500}>
+                  <div className={styles.phoneScreen}>
+                    <small>{desks[0]?.name || "입장 데스크"} · {DESK_ACTION_LABEL[desks[0]?.action || "IN"] ?? "입장"}</small>
+                    <strong>QR을 비춰 주세요</strong>
+                    <span className={styles.phoneCamera}>카메라</span>
+                    <span className={styles.phoneButtons}><i>번호 입력</i><i>명단 찾기</i></span>
+                  </div>
+                </DeviceFrame>
+              </div>
+            </div>
+          </ConsoleSection>
+
+          {stampEnabled ? (
+          <ConsoleSection
+            headingId="ops-booths"
+            title="부스 (선택)"
+            description={boothSummary}
+            className={styles.anchorSection}
+            action={(
+              <ProductButton
+                type="button"
+                variant="ghost"
+                disabled={busy || boothBlocked}
+                title={boothBlocked ? boothNoWriteReason : undefined}
+                onClick={() => { setEditingBooth(null); setBoothOpen(true); setFailure(null); }}
+              >
+                부스 추가
+              </ProductButton>
+            )}
+          >
+            {booths.length ? (
+              <ul className={styles.locations}>
+                {booths.map((booth) => {
+                  const boothStaff = staffAt("BOOTH", booth.id);
+                  return (
+                    <LocationRow
+                      key={booth.id}
+                      name={booth.name}
+                      sub={`${booth.zone || "구역 미지정"} · ${booth.capacity
+                        ? `인증 ${booth.used}회 · 잔여 ${Math.max(0, booth.capacity - booth.used)} / ${booth.capacity}`
+                        : `인증 ${booth.used}회 · 잔여 제한 없음`}`}
+                      staff={boothStaff}
+                      staffSummary={staffLabel(boothStaff)}
+                      warning={boothScheduleNeedsReview(booth.startsAt, booth.endsAt) ? "운영 시간 확인 필요 · 확인 전에는 부스 인증을 받을 수 없습니다." : null}
+                      kind="booth"
+                      tone={booth.status === "OPEN" ? "on" : booth.status === "WAITING" ? "wait" : "off"}
+                      openLabel="상세"
+                      onOpen={() => setDetail({ type: "BOOTH", id: booth.id })}
+                      control={(
+                        <StatusDot tone={booth.status === "OPEN" ? "good" : booth.status === "WAITING" ? "wait" : "muted"}>
+                          {BOOTH_STATUS_LABEL[booth.status] ?? "상태 미정"}
+                        </StatusDot>
+                      )}
+                    />
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="empty-state">등록된 부스가 없습니다.</p>
+            )}
+          </ConsoleSection>
+          ) : (
+            <p className={styles.optionalNote}>
+              부스 인증이 필요한 행사는 행사 설정의 기능에서 켜세요.
+              <ProductLink variant="ghost" href={`/console/events/${encodeURIComponent(eventId)}/settings#settings-features`}>부스 인증 기능 켜기</ProductLink>
+            </p>
+          )}
       </div>
 
       <div className={styles.presetGrid}>

@@ -61,6 +61,7 @@ const SCREENS = [
   { key: 'import', path: '/console/events/:id/participants/import', title: '명단 가져오기', scope: 'event', marker: { css: '#participant-import-file-heading' } },
   { key: 'messages', path: '/console/events/:id/messages', title: '메시지 발송', scope: 'event', marker: { css: '#history-heading' } },
   { key: 'operations', path: '/console/events/:id/operations', title: '입장·스태프', scope: 'event', marker: { css: '#ops-desks' } },
+  { key: 'live', path: '/console/events/:id/live', title: '현장 모드', scope: 'event', marker: { css: '[data-live-room]' } },
   { key: 'programs', path: '/console/events/:id/programs', title: '참여 이벤트', scope: 'event', marker: { role: 'button', name: '콘텐츠 만들기' } },
   { key: 'draws', path: '/console/events/:id/draws', title: '추첨·투표', scope: 'event', marker: { css: 'section[aria-label="무대"]' } },
   { key: 'photos', path: '/console/events/:id/photos', title: '현장 사진', scope: 'event', marker: { css: '#evidence-photo-sections' } },
@@ -2136,10 +2137,10 @@ async function main() {
         await page.getByText('사진은 발송할 때 첨부합니다. 내용과 사진에 따라 문자 유형이 자동 결정됩니다.').first().waitFor({ timeout: 10000 });
         await saveShot(page, 'operator/template-mms.png');
 
-        // Stage board: an unapplied selection says so.
-        await page.goto(`${baseUrl}/console/events/${eventId}/operations`, { waitUntil: 'networkidle', timeout: 30000 });
-        await assertConsoleScreen(page, SCREENS.find((screen) => screen.key === 'operations'), eventId, eventName);
-        const displayPick = page.locator('#ops-display-pick');
+        // Stage board (현장 모드 since 2026-11-20): an unapplied selection says so.
+        await page.goto(`${baseUrl}/console/events/${eventId}/live`, { waitUntil: 'networkidle', timeout: 30000 });
+        await assertConsoleScreen(page, SCREENS.find((screen) => screen.key === 'live'), eventId, eventName);
+        const displayPick = page.locator('#live-display-pick');
         await displayPick.waitFor({ timeout: 10000 });
         const options = await displayPick.locator('option').allTextContents();
         // The applied output is identified by its value, not its label, so try

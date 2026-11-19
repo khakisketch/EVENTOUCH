@@ -400,11 +400,26 @@ Reopened 2026-11-19 (owner: the real screen looked plain; `tests/web-operations-
 - 전광판 출력 is a dark stage (state dot beside the current output, light apply button, outlined "행사장 화면 열기"); the page still has one orange action.
 - 부스 인증 방식 and 부스 지도 sit side by side as two folded setting cards; summaries keep their text and anchors.
 
+Reopened 2026-11-20 (입장·스태프 + 현장 모드; owner approved proposal C of `design-review/onsite-ux-proposal.html`). This block wins over the bullets above where they differ:
+- The screen is named 입장·스태프 and reads as three numbered steps in one column: ① 입장 데스크 만들기 (`ops-desks`), ② 스태프 배정 (`ops-staff`; its status pill and gap list are amber while a place has no one on duty), ③ 스태프 폰에서 스캔 (`ops-scan`: login address with copy, three lines of instructions, a phone preview of the staff scan screen in `DeviceFrame`). Each step states its state in a pill in the section's description slot.
+- 부스 (선택) (`ops-booths`) and the two booth presets appear only with 부스 인증 on; with it off there is one quiet line with a "부스 인증 기능 켜기" ghost link.
+- The 전광판 출력 block (`ops-display`), the 참여 진행 block (`ops-participation`) and the three-card summary strip are removed from this screen (big-number strips stay off work screens). The venue-display output and the participation work moved to 현장 모드. Commands, receipts, recovery, draft guard and the team handoff (`ops-staff`) are unchanged; `display.set` is no longer sent from here.
+
 ### 화면 구성 규칙 (every screen)
 - One bordered card per page, the figure that matters most; other regions take the form of their role (soft surface, plain list, flat line).
 - A state is shown by its control or one word, not by a chip beside a button that says the same thing.
 - A link or action appears once per page unless two entry points do different jobs.
 - Rows are not wrapped in cards, and dimming never lowers text contrast.
+
+## 현장 모드 확정 구성
+
+The owner approved this composition on 2026-11-20 (proposal C, `design-review/onsite-ux-proposal.html`; `apps/web/app/console/events/[id]/live/`, route `/live`, rail group 당일). Change it only on a new owner decision. `tests/web-live-mode-composition.test.cjs` and `scripts/web-live-mode-audit.cjs` guard it.
+
+- One dark room (stage tokens through local custom properties) to keep open beside the stage. A view and control surface over existing data and commands: it adds no server command and no data shape. Every write is `display.set`, `module.status`, `module.reveal`, `draw.run`, `draw.publish`, `draw.program.run` or `reward.fulfill` with the source screen's confirmation copy, receipts and recovery (서버 처리 확인 / 같은 요청 다시 시도 / 확인 전 그만두기).
+- Top bar: event name, clock, entry progress (입장 n / 등록 m · 정원 · %), the "행사장 화면 송출 중" state, 관리 화면으로, last-updated time with 지금 확인. Three panes from 880px of room width (진행 순서 · 지금 행사장 화면 · 실시간 현황); narrower, the venue screen and big controls come first and the schedule folds under one line (DOM order is schedule, stage, side so focus follows reading order).
+- 진행 순서: the day's program in order with done / current / next from the browser clock (a cue without an end time runs to the next cue); participation events attach to a cue by title match, and events open now attach to the current cue. 지금 행사장 화면: the real `/screen/:slug` in a `DeviceFrame` screen, the output picker with 출력 적용, the event picker, and big 열기 / 마감 / 결과 공개 / 추첨 controls (one primary at a time: 열기 or 마감). 실시간 현황: response count (poll tallies), 다음에 할 일, 검토 대기 links, 경품 지급 대기 with 지급.
+- Gates: before 진행 중 only a "행사를 진행 중 단계로 바꾸면 사용할 수 있습니다" panel; 종료·보관 is read-only; each control group follows its source screen's `canWriteEvent` scope and feature. Read-only operators see the same panes with no controls (not disabled ones).
+- Refresh: visibility-aware polling (10s, `ifVersion` shortcut), the console freshness subscription, and a failed read keeps the last good screen with an inline retry. Targets are 48px, status changes are announced (`aria-live`), motion respects reduced-motion.
 
 ## 행사 목록 확정 구성
 

@@ -49,5 +49,7 @@
   "staff/StaffEventWork.tsx": 23,
   "staff/StaffHub.tsx": 2,
   "ui/NameTagPrint.tsx": 2,
-  "ui/OperatorReceiptRecovery.tsx": 6
+  "ui/OperatorReceiptRecovery.tsx": 6,
+  "console/events/[id]/live/LivePanes.tsx": 7,
+  "console/events/[id]/live/LiveWorkspace.tsx": 2
 }

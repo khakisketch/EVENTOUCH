@@ -172,7 +172,8 @@ test('handoff opens the dialog once after load, validates, then consumes the par
 test('the operations screen has no jump nav; sections keep their anchors in one reading order', () => {
   const source = read(OPS);
   assert.doesNotMatch(source, /ConsoleSectionNav|label="현장 운영 구역"/u, 'the sidebar nav is gone');
-  const order = ['ops-desks', 'ops-booths', 'ops-staff', 'ops-display', 'ops-participation', 'ops-booth-mode', 'ops-booth-map'];
+  // Reopened 2026-11-20: three steps first (desks, staff, scan), booths optional, then the booth presets.
+  const order = ['ops-desks', 'ops-staff', 'ops-scan', 'ops-booths', 'ops-booth-mode', 'ops-booth-map'];
   let last = -1;
   for (const id of order) {
     const at = source.indexOf(`headingId="${id}"`);
@@ -181,19 +182,17 @@ test('the operations screen has no jump nav; sections keep their anchors in one 
   }
 });
 
-test('display section keeps its anchor, copy and handlers in the side column', () => {
+test('the display output moved to 현장 모드 with its copy and handlers, and left 입장·스태프', () => {
   const source = read(OPS);
-  assert.equal(source.match(/headingId="ops-display"/g)?.length ?? 0, 1, 'one display section, moved not copied');
-  // Section title, selection guidance, controls and handler wiring.
-  assert.match(source, /title="전광판 출력" description=\{displaySummary\}/u);
-  assert.match(source, /htmlFor="ops-display-pick">전광판 출력 선택/u);
-  assert.match(source, /<option value="">출력 고르기<\/option>/u);
-  assert.match(source, /추첨은 무대별 최근 공개 결과를 고를 수 있습니다/u);
-  assert.match(source, /if \(notice\.published\) options\.push/u);
-  assert.match(source, /if \(!module\.published\) continue/u);
-  assert.match(source, /선택한 출력은 아직 적용되지 않았습니다/u);
-  assert.match(source, /onClick=\{\(\) => void applyDisplayChoice\(\)\}/u);
-  assert.match(source, /display\.set/u);
+  assert.equal(source.match(/ops-display/g)?.length ?? 0, 0, 'moved, not copied');
+  const live = read('app/console/events/[id]/live/LivePanes.tsx') + read('app/console/events/[id]/live/live-schedule.ts');
+  assert.match(live, /htmlFor="live-display-pick">행사장 화면 출력 선택/u);
+  assert.match(live, /<option value="">출력 고르기<\/option>/u);
+  assert.match(live, /추첨은 무대별 최근 공개 결과를 고를 수 있습니다/u);
+  assert.match(live, /if \(notice\.published\) choices\.push/u);
+  assert.match(live, /if \(!module\.published\) continue/u);
+  assert.match(live, /선택한 출력은 아직 적용되지 않았습니다/u);
+  assert.match(live, /onClick=\{props\.onApplyDisplay\}/u);
   // No new jump machinery: the existing anchors keep working.
   assert.doesNotMatch(source, /data-skip-to/u, 'no new skip shortcuts');
 });

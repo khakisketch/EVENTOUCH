@@ -42,6 +42,7 @@ const EXPECTED_TITLES = {
   import: '명단 가져오기',
   messages: '메시지 발송',
   operations: '입장·스태프',
+  live: '현장 모드',
   programs: '참여 이벤트',
   draws: '추첨·투표',
   photos: '현장 사진',
@@ -53,10 +54,11 @@ const EXPECTED_TITLES = {
   analysis: '기간 분석',
 };
 
+// Reopened 2026-11-20: 현장 모드 (/live) joined the audit, so the menu count is 18.
 test('console-audit-covers-all-17-menus-with-registry-titles', () => {
   const audit = require('../scripts/web-console-audit.cjs');
   assert.ok(Array.isArray(audit.SCREENS));
-  assert.equal(audit.SCREENS.length, 17);
+  assert.equal(audit.SCREENS.length, 18);
   const navigation = read('apps/web/app/console/console-navigation.ts');
   for (const [key, title] of Object.entries(EXPECTED_TITLES)) {
     const screen = audit.SCREENS.find((item) => item.key === key);

@@ -633,11 +633,13 @@ test('web-booth-mode-and-map-editor-are-operations-owned', () => {
   assert.match(ops, /expectedPublishedVersion/);
   // Display output honours the same contract the public board reads, and
   // impossible choices are never offered.
-  assert.match(ops, /display\.set/);
-  assert.match(ops, /전광판 출력/);
-  assert.match(ops, /module\.revealed/);
-  assert.match(ops, /module\.draws\[0\]/);
-  assert.match(ops, /payload\.drawId = drawId/);
+  // Reopened 2026-11-20: the display picker and its command moved to 현장 모드.
+  const live = read('app/console/events/[id]/live/LiveWorkspace.tsx') + read('app/console/events/[id]/live/LivePanes.tsx') + read('app/console/events/[id]/live/live-schedule.ts');
+  assert.match(live, /display\.set/);
+  assert.match(live, /행사장 화면 출력 선택/);
+  assert.match(live, /module\.revealed/);
+  assert.match(live, /module\.draws\[0\]/);
+  assert.match(live, /payload\.drawId = drawId/);
   // The public page renders only the published map with its markers.
   const publicPage = read('app/event/[slug]/page.tsx');
   assert.match(publicPage, /source\.published/);

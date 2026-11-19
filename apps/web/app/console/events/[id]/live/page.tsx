@@ -1,14 +1,13 @@
-import ConsolePage from "../../../console-ui/ConsolePage";
+import LiveWorkspace from "./LiveWorkspace";
 
-// 현장 모드: the day-of control room. The workspace is filled in by the live-mode slice;
-// until then the route resolves so the menu, titles and deep links are stable.
+// 현장 모드: the day-of control room. A dark view-and-control surface over the
+// event's schedule, participation events, venue display and reward handover;
+// every write is an existing command with its existing gates.
 export default async function ConsoleLivePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return (
     <section className="console-page live-page">
-      <ConsolePage pageId="live" eventId={id} eventName="">
-        <p>현장 모드는 준비 중입니다.</p>
-      </ConsolePage>
+      <LiveWorkspace eventId={id} />
     </section>
   );
 }

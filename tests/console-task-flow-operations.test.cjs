@@ -174,21 +174,20 @@ test("operations: gates, commands, and touch reuse stay pinned", () => {
     assert.ok(source.includes(blocked), `${blocked} gates its section`);
     assert.match(source, new RegExp(`title=\\{${blocked} \\? ${reason} :`, "u"), `${blocked} names its reason`);
   }
-  assert.ok(source.includes("displayBlocked"), "display gates its section");
-  assert.match(source, /title=\{\s*displayBlocked\s*\?\s*displayNoWriteReason/u, "display names its reason first");
-  assert.match(source, /출력을 먼저 고르세요/u, "display keeps its existing guidance");
-  assert.match(source, /이미 적용된 출력입니다/u, "display keeps its applied-state guidance");
+  // Reopened 2026-11-20: the display picker and its gate live in 현장 모드 now.
+  const live = fs.readFileSync(path.join(__dirname, "..", "apps", "web", "app", "console", "events", "[id]", "live", "LivePanes.tsx"), "utf8");
+  assert.doesNotMatch(source, /displayBlocked|display\.set/u, "the display gate left with the display");
+  assert.match(live, /출력을 먼저 고르세요/u, "display keeps its existing guidance");
+  assert.match(live, /이미 적용된 출력입니다/u, "display keeps its applied-state guidance");
   // Every mutation button consults its own section gate; reads never gate.
   assert.ok((source.match(/disabled=\{[^}]*onsiteBlocked[^}]*\}/gu) ?? []).length >= 3, "onsite buttons gate");
   assert.match(source, /const toggleBlocked = busy \|\| onsiteBlocked/u, "the desk switch consults the onsite gate");
-  assert.ok((source.match(/disabled=\{[^}]*displayBlocked[^}]*\}/gu) ?? []).length >= 1, "display buttons gate");
   assert.match(source, /const mapControlsBlocked = boothBlocked \|\| mapUploadUncertain \|\| mapUploading/u);
   assert.ok((source.match(/disabled=\{[^}]*(?:boothBlocked|mapControlsBlocked)[^}]*\}/gu) ?? []).length >= 8, "booth and map buttons gate");
   assert.doesNotMatch(source, /writeBlocked/u, "no single-gate remnant may hide a scope");
   assert.match(source, /현장 운영을 변경할 운영 권한이 없습니다/u, "the onsite staff copy is untouched");
   assert.match(source, /const canWriteOnsite = canWriteEvent\(capabilities, "desk\.save"\)/u);
   assert.match(source, /const canWriteBooth = canWriteEvent\(capabilities, "booth\.save"\)/u);
-  assert.match(source, /const canWriteDisplay = canWriteEvent\(capabilities, "display\.set"\)/u);
   assert.match(source, /runCommand\("staff\.assign"/u);
   assert.equal(source.match(/runCommand\("staff\.assign"/g)?.length ?? 0, 1, "the existing assign call stays the only one");
   assert.match(source, /staff\.unassign/u, "the release path is untouched");

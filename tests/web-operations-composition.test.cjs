@@ -1,9 +1,13 @@
 "use strict";
 
 // Field operations (현장 운영) composition, approved 2026-11-14 (design-review
-// operations-options.html, scene A3). Reopened 2026-11-19 by the owner: the page
-// now opens on a summary strip, rows carry a kind tile, the gap list is amber and
-// the display is a dark stage. Source-only: rendering rides the real browser check.
+// operations-options.html, scene A3). Reopened 2026-11-19 by the owner: rows carry
+// a kind tile and the gap list is amber. Reopened 2026-11-20 (owner approved
+// proposal C, design-review/onsite-ux-proposal.html): the screen is renamed
+// 입장·스태프 and reads as three steps (desks, staff on duty, scanning on the staff
+// phone) with booths optional; the 전광판 출력 block and the two-card KPI strip are
+// gone (the display moved to 현장 모드, big-number strips stay off work screens).
+// Source-only: rendering rides the real browser check.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -19,17 +23,20 @@ test("approved operations design stays locked", () => {
 
   // One page, no sidebar nav; anchors survive for deep links and handoffs.
   assert.doesNotMatch(ops, /ConsoleSectionNav|sectionLayout="sidebar"/u);
-  for (const id of ["ops-desks", "ops-booths", "ops-staff", "ops-display", "ops-participation", "ops-booth-mode", "ops-booth-map"]) {
+  for (const id of ["ops-desks", "ops-staff", "ops-scan", "ops-booths", "ops-booth-mode", "ops-booth-map"]) {
     assert.match(ops, new RegExp(`headingId="${id}"`), `${id} keeps its anchor`);
   }
-
-  // Reopened 2026-11-19: the page opens on a summary strip (desks running, booths
-  // running, places with someone on duty). Those are the bordered units; the desk
-  // list itself is a plain ledger, not a panel.
+  // Reopened 2026-11-20: the three steps, each with a status pill in the description slot.
+  for (const [n, title] of [[1, "입장 데스크 만들기"], [2, "스태프 배정"], [3, "스태프 폰에서 스캔"]]) {
+    assert.match(ops, new RegExp(`title="${title}"[\\s\\S]*?<StepPill n=\\{${n}\\}`, "u"), `step ${n} is ${title}`);
+  }
+  assert.match(ops, /<DeviceFrame variant="phone"/u, "step 3 previews the staff scan screen on a phone");
+  assert.match(ops, /\/staff`/u, "step 3 names the staff login address");
+  assert.doesNotMatch(ops, /ops-display|ops-participation|전광판 출력|ScreenIcon/u, "display and participation work left for 현장 모드");
+  assert.match(ops, /\{stampEnabled \? \(\s*<ConsoleSection\s+headingId="ops-booths"/u, "booths are an optional section, only with the feature on");
+  assert.doesNotMatch(ops, /styles\.kpiStrip|styles\.kpiCard/u, "no big-number strip on a work screen");
   assert.equal(ops.match(/surface="panel"/g)?.length ?? 0, 0, "no panel around a list");
-  assert.match(ops, /styles\.kpiStrip/u);
-  assert.equal(ops.match(/styles\.kpiCard/g)?.length ?? 0, 3, "desks, booths and coverage");
-  assert.match(css, /\.kpiCard\[data-alert="true"\]\s*\{[^}]*var\(--warning-soft\)/su, "uncovered places turn the coverage card amber");
+  assert.match(css, /\.stepPill\[data-tone="warn"\]\s*\{[^}]*var\(--warning-soft\)/su, "a step with a gap turns amber");
 
   // A row is a name, one quiet line, faces and one control; it opens its detail.
   assert.match(parts, /export function LocationRow/u);
@@ -57,7 +64,6 @@ test("approved operations design stays locked", () => {
   // Assignment: one page-level entry that is primary only while a place has no one on duty.
   assert.match(ops, /variant=\{gapTargets\.length && !archived \? "primary" : "ghost"\}/u);
   assert.match(css, /\.gapSurface\s*\{[^}]*background:\s*var\(--warning-soft\)/su, "the gap list is amber work waiting on a person, not a card");
-  assert.match(css, /\.displayBoard > :global\(\.astryx-section\)\s*\{[^}]*background:\s*var\(--stage\)/su, "the display output is a dark stage");
 
   // Release lives in the detail dialog, with the same command.
   assert.match(ops, /function LocationDialog/u);

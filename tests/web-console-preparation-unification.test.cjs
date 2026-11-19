@@ -87,7 +87,8 @@ test('preparation tabs keep stable anchors and form reading width', () => {
   for (const id of ['content-notices', 'content-program', 'content-venue']) {
     assert.ok(PAGES.content.includes(`"#${id}"`), `content keeps the ${id} deep link`);
   }
-  for (const id of ['ops-desks', 'ops-booths', 'ops-booth-mode', 'ops-booth-map', 'ops-display', 'ops-staff']) {
+  // Reopened 2026-11-20: ops-display left for 현장 모드; ops-scan (step 3) joined.
+  for (const id of ['ops-desks', 'ops-booths', 'ops-booth-mode', 'ops-booth-map', 'ops-scan', 'ops-staff']) {
     assert.match(PAGES.operations, new RegExp(`headingId="${id}"`), `operations keeps ${id}`);
   }
   assert.match(PAGES.content, /className=\{styles\.venuePanel\}/u, 'venue keeps its form reading width');
@@ -142,12 +143,9 @@ test('archived events read as read-only with the reason on every write control',
   assert.match(PAGES.messages, /disabled=\{selectedCount === 0 \|\| busyAction !== null \|\| uploadingImage \|\| messagesLocked \|\| otherCreateReceipt \|\| uncertainMmsUpload\}/u);
   assert.match(PAGES.content, /const gated = busy !== null \|\| archived \|\| Boolean\(pendingContent\) \|\| otherContentReceipt;/u);
   assert.match(PAGES.content, /disabled=\{gated\}/u);
-  for (const [section, permission] of [['onsite', 'Onsite'], ['booth', 'Booth'], ['display', 'Display']]) {
+  for (const [section, permission] of [['onsite', 'Onsite'], ['booth', 'Booth']]) {
     assert.match(PAGES.operations, new RegExp(`const ${section}Blocked = archived \\|\\| !canWrite${permission}`, 'u'));
-    if (section === 'display') {
-      assert.match(PAGES.operations, /disabled=\{busy \|\| !displayChoice \|\| displayChoice === currentDisplayValue \|\| displayBlocked\}/u);
-      assert.match(PAGES.operations, /title=\{\s*displayBlocked\s*\? displayNoWriteReason/u);
-    } else {
+    {
       assert.match(PAGES.operations, new RegExp(`disabled=\\{busy \\|\\| ${section}Blocked\\}`, 'u'));
       assert.match(PAGES.operations, new RegExp(`title=\\{${section}Blocked \\? ${section}NoWriteReason : undefined\\}`, 'u'));
     }
