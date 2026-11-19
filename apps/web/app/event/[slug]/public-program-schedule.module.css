@@ -130,7 +130,8 @@
   margin: 0;
   padding: 10px 6px;
   border-radius: var(--radius-medium);
-  background: color-mix(in srgb, var(--schedule-accent) 12%, var(--paper));
+  /* The palette's soft tint: its accent ink is AA-safe on exactly this color. */
+  background: var(--ev-accent-soft, color-mix(in srgb, var(--schedule-accent) 12%, var(--paper)));
   color: var(--ev-accent-ink, var(--brand-text));
   font-size: var(--text-sm);
   font-weight: 800;

@@ -83,8 +83,11 @@ test('the way back is quiet; the next step is the one primary and the recheck is
   assert.match(ticketPage, /styles\.returnLink/u);
   // Reopened 2026-11-19: with the QR in hand the content link is the primary;
   // the recheck is ghost. Without a QR the recheck is the primary.
-  // Reopened 2026-11-20: both live in the BottomAction bar (primary: content link, secondary: the recheck).
-  assert.match(ticket, /<BottomAction label="다음 행동" primary=\{\{ label: "참여 콘텐츠 보기", href: `\/event\/\$\{encodeURIComponent\(slug\)\}\/engage` \}\} secondary=\{recheckAction\}/u);
+  // Reopened 2026-11-20: the content link is alone in the BottomAction bar (a second button would make the bar taller
+  // than the room under the QR on a 390x844 phone and cover its lower edge); the recheck is a ghost button in the page.
+  assert.match(ticket, /<BottomAction label="다음 행동" primary=\{\{ label: "참여 콘텐츠 보기", href: `\/event\/\$\{encodeURIComponent\(slug\)\}\/engage` \}\} \/>/u);
+  assert.doesNotMatch(ticket, /secondary=\{recheckAction\}/u, 'no second button in the bar over the QR');
+  assert.match(ticket, /<EventBanner theme=\{theme\} title=\{state\.eventName\} kicker=\{<h1>내 티켓<\/h1>\} compact \/>/u, 'the short strip keeps the whole QR above the bar');
 });
 
 test('the application is a numbered sheet: banner, facts, sections, a sticky submit', () => {

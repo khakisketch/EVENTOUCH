@@ -20,8 +20,10 @@ test("the ticket screen points at what the attendee has to do", () => {
   // recheck beside it is a quiet utility. A ticket that cannot show a QR keeps
   // the recheck as its primary.
   // Reopened 2026-11-20: the next step is the BottomAction fixed to the bottom of the phone column
-  // (primary: the content link; secondary: the recheck); without a QR the recheck is the primary.
-  assert.match(ticket, /<BottomAction label="다음 행동" primary=\{\{ label: "참여 콘텐츠 보기", href: `\/event\/\$\{encodeURIComponent\(slug\)\}\/engage` \}\} secondary=\{recheckAction\}/u);
+  // (alone, so it never covers the QR; see web-attendee-entry-composition); the recheck is a quiet ghost
+  // button in the page; without a QR the recheck is the primary.
+  assert.match(ticket, /<BottomAction label="다음 행동" primary=\{\{ label: "참여 콘텐츠 보기", href: `\/event\/\$\{encodeURIComponent\(slug\)\}\/engage` \}\} \/>/u);
+  assert.match(ticket, /<ProductButton type="button" variant="ghost" disabled=\{rechecking\} onClick=\{\(\) => void recheckTicket\(\)\}>/u);
   assert.match(ticket, /<BottomAction label="다음 행동" primary=\{recheckAction\} \/>/u);
 });
 

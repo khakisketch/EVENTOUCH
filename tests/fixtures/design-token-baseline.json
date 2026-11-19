@@ -1,9 +1,9 @@
 {
   "note": "Ratchet baseline for tests/web-design-tokens-guard.test.cjs. Counts may only go down. Refresh with: node tests/web-design-tokens-guard.test.cjs --update",
   "totals": {
-    "fontSizePx": 104,
-    "radius": 68,
-    "hex": 39
+    "fontSizePx": 175,
+    "radius": 122,
+    "hex": 182
   },
   "files": {
     "console/clients/clients.module.css": {

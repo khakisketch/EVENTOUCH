@@ -354,7 +354,7 @@
   color: var(--engage-ink);
 }
 .pageHeader { color: var(--engage-ink); }
-.pageHeader :global(.eyebrow) { color: inherit; opacity: 0.8; }
+.pageHeader :global(.eyebrow) { color: inherit; }
 .returnLink { justify-self: start; min-height: 44px; padding: 0; border: 0; background: transparent; color: inherit; font-weight: 600; }
 .returnLink:hover { text-decoration: underline; }
 
@@ -457,7 +457,8 @@
 [data-attendee-mode="a1"] .typeTab[aria-pressed="true"] { background: var(--ink); }
 
 /* a2: tabs on the event color are translucent white pills; the chosen one is solid white. */
-[data-attendee-mode="a2"] .typeTab { background: color-mix(in srgb, var(--paper) 22%, transparent); color: var(--ev-ground-ink); }
+/* An outline, not a tint: a translucent fill would lighten the ground under the label and cost it contrast. */
+[data-attendee-mode="a2"] .typeTab { border: 1px solid color-mix(in srgb, var(--ev-ground-ink) 60%, transparent); background: transparent; color: var(--ev-ground-ink); }
 [data-attendee-mode="a2"] .typeTab[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
 
 .doneGroup { list-style: none; }

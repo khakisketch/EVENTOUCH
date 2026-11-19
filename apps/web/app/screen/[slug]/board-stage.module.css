@@ -128,7 +128,9 @@
 
 /* Q&A and photos */
 .dark :global(.display-questions) { gap: clamp(14px, 1.8vw, 36px); }
-.dark :global(.display-question) { padding: 0 0 0 clamp(16px, 2.4vw, 48px); border: 0; border-left: 6px solid var(--brand); border-radius: 0; background: transparent; }
+/* Reopened 2026-11-20: a question is one rounded card with a full brand-tinted border and a faint
+   wash; the one-sided 6px brand stripe (a side-tab) is gone, the brand cue stays in the border color. */
+.dark :global(.display-question) { padding: clamp(10px, 1.2vw, 24px) clamp(16px, 2.4vw, 48px); border: 1px solid color-mix(in srgb, var(--brand) 55%, transparent); border-radius: clamp(12px, 1.4vw, 28px); background: var(--board-wash-faint); }
 .dark :global(.display-question) h3 { margin: 0; color: var(--board-ink); font-size: clamp(22px, 3.2vw, 62px); line-height: 1.3; }
 .dark :global(.display-question) p { margin-top: 6px; color: var(--side-muted); font-size: clamp(18px, 2.4vw, 48px); }
 .dark :global(.display-photo-grid) figcaption { color: var(--side-muted); }
@@ -197,7 +199,8 @@
 .dark :global(.program-item[data-live="true"]) {
   border-radius: clamp(10px, 1.2vw, 24px);
   background: color-mix(in srgb, var(--brand) 18%, transparent);
-  box-shadow: inset clamp(6px, 0.6vw, 12px) 0 0 var(--brand);
+  /* A full ring, not a one-sided stripe (a side-tab): "진행 중" is also in the row's words and its orange time. */
+  box-shadow: inset 0 0 0 clamp(2px, 0.2vw, 4px) var(--brand);
 }
 .dark :global(.program-item[data-live="true"]) :global(.program-title) { color: var(--board-ink); }
 
@@ -206,9 +209,6 @@
 .dark :global(.poll-bar) span { border-radius: var(--r-pill); background: var(--board-bar); }
 .dark :global(.poll-row[data-leader="true"]) strong { color: var(--brand); }
 .dark :global(.display-live) { border: 1px solid var(--stage-line); }
-
-/* Questions and photos */
-.dark :global(.display-question) { background: var(--board-wash-faint); border-radius: 0 clamp(12px, 1.4vw, 28px) clamp(12px, 1.4vw, 28px) 0; padding-block: clamp(10px, 1.2vw, 24px); }
 
 /* Reopened 2026-11-20: states on the stage.
    The stale notice, the refresh button and the four whole-screen states

@@ -611,7 +611,8 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
       <section className={`${styles.ticketCard} ${styles.pass}`}>
         {/* The pass: the event's own banner first, then the band that carries
             the state and the name read at a glance. */}
-        <EventBanner theme={theme} title={state.eventName} kicker={<h1>내 티켓</h1>} compact={!usable} />
+        {/* Reopened 2026-11-20: the strip is always the short one, so the whole QR stays above the fixed bottom bar on a 390x844 phone. */}
+        <EventBanner theme={theme} title={state.eventName} kicker={<h1>내 티켓</h1>} compact />
         <header className={styles.ticketBand} data-tone={tone} data-compact={!usable || undefined}>
           <p className={styles.ticketEntryState} aria-live="polite" data-tone={tone}>
             {statusUnconfirmed ? rechecking ? "상태 확인 중" : "상태 확인 필요" : entryLabel(state)}
@@ -633,9 +634,15 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
               <p className={styles.ticketBrightness}><AttendeeIcon name="sun" size={16} />화면을 밝게 하면 더 잘 읽혀요</p>
             </div>
             {facts}
-            {/* The next step once the QR is in hand is the event's content, fixed to
-                the bottom; the recheck beside it is a quiet utility. */}
-            <BottomAction label="다음 행동" primary={{ label: "참여 콘텐츠 보기", href: `/event/${encodeURIComponent(slug)}/engage` }} secondary={recheckAction} />
+            {/* The recheck is a quiet utility in the page. The next step once the QR is in hand is the
+                event's content, alone in the bottom bar: a second button there would be taller than the
+                room under the QR and cover its lower edge on a 390x844 phone. */}
+            <p className={styles.ticketMessageActions}>
+              <ProductButton type="button" variant="ghost" disabled={rechecking} onClick={() => void recheckTicket()}>
+                {rechecking ? "확인 중입니다" : "상태 다시 확인"}
+              </ProductButton>
+            </p>
+            <BottomAction label="다음 행동" primary={{ label: "참여 콘텐츠 보기", href: `/event/${encodeURIComponent(slug)}/engage` }} />
           </>
         ) : (
           <>
