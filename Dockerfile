@@ -11,6 +11,7 @@ COPY apps/web/lib/client-address.mts ./apps/web/lib/client-address.mts
 COPY apps/web/lib/sms-text-validation.cjs ./apps/web/lib/sms-text-validation.cjs
 COPY apps/web/lib/attendance-state.cjs ./apps/web/lib/attendance-state.cjs
 COPY apps/web/lib/cancellation-state.cjs ./apps/web/lib/cancellation-state.cjs
+COPY apps/web/lib/contact-normalize.cjs ./apps/web/lib/contact-normalize.cjs
 COPY data/sample.json ./data/sample.json
 RUN chmod -R a+rX /app/server /app/apps/web/lib \
     && chmod a+r /app/package.json /app/package-lock.json /app/data/sample.json \
