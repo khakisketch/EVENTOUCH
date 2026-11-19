@@ -7,6 +7,9 @@ import ProductButton from "../../../ui/ProductButton";
 import { HOME_FEED_LIMIT, normalizeHomeStyle, readableInk, type HomePhoto, type HomeStyle } from "../../../../lib/attendee-home";
 import { normalizeHomeMenus, type HomeMenus, type HomeProgram } from "../../../../lib/attendee-home-menus";
 import HomeHero from "./HomeHero";
+import AttendeeSurface from "../ui/AttendeeSurface";
+import AttendeeSectionHeader from "../ui/AttendeeSectionHeader";
+import { attendeeLook } from "../attendee-look";
 import styles from "./home.module.css";
 import L from "./home-layouts.module.css";
 
@@ -40,6 +43,8 @@ type AttendeeHomeLandingProps = {
   keyvisual: string | null;
   defaultHomeBanner?: "legacy" | "neutral";
   homeStyle: HomeStyle;
+  // The published 강조색: the event color of the attendee design system.
+  accent?: string | null;
   onOpen?: (key: HomeMenuKey) => void;
   menuButtonRef?: (key: HomeMenuKey, node: HTMLButtonElement | null) => void;
   preview?: boolean;
@@ -68,6 +73,7 @@ export default function AttendeeHomeLanding({
   keyvisual,
   defaultHomeBanner = "legacy",
   homeStyle: homeStyleInput,
+  accent,
   onOpen,
   menuButtonRef,
   preview = false,
@@ -97,6 +103,8 @@ export default function AttendeeHomeLanding({
   const shape = layout === "tile" ? "tile" : layout === "poster" ? "circle" : "row";
   const feedPhotos = photos.slice(0, HOME_FEED_LIMIT);
   const rootStyle = { "--lay-ink": readableInk(homeStyle.backgroundColor) } as CSSProperties;
+  // a1 (white ground, the event color as the accent) unless the agency picked a ground color.
+  const look = attendeeLook(homeStyle, accent);
 
   const hero = (
     <HomeHero
@@ -122,6 +130,7 @@ export default function AttendeeHomeLanding({
     >
       <span className={L.ticketText}>
         <span className={L.ticketLabel}>{ticket.label}</span>
+        <span className={L.ticketMeta}>{hasTicket ? "QR로 바로 입장" : "신청한 티켓 확인"}</span>
       </span>
       <span className={L.ticketGo}>열기</span>
     </ProductButton>
@@ -140,7 +149,7 @@ export default function AttendeeHomeLanding({
   );
   const feed = layout === "instagram" ? (
     <section className={L.feed} aria-label="현장 사진">
-      <h2 className={L.groupLabel}>현장 사진{photos.length ? ` ${photos.length}` : ""}</h2>
+      <AttendeeSectionHeader className={L.sectionHead} size="sm" title={`현장 사진${photos.length ? ` ${photos.length}` : ""}`} />
       {photos.length ? (
         <ul className={L.feedList}>
           {feedPhotos.map((photo) => <FeedCard key={photo.id} photo={photo} />)}
@@ -163,14 +172,14 @@ export default function AttendeeHomeLanding({
   })).filter((group) => group.items.length);
 
   return (
-    <div className={`${L.root} ${L[layout]}`} style={rootStyle} data-layout={layout} data-menu-shape={shape}>
+    <AttendeeSurface color={look.color} mode={look.mode} ground={look.ground} className={`${L.root} ${L[layout]}`} style={rootStyle} data-layout={layout} data-menu-shape={shape}>
       {hero}
       {ticketEntry ? <div className={L.ticketWrap}>{ticketEntry}</div> : null}
       {feed}
       <nav className={L.menus} aria-label="참가 메뉴">
         {groups.map((group, index) => (
           <Fragment key={group.category}>
-            <h2 className={L.groupLabel}>{group.category === "info" ? "행사 안내" : "행사 참여"}</h2>
+            <AttendeeSectionHeader className={L.sectionHead} size="sm" title={group.category === "info" ? "행사 안내" : "행사 참여"} />
             <div className={`${L.group} ${L[`group_${shape}`]}`}>
               {group.items.map(renderEntry)}
               {shape === "tile" && showLinks && index === groups.length - 1 ? (
@@ -192,7 +201,7 @@ export default function AttendeeHomeLanding({
             : <ProductLink key={program.id} className="button button-secondary" href={`/event/${encodeURIComponent(slug!)}/engage?program=${encodeURIComponent(program.id)}`}>{program.title} <span aria-hidden="true">→</span></ProductLink>)}
         </nav>
       ) : null}
-    </div>
+    </AttendeeSurface>
   );
 }
 

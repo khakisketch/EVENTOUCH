@@ -10,6 +10,10 @@ import { publicRecoveryContact } from "../../../lib/public-recovery-contact";
 import ProductLink from "../../ui/ProductLink";
 import RichText from "../../ui/RichText";
 import HomeHero from "./home/HomeHero";
+import AttendeeSurface from "./ui/AttendeeSurface";
+import AttendeeSectionHeader from "./ui/AttendeeSectionHeader";
+import AttendeeStateMessage from "./ui/AttendeeStateMessage";
+import { attendeeLook } from "./attendee-look";
 import homeStyles from "./home/home.module.css";
 import L from "./home/home-layouts.module.css";
 import GuideIcon, { type GuideIconType } from "./GuideIcon";
@@ -134,6 +138,8 @@ export default async function EventPage({
     : [];
   const layout = homeStyle.layout === "instagram" && !photos.length ? "tile" : homeStyle.layout;
   const rootStyle = { "--lay-ink": readableInk(homeStyle.backgroundColor) } as CSSProperties;
+  // a1 (white ground, the 강조색 as the accent) unless the agency picked a ground color.
+  const look = attendeeLook(homeStyle, typeof published.accent === "string" ? published.accent : null);
   const keyvisual = keyvisualSource(slug, published.keyvisual);
   const registrationOpen = workspace.registrationOpen === true;
   // The public signup writer only runs on READY/LIVE (participants writer
@@ -259,10 +265,7 @@ export default async function EventPage({
       ) : !recoveryBlocked ? (
         <GuideCard slot={!simple} href={`${guideHref}/ticket/recover`} icon="ticket" label="이미 신청했다면 내 티켓 찾기" sub="현재 신청을 받지 않습니다" go="찾기" />
       ) : (
-        <div className={styles.closedCard}>
-          <GuideIcon type="register" />
-          <p className={styles.registrationClosed} role="status">현재 신청을 받지 않습니다.</p>
-        </div>
+        <AttendeeStateMessage kind="info" title="현재 신청을 받지 않습니다." className={styles.closedCard} />
       )}
     </TabTicketChoice>
   );
@@ -293,10 +296,9 @@ export default async function EventPage({
   ) : null;
 
   const photoUrl = (fileId: string) => `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`;
-  const sectionLabel = `${L.groupLabel} ${styles.sectionLabel}`;
 
   return (
-    <main id="main-content" tabIndex={-1} className={`${homeStyles.homePage} public-event-page`} style={homeSurfaceStyle(homeStyle)}>
+    <AttendeeSurface as="main" id="main-content" tabIndex={-1} color={look.color} mode={look.mode} ground={look.ground} className={`${homeStyles.homePage} public-event-page`} style={homeSurfaceStyle(homeStyle)}>
       <div className={`${L.root} ${L[layout]}`} style={rootStyle} data-layout={layout} data-menu-shape={layout === "poster" ? "circle" : layout === "tile" ? "tile" : "row"}>
         <HomeHero
           eventName={event.name}
@@ -325,7 +327,7 @@ export default async function EventPage({
 
         {layout === "poster" && publicSections.length ? (
           <nav className={L.menus} aria-label="행사 안내 바로가기">
-            <h2 className={L.groupLabel}>바로가기</h2>
+            <AttendeeSectionHeader className={L.sectionHead} size="sm" title="바로가기" />
             <div className={`${L.group} ${L.group_circle}`}>
               {publicSections.map((section) => (
                 <a key={section.id} className={L.circle} href={`#${section.id}`}>
@@ -338,8 +340,8 @@ export default async function EventPage({
 
         <div className={styles.sections}>
           {showAnnouncements && notices.length ? (
-            <section className={styles.section} aria-labelledby="public-notices">
-              <h2 id="public-notices" className={sectionLabel}>공지</h2>
+            <section className={styles.section} id="public-notices" aria-label="공지">
+              <AttendeeSectionHeader className={`${L.sectionHead} ${styles.sectionHead}`} size="sm" title="공지" />
               <div className={styles.card}>
                 <ul className={styles.noticeList}>
                   {/* Pinned notices lead; the sort is stable, so each group keeps its own order. */}
@@ -361,8 +363,8 @@ export default async function EventPage({
           ) : null}
 
           {showPrograms && program.length ? (
-            <section className={styles.section} aria-labelledby="public-program">
-              <h2 id="public-program" className={sectionLabel}>프로그램</h2>
+            <section className={styles.section} id="public-program" aria-label="프로그램">
+              <AttendeeSectionHeader className={`${L.sectionHead} ${styles.sectionHead}`} size="sm" title="프로그램" />
               <div className={styles.card}>
                 <PublicProgramSchedule program={program} eventDate={showSchedule ? event.date : ""} />
               </div>
@@ -370,8 +372,8 @@ export default async function EventPage({
           ) : null}
 
           {boothMap ? (
-            <section className={styles.section} aria-labelledby="public-booth-map">
-              <h2 id="public-booth-map" className={sectionLabel}>부스 지도</h2>
+            <section className={styles.section} id="public-booth-map" aria-label="부스 지도">
+              <AttendeeSectionHeader className={`${L.sectionHead} ${styles.sectionHead}`} size="sm" title="부스 지도" />
               <div className={styles.card}>
                 <div className={styles.mapWrap}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -391,8 +393,8 @@ export default async function EventPage({
           ) : null}
 
           {showVenue && hasVenue ? (
-            <section className={styles.section} aria-labelledby="public-venue">
-              <h2 id="public-venue" className={sectionLabel}>오시는 길</h2>
+            <section className={styles.section} id="public-venue" aria-label="오시는 길">
+              <AttendeeSectionHeader className={`${L.sectionHead} ${styles.sectionHead}`} size="sm" title="오시는 길" />
               <div className={styles.card}>
                 {venueName || venueAddress ? (
                   <div className={styles.venueHead}>
@@ -460,7 +462,7 @@ export default async function EventPage({
           ) : null}
         </TabTicketChoice>
       </div>
-    </main>
+    </AttendeeSurface>
   );
 }
 

@@ -70,14 +70,15 @@ test("vote guidance on the published background uses adaptive ink, never fixed g
   for (const selector of ["\\.voteSubmittedText", "\\.voteStateTitle", "\\.voteTitle"]) {
     assert.match(
       css,
-      new RegExp(`${selector}\\s*\\{[^}]*color:\\s*var\\(--home-background-ink,\\s*var\\(--ink\\)\\)`, "u"),
+      // Reopened 2026-11-20: the ground ink comes from the attendee surface first (--ev-ground-ink).
+      new RegExp(`${selector}\\s*\\{[^}]*color:\\s*var\\(--ev-ground-ink,\\s*var\\(--home-background-ink,\\s*var\\(--ink\\)\\)\\)`, "u"),
       `${selector} must use adaptive ink`
     );
   }
   for (const selector of ["\\.voteSubmittedNote", "\\.voteStateNote", "\\.voteCount"]) {
     assert.match(
       css,
-      new RegExp(`${selector}\\s*\\{[^}]*color:\\s*var\\(--home-background-copy,\\s*#3f5965\\)`, "u"),
+      new RegExp(`${selector}\\s*\\{[^}]*color:\\s*var\\(--ev-ground-ink,\\s*var\\(--home-background-copy\\)\\)`, "u"),
       `${selector} must use adaptive copy`
     );
   }

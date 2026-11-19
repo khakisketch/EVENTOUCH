@@ -59,6 +59,11 @@ async function renderVenue(venue, published, features = ['venue'], program = [])
       if (id === '../../../lib/public-recovery-contact') return recoveryExports;
       if (id === '../../ui/RichText') return { __esModule: true, default: ({ source }) => jsx.jsx('div', { children: source }) };
       if (id === './public-event.module.css') return cssModule();
+      // Reopened 2026-11-20: the guide wears the attendee design system (surface, section header, state message).
+      if (id === './ui/AttendeeSurface') return { __esModule: true, default: ({ children, as: Tag = 'div', id: elementId, className }) => jsx.jsx(Tag, { id: elementId, className, children }) };
+      if (id === './ui/AttendeeSectionHeader') return { __esModule: true, default: ({ title }) => jsx.jsx('h2', { children: title }) };
+      if (id === './ui/AttendeeStateMessage') return { __esModule: true, default: ({ title, children }) => jsx.jsxs('div', { role: 'status', children: [jsx.jsx('p', { children: title }), children] }) };
+      if (id === './attendee-look') return { attendeeLook: () => ({ mode: 'a1', color: '#EA552E', ground: null }) };
       throw new Error(`Unexpected dependency: ${id}`);
     },
   });

@@ -8,133 +8,12 @@
   min-height: var(--home-viewport-height);
   margin-inline: auto;
   container-type: inline-size;
-  background: var(--home-background-color, #b9def0);
+  background: var(--ev-ground, var(--home-background-color));
   /* On a wide screen the 520px column sits on the event's own color instead of
      a white page: the shadow and clip carry the ground out to both sides
      without changing layout or adding scroll. */
-  box-shadow: 0 0 0 100vmax var(--home-background-color, #b9def0);
+  box-shadow: 0 0 0 100vmax var(--ev-ground, var(--home-background-color));
   clip-path: inset(0 -100vmax);
-}
-
-.eventBanner {
-  position: relative;
-  isolation: isolate;
-  width: 100%;
-  aspect-ratio: 1.92 / 1;
-  min-height: 164px;
-  max-height: 260px;
-  overflow: hidden;
-  background: #52b9dc;
-}
-
-.bannerArtwork {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-/* New events use a neutral built-in when no image was selected. Existing
-   events keep their historical asset; a failed image uses this legible
-   fallback without changing the saved customer design. */
-.bannerNeutral { background: var(--ink); }
-.bannerNeutral.bannerToneDark { background: var(--surface-muted); }
-.bannerNeutral .bannerText { inset: 0 8%; display: flex; flex-direction: column; justify-content: center; }
-.bannerNeutral .eventTitle, .bannerNeutral .heroSubtitle { text-shadow: none; }
-
-.eventBanner::after {
-  position: absolute;
-  z-index: 1;
-  inset: 0;
-  content: "";
-  pointer-events: none;
-}
-
-.bannerText {
-  position: absolute;
-  z-index: 2;
-  inset: 20% 8% auto;
-  margin: 0;
-}
-
-.eventTitle {
-  margin: 0;
-  color: #fff;
-  font-family: var(--body-font);
-  font-size: clamp(23px, 6.6cqi, 34px);
-  font-weight: 850;
-  line-height: 1.18;
-  letter-spacing: -0.035em;
-  text-align: center;
-  text-wrap: balance;
-  overflow-wrap: anywhere;
-  text-shadow: 0 2px 4px rgb(20 73 97 / 76%), 0 0 10px rgb(20 73 97 / 38%);
-}
-
-.heroSubtitle {
-  margin: 8px 0 0;
-  color: #fff;
-  font-size: clamp(13px, 3.4cqi, 17px);
-  font-weight: 700;
-  line-height: 1.35;
-  text-align: center;
-  text-wrap: balance;
-  overflow-wrap: anywhere;
-  text-shadow: 0 1px 4px rgb(20 73 97 / 82%);
-}
-
-.bannerToneDark .eventTitle,
-.bannerToneDark .heroSubtitle { color: #142b35; }
-.bannerToneDark .eventTitle { text-shadow: 0 1px 1px rgb(255 255 255 / 72%); }
-.bannerToneDark .heroSubtitle { text-shadow: 0 1px 2px rgb(255 255 255 / 82%); }
-.bannerAlignLeft .eventTitle,
-.bannerAlignLeft .heroSubtitle { text-align: left; }
-.bannerAlignCenter .eventTitle,
-.bannerAlignCenter .heroSubtitle { text-align: center; }
-.bannerAlignRight .eventTitle,
-.bannerAlignRight .heroSubtitle { text-align: right; }
-.bannerTitleLarge .eventTitle { font-size: clamp(28px, 8.2cqi, 42px); line-height: 1.12; }
-
-.bannerOverlaySoftLight::after { background: rgb(9 34 48 / 24%); }
-.bannerOverlayStrongLight::after { background: rgb(9 34 48 / 46%); }
-.bannerOverlaySoftDark::after { background: rgb(255 255 255 / 28%); }
-.bannerOverlayStrongDark::after { background: rgb(255 255 255 / 54%); }
-.bannerFocusTop .bannerArtwork { object-position: 50% 0%; }
-.bannerFocusBottom .bannerArtwork { object-position: 50% 100%; }
-
-.bannerBottomOverlay .bannerText {
-  inset: auto 8% 10%;
-  width: 84%;
-}
-
-.bannerImageOnly .bannerText { inset: auto auto 0 0; }
-.bannerNeutral.bannerImageOnly .bannerText { inset: 0 8%; }
-
-.bannerExtended {
-  display: flex;
-  flex-direction: column;
-  aspect-ratio: auto;
-  height: auto;
-  min-height: max(164px, min(260px, 52.0833vw, calc(var(--home-viewport-height) * 0.3)));
-  max-height: none;
-}
-
-.bannerExtended .bannerText {
-  position: relative;
-  inset: auto;
-  width: 84%;
-  margin: 10% auto 0;
-  padding-bottom: 10%;
-}
-
-.bannerExtended.bannerBottomOverlay { justify-content: flex-end; }
-.bannerExtended.bannerBottomOverlay .bannerText {
-  width: 84%;
-  margin: auto 8% 0;
-  padding-bottom: 10%;
 }
 
 .bannerImageFailure {
@@ -144,10 +23,10 @@
   display: grid;
   place-items: center;
   padding: 8px 16px;
-  background: #e8f2f5;
-  color: #243943;
-  font-size: 13px;
-  font-weight: 700;
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
   text-align: center;
 }
 
@@ -163,138 +42,11 @@
   border: 0 !important;
 }
 
-.menuBoard {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  width: 100%;
-  max-width: 440px;
-  margin: 0 auto;
-  padding: 12px 24px 24px;
-}
-
-.moreLinks {
-  display: grid;
-  gap: 8px;
-  max-width: 440px;
-  margin: 0 auto;
-  padding: 0 24px 28px;
-}
-.moreLinks a,
-.moreLinks button {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 48px;
-  padding: 10px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
-  color: var(--ink);
-  font-weight: 700;
-  text-decoration: none;
-  border: 0;
-  font: inherit;
-  font-weight: 700;
-  text-align: left;
-  cursor: pointer;
-}
-.moreLinks button:disabled { opacity: 1; cursor: default; }
-
-.menuButton {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  min-width: 0;
-  min-height: 132px;
-  aspect-ratio: 1;
-  padding: 40px 10px 12px;
-  border: 0;
-  border-radius: 18px;
-  background: var(--paper);
-  color: #111;
-  text-align: center;
-  cursor: pointer;
-  transition: transform 160ms ease-out, box-shadow 160ms ease-out;
-}
-
-.menuButton:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgb(19 67 91 / 15%);
-}
-
-.menuButton:active {
-  transform: translateY(0);
-  box-shadow: none;
-}
-
-.menuButton:disabled {
-  opacity: 1;
-  cursor: default;
-}
-
 .menuIcon {
   flex: none;
   width: 46px;
   height: 46px;
-  color: #101214;
-}
-
-.menuBadge {
-  position: absolute;
-  top: 9px;
-  right: 9px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 20px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  font-size: 9px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: 0.01em;
-}
-
-.categoryUtility { background: #b83d38; color: #fff; }
-.categoryInfo { background: #17191b; color: #fff; }
-.categoryEngagement { background: #862a9e; color: #fff; }
-
-.menuLabel {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2.65em;
-  max-width: 100%;
-  font-size: 14px;
-  font-weight: 800;
-  line-height: 1.35;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-}
-
-/* Tile-level ticket notice: absolute like the category badge, so the tile
-   box and the pinned first-screen fit never move. The detail screen
-   announces the need in full sentences; the visible cue also stays in the action name. */
-.menuNeedTicket {
-  position: absolute;
-  top: 9px;
-  left: 9px;
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--brand-tint);
-  color: var(--brand-text);
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1.4;
-  white-space: nowrap;
+  color: var(--ink);
 }
 
 .detailHeader {
@@ -303,7 +55,7 @@
   gap: 12px;
   min-height: 64px;
   padding: 10px 14px;
-  background: var(--home-background-color, #b9def0);
+  background: var(--ev-ground, var(--home-background-color));
 }
 
 .menuBack {
@@ -314,64 +66,65 @@
   gap: 6px;
   min-height: 44px;
   padding: 0 12px;
-  border: 1px solid #89b3c6;
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-medium);
-  background: #fff;
-  color: #17252b;
-  font-size: 14px;
-  font-weight: 750;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 800;
   cursor: pointer;
 }
 
-.menuBack:hover { background: #f4fbff; }
+.menuBack:hover { background: var(--surface-muted); }
 
 .detailEventName {
   min-width: 0;
   overflow: hidden;
-  color: var(--home-background-ink, #254c60);
-  font-size: 13px;
-  font-weight: 700;
+  color: var(--ev-ground-ink, var(--home-background-ink));
+  font-size: var(--text-sm);
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .tabPanel {
+  color: var(--ev-ground-ink, var(--ink));
   display: flex;
   flex-direction: column;
   gap: var(--s5);
   min-height: calc(100svh - 64px);
   margin: 0;
   padding: 12px 14px 28px;
-  background: var(--home-background-color, #b9def0);
+  background: var(--ev-ground, var(--home-background-color));
 }
 
 .tabPanel h2 {
   margin: 0 0 var(--s3);
   font-size: var(--h2);
   letter-spacing: -0.01em;
-  color: var(--ink);
+  color: inherit;
 }
 
 .tabPanel h3 {
   margin: 0 0 var(--s2);
   font-size: var(--h3);
-  color: var(--ink);
+  color: inherit;
 }
 
 .tabPanel > p {
   margin: 0 0 var(--s4);
-  color: var(--home-background-copy, #3f5965);
+  color: var(--ev-ground-ink, var(--home-background-copy));
   font-size: var(--small);
   line-height: 1.5;
 }
 
-/* Notice tab: client reference sky cards. */
+/* Notice tab: soft cards (white cards on an a2 ground). */
 .noticeList { display: flex; flex-direction: column; gap: var(--s3); margin: 0; padding: 0; list-style: none; }
 .noticeItem {
   padding: var(--s4);
   border: 1px solid transparent;
   border-radius: var(--radius-medium);
-  background: var(--ref-sky);
+  background: color-mix(in srgb, var(--ink) 5%, var(--paper));
 }
 .noticeTitle {
   display: flex;
@@ -386,7 +139,7 @@
   align-items: center;
   min-height: 28px;
   padding-inline: var(--s2);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--ref-navy);
   color: var(--ref-navy-ink);
   font-size: var(--small);
@@ -401,7 +154,7 @@
   display: grid;
   gap: var(--s3);
   padding: var(--s5);
-  border-radius: 20px;
+  border-radius: calc(var(--radius-card) + var(--s1));
   background: var(--ref-yellow);
   color: var(--ref-yellow-ink);
   text-align: center;
@@ -426,13 +179,13 @@
 .eticketSub {
   margin: 0;
   font-size: var(--small);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .eticketNumber {
   margin: 0;
   font-family: var(--display-font);
-  font-size: clamp(var(--display-xl), 20vw, 88px);
+  font-size: clamp(var(--display-xl), 20vw, var(--display-stage));
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.03em;
@@ -464,14 +217,8 @@
 .voteSubmittedNote,
 .voteStateNote,
 .voteCount,
-.voteError,
 .stampHint,
 .stampDone,
-.stampError,
-.emptyText,
-.needTicketText,
-.stateMessage,
-.luckyError,
 .personalRewardsNote,
 .tabPanel > p {
   word-break: keep-all;
@@ -490,16 +237,6 @@
   cursor: pointer;
 }
 .assignButton:disabled { opacity: 0.6; cursor: not-allowed; }
-
-.luckyError {
-  margin: 0;
-  padding: var(--s2) var(--s3);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
-  color: var(--danger);
-  font-size: var(--small);
-  font-weight: 700;
-}
 
 .luckyWinners {
   display: grid;
@@ -606,7 +343,7 @@
 }
 
 .wheelSlice {
-  stroke: #f7fbff;
+  stroke: var(--paper);
   stroke-width: 2.5;
   vector-effect: non-scaling-stroke;
 }
@@ -617,27 +354,27 @@
 }
 
 .wheelSectorLabel {
-  fill: #fff;
+  fill: var(--paper);
   stroke: rgb(9 37 77 / 45%);
   stroke-width: 2px;
   stroke-linejoin: round;
   paint-order: stroke;
   font-family: var(--body-font);
-  font-size: 16px;
-  font-weight: 850;
+  font-size: var(--body);
+  font-weight: 800;
   pointer-events: none;
   user-select: none;
 }
 
 .wheelHubDisc {
   fill: var(--ref-wheel-deep);
-  stroke: #fff;
+  stroke: var(--paper);
   stroke-width: 4;
   vector-effect: non-scaling-stroke;
 }
 
 .wheelPointer {
-  fill: #fff;
+  fill: var(--paper);
   stroke: var(--ref-wheel-deep);
   stroke-width: 3;
   stroke-linejoin: round;
@@ -655,9 +392,9 @@
   place-items: center;
   border-radius: 50%;
   background: var(--ref-wheel-deep);
-  border: 4px solid #fff;
-  color: #fff;
-  font-size: clamp(10px, 2.8vw, 13px);
+  border: 4px solid var(--paper);
+  color: var(--paper);
+  font-size: clamp(0.625rem, 2.8vw, var(--text-sm)); /* the wheel hub label: it must fit inside the round hub at any phone width */
   font-weight: 800;
   letter-spacing: 0.08em;
   box-shadow: 0 2px 0 rgb(10 38 78 / 30%);
@@ -674,9 +411,9 @@
   transform: translate(-50%, -50%);
   place-items: center;
   border-radius: 50%;
-  border: 4px solid #fff;
+  border: 4px solid var(--paper);
   background: var(--ref-wheel-deep);
-  color: #fff;
+  color: var(--paper);
   font-size: var(--small);
   font-weight: 800;
   letter-spacing: 0.05em;
@@ -725,7 +462,7 @@
   flex: none;
   color: var(--ref-wheel-deep);
   font-variant-numeric: tabular-nums;
-  font-weight: 850;
+  font-weight: 800;
 }
 .roulettePrizeName {
   min-width: 0;
@@ -736,14 +473,14 @@
 .rouletteSpinStatus,
 .rouletteUnmatched {
   margin: 0;
-  color: #29445e;
-  font-size: 12px;
+  color: var(--muted);
+  font-size: var(--text-xs);
   line-height: 1.5;
   text-align: center;
 }
 
 .rouletteSpinStatus {
-  font-weight: 750;
+  font-weight: 800;
 }
 
 .rouletteUnmatched {
@@ -761,7 +498,7 @@
 .rouletteResultLabel {
   color: var(--muted);
   font-size: var(--small);
-  font-weight: 700;
+  font-weight: 600;
 }
 .rouletteResultName {
   color: var(--ref-yellow-ink);
@@ -769,20 +506,10 @@
   overflow-wrap: anywhere;
 }
 
-.rouletteError {
-  margin: 0;
-  padding: var(--s2) var(--s3);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
-  color: var(--danger);
-  font-size: var(--small);
-  font-weight: 700;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .wheelRotorAnimating,
   .wheelStart { transition: none; }
-  .wheelStart:hover:not(:disabled),
+      .wheelStart:hover:not(:disabled),
   .wheelStart:active:not(:disabled) { transform: translate(-50%, -50%); }
 }
 
@@ -822,11 +549,11 @@
   align-items: center;
   min-height: 28px;
   padding: 2px 9px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--surface-muted);
   color: var(--ink);
   font-size: var(--label);
-  font-weight: 750;
+  font-weight: 800;
   white-space: nowrap;
 }
 .stampBoothList { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
@@ -842,16 +569,16 @@
 }
 .stampBoothMain { display: grid; flex: 1; gap: var(--s1); min-width: 0; }
 .stampBoothTitleRow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); min-width: 0; }
-.stampBoothName { min-width: 0; color: var(--ink); font-weight: 750; overflow-wrap: anywhere; }
+.stampBoothName { min-width: 0; color: var(--ink); font-weight: 800; overflow-wrap: anywhere; }
 .stampBoothStatus {
   display: inline-flex;
   flex: none;
   align-items: center;
   min-height: 26px;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   font-size: var(--label);
-  font-weight: 750;
+  font-weight: 800;
   line-height: 1.4;
 }
 .stampStatusOpen { background: var(--success-soft); color: var(--success); }
@@ -863,8 +590,8 @@
 .stampBoothSchedule { color: var(--ink); }
 .stampBoothInventory { color: var(--muted); }
 .stampBoothProgress { display: grid; flex: none; justify-items: end; gap: 3px; width: clamp(84px, 26vw, 104px); }
-.stampBoothMeter { display: block; width: 100%; height: 7px; accent-color: var(--brand); }
-.stampBoothCount { flex: none; color: var(--brand-text); font-size: var(--small); font-weight: 800; font-variant-numeric: tabular-nums; }
+.stampBoothMeter { display: block; width: 100%; height: 7px; accent-color: var(--ev-accent, var(--brand)); }
+.stampBoothCount { flex: none; color: var(--ev-accent-ink, var(--brand-text)); font-size: var(--small); font-weight: 800; font-variant-numeric: tabular-nums; }
 .stampField { display: grid; gap: var(--s1); }
 .stampField input {
   min-height: 44px;
@@ -876,7 +603,7 @@
   font: inherit;
 }
 .stampField input:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.stampError { margin: 0; color: var(--danger); font-size: var(--small); }
+
 .stampNextLink {
   display: inline-flex;
   align-items: center;
@@ -888,10 +615,10 @@
   background: var(--paper);
   color: var(--ink);
   font-size: var(--small);
-  font-weight: 650;
+  font-weight: 600;
   text-decoration: none;
 }
-.stampDone { margin: 0; color: var(--brand-text); font-weight: 700; }
+.stampDone { margin: 0; color: var(--ev-accent-ink, var(--brand-text)); font-weight: 600; }
 
 .commandRecovery {
   display: grid;
@@ -905,9 +632,9 @@
 .commandRecoveryMemory { margin: 0; color: var(--muted); font-size: var(--label); line-height: 1.5; overflow-wrap: anywhere; }
 .commandRecoveryItem { display: grid; gap: var(--s2); padding-top: var(--s3); border-top: 1px solid var(--warning-line); min-width: 0; }
 .commandRecoveryItemTitle { margin: 0; color: var(--ink); font-size: var(--small); font-weight: 800; }
-.commandRecoveryMessage { margin: 0; color: var(--warning); font-size: var(--small); font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; }
+.commandRecoveryMessage { margin: 0; color: var(--warning); font-size: var(--small); font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
 .commandRecoveryNote { margin: 0; color: var(--muted); font-size: var(--label); line-height: 1.5; }
-.commandRecoveryProgress { margin: 0; color: var(--info); font-size: var(--small); font-weight: 700; }
+.commandRecoveryProgress { margin: 0; color: var(--info); font-size: var(--small); font-weight: 600; }
 .commandRecoveryActions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2); }
 .recoveryRetryButton,
 .recoveryAbandonButton {
@@ -916,10 +643,10 @@
   border-radius: var(--radius-medium);
   font: inherit;
   font-size: var(--small);
-  font-weight: 750;
+  font-weight: 800;
   cursor: pointer;
 }
-.recoveryRetryButton { border: 1px solid var(--brand); background: var(--brand); color: var(--on-brand); }
+.recoveryRetryButton { border: 1px solid var(--ev-accent, var(--brand)); background: var(--ev-accent, var(--brand)); color: var(--ev-on-accent, var(--on-brand)); }
 .recoveryAbandonButton { border: 1px solid var(--line-strong); background: var(--paper); color: var(--ink); }
 .recoveryRetryButton:disabled,
 .recoveryAbandonButton:disabled { opacity: 0.6; cursor: wait; }
@@ -934,20 +661,20 @@
   background: var(--success-soft);
   color: var(--success);
   font-size: var(--small);
-  font-weight: 750;
+  font-weight: 800;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
 @media (max-width: 360px) {
   .commandRecoveryActions { grid-template-columns: minmax(0, 1fr); }
-  .stampBooth { gap: var(--s2); padding-inline: var(--s2); }
-  .stampBoothProgress { width: 82px; }
+      .stampBooth { gap: var(--s2); padding-inline: var(--s2); }
+      .stampBoothProgress { width: 82px; }
 }
 
 .votePanel { display: flex; flex-direction: column; gap: var(--s4); }
 .voteTitle {
   margin: 0;
-  color: var(--home-background-ink, var(--ink));
+  color: var(--ev-ground-ink, var(--home-background-ink, var(--ink)));
 }
 
 /* Vote tab: client reference candidate rows with avatar + check. */
@@ -966,7 +693,7 @@
   background: var(--paper);
 }
 .teamCard:hover { border-color: var(--line-strong); }
-.teamSelected { border-color: var(--brand); background: var(--soft); }
+.teamSelected { border-color: var(--ev-accent, var(--brand)); background: var(--ev-accent-soft, var(--soft)); }
 
 .teamPick {
   display: flex;
@@ -998,8 +725,8 @@
 }
 
 .teamSelected .candidateAvatar {
-  background: var(--brand);
-  color: var(--on-brand);
+  background: var(--ev-accent, var(--brand));
+  color: var(--ev-on-accent, var(--on-brand));
 }
 
 .teamName {
@@ -1007,7 +734,7 @@
   min-width: 0;
   margin: 0;
   font-size: var(--body);
-  font-weight: 700;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 
@@ -1022,8 +749,8 @@
 
 .candidateChecked {
   position: relative;
-  border-color: var(--brand);
-  background: var(--brand);
+  border-color: var(--ev-accent, var(--brand));
+  background: var(--ev-accent, var(--brand));
 }
 
 .candidateChecked::after {
@@ -1032,33 +759,31 @@
   inset: 0;
   display: grid;
   place-items: center;
-  color: var(--on-brand);
+  color: var(--ev-on-accent, var(--on-brand));
   font-size: var(--small);
   font-weight: 800;
 }
 
 .voteCount {
   margin: 0;
-  color: var(--home-background-copy, #3f5965);
+  color: var(--ev-ground-ink, var(--home-background-copy));
   font-size: var(--small);
-  font-weight: 700;
+  font-weight: 600;
 }
-
-.voteError { color: var(--danger); font-size: var(--small); margin: 0; }
 
 .submitButton {
   width: 100%;
   min-height: var(--s8);
-  border: 1px solid var(--brand);
+  border: 1px solid var(--ev-accent, var(--brand));
   border-radius: var(--radius-medium);
-  background: var(--brand);
-  color: var(--on-brand);
-  font-weight: 750;
+  background: var(--ev-accent, var(--brand));
+  color: var(--ev-on-accent, var(--on-brand));
+  font-weight: 800;
   font-size: var(--body);
   cursor: pointer;
 }
 .submitButton:disabled { opacity: 0.6; cursor: not-allowed; }
-.submitButton:hover:not(:disabled) { background: var(--brand-hover); color: var(--on-brand-hover); }
+.submitButton:hover:not(:disabled) { background: var(--ev-accent-strong, var(--brand-hover)); color: var(--ev-on-accent, var(--on-brand-hover)); }
 
 .voteSubmitted {
   display: flex;
@@ -1073,12 +798,12 @@
   margin: 0;
   font-size: var(--h2);
   font-weight: 800;
-  color: var(--home-background-ink, var(--ink));
+  color: var(--ev-ground-ink, var(--home-background-ink, var(--ink)));
 }
 /* Direct-on-background vote text follows the published background through
    the adaptive ink/copy variables (never an unconditional gray): muted
    #626B78 reads 3.79:1 on the default #B9DEF0 and worse on dark styles. */
-.voteSubmittedNote { margin: 0; color: var(--home-background-copy, #3f5965); font-size: var(--small); }
+.voteSubmittedNote { margin: 0; color: var(--ev-ground-ink, var(--home-background-copy)); font-size: var(--small); }
 .voteWaiting {
   display: grid;
   justify-items: center;
@@ -1090,9 +815,9 @@
   margin: 0;
   font-size: var(--h2);
   font-weight: 800;
-  color: var(--home-background-ink, var(--ink));
+  color: var(--ev-ground-ink, var(--home-background-ink, var(--ink)));
 }
-.voteStateNote { margin: 0; color: var(--home-background-copy, #3f5965); font-size: var(--small); }
+.voteStateNote { margin: 0; color: var(--ev-ground-ink, var(--home-background-copy)); font-size: var(--small); }
 .publishedVoteResults {
   display: grid;
   gap: var(--s3);
@@ -1130,7 +855,7 @@
   margin-left: var(--s2);
   padding: 2px 8px;
   border: 1px solid var(--success-line);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--success-soft);
   color: var(--success);
   font-size: var(--label);
@@ -1140,278 +865,85 @@
   vertical-align: middle;
 }
 
-/* Need-ticket state. */
+/* Need-ticket, empty and error states are AttendeeStateMessage; these only place them. */
 .needTicket {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--s3);
-  padding: var(--s7) var(--s5);
-  text-align: center;
-  color: var(--muted);
+  display: grid;
+  gap: var(--s4);
 }
-.needTicketText { margin: 0; font-size: var(--small); }
-.needTicketAction { margin: 0; }
+.needTicketAction { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0; }
 
 .needTicketButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--s2);
-  min-height: 44px;
-  padding: var(--s2) var(--s4);
-  border: 1px solid var(--brand);
-  border-radius: var(--radius-medium);
-  background: var(--brand);
-  color: var(--on-brand);
-  font-weight: 700;
+  min-height: var(--s7);
+  padding: var(--s2) var(--s5);
+  border: 0;
+  border-radius: var(--radius-large);
+  background: var(--ev-accent, var(--brand));
+  color: var(--ev-on-accent, var(--on-brand));
+  font-weight: 800;
   text-decoration: none;
 }
-.needTicketButton:hover { background: var(--brand-hover); color: var(--on-brand-hover); }
 
-/* Empty / error states. */
-.emptyState {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--s3);
-  padding: var(--s7) var(--s5);
-  text-align: center;
-  color: var(--muted);
-}
-.emptyText { margin: 0; font-size: var(--small); }
+.emptyState { display: grid; gap: var(--s3); }
 
+/* A whole-screen state: the title, then the message card; the next action is the bottom bar. */
 .statePanel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--s3);
-  padding: var(--s7) var(--s5);
-  text-align: center;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
+  display: grid;
+  gap: var(--s4);
+  padding: var(--s6) var(--s4) 0;
 }
 .stateTitle {
   margin: 0;
-  font-size: var(--h2);
-  letter-spacing: -0.01em;
-  color: var(--ink);
+  color: var(--ev-ground-ink, var(--ink));
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  letter-spacing: var(--ls-heading);
+  line-height: var(--lh-tight);
+  word-break: keep-all;
 }
-.stateMessage { margin: 0; color: var(--muted); font-size: var(--small); }
-.refreshNotice {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2);
-  margin-bottom: var(--s4);
-  color: var(--ink);
-  font-size: var(--small);
-}
-.refreshNotice button {
-  min-height: 44px;
-  padding: 0 var(--s3);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
-  color: var(--ink);
-  font: inherit;
-  font-weight: 700;
-  text-decoration: none;
-  cursor: pointer;
-}
-.stateAction { margin: 0; }
-.stateButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s2);
-  min-height: 44px;
-  padding: var(--s2) var(--s4);
-  border: 1px solid var(--brand);
-  border-radius: var(--radius-medium);
-  background: var(--brand);
-  color: var(--on-brand);
-  font-weight: 700;
-  text-decoration: none;
-}
-.stateButton:hover { background: var(--brand-hover); color: var(--on-brand-hover); }
-
-.loading {
-  padding: var(--s7);
-  color: var(--muted);
-  font-size: var(--small);
-  text-align: center;
-}
+.stateInline { margin-top: var(--s3); }
+.refreshNotice { margin-bottom: var(--s4); }
+.loading { margin: var(--s6) var(--s4); }
 
 @media (min-width: 720px) {
   .eticket { max-width: var(--web-form-max); margin-inline: auto; width: 100%; }
 }
 
-/* Keep the five-menu landing within short browser viewports without locking
-   the page height. Detail tabs retain their natural document scrolling. */
-@media (max-height: 820px) {
-  .eventBanner {
-    aspect-ratio: auto;
-    max-height: none;
-    height: auto;
-    min-height: max(164px, min(260px, 52.0833vw, calc(var(--home-viewport-height) * 0.3)));
-  }
-
-  .bannerArtwork {
-    position: absolute;
-    inset: 0;
-    object-position: 50% 50%;
-  }
-
-  .eventBanner:not(.bannerExtended):not(.bannerBottomOverlay):not(.bannerImageOnly) .bannerText {
-    position: relative;
-    inset: auto;
-    width: 84%;
-    margin: 10% auto 0;
-  }
-
-  .menuBoard {
-    gap: clamp(7px, calc(var(--home-viewport-height) * 0.011), 10px);
-    padding: clamp(8px, calc(var(--home-viewport-height) * 0.011), 12px) 24px max(8px, env(safe-area-inset-bottom, 0px));
-  }
-
-  .menuButton {
-    aspect-ratio: auto;
-    min-height: clamp(112px, calc(var(--home-viewport-height) * 0.24 - 24px), 158px);
-    padding: 8px;
-    gap: clamp(5px, calc(var(--home-viewport-height) * 0.008), 8px);
-  }
-
-  .menuBadge {
-    position: static;
-    align-self: flex-end;
-    max-width: 100%;
-    margin-right: 1px;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    text-align: center;
-  }
-
-  .menuLabel { min-height: 0; }
-}
-
-/* The editor's preview carries the selected phone height here instead of
-   inheriting the operator's desktop viewport units. */
-.previewShortBanner {
-  aspect-ratio: auto;
-  max-height: none;
-  height: auto;
-  min-height: max(164px, min(260px, 52.0833vw, calc(var(--home-viewport-height) * 0.3)));
-}
-
-.previewShortBanner .bannerArtwork {
-  position: absolute;
-  inset: 0;
-  object-position: 50% 50%;
-}
-
-.previewShortBanner:not(.bannerExtended):not(.bannerBottomOverlay):not(.bannerImageOnly) .bannerText {
-  position: relative;
-  inset: auto;
-  width: 84%;
-  margin: 10% auto 0;
-}
-
-.previewShortMenu {
-  gap: clamp(7px, calc(var(--home-viewport-height) * 0.011), 10px);
-  padding: clamp(8px, calc(var(--home-viewport-height) * 0.011), 12px) 24px max(8px, env(safe-area-inset-bottom, 0px));
-}
-
-.previewShortMenu .menuButton {
-  aspect-ratio: auto;
-  min-height: clamp(112px, calc(var(--home-viewport-height) * 0.24 - 24px), 158px);
-  padding: 8px;
-  gap: clamp(5px, calc(var(--home-viewport-height) * 0.008), 8px);
-}
-
-.previewShortMenu .menuBadge {
-  position: static;
-  align-self: flex-end;
-  max-width: 100%;
-  margin-right: 1px;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  text-align: center;
-}
-
-.previewShortMenu .menuLabel { min-height: 0; }
-
-@media (max-width: 340px) and (max-height: 820px) {
-  .menuBadge {
-    padding-inline: 4px;
-    letter-spacing: -0.04em;
-    overflow-wrap: normal;
-  }
-}
-
-/* The home stays the simple entry list: a QR is not handed to every
-   participant, so the landing never printed one. The ticket QR lives on the
-   ticket screen, where the desk scans it. */
-
-/* Compact task entries leave the customer's banner and its styling alone. */
-.menuBoard,
-.previewShortMenu {
-  gap: 8px;
-  max-width: 520px;
-  padding: 16px 16px max(24px, env(safe-area-inset-bottom, 0px));
-}
-.menuButton,
-.previewShortMenu .menuButton {
-  display: flex;
-  flex-direction: row;
-  justify-content: flex-start;
-  align-content: center;
-  column-gap: 10px;
-  row-gap: 2px;
-  aspect-ratio: auto;
-  min-height: 68px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-medium);
-  text-align: left;
-}
-.menuButton:hover { transform: none; box-shadow: none; background: #f7f8fa; }
-.menuButton:first-child {
-  grid-column: 1 / -1;
-  min-height: 56px;
-  border-color: #f1b99f;
-  background: var(--soft);
-}
-.menuButton:first-child:hover { background: var(--brand-tint); }
 .menuIcon { width: 24px; height: 24px; grid-row: 1 / 3; }
-.menuLabel,
-.previewShortMenu .menuLabel {
-  justify-content: flex-start;
-  min-height: 0;
-  font-size: 14px;
-  text-align: left;
-}
-.menuNeedTicket {
-  position: static;
-  grid-column: 2;
-  margin: 0;
-  padding: 0;
-  background: transparent;
-  font-size: 11px;
-  min-height: 0;
-  white-space: nowrap;
-  text-align: left;
-}
+
 @media (max-width: 360px) {
-  .menuButton, .previewShortMenu .menuButton { grid-template-columns: 20px minmax(0, 1fr); column-gap: 6px; padding: 10px 8px; }
   .menuIcon { width: 20px; height: 20px; }
-  .menuLabel { font-size: 13px; }
 }
 
-.menuGroupLabel { grid-column: 1 / -1; margin: var(--s2) 0 0; padding-inline: var(--s1); color: var(--home-background-ink, #254c60); font-size: var(--small); font-weight: 800; letter-spacing: 0.08em; }
-.menuButton:first-child { grid-column: 1 / -1; min-height: 64px; }
 .detailHeader { border-bottom: 1px solid var(--line); background: var(--paper); }
 
 .detailHeader .detailEventName { color: var(--ink); }
+
+/* a2: the ground is the event color, so the strong actions are white pills in the
+   accent ink (an event-color button would vanish into its own ground). */
+[data-attendee-mode="a2"] .noticeItem { background: var(--paper); }
+[data-attendee-mode="a2"] .submitButton,
+[data-attendee-mode="a2"] .needTicketButton,
+[data-attendee-mode="a2"] .recoveryRetryButton {
+  border-color: transparent;
+  border-radius: var(--r-pill);
+  background: var(--paper);
+  color: var(--ev-accent-ink, var(--brand-text));
+}
+
+/* A card with its own background keeps the card ink, whatever the ground's ink is
+   (white on a dark ground would vanish on the white card). */
+.luckyWinners,
+.personalRewards,
+.rouletteResult,
+.stampWorkspace,
+.stampBooth,
+.commandRecovery,
+.teamCard,
+.publishedVoteResults,
+.noticeItem {
+  color: var(--ink);
+}
