@@ -210,13 +210,13 @@ function EventRow({
           )}
         </span>
         <div className={styles.eventRowMain}>
-          <h3 className={styles.eventName} style={zoneStyle}>
-            {event.name}
+          <div className={styles.eventNameRow}>
+            <h3 className={styles.eventName} style={zoneStyle}>{event.name}</h3>
             <span className={styles.stageChip} data-tone={tone} aria-hidden="true">
               <span className={styles.stageDot} data-tone={tone} />
               {stageLabel}
             </span>
-          </h3>
+          </div>
           <p className={styles.eventDateTime}>
             <strong>{lead}</strong>
             {rest ? ` ${rest}` : ""}

@@ -220,11 +220,8 @@
 .dateTile[data-tone="prep"] small, .dateTile[data-tone="prep"] b { color: var(--warning); }
 .dateTile[data-tone="done"] b { color: var(--muted); }
 
+.eventNameRow { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); min-width: 0; }
 .eventName {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s1) var(--s3);
   margin: 0;
   color: var(--ink);
   font-size: var(--body);
@@ -775,4 +772,17 @@
 
 .createAdvanced[open] > div {
   padding-block: var(--s2) var(--s3);
+}
+
+/* 휴대폰에서는 단계 카드를 한 줄 4칸으로 줄여 첫 행사가 첫 화면에서 시작하게 한다. */
+@media (max-width: 768px) {
+  .stageTabs { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s1); }
+  .stageTab { grid-template-columns: minmax(0, 1fr); grid-template-areas: "label" "count" "bar"; align-items: start; gap: var(--s1); min-height: 72px; padding: var(--s2) var(--s2) var(--s2) var(--s3); border-radius: var(--radius-medium); }
+  .stageLabel { font-size: var(--label); white-space: nowrap; }
+  .stageTab[data-stage="live"] .stageLabel::before { width: 6px; height: 6px; margin-right: 4px; }
+  .stageCount { font-size: 24px; }
+  .stageBar { height: 4px; }
+  .liveCard { gap: var(--s3); padding: var(--s4); }
+  .liveName { margin: var(--s1) 0; font-size: 22px; }
+  .liveLink { min-height: 44px; }
 }
