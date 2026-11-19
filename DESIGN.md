@@ -331,6 +331,13 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 - The page owns one assignment entry in the header. It is the only primary while some place has no one on duty and a ghost otherwise; gap rows name the place with a ghost "배정".
 - Text budget: a row says its name, one line of facts and its state in words. No panel subtitles, no repeated links, no standing explanations.
 
+Reopened 2026-11-19 (owner: the real screen looked plain; `tests/web-operations-composition.test.cjs` now asserts this composition):
+- The page opens on a three-card summary strip: 데스크 가동 N / M, 부스 운영 N / M (only with 부스 인증 on) and 담당 배정 N / M곳. These are the bordered units; the desk list is a plain ledger, no panel. The coverage card turns amber when a place has no one on duty.
+- A location row leads with a tinted kind tile (desk, tablet, booth; green running, grey stopped, blue waiting, amber needs checking), then name (17px) and the same one quiet line, who is on duty as faces plus the first name ("담당 필요" in amber for an empty place), a chevron and the run control. Row copy and the switch/dot rule are unchanged.
+- 스태프 배정 gaps are an amber block: a count head and one row per place with an outlined "배정" pill with a plus icon (ghost role).
+- 전광판 출력 is a dark stage (state dot beside the current output, light apply button, outlined "행사장 화면 열기"); the page still has one orange action.
+- 부스 인증 방식 and 부스 지도 sit side by side as two folded setting cards; summaries keep their text and anchors.
+
 ### 화면 구성 규칙 (every screen)
 - One bordered card per page, the figure that matters most; other regions take the form of their role (soft surface, plain list, flat line).
 - A state is shown by its control or one word, not by a chip beside a button that says the same thing.
@@ -408,6 +415,11 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/staff/StaffEven
 - A result's buttons live inside its own region (the white bar at the bottom of the colored face: 다음 참가자, 확인, 같은 요청 재확인 with its server check, the prize list), never in the scan bar. The code or name-search sheet stays open while its request is in flight (read-only code, "처리 중입니다") and closes when the result arrives. A plain success or an already-entered notice is one big tap target (its text lets the tap through); every other result takes taps normally. The shared 처리 결과 확인 panel (another window's unconfirmed request) shows in the page flow above the stage, never only inside the ⋯ menu. A rejected prize handout keeps its message and the lookup form open.
 - The SELF booth shows its QR on a light stage with one 최근 처리 button. Request ids, same-request recovery, frozen receipts, the draft and leave guards, correction, direction review and the prize contracts are unchanged; only the presentation and the scan loop moved.
 
+Reopened 2026-11-19 (owner: plain; `tests/web-staff-field-composition.test.cjs` asserts the additions below; the flow above is unchanged):
+- The 데스크 체크인 / 부스 인증 switch is one segmented pill on a translucent track (chosen = paper fill), not two outlined buttons; the station select is a pill title with a visible chevron.
+- The idle stage is a lit viewfinder: a soft radial lift, glowing corners and a slow orange scan line (only for users without a reduced-motion preference).
+- The bar's "카메라 켜기" carries a camera glyph (still the only orange); 코드 입력 / 명단 찾기 / 최근 처리 are 72px outlined icon tiles with 14px labels instead of grey chips.
+
 ## Product component boundary
 
 Astryx supplies the production theme, actions, icon actions, links, labeled text fields, headings, sections and feedback. `app/ui/ProductButton`, `ProductLink`, `ProductInput` and `ProductNotice` keep the product-facing contract small. The production theme in `apps/web/src/themes/eventouch/` aliases `tokens.css`; generated theme files are rebuilt, not edited. The product explicitly uses light mode and Pretendard. The isolated design-review pilot is not a runtime dependency.
@@ -459,6 +471,10 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/screen/[slug]/`
 - A poll is one row per option (name, bar, count); the leading option's bar is orange and the others white, with a "투표 진행 중" pill and the total. Counts are the public aggregates, as before.
 - The program lists time, title and place. The session in progress is orange with "진행 중": it needs a start and an end on a known day (a missing day takes the event's date) and is read as the venue's local time against the server's clock (the offset from the response's `Date` header, refreshed on every poll and re-evaluated every 30 seconds), so a screen with a drifting clock highlights the right line. Row size follows the number of sessions shown so ten still fit.
 - Selection rules (the operator's choice first, otherwise a rotation of what exists), quiz answers only after reveal, four questions and six photos at most, words only for notices, the "연결 확인 중 · 마지막 화면입니다" notice and reduced-motion handling are unchanged, and so are the class names the audits read (`.display-frame h2`).
+
+Reopened 2026-11-19 (owner: plain; `tests/web-venue-screen-composition.test.cjs` asserts it; markup and the pinned sizes are unchanged):
+- The stage gets depth: a brand-orange glow from the top-right corner, a short orange mark above the event name, the wordmark's orange E, the date in a pill, and a venue footer with an orange dot over a hairline.
+- The program is a ledger with padded rows and white times; the session in progress is a lit orange band with a left bar and white title. A poll's leading count is orange like its bar; bars are fully rounded. Questions sit on a faint panel.
 
 ## 스태프 목록과 로그인 확정 구성
 

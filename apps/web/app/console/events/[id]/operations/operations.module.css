@@ -143,39 +143,90 @@
 .liveContents li + li { border-top: 1px solid var(--line); }
 .liveContents strong { overflow-wrap: anywhere; }
 .liveContents p { margin: var(--s1) 0 0; color: var(--muted); font-size: var(--small); }
-.liveContents a { display: inline-flex; align-items: center; min-height: 44px; color: var(--brand-text); font-weight: 600; }
+.liveContents a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink); font-weight: 650; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 4px; }
 @media (max-width: 800px) {
   .participationGrid { grid-template-columns: minmax(0, 1fr); gap: var(--s5); }
   .participationColumn + .participationColumn { border-left: 0; border-top: 1px solid var(--line); padding: var(--s5) 0 0; }
 }
 
-/* Locations (desks and booths): one row is a name, one quiet line, who is on
-   duty as faces, and the run control. The row opens its detail; the switch
-   sits outside the opening button. Dim rows stay readable (muted text, not
-   reduced opacity). */
-.locations { display: grid; margin: 0; padding: 0; list-style: none; }
-.location { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s3); }
+/* Redesign 2026-11-19: the page opens on a summary strip (what is running and
+   who covers it), rows read as places (tile, name, facts, who is on duty), the
+   gap list is amber work waiting for a person, and the display is a dark stage
+   so it reads as the venue's screen. Orange stays with the page's one action. */
+.kpiStrip { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: var(--s3); margin-bottom: var(--s6); }
+.kpiCard {
+  display: grid;
+  align-content: space-between;
+  gap: var(--s2);
+  min-width: 0;
+  min-height: 112px;
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-large);
+  background: var(--paper);
+}
+.kpiLabel { color: var(--muted); font-size: var(--small); font-weight: 650; word-break: keep-all; }
+.kpiCard[data-alert="true"] { border-color: var(--warning-line); background: var(--warning-soft); }
+.kpiCard[data-alert="true"] .kpiLabel { display: inline-flex; align-items: center; gap: var(--s2); color: var(--warning); }
+.kpiCard[data-alert="true"] .kpiLabel::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--warning); }
+.kpiCard[data-alert="true"] .heroBar { background: var(--warning-line); }
+.kpiCard[data-alert="true"] .heroBar i { background: var(--warning); }
+.heroFigure { display: flex; align-items: baseline; gap: var(--s2); }
+.heroFigure b { font-size: 36px; font-weight: 750; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.heroFigure span { color: var(--muted); font-size: var(--small); font-weight: 650; word-break: keep-all; }
+.heroBar { height: 6px; overflow: hidden; border-radius: 999px; background: var(--line); }
+.heroBar i { display: block; height: 100%; border-radius: inherit; background: var(--ink); }
+
+/* Section heads on this page are a step larger than the shared default. */
+.anchorSection [data-console-section-head] h2 { font-size: var(--h3); font-weight: 700; letter-spacing: -0.01em; word-break: keep-all; }
+
+/* Locations (desks and booths): a row is a tile for the kind of place, its name
+   and one quiet line, who is on duty, the run control. The row opens its
+   detail; the switch sits outside the opening button. Dim rows stay readable
+   (muted text, not reduced opacity). */
+.locations { display: grid; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.location { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s3); border-bottom: 1px solid var(--line); }
 .locationOpen {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: var(--s3);
-  min-height: 64px;
-  padding: var(--s3) 0;
+  gap: var(--s4);
+  min-height: 76px;
+  padding: var(--s3) var(--s2);
   border: 0;
+  border-radius: var(--radius-medium);
   background: none;
   color: var(--ink);
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background-color 0.12s;
 }
-.locationOpen:hover .locationChevron { color: var(--ink); }
+.locationOpen:hover { background: var(--surface-muted); }
+.locationOpen:hover .locationChevron { color: var(--ink); transform: translateX(2px); }
+.locationTile {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-medium);
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+.locationTile svg { width: 22px; height: 22px; }
+.locationTile[data-tone="on"] { background: var(--success-soft); color: var(--success); }
+.locationTile[data-tone="wait"] { background: var(--info-soft); color: var(--info); }
+.locationTile[data-tone="warn"] { background: var(--warning-soft); color: var(--warning); }
 .locationText { display: grid; gap: 2px; min-width: 0; }
-.locationText strong { font-size: var(--body); font-weight: 750; overflow-wrap: anywhere; }
-.locationSub { color: var(--muted); font-size: var(--small); }
+.locationText strong { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; overflow-wrap: anywhere; word-break: keep-all; }
+.locationSub { color: var(--muted); font-size: var(--small); word-break: keep-all; }
 .locationWarn { color: var(--warning); font-size: var(--small); font-weight: 700; }
-.locationChevron { color: var(--muted); font-size: 20px; line-height: 1; }
-.locationControl { display: inline-flex; align-items: center; min-width: 44px; justify-content: flex-end; }
+.locationDuty { display: inline-flex; align-items: center; gap: var(--s2); min-width: 0; }
+.dutyCaption { max-width: 9em; overflow: hidden; color: var(--ink); font-size: var(--small); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.dutyCaption[data-empty="true"] { color: var(--warning); font-weight: 700; }
+.locationChevron { display: inline-flex; color: var(--line-strong); transition: transform 0.12s, color 0.12s; }
+.locationChevron svg { width: 20px; height: 20px; }
+.locationControl { display: inline-flex; align-items: center; min-width: 44px; justify-content: flex-end; padding-right: var(--s2); }
 .locationDim .locationText strong { color: var(--muted); }
 .faces { display: inline-flex; align-items: center; }
 .faces > * + * { margin-left: -8px; }
@@ -185,45 +236,89 @@
   place-items: center;
   width: 28px;
   height: 28px;
-  border: 1.5px dashed var(--line-strong);
+  border: 1.5px dashed var(--warning);
   border-radius: 50%;
-  color: var(--brand-text);
+  color: var(--warning);
   font-weight: 700;
 }
-.statusDot { display: inline-flex; align-items: center; gap: var(--s1); color: var(--muted); font-size: var(--small); font-weight: 700; white-space: nowrap; }
+.statusDot { display: inline-flex; align-items: center; gap: var(--s2); min-width: 4.5em; justify-content: flex-end; color: var(--muted); font-size: var(--small); font-weight: 700; white-space: nowrap; }
 .statusDot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
 .statusDot[data-tone="good"] { color: var(--success); }
 .statusDot[data-tone="good"]::before { background: var(--success); }
 .statusDot[data-tone="wait"] { color: var(--info); }
 .statusDot[data-tone="wait"]::before { background: var(--info); }
 
-/* The one bordered card: desks, with the running count as the figure. */
-.deskHero { display: grid; gap: var(--s2); }
-.heroFigure { display: flex; align-items: baseline; gap: var(--s2); }
-.heroFigure b { font-size: 40px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
-.heroFigure span { color: var(--muted); font-weight: 650; }
-.heroBar { height: 8px; overflow: hidden; border-radius: 8px; background: var(--line); }
-.heroBar i { display: block; height: 100%; border-radius: 8px; background: var(--ink); }
-
-/* Missing coverage reads as a soft surface, like the overview's queue. */
-.gapSurface { padding: var(--s5); border-radius: var(--radius-card); background: var(--surface-muted); }
-.gapRow { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 44px; }
-.gapRow strong { font-weight: 700; }
+/* Missing coverage is work waiting on a person: amber, with the way to fix it on each row. */
+.gapSurface { display: grid; gap: var(--s1); padding: var(--s4) var(--s5); border: 1px solid var(--warning-line); border-radius: var(--radius-large); background: var(--warning-soft); }
+.gapHead { display: flex; align-items: center; gap: var(--s2); margin: 0 0 var(--s1); color: var(--warning); font-size: var(--small); font-weight: 700; }
+.gapHead b { font-size: var(--h3); font-weight: 750; font-variant-numeric: tabular-nums; }
+.gapMark { width: 8px; height: 8px; border-radius: 50%; background: var(--warning); }
+.gapRow { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 48px; border-top: 1px solid var(--warning-line); }
+.gapName { display: inline-flex; align-items: baseline; gap: var(--s2); min-width: 0; }
+.gapName strong { font-weight: 700; overflow-wrap: anywhere; word-break: keep-all; }
+.gapName em { color: var(--muted); font-size: var(--label); font-style: normal; font-weight: 650; }
+.gapRow > :global(.astryx-button) { flex: none; border: 1px solid var(--warning-line); border-radius: 999px; background: var(--paper); color: var(--ink); font-weight: 650; }
+.gapRow > :global(.astryx-button:hover:not(:disabled)) { border-color: var(--ink); }
 .gapCondition { margin: var(--s2) 0 0; color: var(--muted); font-size: var(--small); }
-.gapOk { display: flex; align-items: center; gap: var(--s2); color: var(--muted); }
+.gapOk { display: flex; align-items: center; gap: var(--s3); margin: 0; padding: var(--s3) var(--s4); border-radius: var(--radius-large); background: var(--success-soft); color: var(--ink); font-weight: 600; }
+.gapOkMark { display: inline-grid; flex: none; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--paper); color: var(--success); }
+.gapSurface:has(.gapOk) { padding: 0; border: 0; background: transparent; }
+
+/* Display output: a dark stage, like the screen it drives. */
+.displayBoard > :global(.astryx-section) { padding: var(--s5); border-radius: var(--radius-large); background: var(--stage); color: var(--side-text); }
+.displayBoard [data-console-section-head] h2 { color: var(--side-text); }
+.displayBoard [data-console-section-head] p { color: var(--side-muted); }
+.displayBoard [data-console-section-head] p::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: var(--s2); border-radius: 50%; background: var(--success-line); vertical-align: baseline; }
+.displayBoard select { border-color: var(--stage-line); background-color: var(--stage-2); color: var(--side-text); }
+.displayBoard .hint { color: var(--side-muted); }
+.displayBoard :global(.notice) { border-color: var(--stage-line); background: var(--stage-2); color: var(--side-text); }
+.displayBoard .buttonRow > :global(.astryx-button) { border: 1px solid var(--paper); background: var(--paper); color: var(--ink); font-weight: 700; }
+.displayBoard .buttonRow > :global(.astryx-button:disabled) { border: 1px solid var(--stage-line); background: transparent; color: var(--side-muted); opacity: 1; }
+.screenLink { display: inline-flex; align-items: center; gap: var(--s2); border-radius: 999px; }
+.screenLink svg { width: 18px; height: 18px; }
+.displayBoard .screenLink { border: 1px solid var(--side-muted); background: transparent; color: var(--side-text); }
+.displayBoard .screenLink:hover { border-color: var(--paper); background: var(--side-hover); }
+.moreLink { display: inline-flex; align-items: center; gap: var(--s2); color: var(--ink); font-weight: 650; }
+.moreLink svg { width: 16px; height: 16px; }
+
 /* Detail dialog: who is on duty, with their release. */
 .dutyList { display: grid; margin: 0; padding: 0; list-style: none; }
 .dutyRow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--s3); min-height: 52px; }
 .dutyName { font-weight: 700; overflow-wrap: anywhere; }
 .dutyEmpty { margin: 0; color: var(--muted); }
 
+/* Before-the-day presets sit side by side as two setting cards. */
+.presetGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); align-items: start; margin-top: var(--s6); }
+.presetGrid:empty { display: none; }
+.presetFold { border-color: var(--line); border-radius: var(--radius-large); transition: border-color 0.12s; }
+.presetFold:hover { border-color: var(--line-strong); }
+.presetFold[open] { border-color: var(--ink); }
+.presetSummary { min-height: 56px; padding: var(--s3) var(--s4); font-size: var(--body); }
+.presetBody { margin: var(--s4); }
+
 @media (min-width: 1101px) {
-  .opsGrid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--s6); align-items: start; }
+  .opsGrid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--s6); align-items: start; }
 }
 .opsSide .participationGrid { grid-template-columns: minmax(0, 1fr); gap: var(--s5); }
 .opsSide .participationColumn + .participationColumn { border-left: 0; padding-left: 0; }
 .opsMain, .opsSide { display: grid; gap: var(--s6); min-width: 0; align-content: start; }
 @media (max-width: 1100px) {
   .opsGrid { display: grid; gap: var(--s6); }
-  .opsSide { order: -1; }
+  .opsSide { order: 1; }
+}
+@media (max-width: 768px) {
+  .kpiStrip { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: var(--s2); margin-bottom: var(--s5); }
+  .kpiCard { min-height: 96px; padding: var(--s3) var(--s4); }
+  .heroFigure b { font-size: 28px; }
+  .heroFigure { flex-wrap: wrap; gap: 0 var(--s2); }
+  .locationOpen { grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--s3); min-height: 72px; padding-inline: 0; }
+  .locationOpen .locationChevron { display: none; }
+  .dutyCaption { display: none; }
+  .locationTile { width: 40px; height: 40px; }
+  .presetGrid { grid-template-columns: minmax(0, 1fr); gap: var(--s4); margin-top: var(--s5); }
+  .displayBoard > :global(.astryx-section) { padding: var(--s4); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .locationOpen, .locationChevron, .presetFold { transition: none; }
+  .locationOpen:hover .locationChevron { transform: none; }
 }

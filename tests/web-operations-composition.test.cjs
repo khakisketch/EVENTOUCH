@@ -1,8 +1,9 @@
 "use strict";
 
 // Field operations (현장 운영) composition, approved 2026-11-14 (design-review
-// operations-options.html, scene A3). Source-only: rendering rides the real
-// browser check. Change it only on a new owner decision.
+// operations-options.html, scene A3). Reopened 2026-11-19 by the owner: the page
+// now opens on a summary strip, rows carry a kind tile, the gap list is amber and
+// the display is a dark stage. Source-only: rendering rides the real browser check.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -22,9 +23,13 @@ test("approved operations design stays locked", () => {
     assert.match(ops, new RegExp(`headingId="${id}"`), `${id} keeps its anchor`);
   }
 
-  // Desks are the only bordered card; everything else stays plain.
-  assert.equal(ops.match(/surface="panel"/g)?.length ?? 0, 1, "one card on the page");
-  assert.match(ops, /headingId="ops-desks"\s+title="데스크"\s+surface="panel"/u);
+  // Reopened 2026-11-19: the page opens on a summary strip (desks running, booths
+  // running, places with someone on duty). Those are the bordered units; the desk
+  // list itself is a plain ledger, not a panel.
+  assert.equal(ops.match(/surface="panel"/g)?.length ?? 0, 0, "no panel around a list");
+  assert.match(ops, /styles\.kpiStrip/u);
+  assert.equal(ops.match(/styles\.kpiCard/g)?.length ?? 0, 3, "desks, booths and coverage");
+  assert.match(css, /\.kpiCard\[data-alert="true"\]\s*\{[^}]*var\(--warning-soft\)/su, "uncovered places turn the coverage card amber");
 
   // A row is a name, one quiet line, faces and one control; it opens its detail.
   assert.match(parts, /export function LocationRow/u);
@@ -33,6 +38,7 @@ test("approved operations design stays locked", () => {
   assert.match(ops, /onOpen=\{\(\) => setDetail\(/u);
   assert.match(parts, /<Switch/u, "desks run through a switch");
   assert.match(parts, /<Avatar/u, "who is on duty reads as faces");
+  assert.match(parts, /styles\.locationTile/u, "a row opens on a tile for the kind of place");
   // axe: faces inside the row button must not be focusable (an avatar tooltip adds tabindex),
   // and the button's name comes from its visible text instead of an aria-label that omits it.
   assert.match(parts, /<Avatar[^>]*tooltip=\{false\}/u, "decorative faces take no focus");
@@ -50,7 +56,8 @@ test("approved operations design stays locked", () => {
 
   // Assignment: one page-level entry that is primary only while a place has no one on duty.
   assert.match(ops, /variant=\{gapTargets\.length && !archived \? "primary" : "ghost"\}/u);
-  assert.match(css, /\.gapSurface\s*\{[^}]*background:\s*var\(--surface-muted\)/su, "the gap list is a soft surface, not a card");
+  assert.match(css, /\.gapSurface\s*\{[^}]*background:\s*var\(--warning-soft\)/su, "the gap list is amber work waiting on a person, not a card");
+  assert.match(css, /\.displayBoard > :global\(\.astryx-section\)\s*\{[^}]*background:\s*var\(--stage\)/su, "the display output is a dark stage");
 
   // Release lives in the detail dialog, with the same command.
   assert.match(ops, /function LocationDialog/u);

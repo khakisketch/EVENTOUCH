@@ -122,3 +122,73 @@
 .dark:global(.display-idle) > h1 { max-width: 20ch; color: #fff; font-size: clamp(40px, 6vw, 116px); }
 .dark:global(.display-idle) > p { color: var(--side-muted); font-size: clamp(22px, 2.4vw, 48px); }
 .dark:global(.display-idle) :global(.display-footer) { position: absolute; inset-inline: clamp(28px, 4.2vw, 84px); bottom: clamp(14px, 1.8vw, 34px); }
+
+/* Reopened 2026-11-19: the stage keeps its ink and type sizes but gains depth and
+   hierarchy so it reads as a produced screen, not a text file. A brand glow in the
+   corner, an orange mark on the event name, an orange E, the date in a pill, the
+   program in a ledger with a banded "now" row, and a venue footer with a rule.
+   Everything here is decoration over the same markup; sizes of the pinned
+   headline, body and poll rows are unchanged. */
+.dark:global(.display-board) {
+  background-image:
+    radial-gradient(60% 70% at 100% 0%, color-mix(in srgb, var(--brand) 22%, transparent) 0%, transparent 62%),
+    radial-gradient(50% 60% at 0% 100%, color-mix(in srgb, var(--paper) 6%, transparent) 0%, transparent 70%);
+}
+.dark :global(.display-brand)::first-letter { color: var(--brand); }
+.dark :global(.display-brand) { color: #fff; }
+.dark :global(.display-date) {
+  padding: 0.28em 0.9em;
+  border: 1px solid var(--stage-line);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 6%);
+  color: #fff;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.dark :global(.display-content) > h1::before {
+  content: "";
+  display: block;
+  width: clamp(44px, 4.6vw, 96px);
+  height: clamp(5px, 0.5vw, 10px);
+  margin-bottom: clamp(10px, 1.2vw, 24px);
+  border-radius: 999px;
+  background: var(--brand);
+}
+.dark :global(.display-content) > h1 { color: #fff; }
+.dark :global(.display-footer) {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  padding-top: clamp(10px, 1.2vw, 22px);
+  border-top: 1px solid var(--stage-line);
+}
+.dark :global(.display-footer) span::before {
+  content: "";
+  display: inline-block;
+  width: 0.55em;
+  height: 0.55em;
+  margin-right: 0.6em;
+  border-radius: 50%;
+  background: var(--brand);
+}
+.dark:global(.display-idle) :global(.display-footer) { padding-top: clamp(10px, 1.2vw, 22px); border-top: 1px solid var(--stage-line); }
+
+/* Program: a ledger whose current session is a lit band. */
+.dark :global(.program-item) { padding-inline: clamp(8px, 1.2vw, 24px); border-top-color: var(--stage-line); }
+.dark :global(.program-time) { color: #fff; font-weight: 750; }
+.dark :global(.program-meta) { color: var(--side-muted); }
+.dark :global(.program-item[data-live="true"]) {
+  border-radius: clamp(10px, 1.2vw, 24px);
+  background: color-mix(in srgb, var(--brand) 18%, transparent);
+  box-shadow: inset clamp(6px, 0.6vw, 12px) 0 0 var(--brand);
+}
+.dark :global(.program-item[data-live="true"]) :global(.program-title) { color: #fff; }
+
+/* Poll: the leader's count is lit too. */
+.dark :global(.poll-bar) { border-radius: 999px; background: var(--stage-2); }
+.dark :global(.poll-bar) span { border-radius: 999px; background: rgb(255 255 255 / 86%); }
+.dark :global(.poll-row[data-leader="true"]) strong { color: var(--brand); }
+.dark :global(.display-live) { border: 1px solid var(--stage-line); }
+
+/* Questions and photos */
+.dark :global(.display-question) { background: rgb(255 255 255 / 5%); border-radius: 0 clamp(12px, 1.4vw, 28px) clamp(12px, 1.4vw, 28px) 0; padding-block: clamp(10px, 1.2vw, 24px); }
