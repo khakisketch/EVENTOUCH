@@ -147,7 +147,6 @@ async function main() {
       }
       if (name === 'landing') {
         check(`landing@${width}: all product illustrations decoded`, await images.evaluateAll(elements => elements.every(image => image.complete && image.naturalWidth > 0)));
-        await page.locator('[class*="mobileEvidence"]').evaluate(element => { element.scrollLeft = 0; });
       }
       await page.evaluate(() => scrollTo(0, 0));
       await page.mouse.move(width - 2, 2);

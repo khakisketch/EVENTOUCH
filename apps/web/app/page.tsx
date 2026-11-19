@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import styles from "./landing.module.css";
 import ProductPreview from "./ProductPreview";
+import sec from "./landing-sections.module.css";
+import LandingFlow, { type FlowScene } from "./LandingFlow";
+import LandingPageDemo from "./LandingPageDemo";
+import LandingCompare from "./LandingCompare";
+import { LandingIcon } from "./LandingIcons";
+import { CountUp, Reveal, useActiveSection } from "./LandingMotion";
 
 // Service entry: signed-in operators return to their work surface, everyone
 // else sees the public landing. Attendees enter through their event link.
@@ -44,11 +50,75 @@ const HERO_TABS: readonly HeroTab[] = [
 const INQUIRY_HREF =
   `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(INQUIRY_SUBJECT)}&body=${encodeURIComponent(INQUIRY_BODY)}`;
 
+const NAV_SECTIONS = ["journey", "attendee-page", "report", "faq"] as const;
+
+const FLOW_SCENES: readonly FlowScene[] = [
+  {
+    id: "before",
+    phase: "행사 전",
+    title: "모집 · 승인 · 안내",
+    body: "신청 명단과 참가 상태를 살피고, 안내할 대상을 정합니다.",
+    screens: "쓰는 화면 · 참가자 명단, 메시지",
+    stage: (
+      <div className={sec.stageDuo}>
+        <div className={sec.window}>
+          <div className={sec.windowBar} aria-hidden="true"><i /><i /><i /><span>운영 현황</span></div>
+          <ProductPreview variant="console" />
+        </div>
+        <div className={sec.phoneCrop}><ProductPreview variant="home" /></div>
+      </div>
+    ),
+  },
+  {
+    id: "onsite",
+    phase: "행사 현장",
+    title: "체크인 · 참여",
+    body: "배정된 스태프가 QR 또는 참가자 검색으로 입장을 처리합니다.",
+    screens: "쓰는 화면 · 스태프 체크인, 부스 인증",
+    stage: (
+      <div className={sec.stagePair}>
+        <div className={sec.phoneCrop}><ProductPreview variant="ticket" /></div>
+        <div className={sec.phoneCrop}><ProductPreview variant="staff" /></div>
+      </div>
+    ),
+  },
+  {
+    id: "after",
+    phase: "행사 후",
+    title: "결과 · 보고서",
+    body: "참가·입장·현장 기록을 모아 결과를 확인하고 보고서를 관리합니다.",
+    screens: "쓰는 화면 · 결과 분석, 보고서",
+    stage: (
+      <div className={sec.stageSolo}>
+        <div className={sec.window}>
+          <div className={sec.windowBar} aria-hidden="true"><i /><i /><i /><span>결과 보고서</span></div>
+          <ProductPreview variant="report" />
+        </div>
+      </div>
+    ),
+  },
+];
+
+const AUDIENCE = [
+  { icon: "seminar", title: "컨퍼런스·세미나", text: "100명 이상 참가자의 사전 등록부터 현장 입장까지 한 흐름으로 운영합니다." },
+  { icon: "door", title: "입장 통제·사전 승인 행사", text: "QR·명단 검색 체크인으로 입구 병목을 줄이고 중복 입장을 막습니다." },
+  { icon: "repeat", title: "반복 교육·설명회", text: "같은 틀을 복사해 매번 운영하고, 결과는 행사마다 따로 보관합니다." },
+] as const;
+
+const STEPS = [
+  { icon: "mail", title: "도입 문의", text: "종류·일정·규모를 적어 보내면 맞는 운영 방식을 제안합니다." },
+  { icon: "setup", title: "행사 세팅", text: "행사 생성·신청 항목·명단 준비를 함께 구성합니다." },
+  { icon: "chart", title: "운영·정리", text: "현장 체크인부터 결과 보고서까지 한곳에서 운영합니다." },
+] as const;
+
+const ENTRY_BARS = [18, 46, 82, 64, 38, 52, 30] as const;
+
 export default function Home() {
   const router = useRouter();
   const [copyStatus, setCopyStatus] = useState<{ message: string; tone: "success" | "error" } | null>(null);
   const [heroTab, setHeroTab] = useState<HeroTab["id"]>("console");
   const [heroPaused, setHeroPaused] = useState(false);
+  const activeSection = useActiveSection(NAV_SECTIONS);
   const activeHero = HERO_TABS.find((tab) => tab.id === heroTab) ?? HERO_TABS[0];
 
   useEffect(() => {
@@ -117,10 +187,10 @@ export default function Home() {
           <span className={styles.brandDescription}>행사 운영 워크스페이스</span>
         </Link>
         <nav className={styles.siteNav} aria-label="페이지 메뉴">
-          <a href="#journey">운영 흐름</a>
-          <a href="#product-screens">역할별 화면</a>
-          <a href="#report">결과 보고</a>
-          <a href="#faq">확인 사항</a>
+          <a href="#journey" aria-current={activeSection === "journey" ? "location" : undefined}>운영 흐름</a>
+          <a href="#attendee-page" aria-current={activeSection === "attendee-page" ? "location" : undefined}>참가자 페이지</a>
+          <a href="#report" aria-current={activeSection === "report" ? "location" : undefined}>결과 보고</a>
+          <a href="#faq" aria-current={activeSection === "faq" ? "location" : undefined}>확인 사항</a>
         </nav>
         <Link className={styles.loginLink} href="/login">운영자·스태프 로그인</Link>
         <a className={styles.headerCta} href={INQUIRY_HREF}>도입 문의</a>
@@ -193,201 +263,135 @@ export default function Home() {
           </ul>
         </section>
 
-        <section className={styles.proofSection} aria-label="운영 실적 예시">
-          <ul className={styles.proofStats}>
-            <li><strong>320+</strong><span>누적 운영 행사</span></li>
-            <li><strong>86,000+</strong><span>누적 참가자</span></li>
-            <li><strong>1곳</strong><span>모집부터 보고서까지</span></li>
-          </ul>
-          <p className={styles.proofNote}>예시 수치 · 실제 운영 실적은 도입 상담에서 공유합니다.</p>
-        </section>
-
-        <section className={styles.flowSection} id="journey" aria-labelledby="flow-title">
-          <div className={styles.sectionHeading}>
+        <section className={sec.section} id="journey" aria-labelledby="flow-title">
+          <Reveal className={sec.heading}>
+            <p className={sec.eyebrow}>운영 흐름</p>
             <h2 id="flow-title">한 행사의 세 시점이 이어집니다.</h2>
-            <p>행사 전 준비, 현장 진행, 행사 후 정리. 필요한 화면과 역할은 달라도 업무의 맥락은 이어집니다.</p>
-          </div>
-          <ol className={styles.flowLedger}>
-            <li className={styles.flowRow}>
-              <span className={styles.flowIndex} aria-hidden="true">01</span>
-              <div className={styles.flowBody}>
-                <p className={styles.flowPhase}>행사 전</p>
-                <h3>모집 · 승인 · 안내</h3>
-                <p>신청 명단과 참가 상태를 살피고, 안내할 대상을 정합니다.</p>
-                <p className={styles.flowScreens}>쓰는 화면 · 참가자 명단, 메시지</p>
-              </div>
+            <p>행사 전 준비, 현장 진행, 행사 후 정리. 필요한 화면과 역할은 달라도 업무의 맥락은 이어집니다. 운영자는 콘솔에서, 참가자와 스태프는 행사 링크의 모바일 웹에서 일합니다.</p>
+          </Reveal>
+          <Reveal delay={120}>
+            <LandingFlow scenes={FLOW_SCENES} />
+          </Reveal>
+        </section>
+
+        <section className={`${sec.section} ${sec.bandTint}`} id="attendee-page" aria-labelledby="demo-title">
+          <Reveal className={sec.heading}>
+            <p className={sec.eyebrow}>참가자 페이지</p>
+            <h2 id="demo-title">행사마다 다른 얼굴, 링크는 하나.</h2>
+            <p>참가자는 행사 링크에서 앱 설치 없이 신청하고 티켓과 참여 화면까지 이어갑니다. 구성과 색은 관리자에서 행사마다 고릅니다. 직접 눌러 바꿔 보세요.</p>
+          </Reveal>
+          <Reveal delay={120}>
+            <LandingPageDemo />
+          </Reveal>
+        </section>
+
+        <section className={sec.section} aria-labelledby="compare-title">
+          <Reveal className={sec.heading}>
+            <p className={sec.eyebrow}>기존 방식과 비교</p>
+            <h2 id="compare-title">엑셀·종이 명단과 무엇이 다른가요.</h2>
+            <p>행사 당일에 벌어지는 네 가지 일을 기준으로 비교했습니다. 위의 전환을 눌러 보세요.</p>
+          </Reveal>
+          <Reveal delay={120}>
+            <LandingCompare />
+          </Reveal>
+        </section>
+
+        <section className={sec.section} aria-labelledby="audience-title">
+          <Reveal className={sec.heading}>
+            <p className={sec.eyebrow}>이런 행사에</p>
+            <h2 id="audience-title">신청·입장·안내가 엇갈리기 시작하는 규모부터.</h2>
+          </Reveal>
+          <ul className={sec.audience}>
+            {AUDIENCE.map((item, i) => (
+              <li key={item.title}>
+                <Reveal className={sec.audienceCard} delay={i * 90}>
+                  <span className={sec.audienceIcon}><LandingIcon name={item.icon} size={22} /></span>
+                  <h3>{item.title}</h3>
+                  <p>{item.text}</p>
+                </Reveal>
+              </li>
+            ))}
+            <li>
+              <Reveal className={`${sec.audienceCard} ${sec.audienceOff}`} delay={270}>
+                <h3>맞지 않는 경우</h3>
+                <p>열 명 남짓한 내부 모임은 엑셀로 충분합니다. 그런 행사에는 권하지 않습니다.</p>
+              </Reveal>
             </li>
-            <li className={styles.flowRow}>
-              <span className={styles.flowIndex} aria-hidden="true">02</span>
-              <div className={styles.flowBody}>
-                <p className={styles.flowPhase}>행사 현장</p>
-                <h3>체크인 · 참여</h3>
-                <p>배정된 스태프가 QR 또는 참가자 검색으로 입장을 처리합니다.</p>
-                <p className={styles.flowScreens}>쓰는 화면 · 스태프 체크인, 부스 인증</p>
-              </div>
-            </li>
-            <li className={styles.flowRow}>
-              <span className={styles.flowIndex} aria-hidden="true">03</span>
-              <div className={styles.flowBody}>
-                <p className={styles.flowPhase}>행사 후</p>
-                <h3>결과 · 보고서</h3>
-                <p>참가·입장·현장 기록을 모아 결과를 확인하고 보고서를 관리합니다.</p>
-                <p className={styles.flowScreens}>쓰는 화면 · 결과 분석, 보고서</p>
-              </div>
-            </li>
-          </ol>
+          </ul>
         </section>
 
-        <section className={styles.fieldSection} id="product-screens" aria-labelledby="field-title">
-          <div className={styles.fieldLayout}>
-            <div className={styles.fieldCopy}>
-              <h2 id="field-title">운영자는 콘솔에서, 현장은 모바일에서.</h2>
-              <p>운영사는 데스크톱 콘솔에서 흐름을 관리하고, 참가자와 스태프는 각자의 역할에 맞는 모바일 웹 화면을 사용합니다.</p>
-              <p>참가자는 행사 링크에서 앱 설치 없이 신청하고, 스태프는 배정 데스크에서 QR·검색으로 입장 처리합니다.</p>
-              <p className={styles.fieldNote}>아래는 역할별 화면 구성 예시입니다. 티켓은 샘플이며 실제 입장에는 사용할 수 없습니다.</p>
-            </div>
-            <div
-              className={styles.mobileEvidence}
-              tabIndex={0}
-              role="region"
-              aria-label="역할별 화면 구성 예시. 좌우로 밀어 세 화면을 봅니다."
-            >
-              <figure className={styles.phoneFigure}>
-                <div className={styles.phoneFrame}>
-            <ProductPreview variant="home" />
-                </div>
-                <figcaption>
-                  <strong>참가자 행사 안내</strong>
-                  <span>파트너 컨퍼런스 데모 · 모바일 첫 화면</span>
-                </figcaption>
-              </figure>
-              <figure className={styles.phoneFigure}>
-                <div className={styles.phoneFrame}>
-            <ProductPreview variant="ticket" />
-                </div>
-                <figcaption>
-                  <strong>참가자 모바일 티켓</strong>
-                  <span>EVENTOUCH 데모 행사 · 샘플 QR</span>
-                </figcaption>
-              </figure>
-              <figure className={styles.phoneFigure}>
-                <div className={styles.phoneFrame}>
-            <ProductPreview variant="staff" />
-                </div>
-                <figcaption>
-                  <strong>현장 스태프</strong>
-                  <span>파트너 컨퍼런스 데모 · 데스크 선택 · QR 스캔</span>
-                </figcaption>
-              </figure>
-            </div>
-          </div>
-        </section>
-
-        <section className={styles.blockSection} aria-labelledby="audience-title">
-          <h2 id="audience-title">이런 행사에 잘 맞습니다.</h2>
-          <p className={styles.blockLead}>신청·입장·안내가 엇갈리기 시작하는 규모부터 진가를 발휘합니다.</p>
-          <div className={styles.audienceGrid}>
-            <article>
-              <h3>컨퍼런스·세미나</h3>
-              <p>100명 이상 참가자의 사전 등록부터 현장 입장까지 한 흐름으로 운영합니다.</p>
-            </article>
-            <article>
-              <h3>입장 통제·사전 승인 행사</h3>
-              <p>QR·명단 검색 체크인으로 입구 병목을 줄이고 중복 입장을 막습니다.</p>
-            </article>
-            <article>
-              <h3>반복 교육·설명회</h3>
-              <p>같은 틀을 복사해 매번 운영하고, 결과는 행사마다 따로 보관합니다.</p>
-            </article>
-            <article className={styles.audienceOff}>
-              <h3>맞지 않는 경우</h3>
-              <p>열 명 남짓한 내부 모임은 엑셀로 충분합니다. 그런 행사에는 권하지 않습니다.</p>
-            </article>
-          </div>
-        </section>
-
-        <section className={styles.blockSection} aria-labelledby="compare-title">
-          <h2 id="compare-title">엑셀·종이 명단과 무엇이 다른가요.</h2>
-          <p className={styles.blockLead}>행사 당일에 벌어지는 네 가지 일을 기준으로 비교했습니다.</p>
-          <div className={styles.compareTable} role="table" aria-label="기존 방식과 EVENTOUCH 비교">
-            <div className={styles.compareHead} role="row">
-              <span role="columnheader">종이·엑셀 명단</span>
-              <span role="columnheader">EVENTOUCH</span>
-            </div>
-            <div className={styles.compareRow} role="row">
-              <span role="cell" className={styles.compareOld}>흩어진 파일, 누가 왔는지 나중에 정리</span>
-              <span role="cell">승인·입장 상태가 한 명단에 실시간 반영</span>
-            </div>
-            <div className={styles.compareRow} role="row">
-              <span role="cell" className={styles.compareOld}>종이 명단을 눈으로 대조</span>
-              <span role="cell">QR·검색 체크인, 중복 입장 방지</span>
-            </div>
-            <div className={styles.compareRow} role="row">
-              <span role="cell" className={styles.compareOld}>문자 보내고 전달 확인 불가</span>
-              <span role="cell">예약·발송 결과·미확인 복구까지 기록</span>
-            </div>
-            <div className={styles.compareRow} role="row">
-              <span role="cell" className={styles.compareOld}>행사 후 수기 집계</span>
-              <span role="cell">입장률·결과 보고서가 생성 시점에 고정</span>
-            </div>
-          </div>
-        </section>
-
-        <section className={styles.reportSection} id="report" aria-labelledby="report-title">
-          <div className={styles.reportLayout}>
-            <div className={styles.reportCopy}>
+        <section className={`${sec.section} ${sec.bandMuted}`} id="report" aria-labelledby="report-title">
+          <div className={sec.report}>
+            <Reveal className={sec.reportCopy}>
+              <p className={sec.eyebrow}>결과 보고</p>
               <h2 id="report-title">행사가 끝나면, 기록을 결과로.</h2>
-              <p>등록·입장·부스·참여 기록을 확인하고 보고서를 관리합니다.</p>
-              <p className={styles.reportProof}>결과 분석 · 파트너 컨퍼런스 데모 데이터</p>
-            </div>
-            <figure className={styles.reportEvidence}>
-              <ProductPreview variant="report" />
-              <figcaption>결과 보고서 · 등록·입장 집계 · 데모 데이터</figcaption>
-              <p className={styles.reportCropNote}>보고서는 생성 시점의 기록을 고정해 보관합니다.</p>
-            </figure>
+              <p>등록·입장·부스·참여 기록을 한곳에서 확인하고 보고서로 남깁니다.</p>
+              <ul className={sec.checks}>
+                <li><LandingIcon name="check" size={18} />등록·입장 집계가 행사 중에도 계속 쌓입니다.</li>
+                <li><LandingIcon name="check" size={18} />보고서는 생성 시점의 기록을 고정해 보관합니다.</li>
+                <li><LandingIcon name="check" size={18} />결과 화면에서 바로 확인하고 내보낼 수 있습니다.</li>
+              </ul>
+            </Reveal>
+            <Reveal className={sec.reportCard} delay={140}>
+              <p className={sec.reportKicker}>결과 보고서 · 입장 집계</p>
+              <div className={sec.reportNumbers}>
+                <div><span>등록</span><strong><CountUp to={269} suffix="명" /></strong></div>
+                <div><span>누적 입장</span><strong><CountUp to={221} suffix="명" /></strong></div>
+                <div><span>입장률</span><strong><CountUp to={82} suffix="%" /></strong></div>
+              </div>
+              <div className={sec.reportRate} aria-hidden="true"><i /></div>
+              <div className={sec.bars} aria-hidden="true">
+                {ENTRY_BARS.map((height, i) => <i key={i} style={{ "--bar": `${height}%`, "--i": i } as CSSProperties} />)}
+              </div>
+              <p className={sec.reportAxis} aria-hidden="true"><span>09시</span><span>시간대별 입장</span><span>15시</span></p>
+              <p className={sec.reportNote}>화면 구성 예시 · 합성 데이터</p>
+            </Reveal>
           </div>
         </section>
 
-        <section className={styles.blockSection} aria-labelledby="steps-title">
-          <h2 id="steps-title">도입은 세 단계로 끝납니다.</h2>
-          <p className={styles.blockLead}>첫 행사까지 평균 일주일. 운영 대행사가 직접 세팅을 돕습니다.</p>
-          <ol className={styles.stepsList}>
-            <li>
-              <span className={styles.stepIndex} aria-hidden="true">1</span>
-              <h3>도입 문의</h3>
-              <p>종류·일정·규모를 적어 보내면 맞는 운영 방식을 제안합니다.</p>
-            </li>
-            <li>
-              <span className={styles.stepIndex} aria-hidden="true">2</span>
-              <h3>행사 세팅</h3>
-              <p>행사 생성·신청 항목·명단 준비를 함께 구성합니다.</p>
-            </li>
-            <li>
-              <span className={styles.stepIndex} aria-hidden="true">3</span>
-              <h3>운영·정리</h3>
-              <p>현장 체크인부터 결과 보고서까지 한곳에서 운영합니다.</p>
-            </li>
+        <section className={sec.section} aria-labelledby="steps-title">
+          <Reveal className={sec.heading}>
+            <p className={sec.eyebrow}>도입 절차</p>
+            <h2 id="steps-title">도입은 세 단계로 끝납니다.</h2>
+            <p>첫 행사까지 평균 일주일. 운영 대행사가 직접 세팅을 돕습니다.</p>
+          </Reveal>
+          <ol className={sec.steps}>
+            {STEPS.map((item, i) => (
+              <li key={item.title}>
+                <Reveal className={sec.stepCard} delay={i * 110}>
+                  <span className={sec.stepNode}><LandingIcon name={item.icon} size={22} /><b>{i + 1}</b></span>
+                  <h3>{item.title}</h3>
+                  <p>{item.text}</p>
+                </Reveal>
+              </li>
+            ))}
           </ol>
         </section>
 
-        <section className={styles.faqSection} id="faq" aria-labelledby="faq-title">
-          <h2 id="faq-title">도입 전에 확인해 주세요.</h2>
-          <details className={styles.faqItem} id="faq-install">
-            <summary>참가자는 앱을 설치해야 하나요?</summary>
-            <p>아니요. 행사별 링크에서 신청하고 모바일 웹 티켓으로 입장 정보를 확인합니다.</p>
-          </details>
-          <details className={styles.faqItem} id="faq-sms">
-            <summary>문자·알림톡을 실제로 발송할 수 있나요?</summary>
-            <p>실제 발송은 발송 연결과 발신번호가 준비된 경우에만 시도합니다. 알림톡에는 승인된 템플릿이 필요합니다. 모의 발송이나 미연동 상태에서는 실제로 전달되지 않으며, 처리 결과는 운영 화면에서 확인할 수 있습니다.</p>
-          </details>
-          <details className={styles.faqItem} id="faq-portal">
-            <summary>고객사 담당자도 로그인해 사용할 수 있나요?</summary>
-            <p>고객사 포털은 제공하지 않습니다. 고객사 정보는 행사 운영사가 내부 기록으로 관리합니다.</p>
-          </details>
+        <section className={`${sec.section} ${sec.faq}`} id="faq" aria-labelledby="faq-title">
+          <Reveal className={sec.faqIntro}>
+            <p className={sec.eyebrow}>확인 사항</p>
+            <h2 id="faq-title">도입 전에 확인해 주세요.</h2>
+            <p>가장 많이 묻는 세 가지를 먼저 답해 둡니다.</p>
+          </Reveal>
+          <Reveal className={sec.faqList} delay={100}>
+            <details className={styles.faqItem} id="faq-install">
+              <summary>참가자는 앱을 설치해야 하나요?</summary>
+              <p>아니요. 행사별 링크에서 신청하고 모바일 웹 티켓으로 입장 정보를 확인합니다.</p>
+            </details>
+            <details className={styles.faqItem} id="faq-sms">
+              <summary>문자·알림톡을 실제로 발송할 수 있나요?</summary>
+              <p>실제 발송은 발송 연결과 발신번호가 준비된 경우에만 시도합니다. 알림톡에는 승인된 템플릿이 필요합니다. 모의 발송이나 미연동 상태에서는 실제로 전달되지 않으며, 처리 결과는 운영 화면에서 확인할 수 있습니다.</p>
+            </details>
+            <details className={styles.faqItem} id="faq-portal">
+              <summary>고객사 담당자도 로그인해 사용할 수 있나요?</summary>
+              <p>고객사 포털은 제공하지 않습니다. 고객사 정보는 행사 운영사가 내부 기록으로 관리합니다.</p>
+            </details>
+          </Reveal>
         </section>
 
-        <section className={styles.contactSection} id="contact" aria-labelledby="contact-title">
-          <div>
+        <section className={`${styles.contactSection} ${sec.contact}`} id="contact" aria-labelledby="contact-title">
+          <Reveal className={sec.contactCopy}>
             <h2 id="contact-title">다음 행사의 운영 흐름을 함께 살펴보세요.</h2>
             <p>행사 종류와 일정, 예상 규모를 알려주시면 도입 상담으로 이어집니다.</p>
             <div className={styles.contactDetails}>
@@ -399,7 +403,7 @@ export default function Home() {
                 {copyStatus?.message}
               </p>
             </div>
-          </div>
+          </Reveal>
           <a className={styles.primaryAction} href={INQUIRY_HREF}>
             이메일로 도입 문의
             <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">

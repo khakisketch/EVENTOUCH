@@ -54,3 +54,31 @@ test('flows, tokens and the contact rules are unchanged', () => {
   assert.match(pages.invite, /팀 초대 수락/u);
   assert.match(pages.recover, /비밀번호 재설정/u);
 });
+
+test('the landing below the hero is interactive, honest and keeps the hero\'s ink identity', () => {
+  const home = fs.readFileSync(path.join(app, 'page.tsx'), 'utf8');
+  const sections = fs.readFileSync(path.join(app, 'landing-sections.module.css'), 'utf8');
+  const flow = fs.readFileSync(path.join(app, 'LandingFlow.tsx'), 'utf8');
+  // The persuasion path: one event in three moments, the attendee page you can try,
+  // the old way against the new, who it fits, the result, the steps, the answers.
+  for (const part of ['<LandingFlow', '<LandingPageDemo', '<LandingCompare', 'id="report"', 'id="faq"', 'id="contact"']) assert.ok(home.includes(part), `${part} stays`);
+  // Totals nobody measured are not shown as a track record.
+  assert.doesNotMatch(home, /320\+|86,000\+|누적 운영 행사/u);
+  // Interactive parts are real controls with names and states, not pictures.
+  assert.match(flow, /role="tablist"[\s\S]*?role="tab"[\s\S]*?aria-selected/u);
+  assert.match(flow, /role="tabpanel"/u);
+  assert.match(flow, /prefers-reduced-motion/u, 'the flow never advances for people who asked for less motion');
+  const demo = fs.readFileSync(path.join(app, 'LandingPageDemo.tsx'), 'utf8');
+  assert.match(demo, /role="radiogroup"[\s\S]*?role="radio"[\s\S]*?aria-checked/u);
+  assert.match(demo, /실제 행사 데이터가 아닙니다/u, 'the attendee page sample says it is a sample');
+  const compare = fs.readFileSync(path.join(app, 'LandingCompare.tsx'), 'utf8');
+  assert.match(compare, /aria-pressed/u);
+  // Reveal never hides content before script runs, and motion respects the preference.
+  assert.match(sections, /\[data-reveal="pending"\]/u);
+  assert.match(sections, /@media \(prefers-reduced-motion: reduce\)/u);
+  assert.match(sections, /@media print[\s\S]*?\[data-reveal\][\s\S]*?opacity: 1 !important/u);
+  // The closing band is the hero's ink reversed, so the page starts and ends dark.
+  assert.match(landing, /\.contactSection \{[^}]*background:\s*var\(--ink\)/su);
+  // A phone does not keep a 160px sticky header over every screen.
+  assert.match(landing, /@media \(max-width: 768px\) \{\s*\.header \{ position: static; \}/u);
+});
