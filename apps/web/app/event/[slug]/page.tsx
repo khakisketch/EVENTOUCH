@@ -342,7 +342,8 @@ export default async function EventPage({
               <h2 id="public-notices" className={sectionLabel}>공지</h2>
               <div className={styles.card}>
                 <ul className={styles.noticeList}>
-                  {notices.map((notice) => (
+                  {/* Pinned notices lead; the sort is stable, so each group keeps its own order. */}
+                  {[...notices].sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true)).map((notice) => (
                     <li key={notice.id} data-pinned={notice.pinned || undefined}>
                       <span className={styles.noticeIcon} aria-hidden="true"><GuideIcon type="notice" /></span>
                       <div className={styles.noticeBody}>

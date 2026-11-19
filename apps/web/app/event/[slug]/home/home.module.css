@@ -9,6 +9,11 @@
   margin-inline: auto;
   container-type: inline-size;
   background: var(--home-background-color, #b9def0);
+  /* On a wide screen the 520px column sits on the event's own color instead of
+     a white page: the shadow and clip carry the ground out to both sides
+     without changing layout or adding scroll. */
+  box-shadow: 0 0 0 100vmax var(--home-background-color, #b9def0);
+  clip-path: inset(0 -100vmax);
 }
 
 .eventBanner {
