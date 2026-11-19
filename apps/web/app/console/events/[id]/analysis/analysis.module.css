@@ -1,10 +1,10 @@
-/* 기간 분석: 기간 버튼 → 숫자 셋 → 막대 → 일별 표. 카드 상자 없이 한 열로
-   읽고, 직접 선택일 때만 날짜 입력이 나온다. */
+/* 기간 분석 (2026-11-20 재설계). 운영 현황의 상황판과 같은 문법: 큰 숫자 카드 → 도형 카드 → 기록.
+   색은 의미로만 쓴다. 신청 = 잉크, 입장 = 성공색, 주황은 입장률 알약 하나뿐이다.
+   데이터 도형은 숫자·표와 같은 값을 보여 주며, 표는 접근성과 대조용으로 항상 있다. */
 .view {
   display: grid;
-  gap: var(--s4);
+  gap: var(--s5);
   min-width: 0;
-  max-width: 860px;
 }
 
 .updated {
@@ -15,14 +15,26 @@
   font-size: var(--small);
 }
 
-.presets {
+/* ---- 기간 고르기: 하나로 묶인 세그먼트 ---- */
+.controls {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s2);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3) var(--s5);
+}
+
+.presets {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
   margin: 0;
-  padding: 0;
-  border: 0;
+  padding: 4px;
   min-width: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 
 .preset {
@@ -30,15 +42,18 @@
   display: inline-flex;
   min-height: 44px;
   align-items: center;
+  justify-content: center;
   padding-inline: var(--s4);
-  border: 1px solid var(--line-strong);
   border-radius: 999px;
-  background: var(--paper);
-  color: var(--ink);
+  color: var(--muted);
   font-size: var(--small);
-  font-weight: 650;
+  font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
+  transition: background var(--enter), color var(--enter);
 }
+
+.preset:hover { color: var(--ink); }
 
 .preset input {
   position: absolute;
@@ -49,9 +64,9 @@
 }
 
 .preset:has(input:checked) {
-  border-color: var(--ink);
   background: var(--ink);
   color: var(--paper);
+  box-shadow: var(--shadow-raised);
 }
 
 .preset:has(input:focus-visible) {
@@ -59,10 +74,28 @@
   outline-offset: 2px;
 }
 
-.rangeFields {
+.dateLine {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s2) var(--s4);
+  align-items: baseline;
+  gap: var(--s1) var(--s3);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-variant-numeric: tabular-nums;
+}
+
+.dateLine strong { color: var(--ink); font-weight: 750; }
+.dateLine:empty { display: none; }
+
+.rangeFields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 220px));
+  gap: var(--s3) var(--s5);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-large);
+  background: var(--surface-muted);
 }
 
 .rangeFields > div {
@@ -76,15 +109,6 @@
   min-height: 44px;
   font-size: var(--body);
 }
-
-.dateLine {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--small);
-  font-variant-numeric: tabular-nums;
-}
-
-.dateLine:empty { display: none; }
 
 .note {
   margin: 0;
@@ -100,61 +124,158 @@
   font-weight: 650;
 }
 
-.totals {
+/* ---- 숫자 카드: 고유 입장이 주인공, 나머지는 보조 ---- */
+.kpis {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s4);
+  margin: 0;
+}
+
+.kpi {
+  display: grid;
+  align-content: start;
+  gap: var(--s2);
+  min-width: 0;
+  padding: var(--s5);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.kpi dt {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.dotApplications,
+.dotEntries {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dotApplications { background: var(--ink); }
+.dotEntries { background: var(--success); }
+
+.kpiValue {
+  margin: 0;
+  font-size: clamp(40px, 4.4vw, 56px);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpiValue small {
+  margin-left: 4px;
+  color: var(--muted);
+  font-size: var(--h3);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.kpiNote {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s3) var(--s6);
+  align-items: center;
+  gap: var(--s1) var(--s2);
   margin: 0;
-  padding-block: var(--s3);
-  border-block: 1px solid var(--line);
+  font-size: var(--label);
+  font-variant-numeric: tabular-nums;
 }
 
-.totals > div {
+.delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--muted);
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.delta[data-dir="up"] { background: var(--success-soft); box-shadow: none; color: var(--success); }
+.delta[data-dir="down"] { color: var(--ink); }
+.delta i { font-size: 9px; font-style: normal; }
+.base { color: var(--muted); font-weight: 600; }
+
+.kpiHint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--label);
+}
+
+.kpiHero {
+  gap: var(--s2);
+  border-color: transparent;
+  background: radial-gradient(360px 200px at 100% 0%, color-mix(in srgb, var(--success) 55%, transparent), transparent 70%), var(--ink);
+  color: var(--paper);
+  box-shadow: var(--shadow-raised);
+}
+
+.kpiHero dt,
+.kpiHero .kpiValue small,
+.kpiHero .base,
+.kpiHero .kpiHint { color: color-mix(in srgb, var(--paper) 72%, transparent); }
+.kpiHero .kpiValue { font-size: clamp(56px, 7vw, 84px); }
+.kpiHero .dotEntries { background: var(--paper); }
+.kpiHero .delta { background: color-mix(in srgb, var(--paper) 14%, transparent); box-shadow: none; color: var(--paper); }
+
+.rate { display: grid; gap: var(--s2); margin: var(--s2) 0 0; }
+.rateHead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s2); font-size: var(--small); font-weight: 600; }
+.rateHead b { padding: 4px 14px; border-radius: 999px; background: var(--brand); color: var(--on-brand); font-size: var(--small); font-weight: 800; }
+.rateTrack { display: block; height: 10px; overflow: hidden; border-radius: 10px; background: color-mix(in srgb, var(--paper) 18%, transparent); }
+.rateTrack span { display: block; height: 100%; border-radius: 10px; background: var(--paper); }
+
+/* ---- 도형 카드 ---- */
+.card {
   display: grid;
-  gap: var(--s1);
+  align-content: start;
+  gap: var(--s4);
   min-width: 0;
+  padding: var(--s5);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--paper);
 }
 
-.totals dt {
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s1) var(--s4);
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: var(--h3);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.cardSub {
+  margin: 0;
   color: var(--muted);
   font-size: var(--small);
 }
 
-.totals dd {
-  margin: 0;
-  color: var(--ink);
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
+.cardTools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s4);
 }
-
-.totals dd small {
-  margin-left: 2px;
-  color: var(--muted);
-  font-size: var(--body);
-  font-weight: 650;
-}
-
-.chart {
-  width: 100%;
-  height: auto;
-}
-
-.grid {
-  stroke: var(--line);
-  stroke-width: 1;
-}
-
-.axis {
-  fill: var(--muted);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-
-.barApplications { fill: var(--brand); }
-.barEntries { fill: var(--ink); }
 
 .legend {
   display: flex;
@@ -171,25 +292,223 @@
 .legend li {
   display: inline-flex;
   align-items: center;
-  gap: var(--s1);
-  min-height: 44px;
+  gap: var(--s2);
 }
-
-.basisToggle { margin-left: auto; }
 
 .swatch {
   display: inline-block;
-  width: var(--s3);
-  height: var(--s3);
-  border-radius: var(--radius-small);
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
 }
 
-.swatchApplications { background: var(--brand); }
-.swatchEntries { background: var(--ink); }
+.swatchApplications { background: var(--ink); }
+.swatchEntries { background: var(--success); }
 
+.basis {
+  margin: 0;
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius-large);
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.6;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+/* ---- 일별 막대 ---- */
+.chartBox { position: relative; min-width: 0; }
+
+.readout {
+  min-height: 24px;
+  margin: 0 0 var(--s2);
+  color: var(--muted);
+  font-size: var(--small);
+  font-variant-numeric: tabular-nums;
+}
+
+.readout strong { color: var(--ink); font-weight: 750; }
+.readout b { color: var(--ink); font-weight: 800; }
+
+.chart {
+  display: block;
+  max-width: 100%;
+  touch-action: pan-y;
+  overflow: visible;
+}
+
+.grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 4; }
+.baseline { stroke: var(--line-strong); stroke-width: 1; }
+
+.axis {
+  fill: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.barApplications { fill: var(--ink); }
+.barEntries { fill: var(--success); }
+.band { fill: color-mix(in srgb, var(--ink) 6%, transparent); }
+.hit { fill: transparent; }
+
+.chartEmpty {
+  position: absolute;
+  inset: 40px 0 28px 30px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+  pointer-events: none;
+}
+
+.blank {
+  display: grid;
+  min-height: 120px;
+  place-items: center;
+  margin: 0;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-large);
+  color: var(--muted);
+  font-size: var(--small);
+  text-align: center;
+  word-break: keep-all;
+}
+
+/* ---- 시간대별 입장 ---- */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: var(--s4);
+  align-items: stretch;
+}
+
+.split > .card { grid-template-rows: auto 1fr; }
+
+.hours {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  min-height: 220px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hours li {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  gap: 6px;
+}
+
+.hourTrack {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 180px;
+}
+
+.hourBar {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 100%;
+  max-width: 28px;
+  height: calc((100% - 22px) * var(--h) / 100);
+  min-height: 3px;
+  transform: translateX(-50%);
+  border-radius: 6px 6px 2px 2px;
+  background: color-mix(in srgb, var(--success) 32%, var(--paper));
+}
+
+.hours li[data-peak="true"] .hourBar { background: var(--success); }
+.hours li[data-empty="true"] .hourBar { background: var(--chart-track); }
+
+.hourCount {
+  position: absolute;
+  bottom: calc((100% - 22px) * var(--h) / 100 + 4px);
+  left: 0;
+  right: 0;
+  color: var(--ink);
+  font-size: var(--label);
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.hourLabel {
+  min-height: 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: var(--label);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 소속별 신청 ---- */
+.shares {
+  display: grid;
+  gap: var(--s4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shares li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 6px var(--s3);
+}
+
+.shareName {
+  font-size: var(--small);
+  font-weight: 700;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.shareValue {
+  font-size: var(--body);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.shareValue small {
+  margin-left: 4px;
+  color: var(--muted);
+  font-size: var(--label);
+  font-weight: 600;
+}
+
+.shareTrack {
+  display: block;
+  grid-column: 1 / -1;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--chart-track);
+}
+
+.shareTrack span {
+  display: block;
+  height: 100%;
+  border-radius: 8px;
+  background: var(--ink);
+}
+
+.shares li[data-quiet="true"] .shareName { color: var(--muted); font-weight: 600; }
+.shares li[data-quiet="true"] .shareTrack span { background: var(--line-strong); }
+
+/* ---- 일별 기록 표 ---- */
 .tableWrap {
   min-width: 0;
-  overflow-x: auto;
+  max-height: 440px;
+  overflow: auto;
+  border-radius: var(--radius-large);
 }
 
 .table {
@@ -200,29 +519,65 @@
 
 .table th,
 .table td {
-  padding: var(--s2) var(--s3);
+  padding: var(--s3) var(--s4);
   border-bottom: 1px solid var(--line);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
 .table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--paper);
   color: var(--muted);
-  font-weight: 650;
+  font-size: var(--label);
+  font-weight: 700;
 }
 
 .table tbody th {
   color: var(--ink);
-  font-weight: 650;
+  font-weight: 700;
   text-align: left;
 }
 
-.table thead th:first-child {
-  text-align: left;
+.table thead th:first-child { text-align: left; }
+.table tbody tr:last-child th,
+.table tbody tr:last-child td { border-bottom: 0; }
+
+@media (max-width: 1100px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpiHero { grid-column: 1 / -1; }
+}
+
+@media (max-width: 900px) {
+  .split { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 768px) {
   .updatedLabel { display: none; }
-  .totals { gap: var(--s3) var(--s5); }
-  .totals dd { font-size: 24px; }
+  .view { gap: var(--s4); }
+  .presets { display: flex; border-radius: var(--radius-large); }
+  .preset { flex: 1 1 auto; }
+  .kpi, .card { padding: var(--s4); border-radius: 20px; }
+  .kpis { gap: var(--s3); }
+  .kpiValue { font-size: 36px; }
+  .kpiHero .kpiValue { font-size: 60px; }
+  .kpiValue small { font-size: var(--body); }
+  .hours { min-height: 180px; }
+  .hourTrack { min-height: 140px; }
+
+
+  .table th, .table td { padding: var(--s3) var(--s2); }
+}
+
+@media (max-width: 480px) {
+  .controls { gap: var(--s2); }
+  .presets { width: 100%; gap: 2px; padding: 3px; }
+  .rangeFields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s3); }
+  .rangeFields input { min-width: 0; width: 100%; }
+  .preset { padding-inline: 8px; font-size: 13px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preset { transition: none; }
 }
