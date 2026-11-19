@@ -1,0 +1,37 @@
+.card {
+  box-sizing: border-box;
+  min-width: 0;
+  /* The card radius is the product card radius plus one step: 22px. */
+  border-radius: calc(var(--radius-card) + var(--s1));
+  border: 1px solid transparent;
+  color: var(--ink);
+}
+
+.soft {
+  background: color-mix(in srgb, var(--ink) 5%, var(--paper));
+}
+
+.white {
+  border-color: var(--line);
+  background: var(--paper);
+}
+
+/* On the event color the cards are white and float without a line. */
+[data-attendee-mode="a2"] .card {
+  border-color: transparent;
+  background: var(--paper);
+}
+
+.sm { padding: var(--s4); }
+.md { padding: calc(var(--s4) + var(--s1)); }
+.lg { padding: var(--s5); }
+
+.heading {
+  margin: 0 0 var(--s3);
+  color: var(--ink);
+  font-size: var(--h3);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  word-break: keep-all;
+}

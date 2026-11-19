@@ -3,7 +3,9 @@
 // technology, the words beside it carry the meaning.
 export type AttendeeIconName =
   | "calendar" | "pin" | "ticket" | "check" | "clock" | "sun" | "arrow" | "info"
-  | "poll" | "quiz" | "survey" | "qa" | "photo" | "board" | "draw" | "user" | "refresh" | "shield" | "qr";
+  | "poll" | "quiz" | "survey" | "qa" | "photo" | "board" | "draw" | "user" | "refresh" | "shield" | "qr"
+  // Added with the attendee design-system foundation (2026-11-20).
+  | "gift" | "chat" | "vote" | "chevron" | "alert";
 
 export default function AttendeeIcon({ name, size = 20 }: { name: AttendeeIconName; size?: number }) {
   const common = {
@@ -57,5 +59,15 @@ export default function AttendeeIcon({ name, size = 20 }: { name: AttendeeIconNa
       return <svg {...common}><path d="M12 3 5 6v5.5c0 4.2 2.8 7.5 7 9.5 4.2-2 7-5.3 7-9.5V6l-7-3Z" /><path d="m9 12 2.2 2.2L15.5 10" /></svg>;
     case "qr":
       return <svg {...common}><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><path d="M14 14h2.5v2.5M20 14v.01M14 20h.01M17 20h3v-3.5" /></svg>;
+    case "gift":
+      return <svg {...common}><rect x="4" y="11" width="16" height="9" rx="2" /><rect x="3" y="7.5" width="18" height="3.5" rx="1.5" /><path d="M12 7.5V20M12 7.5C10 3.5 6.5 4.5 7.5 6.5c.6 1.1 2.7 1 4.5 1Zm0 0c2-4 5.5-3 4.5-1-.6 1.1-2.7 1-4.5 1Z" /></svg>;
+    case "chat":
+      return <svg {...common}><path d="M20 12a8 8 0 0 1-11.7 7.1L4 20l1-3.9A8 8 0 1 1 20 12Z" /><path d="M9 11h6M9 14h3.5" /></svg>;
+    case "vote":
+      return <svg {...common}><path d="M4 14h16v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-5Z" /><path d="M8 14V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V14" /><path d="m10 9 1.5 1.5L14 7.5" /></svg>;
+    case "chevron":
+      return <svg {...common}><path d="m9 6 6 6-6 6" /></svg>;
+    case "alert":
+      return <svg {...common}><path d="M12 3.5 21.5 20h-19L12 3.5Z" /><path d="M12 10v4.5M12 17.5h.01" /></svg>;
   }
 }

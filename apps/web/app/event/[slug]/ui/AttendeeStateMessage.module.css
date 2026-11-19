@@ -1,0 +1,128 @@
+.message {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  box-sizing: border-box;
+  min-width: 0;
+  padding: calc(var(--s4) + var(--s1));
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius-card) + var(--s1));
+  color: var(--ink);
+}
+
+.icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--s7);
+  height: var(--s7);
+  border-radius: var(--radius-large);
+}
+
+.body {
+  display: grid;
+  flex: 1;
+  gap: var(--s1);
+  min-width: 0;
+  padding-top: var(--s2);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--body);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+  word-break: keep-all;
+}
+
+.text {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 400;
+  line-height: 1.5;
+  word-break: keep-all;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  box-sizing: border-box;
+  min-height: var(--s7);
+  margin: var(--s2) 0 0;
+  padding: 0 var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-large);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--small);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  word-break: keep-all;
+}
+
+.action:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* empty: a quiet gray panel, centered, with the icon above the words. */
+.empty {
+  flex-direction: column;
+  align-items: center;
+  padding: var(--s6) var(--s5);
+  background: color-mix(in srgb, var(--ink) 5%, var(--paper));
+  text-align: center;
+}
+
+.empty .icon {
+  background: var(--ev-accent-soft, var(--brand-tint));
+  color: var(--ev-accent-ink, var(--brand-text));
+}
+
+.empty .body {
+  justify-items: center;
+  padding-top: 0;
+}
+
+.empty .text {
+  color: var(--muted);
+}
+
+.error {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+}
+
+.error .icon {
+  background: var(--paper);
+  color: var(--danger);
+}
+
+.error .title {
+  color: var(--danger);
+}
+
+.info {
+  border-color: var(--info-line);
+  background: var(--info-soft);
+}
+
+.info .icon {
+  background: var(--paper);
+  color: var(--info);
+}
+
+.info .title {
+  color: var(--info);
+}
+
+/* On the event-color ground a state is a white card. */
+[data-attendee-mode="a2"] .empty {
+  background: var(--paper);
+}

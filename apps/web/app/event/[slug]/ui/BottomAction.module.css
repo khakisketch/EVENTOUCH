@@ -1,0 +1,112 @@
+/* Fixed to the viewport bottom, but only as wide as the phone column
+   (the attendee screens are max-width 520px) and centered on a desktop. */
+.bar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 20;
+  box-sizing: border-box;
+  width: min(100%, 520px);
+  margin-inline: auto;
+  padding: var(--s4) var(--s4) max(var(--s4), env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(transparent, var(--ev-ground, var(--paper)) 28%);
+  pointer-events: none;
+}
+
+.inner {
+  display: grid;
+  gap: var(--s2);
+  pointer-events: auto;
+}
+
+/* Room the content needs so the fixed bar never covers its last line. */
+.spacer {
+  height: calc(var(--s8) + var(--s6) + env(safe-area-inset-bottom, 0px));
+}
+
+.spacerDouble {
+  height: calc(var(--s8) + var(--s8) + var(--s5) + env(safe-area-inset-bottom, 0px));
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--s7);
+  margin: 0;
+  padding: 0 var(--s5);
+  border: 0;
+  border-radius: var(--radius-card);
+  font: inherit;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  word-break: keep-all;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.primary {
+  min-height: calc(var(--s7) + var(--s2));
+  background: var(--ev-accent, var(--brand));
+  color: var(--ev-on-accent, var(--on-brand));
+  font-size: var(--h3);
+}
+
+.secondary {
+  background: var(--ev-accent-soft, var(--brand-tint));
+  color: var(--ev-accent-ink, var(--brand-text));
+  font-size: var(--body);
+}
+
+.button:disabled {
+  background: color-mix(in srgb, var(--ink) 10%, var(--paper));
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+/* a2: the ground is the event color, so the strong action is a white pill and
+   the quiet one is outlined in the ground's ink. */
+[data-attendee-mode="a2"] .button {
+  border-radius: 100vmax;
+}
+
+[data-attendee-mode="a2"] .primary {
+  background: var(--paper);
+  color: var(--ev-accent-ink, var(--brand-text));
+}
+
+[data-attendee-mode="a2"] .secondary {
+  border: 2px solid var(--ev-ground-ink);
+  background: transparent;
+  color: var(--ev-ground-ink);
+}
+
+[data-attendee-mode="a2"] .button:disabled {
+  background: color-mix(in srgb, var(--ev-ground-ink) 16%, transparent);
+  color: var(--ev-ground-ink);
+  opacity: 0.7;
+}
+
+[data-attendee-mode="a2"] .button:focus-visible {
+  outline-color: var(--ev-ground-ink);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .button {
+    transition: transform var(--exit), background-color var(--enter);
+  }
+
+  .button:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+}

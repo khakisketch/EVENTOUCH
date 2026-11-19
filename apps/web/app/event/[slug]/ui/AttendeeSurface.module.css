@@ -1,0 +1,9 @@
+/* The ground of an attendee screen. a1 paints white; a2 paints the event
+   color (set inline as --ev-ground) with the ink that reads on it. */
+.surface {
+  background: var(--ev-ground, var(--paper));
+  color: var(--ev-ground-ink, var(--ink));
+  font-family: var(--body-font);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
