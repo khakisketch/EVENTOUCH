@@ -951,8 +951,8 @@ export default function EventOverview({ eventId }: { eventId: string }) {
   }
 
   const fieldOperationsLink = (
-    <Link variant={live ? "primary" : "ghost"} href={`${base}/operations`}>
-      현장 운영 열기 <ArrowRightIcon />
+    <Link variant={live ? "primary" : "ghost"} href={live ? `${base}/live` : `${base}/operations`}>
+      {live ? "현장 모드 열기" : "입장·스태프 열기"} <ArrowRightIcon />
     </Link>
   );
 
@@ -986,7 +986,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
       label: "현장 준비",
       state: !liveBlocked ? "done" : currentStage === "READY" ? "todo" : "optional",
       text: `등록 데스크 ${overview.deskCount}개 · 배정 ${overview.deskAssignmentCount}건${liveBlocked ? " — 부족합니다" : ""}`,
-      action: "현장 운영 확인",
+      action: "입장·스태프 확인",
       href: `${base}/operations`,
     },
     {
@@ -1351,7 +1351,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
           {refreshing ? <p className={styles.refreshStatus} role="status">최신 운영 현황을 불러오고 있습니다.</p> : null}
           <p className={styles.recentCompactEmpty}>
             {overview.canManageEvent
-              ? "아직 입퇴장 기록이 없습니다. 현장 운영의 데스크에서 입장을 기록하면 여기에 표시됩니다."
+              ? "아직 입퇴장 기록이 없습니다. 입장·스태프의 데스크에서 입장을 기록하면 여기에 표시됩니다."
               : "배정된 데스크에 아직 입퇴장 기록이 없습니다. 담당 데스크에서 입장 기록이 생기면 여기에 표시됩니다."}
           </p>
         </div>
@@ -1410,7 +1410,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         ) : (
           <p className="empty-state">
             {overview.canManageEvent
-              ? "아직 입퇴장 기록이 없습니다. 현장 운영의 데스크에서 입장을 기록하면 여기에 표시됩니다."
+              ? "아직 입퇴장 기록이 없습니다. 입장·스태프의 데스크에서 입장을 기록하면 여기에 표시됩니다."
               : "배정된 데스크에 아직 입퇴장 기록이 없습니다. 담당 데스크에서 입장 기록이 생기면 여기에 표시됩니다."}
           </p>
         )}

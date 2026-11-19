@@ -249,7 +249,7 @@ async function main() {
               const stageBody = await stageResponse.json();
               const overviewStage = stageBody.state.events.find(event => event.id === f.eventId)?.stage;
               if (!overviewStage) throw new Error('overview stage is missing');
-              const actions = await page.locator('[data-task] a, a:has-text("현장 운영 열기")').evaluateAll(elements => elements.map(element => ({
+              const actions = await page.locator('[data-task] a, a:has-text("현장 모드 열기")').evaluateAll(elements => elements.map(element => ({
                 task: element.closest('[data-task]')?.getAttribute('data-task') ?? null,
                 variant: element.getAttribute('data-action-variant'),
                 background: getComputedStyle(element).backgroundColor,

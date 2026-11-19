@@ -123,7 +123,7 @@ async function main() {
         pass(`lifecycle-options-${width}`, options);
       }
       const commandsBefore = fixture.gateway.commands.length;
-      await row.getByRole('link', { name: /현장 운영 · 스태프 배정으로 이동/ }).click();
+      await row.getByRole('link', { name: /입장·스태프 · 스태프 배정으로 이동/ }).click();
       if (baseline) {
         assert.equal(await page.getByRole('dialog').count(), 0);
         pass(`baseline-account-handoff-missing-${width}`, { commands: fixture.gateway.commands.length - commandsBefore });

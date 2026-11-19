@@ -160,7 +160,7 @@ export default function StaffHub() {
         <section className={`staff-workspace state-panel ${workStyles.hubState}`}>
           <span className={workStyles.hubTile} aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="9" rx="2" /><path d="M7 9V6h10v3M7 21v-3M17 21v-3" /></svg></span>
           <p role="status" className={workStyles.hubNote}>배정된 업무가 없습니다. 운영자에게 문의하세요.</p>
-          <p className={workStyles.hubNote}>업무 배정은 운영 콘솔 &gt; 현장 운영 &gt; 스태프 배정에서 지정됩니다. 아직 배정 전이라면 대기 상태이며, 배정이 올라오면 다시 불러오기 후 목록에 표시됩니다.</p>
+          <p className={workStyles.hubNote}>업무 배정은 운영 콘솔 &gt; 입장·스태프 &gt; 스태프 배정에서 지정됩니다. 아직 배정 전이라면 대기 상태이며, 배정이 올라오면 다시 불러오기 후 목록에 표시됩니다.</p>
           <p className={workStyles.hubNote}>이 화면을 안내한 담당자(초대 메일·행사 안내의 문의처)에게 배정 여부를 확인해 주세요.</p>
           <ProductButton type="button" variant="secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
             다시 불러오기

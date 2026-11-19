@@ -68,7 +68,8 @@ test('approved overview design stays locked', () => {
   // Recent activity: time, rail dot, details timeline.
   for (const marker of ['styles.checkTime', 'styles.checkRail', 'styles.checkDot', 'styles.checkDetails']) assert.ok(source.includes(marker), marker);
   // Exactly one primary on live: the hero owns it, so the queue never adds another.
-  assert.match(source, /<Link variant=\{live \? "primary" : "ghost"\} href=\{`\$\{base\}\/operations`\}>/u);
+  // Reopened 2026-11-20: while live, the one orange action opens 현장 모드; before that it opens 입장·스태프.
+  assert.match(source, /<Link variant=\{live \? "primary" : "ghost"\} href=\{live \? `\$\{base\}\/live` : `\$\{base\}\/operations`\}>/u);
   assert.match(queue, /variant=\{index === 0 && !liveOverview \? "primary" : "ghost"\}/u);
   // Utilities are ghost links, not white boxes.
   assert.match(source, /<Link variant="ghost" href=\{`\$\{base\}\/settings#settings-stage`\}>진행 단계 설정<\/Link>/u);

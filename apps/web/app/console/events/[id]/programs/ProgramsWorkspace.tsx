@@ -1773,7 +1773,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   const reviewTotal = reviewQuestions + reviewPhotos + reviewPosts;
   const runningCount = state.modules.filter((module) => module.status === "OPEN").length;
   const returnBack = handoffReturn?.href ?? `/console/events/${encodeURIComponent(eventId)}/operations#ops-participation`;
-  const returnLabel = handoffReturn?.label ?? "현장 운영";
+  const returnLabel = handoffReturn?.label ?? "입장·스태프";
 
   return (
     <ConsolePage

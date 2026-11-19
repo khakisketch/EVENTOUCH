@@ -878,7 +878,7 @@ function StaffAssignmentPanel({
   return (
     <div className={teamStyles.assignPanel} id={`staff-assign-panel-${accountId}`}>
       <p className={teamStyles.assignLead}>
-        {accountName}님의 데스크·부스 배정은 행사별 현장 운영에서 지정합니다.
+        {accountName}님의 데스크·부스 배정은 행사별 입장·스태프에서 지정합니다.
         {events.length === 1
           ? " 배정할 행사가 하나뿐이라 미리 선택했습니다."
           : " 배정할 행사를 선택하세요."}
@@ -906,7 +906,7 @@ function StaffAssignmentPanel({
             className={teamStyles.assignLink}
             href={buildStaffAssignHandoffHref(chosen.id, accountId)}
           >
-            {chosen.name} 현장 운영 · 스태프 배정으로 이동
+            {chosen.name} 입장·스태프 · 스태프 배정으로 이동
           </ProductLink>
         </p>
       ) : events.length ? (
