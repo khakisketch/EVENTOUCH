@@ -14,7 +14,7 @@ import ConsoleFormActions from "../../../console-ui/ConsoleFormActions";
 import ConsoleDialog from "../../../console-ui/ConsoleDialog";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
 import ConsoleSectionNav, { requestConsoleTask } from "../../../console-ui/ConsoleSectionNav";
-import { ArrowRightIcon, BackIcon, DocumentIcon, DownloadIcon, PrinterIcon } from "../../../console-ui/ConsoleIcons";
+import { ArrowRightIcon, BackIcon, DocumentIcon, DownloadIcon, PencilIcon, PlusIcon, PrinterIcon } from "../../../console-ui/ConsoleIcons";
 import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
 import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleRefreshButton from "../../../console-ui/ConsoleRefreshButton";
@@ -23,6 +23,7 @@ import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import ui from "../../../console-ui/console-ui.module.css";
 import styles from "./reports.module.css";
 import EventCloseFlow from "./EventCloseFlow";
+import { RateRing, StepBar, inkTone } from "./ReportVisuals";
 import { consoleFetch } from "../../../../../lib/console-api";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
 import { attendanceNeedsReview } from "../../../../../lib/attendance-state.cjs";
@@ -156,6 +157,11 @@ function snapshotAverage(value: unknown): string {
   return Number.isFinite(number) && number >= 0 && number <= 5 ? `${value} / 5` : "확인 불가";
 }
 
+function questionAverage(value: unknown): number | null {
+  const number = typeof value === "number" ? value : typeof value === "string" && /^\d+(?:\.\d+)?$/.test(value) ? Number(value) : NaN;
+  return Number.isFinite(number) && number >= 0 && number <= 5 ? number : null;
+}
+
 function averageLabel(values: number[]): string | null {
   if (!values.length) return null;
   return (values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1);
@@ -271,10 +277,9 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-// Three colors reserved for distinguishing registration groups by series,
-// dataviz-skill validated (apps/web/app/tokens.css: --series-blue/orange/aqua).
-// Never used for anything else on this screen.
-const SERIES_COLORS = ["var(--series-blue)", "var(--series-orange)", "var(--series-aqua)"];
+// Registration groups are told apart by ink tone (darkest = first/largest),
+// not by hue: the report keeps one accent (its own theme color) and the
+// category chart stays neutral. Order follows the saved group order.
 
 // A chart segment is only ever drawn from fully verified counts: any
 // missing, non-integer, or negative count (or an empty/zero total) cancels
@@ -288,7 +293,7 @@ function reportGroupChart(items: Array<{ name?: unknown; count?: unknown }>): Ar
   return items.map((item, index) => ({
     name: text(item.name) || "이름 확인 불가",
     count: item.count as number,
-    color: SERIES_COLORS[index % SERIES_COLORS.length],
+    color: inkTone(index),
   }));
 }
 
@@ -1209,6 +1214,14 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
   ];
   const programChartMax = programChart.length ? Math.max(...programChart.map((row) => row.value), 1) : 1;
   const surveyOverall = savedSurveys.items ? overallSurveyAverage(savedSurveys.items) : null;
+  const savedMetrics = detail?.snapshot?.metrics;
+  const savedKpi = (() => {
+    if (!savedMetrics || typeof savedMetrics !== "object" || Array.isArray(savedMetrics)) return null;
+    const { total, checked, inside, rate } = savedMetrics;
+    const whole = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+    if (!whole(total) || !whole(checked) || !whole(inside) || typeof rate !== "number" || !Number.isSafeInteger(rate) || rate < 0 || rate > 100) return null;
+    return { total, checked, inside, rate };
+  })();
   const boothCapacityRows = state.booths.filter((booth) => Number.isSafeInteger(booth.capacity) && booth.capacity > 0);
 
   // The deliverable owns its creation: the 만들기 control lives in the
@@ -1295,7 +1308,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         action={(
           <div className={ui.recordActions}>
           {!reportSourcesAvailable ? <ConsoleRefreshButton label="보고서 자료 다시 확인" busy={refreshing} onRefresh={() => setReloadTick((tick) => tick + 1)} /> : null}
-          <ProductButton type="button" variant={state.reports.length ? "secondary" : "primary"} disabled={writeLocked || !reportSourcesAvailable}
+          <ProductButton type="button" icon={<PlusIcon />} variant={state.reports.length ? "secondary" : "primary"} disabled={writeLocked || !reportSourcesAvailable}
             onClick={openReportCreate}>
             보고서 만들기
           </ProductButton>
@@ -1311,6 +1324,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
           <div className={styles.statusLine}>
             <span className={styles.statusDot} aria-hidden="true" />
             <strong>마감 {closeStatus.position}/7 · {closeStatus.label}</strong>
+            <StepBar position={closeStatus.position} />
             {closeStatus.done ? null : (
               <ProductLink variant="ghost" href={eventCloseHref(eventId, closeReportId)} onNavigate={() => requestConsoleTask("event-close", true)}>
                 마감 지도 보기 <ArrowRightIcon />
@@ -1323,6 +1337,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
             {state.reports.map((report) => (
               <button key={report.id} type="button" role="tab" aria-selected={detail?.id === report.id}
                 className={styles.reportTab} onClick={() => openReport(report.id)}>
+                <span className={styles.reportSwatch} style={{ background: report.color }} aria-hidden="true" />
                 <span className={styles.reportTabTitle}>{report.title}</span>
                 <span className={`${styles.badge} ${report.status === "PUBLISHED" ? styles.badgePublished : styles.badgeDraft}`}>
                   {report.status === "PUBLISHED" ? "공유 완료" : "초안"}
@@ -1337,7 +1352,8 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
               <>
                 <div className={styles.pageDesk}>
                   <article ref={articleRef} id="report-detail"
-                    className={`${styles.reportDoc} ${printLayout === "wide" ? styles.reportDocWide : styles.reportDocA4}`} data-layout={printLayout}>
+                    className={`${styles.reportDoc} ${printLayout === "wide" ? styles.reportDocWide : styles.reportDocA4}`} data-layout={printLayout}
+                    style={{ "--report-accent": detail.color } as React.CSSProperties}>
                     <div className={styles.cardBand} style={{ background: detail.color }} aria-hidden="true" />
                     <div className={styles.cardPad}>
                     <header className={styles.reportCover}>
@@ -1349,10 +1365,12 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                           {[text(detail.snapshot.event.name), text(detail.snapshot.event.date), text(detail.snapshot.event.client), text(detail.snapshot.event.venue)].filter(Boolean).join(" · ")}
                         </p>
                       ) : null}
-                      <p className={styles.help}>버전 {detail.version} · {detail.status === "PUBLISHED" ? `공유 완료 기록 · 편집 잠김${detail.publishedAt ? ` · ${capturedLabel(detail.publishedAt)}` : ""}` : "초안"}</p>
-                      {capturedLabel(detail.snapshot?.capturedAt) ? (
-                        <p className={styles.help}>집계 기준 {capturedLabel(detail.snapshot?.capturedAt)}</p>
-                      ) : null}
+                      <div className={styles.coverMeta}>
+                        <p className={`${styles.help} ${styles.coverStatus}`} data-status={detail.status === "PUBLISHED" ? "published" : "draft"}>버전 {detail.version} · {detail.status === "PUBLISHED" ? `공유 완료 기록 · 편집 잠김${detail.publishedAt ? ` · ${capturedLabel(detail.publishedAt)}` : ""}` : "초안"}</p>
+                        {capturedLabel(detail.snapshot?.capturedAt) ? (
+                          <p className={`${styles.help} ${styles.coverStamp}`}>집계 기준 {capturedLabel(detail.snapshot?.capturedAt)}</p>
+                        ) : null}
+                      </div>
                       {detail.coverNote ? <p>{detail.coverNote}</p> : null}
                     </header>
                     {detail.sections.includes("overview") ? (
@@ -1362,6 +1380,19 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                       <section>
                         <h3>참가·입장</h3>
                         {detail.snapshot?.metrics && typeof detail.snapshot.metrics === "object" && !Array.isArray(detail.snapshot.metrics) ? <>
+                        {savedKpi ? (
+                          <div className={styles.kpiRow} aria-hidden="true">
+                            <div className={styles.kpiRing}>
+                              <RateRing value={savedKpi.rate} size={96} />
+                              <div><strong>{savedKpi.rate}<small>%</small></strong><span>입장률</span></div>
+                            </div>
+                            <div className={styles.kpiTiles}>
+                              <div><strong>{savedKpi.total}</strong><span>등록 (명)</span></div>
+                              <div><strong>{savedKpi.checked}</strong><span>누적 입장 (명)</span></div>
+                              <div><strong>{savedKpi.inside}</strong><span>현재 입장 (명)</span></div>
+                            </div>
+                          </div>
+                        ) : null}
                         {groupChart ? (
                           <>
                             <div className={styles.stack} role="img" aria-label={groupChart.map((segment) => `${segment.name} ${segment.count}명`).join(", ")}>
@@ -1371,12 +1402,12 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                             </div>
                             <div className={styles.legend}>
                               {groupChart.map((segment) => (
-                                <span key={segment.name}><em style={{ background: segment.color }} />{segment.name} · <b>{segment.count}명</b></span>
+                                <span key={segment.name}><em style={{ background: segment.color }} />{segment.name} · <b>{segment.count}명</b> <small>{Math.round((segment.count / groupChartTotal) * 100)}%</small></span>
                               ))}
                             </div>
                           </>
                         ) : null}
-                        <p>등록 {snapshotValue(detail.snapshot.metrics.total, "명")} · 누적 입장 {snapshotValue(detail.snapshot.metrics.checked, "명")} · 현재 입장 {snapshotValue(detail.snapshot.metrics.inside, "명")} · 입장률 {snapshotValue(detail.snapshot.metrics.rate, "%", 100)}</p>
+                        <p className={savedKpi ? "sr-only" : undefined}>등록 {snapshotValue(detail.snapshot.metrics.total, "명")} · 누적 입장 {snapshotValue(detail.snapshot.metrics.checked, "명")} · 현재 입장 {snapshotValue(detail.snapshot.metrics.inside, "명")} · 입장률 {snapshotValue(detail.snapshot.metrics.rate, "%", 100)}</p>
                         {typeof detail.snapshot.metrics.attendanceReview !== "number" || !Number.isSafeInteger(detail.snapshot.metrics.attendanceReview) || detail.snapshot.metrics.attendanceReview < 0 ? (
                           <p>저장 당시 출입 기록의 확인 필요 여부는 이 보고서에서 확인할 수 없습니다.</p>
                         ) : detail.snapshot.metrics.attendanceReview > 0 ? (
@@ -1407,7 +1438,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                         {programChart.length ? (
                           <div className={styles.barlist}>
                             {programChart.map((row) => (
-                              <div key={row.name} className={styles.barlistRow}>
+                              <div key={row.name} className={styles.barlistRow} data-zero={row.value === 0 ? "true" : undefined}>
                                 <span className={styles.barlistKey}>{row.name}</span>
                                 <span className={styles.barlistTrack}><i style={{ width: `${(row.value / programChartMax) * 100}%` }} /></span>
                                 <span className={styles.barlistValue}>{row.value}건</span>
@@ -1432,16 +1463,26 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                         {savedSurveys.items && !savedSurveys.items.length && !savedSurveys.invalid ? <p className={styles.reportEmpty}>저장 시점에 만족도 조사가 없습니다.</p> : null}
                         {surveyOverall !== null ? (
                           <div className={styles.meter}>
-                            <div className={styles.meterTrack}><i style={{ width: `${(surveyOverall / 5) * 100}%` }} /></div>
-                            <div className={styles.meterValue}><span>5점 만점 평균</span><b>{surveyOverall.toFixed(1)}</b></div>
+                            <div className={styles.scoreHead}>
+                              <b>{surveyOverall.toFixed(1)}</b><small>/ 5</small>
+                              <span>5점 만점 평균</span>
+                            </div>
+                            <div className={styles.scoreSegments} aria-hidden="true">
+                              {[1, 2, 3, 4, 5].map((step) => (
+                                <i key={step}><span style={{ width: `${Math.max(0, Math.min(1, surveyOverall - (step - 1))) * 100}%` }} /></i>
+                              ))}
+                            </div>
                           </div>
                         ) : null}
                         {(savedSurveys.items ?? []).map((survey, index) => {
                           const questions = snapshotRecords(survey.questions);
                           return <div key={index}>
-                            <p><strong>{text(survey.name) || "이름 확인 불가"}</strong> · 응답 {snapshotValue(survey.count, "명")} · 평균 {snapshotAverage(survey.average)}</p>
+                            <p className={styles.surveyTitle}><strong>{text(survey.name) || "이름 확인 불가"}</strong> · 응답 {snapshotValue(survey.count, "명")} · 평균 {snapshotAverage(survey.average)}</p>
                             {(questions.items ?? []).map((question, questionIndex) => (
-                              <p key={questionIndex}>{text(question.name) || "항목 확인 불가"} · 평균 {snapshotAverage(question.average)} · {snapshotValue(question.count, "명")}</p>
+                              <p key={questionIndex} className={styles.qrow}>
+                                <span>{text(question.name) || "항목 확인 불가"} · 평균 {snapshotAverage(question.average)} · {snapshotValue(question.count, "명")}</span>
+                                {questionAverage(question.average) !== null ? <i className={styles.qbar} aria-hidden="true"><span style={{ width: `${(questionAverage(question.average) as number) / 5 * 100}%` }} /></i> : null}
+                              </p>
                             ))}
                             {questions.items === null || questions.invalid ? <p className={styles.reportUnavailable}>만족도 항목의 전부 또는 일부를 확인할 수 없습니다.</p> : null}
                           </div>;
@@ -1546,16 +1587,16 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                   reading order and proportion change. */}
               {attendanceAvailable ? <div className={styles.metricGrid}>
                 <div className={`${styles.metricCard} ${styles.metricLead}`}>
-                  <strong>{state.metrics.rate}<span aria-hidden="true">%</span></strong><span>누적 입장률</span>
-                  <div className={styles.meter}>
-                    <div className={styles.meterTrack}><i style={{ width: `${state.metrics.rate}%` }} /></div>
+                  <RateRing value={state.metrics.rate} size={76} />
+                  <div className={styles.leadText}>
+                    <strong>{state.metrics.rate}<span aria-hidden="true">%</span></strong><span>누적 입장률</span>
                   </div>
                 </div>
                 <div className={styles.metricCard}><strong>{state.metrics.checked}</strong><span>누적 입장 (명)</span></div>
                 <div className={styles.metricCard}><strong>{state.metrics.total}</strong><span>{state.metrics.cancellationReview > 0 ? "신청 상태 기준 등록 (명)" : "취소 제외 등록 (명)"}</span></div>
                 <div className={styles.metricCard}><strong>{state.metrics.inside}</strong><span>현재 입장 (명)</span></div>
                 {state.metrics.pending > 0 ? (
-                  <div className={styles.metricCard}>
+                  <div className={`${styles.metricCard} ${styles.metricWaiting}`}>
                     <strong>{state.metrics.pending}</strong>
                     <span>승인 대기 (명)</span>
                   </div>
@@ -1696,9 +1737,6 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                 <ConsoleFormActions>
                   {detail.status === "DRAFT" ? (
                     <>
-                      <ProductButton type="button" variant="secondary" disabled={writeLocked} onClick={() => { setEditReport(detail); setFailure(null); dialogUnresolvedRef.current = false; setCreateOpen(true); }}>
-                        내용 편집
-                      </ProductButton>
                       {publishIntent?.id === detail.id && publishIntent.version === detail.version ? (
                         <>
                           <span className={styles.help}>완료로 표시하면 이 버전은 편집할 수 없습니다. 고객사에 자동 전송되지는 않습니다.</span>
@@ -1725,6 +1763,9 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                           </ProductButton>
                         </>
                       )}
+                      <ProductButton type="button" variant="secondary" icon={<PencilIcon />} disabled={writeLocked} onClick={() => { setEditReport(detail); setFailure(null); dialogUnresolvedRef.current = false; setCreateOpen(true); }}>
+                        내용 편집
+                      </ProductButton>
                     </>
                   ) : (
                     <>
@@ -1798,7 +1839,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                       )}
                     </>
                   )}
-                  <ProductButton type="button" variant="secondary" onClick={() => { setDetailId(null); setPublishIntent(null); setSuccessorId(null); }}>
+                  <ProductButton type="button" variant="ghost" onClick={() => { setDetailId(null); setPublishIntent(null); setSuccessorId(null); }}>
                     닫기
                   </ProductButton>
                 </ConsoleFormActions>
@@ -1834,7 +1875,10 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                       </ProductButton>
                     ) : null}
                   </ConsoleFormActions>
+                  <details className={styles.fold}>
+                    <summary>PPTX 내보내기 안내</summary>
                   <p className={styles.exportNote}>PPTX는 저장된 집계 기준(표지의 일시)으로 한 번 채워 내려받습니다. 선택 해제한 항목은 제외되며, 참여 콘텐츠·만족도는 각 최대 8개, 사진은 최대 6개까지 담기고 불러오지 못한 사진은 건너뜁니다. 꾸미기는 파워포인트·키노트·캔바에서 이어가세요.</p>
+                  </details>
                 </div>
                 <div className={styles.viewGroup}>
                   <p className={styles.toolbarLabel}>보기</p>
@@ -1842,7 +1886,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                     <span className="sr-only">보기: {printLayout === "wide" ? "발표용 16:9" : "A4 세로"}</span>
                     <button
                       type="button"
-                      className="pill"
+                      className={`pill ${styles.viewPill}`}
                       aria-pressed={printLayout === "a4"}
                       onClick={() => setPrintLayout("a4")}
                     >
@@ -1850,14 +1894,17 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                     </button>
                     <button
                       type="button"
-                      className="pill"
+                      className={`pill ${styles.viewPill}`}
                       aria-pressed={printLayout === "wide"}
                       onClick={() => setPrintLayout("wide")}
                     >
                       발표용 16:9
                     </button>
                   </div>
+                  <details className={styles.fold}>
+                    <summary>보기와 인쇄 안내</summary>
                   <p className={styles.help}>보기는 화면 표시만 바꿉니다. 저장된 보고서 내용·버전은 그대로이며, PPT를 만들거나 서식을 편집하지 않습니다. 인쇄·PDF는 아래 인쇄 버튼 뒤 브라우저 대화상자에서 용지 방향을 고르세요. 긴 내용은 페이지가 나뉘어 모두 인쇄됩니다.</p>
+                  </details>
                 </div>
                 <div className={styles.closeBack}>
                   <ProductLink variant="ghost" href={eventCloseHref(eventId, detail.id)}

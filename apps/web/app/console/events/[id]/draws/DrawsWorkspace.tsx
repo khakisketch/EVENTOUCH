@@ -2207,14 +2207,6 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
           </div>
         ) : null}
 
-            <section className={styles.stageCard} id={kind === "program" && program ? `draw-program-${program.id}` : `draws-${kind}`} aria-label="무대">
-              <div className={styles.stagePreview}>
-                <div className={styles.previewCap}><span>청중 화면 · {scene.kind === "board" ? "전광판" : "참가자 폰"}</span></div>
-                <StagePreview scene={scene} label={sceneLabel} event={eventLabel} />
-              </div>
-              {featureOffNote ? <p className={styles.featureOff}>{featureOffNote}</p> : stageBody}
-            </section>
-
             <h2 className={styles.pickerTitle}>무대 선택</h2>
             <ul className={styles.picker}>
               {rows.map((row) => (
@@ -2228,6 +2220,14 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                 </li>
               ))}
             </ul>
+
+            <section className={styles.stageCard} id={kind === "program" && program ? `draw-program-${program.id}` : `draws-${kind}`} aria-label="무대">
+              <div className={styles.stagePreview}>
+                <div className={styles.previewCap}><span>청중 화면 · {scene.kind === "board" ? "전광판" : "참가자 폰"}</span></div>
+                <StagePreview scene={scene} label={sceneLabel} event={eventLabel} />
+              </div>
+              {featureOffNote ? <p className={styles.featureOff}>{featureOffNote}</p> : stageBody}
+            </section>
 
             {programFormOpen && canWriteDraws ? (
               <ConsoleDialog title={editingProgramId ? "추첨 설정 수정" : "추첨 프로그램 만들기"} titleId="draws-program-dialog-title" wide busy={busy === "program:save"} onClose={closeProgramForm}>

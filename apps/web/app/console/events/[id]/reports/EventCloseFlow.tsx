@@ -9,6 +9,7 @@ import ConsoleRefreshButton from "../../../console-ui/ConsoleRefreshButton";
 import ConsoleFormActions from "../../../console-ui/ConsoleFormActions";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import styles from "./reports.module.css";
+import { StepBar } from "./ReportVisuals";
 
 type CloseReport = { id: string; title: string; status: string; version: number; capturedAt: string; attendanceChanged: boolean };
 
@@ -59,6 +60,7 @@ export default function EventCloseFlow({ eventId, inputs, loadedAt, report, hasR
       <div className={styles.statusLine}>
         <span className={styles.statusDot} aria-hidden="true" />
         <strong>{next ? `마감 ${stepNumber}/7 · ${next.label}` : "보관된 행사입니다"}</strong>
+        <StepBar position={stepNumber} />
         {next?.href ? (
           <ProductLink variant="ghost" className={styles.statusNext} href={next.href} data-close-next>
             다음: {next.label} <ArrowRightIcon />

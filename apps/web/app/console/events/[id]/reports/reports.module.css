@@ -9,35 +9,13 @@
    handoff button this screen used to need is gone — 결과 분석 is now always
    visible in the rail, so there is nothing left to hand off to. */
 
-.switchbar {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--s1);
-  overflow-x: auto;
-  margin-top: var(--s3);
-  padding-bottom: 0;
-  border-bottom: 1px solid var(--line);
-}
 
-.reportTab {
-  all: unset;
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  min-height: var(--control-min-size);
-  padding: var(--s2) var(--s1);
-  margin-right: var(--s5);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  color: var(--muted);
-  font-size: var(--body-work);
-  transition: color 0.12s, border-color 0.12s;
-}
-.reportTab:hover { color: var(--ink); }
-.reportTab:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
-.reportTab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); font-weight: 700; }
-.reportTabTitle { white-space: nowrap; }
+
+
+
+
+
+
 
 /* Desk (left, flexible) and rail (right, fixed 300px). Narrow screens stack. */
 .content {
@@ -293,28 +271,11 @@
   overflow-wrap: anywhere;
 }
 
-.badge {
-  display: inline-flex;
-  min-height: 28px;
-  align-items: center;
-  padding: 0 var(--s2);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-small);
-  font-size: var(--small);
-  font-weight: 650;
-}
 
-.badgePublished {
-  border-color: var(--success-line);
-  background: var(--success-soft);
-  color: var(--success);
-}
 
-.badgeDraft {
-  border-color: var(--warning-line);
-  background: var(--warning-soft);
-  color: var(--warning);
-}
+
+
+
 
 .alert {
   margin: 0;
@@ -467,7 +428,7 @@
   gap: var(--s2) var(--s3);
 }
 
-.reportViewBar > .pill {
+.reportViewBar > .viewPill {
   min-height: 44px;
 }
 
@@ -495,7 +456,7 @@
 }
 
 /* Registration-group composition: a single bar cut into verified-count
-   segments, the only place --series-* colors are used on this screen. */
+   segments. Segment tones are set inline from ink density (ReportVisuals). */
 .stack {
   display: flex;
   height: 26px;
@@ -869,11 +830,6 @@
   gap: var(--s2);
 }
 
-.viewGroup .reportViewBar > .pill {
-  flex: 1 1 0;
-  justify-content: center;
-  white-space: nowrap;
-}
 
 .viewGroup > .help {
   font-size: var(--label);
@@ -955,3 +911,324 @@
   width: 100%;
   justify-content: center;
 }
+
+/* ------------------------------------------------------------------
+   Reopened 2026-11-19: shapes instead of text. Report switcher as cards
+   that carry each report's own color, status chips with a dot, KPI tiles
+   and a ring for the entry rate, one satisfaction score gauge, ink-tone
+   category bar, a rail whose actions read as one main action plus quiet
+   rows. Ink = emphasis, amber = waiting, green = done, orange stays the
+   single primary action (see DESIGN.md "Action role rules").
+   ------------------------------------------------------------------ */
+
+.switchbar {
+  display: flex;
+  align-items: stretch;
+  gap: var(--s3);
+  overflow-x: auto;
+  margin-top: var(--s4);
+  padding: 2px 2px var(--s2);
+}
+
+.reportTab {
+  all: unset;
+  box-sizing: border-box;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 56px;
+  max-width: 320px;
+  padding: var(--s2) var(--s4) var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
+  color: var(--muted);
+  font-size: var(--body-work);
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s, color 0.12s;
+}
+.reportTab:hover { border-color: var(--line-strong); color: var(--ink); }
+.reportTab:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.reportTab[aria-selected="true"] {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+  color: var(--ink);
+  font-weight: 700;
+}
+.reportTabTitle { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; word-break: keep-all; }
+.reportSwatch { flex: none; width: 10px; height: 32px; border-radius: 4px; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 var(--s2);
+  border-radius: 999px;
+  font-size: var(--label);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.badgePublished { background: var(--success-soft); color: var(--success); }
+.badgeDraft { background: var(--warning-soft); color: var(--warning); }
+
+.stepBar { display: inline-flex; align-items: center; gap: 3px; }
+.stepBar i { display: block; width: 18px; height: 6px; border-radius: 3px; background: var(--line); }
+.stepBar i.stepOn { background: var(--ink); }
+.statusDot { background: var(--ink); }
+
+/* Document card -------------------------------------------------- */
+.reportDoc {
+  container-type: inline-size;
+  border-radius: var(--radius-large);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.cardBand { height: 8px; }
+.cardPad { gap: var(--s6); padding: var(--s6) var(--s6) var(--s7); }
+.reportCover { gap: var(--s2); padding-bottom: var(--s5); }
+.reportCover h3 {
+  font-size: var(--h1);
+  line-height: 1.25;
+  font-weight: 800;
+  word-break: keep-all;
+}
+.reportSubtitle { color: var(--muted); font-weight: 600; }
+.coverMeta { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s2); }
+.coverStatus, .coverStamp {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 var(--s3);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--muted);
+  font-size: var(--label);
+  font-weight: 650;
+}
+.coverStatus[data-status="published"] { background: var(--success-soft); box-shadow: none; color: var(--success); }
+.coverStatus[data-status="draft"] { background: var(--warning-soft); box-shadow: none; color: var(--warning); }
+
+.reportDoc section { display: grid; gap: var(--s3); min-width: 0; }
+.reportDoc section + section { padding-top: var(--s5); border-top: 1px solid var(--line); }
+.reportDoc section > h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: var(--h3);
+  font-weight: 800;
+  word-break: keep-all;
+}
+.reportDoc section > h3::before {
+  content: "";
+  flex: none;
+  width: 5px;
+  height: 20px;
+  border-radius: 3px;
+  background: var(--report-accent, var(--ink));
+}
+.reportDoc section p { margin: 0; line-height: 1.6; word-break: keep-all; overflow-wrap: anywhere; }
+
+/* Attendance: ring + three number tiles */
+.kpiRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s5);
+  padding: var(--s4) var(--s5);
+  border-radius: var(--radius-medium);
+  background: var(--surface-muted);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.kpiRing { display: flex; align-items: center; gap: var(--s3); }
+.kpiRing > div { display: grid; gap: 2px; }
+.kpiRing strong { font-size: 40px; line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; }
+.kpiRing strong small { margin-left: 2px; font-size: var(--h3); font-weight: 700; color: var(--muted); }
+.kpiRing span { color: var(--muted); font-size: var(--small); font-weight: 650; }
+.kpiTiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3); }
+.kpiTiles > div {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.kpiTiles strong { font-size: var(--h1); line-height: 1.1; font-weight: 800; font-variant-numeric: tabular-nums; }
+.kpiTiles span { color: var(--muted); font-size: var(--label); font-weight: 650; word-break: keep-all; }
+
+@container (max-width: 560px) {
+  .kpiRow { grid-template-columns: minmax(0, 1fr); gap: var(--s4); padding: var(--s4); }
+  .kpiTiles { gap: var(--s2); }
+  .kpiTiles > div { padding: var(--s3); }
+  .kpiTiles strong { font-size: var(--h2); }
+  .cardPad { padding: var(--s5) var(--s4) var(--s6); }
+}
+
+.ring { position: relative; display: inline-grid; place-items: center; flex: none; }
+.ring svg { display: block; }
+.ringTrack { stroke: var(--line); }
+.ringFill { stroke: var(--ink); }
+
+/* Group composition: one bar, ink tones, share beside each count */
+.stack { height: 16px; border-radius: 8px; gap: 2px; margin: var(--s1) 0 var(--s2); }
+.stack i:first-child { border-radius: 8px 0 0 8px; }
+.stack i:last-child { border-radius: 0 8px 8px 0; }
+.stack i:only-child { border-radius: 8px; }
+.legend { gap: var(--s2) var(--s5); margin: 0; }
+.legend span { color: var(--ink); font-weight: 600; }
+.legend em { width: 10px; height: 10px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--line); }
+.legend small { color: var(--muted); font-size: var(--label); font-variant-numeric: tabular-nums; }
+
+/* Program and booth participation */
+.barlist, .boothBarList { gap: var(--s2); }
+.barlistRow, .boothBarRow {
+  padding: var(--s2) var(--s3);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+.barlistKey { color: var(--ink); font-weight: 600; word-break: keep-all; }
+.barlistTrack, .boothBarTrack { height: 10px; border-radius: 5px; background: var(--line); box-shadow: none; }
+.barlistTrack i, .boothBarTrack i { border-radius: 5px; background: var(--ink); }
+.barlistValue, .boothBarValue { font-size: var(--small); }
+.barlistRow[data-zero="true"] .barlistKey,
+.barlistRow[data-zero="true"] .barlistValue { color: var(--muted); font-weight: 500; }
+.pageDesk .barlistRow, .pageDesk .boothBarRow { grid-template-columns: 148px minmax(0, 1fr) 52px; }
+@container (max-width: 560px) {
+  .pageDesk .barlistRow { grid-template-columns: minmax(0, 1fr) 52px; row-gap: var(--s1); }
+  .pageDesk .barlistRow .barlistTrack { grid-column: 1 / -1; grid-row: 2; }
+}
+
+/* Satisfaction: one score, five segments, a bar under each question */
+.meter { margin: 0; display: grid; gap: var(--s2); }
+.scoreHead { display: flex; align-items: baseline; gap: var(--s2); }
+.scoreHead b { font-size: 44px; line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; }
+.scoreHead small { color: var(--muted); font-size: var(--h3); font-weight: 650; }
+.scoreHead span { margin-left: auto; color: var(--muted); font-size: var(--small); font-weight: 650; }
+.scoreSegments { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.scoreSegments i { display: block; height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; }
+.scoreSegments i > span { display: block; height: 100%; background: var(--ink); }
+.surveyTitle { margin-top: var(--s2) !important; }
+.qrow { max-width: none; display: grid; gap: 6px; padding: var(--s2) 0; border-top: 1px solid var(--line); }
+.qbar { display: block; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.qbar > span { display: block; height: 100%; background: var(--ink); border-radius: 3px; }
+
+.snapshotPhotos { gap: var(--s3); }
+.snapshotPhotos img { border-radius: var(--radius); }
+
+/* Live drift between the saved report and the current count */
+.reportComparison {
+  max-width: 720px;
+  padding: var(--s4);
+  border-radius: var(--radius-medium);
+  background: var(--warning-soft);
+  box-shadow: inset 0 0 0 1px var(--warning-line);
+}
+.reportComparison .help, .reportComparison .diff summary { color: var(--warning); }
+.dbline { height: 3px; background: var(--warning-line); }
+.dbdotBase { background: var(--ink); }
+.dbdotNow { background: var(--warning); }
+
+.archiveCheck { border: 0; border-radius: var(--radius-medium); background: var(--surface-muted); padding: var(--s4); }
+
+/* Rail ------------------------------------------------------------ */
+.analysisBox {
+  gap: var(--s4);
+  padding: var(--s5);
+  border-radius: var(--radius-large);
+  background: var(--paper);
+  box-shadow: var(--shadow-soft);
+}
+.analysisBoxTitle { color: var(--ink); font-size: var(--h3); font-weight: 800; letter-spacing: 0; }
+.stamp { color: var(--muted); font-size: var(--label); line-height: 1.5; }
+
+.analysisBox .metricGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2); overflow: visible; }
+.analysisBox .metricCard,
+.analysisBox .metricCard + .metricCard,
+.analysisBox .metricCard:first-child {
+  align-content: start;
+  gap: 2px;
+  padding: var(--s3);
+  border-radius: var(--radius-medium);
+  background: var(--surface-muted);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.analysisBox .metricCard strong { font-size: var(--h2); line-height: 1.1; font-weight: 800; }
+.analysisBox .metricCard span { font-size: var(--label); font-weight: 650; word-break: keep-all; }
+.analysisBox .metricLead {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  padding: var(--s4);
+  background: var(--paper);
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+.analysisBox .metricLead .leadText { display: grid; gap: 2px; }
+.analysisBox .metricLead strong { font-size: 44px; line-height: 1; }
+.analysisBox .metricLead strong span { margin-left: 2px; font-size: var(--h3); color: var(--muted); }
+.analysisBox .metricWaiting { background: var(--warning-soft); box-shadow: inset 0 0 0 1px var(--warning-line); }
+.analysisBox .metricWaiting strong, .analysisBox .metricWaiting span { color: var(--warning); }
+.analysisBox .metricCard:last-child:nth-child(odd) { grid-column: auto; }
+
+.analysisNote > summary, .analysisDetails > summary { color: var(--ink); font-weight: 700; }
+
+.actionBox { gap: var(--s4); padding: 0; border: 0; border-radius: 0; }
+.primaryActions > div > div { gap: var(--s2); }
+.primaryActions [data-product-variant="primary"] { min-height: 52px; font-weight: 800; }
+.exportScope {
+  padding: var(--s3);
+  border-radius: var(--radius);
+  background: var(--info-soft);
+  color: var(--info);
+  line-height: 1.55;
+}
+.exportScope strong { color: inherit; }
+.exportGroup, .viewGroup, .closeBack { gap: var(--s2); padding-top: var(--s4); }
+.toolbarLabel { color: var(--ink); font-family: var(--body-font); font-size: var(--small); font-weight: 800; letter-spacing: 0; }
+.exportGroup > div > div { width: 100%; justify-self: stretch; justify-items: stretch; }
+.exportGroup button {
+  width: 100%;
+  justify-content: flex-start;
+  min-height: 48px;
+  border-radius: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  font-weight: 650;
+}
+.fold > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 44px;
+  color: var(--muted);
+  font-size: var(--small);
+  font-weight: 650;
+  cursor: pointer;
+}
+.fold > summary::before { content: "+"; font-weight: 800; }
+.fold[open] > summary::before { content: "−"; }
+.fold > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+.viewGroup .reportViewBar {
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.viewGroup .reportViewBar > .viewPill { flex: 1 1 0; justify-content: center; white-space: nowrap; border: 0; background: transparent; color: var(--muted); }
+.viewGroup .reportViewBar > .viewPill[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.viewGroup .reportViewBar > .viewPill[aria-pressed="true"]:hover { background: var(--ink); color: var(--paper); }
+.viewGroup .reportViewBar > .viewPill:not([aria-pressed="true"]):hover { color: var(--ink); background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reportTab { transition: none; }
+}
+
+/* The close map reads as a progress strip: the segments span the full row. */
+.closeFlow .stepBar { order: 5; flex: 1 0 100%; gap: 4px; }
+.closeFlow .stepBar i { flex: 1; width: auto; height: 8px; border-radius: 4px; }
+.closeFlow .statusLine { padding-block: var(--s4); }

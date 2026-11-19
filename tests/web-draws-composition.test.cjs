@@ -20,7 +20,8 @@ const css = read('draws.module.css');
 test('approved draws design stays locked: preview-first stage card over a flat picker', () => {
   assert.doesNotMatch(workspace, /ConsoleSectionNav|ConsoleSection\b/u, 'no tab nav and no stack of section panels');
   assert.match(workspace, /<StagePreview scene=\{scene\}/u);
-  assert.ok(workspace.indexOf('<StagePreview') < workspace.indexOf('className={styles.picker}'), 'the card comes before the picker');
+  // Reopened 2026-11-19: the picker now leads as cards and the stage card follows it.
+  assert.ok(workspace.indexOf('className={styles.picker}') < workspace.indexOf('<StagePreview'), 'the picker (what you are looking at) comes before the card');
   assert.match(workspace, /className=\{styles\.stageInfo\}/u, 'facts left, actions right, under the preview');
   for (const key of ['"vote"', '"roulette"', '"lucky"']) assert.ok(workspace.includes(`key: ${key}`), `${key} is a picker row`);
   assert.match(workspace, /aria-pressed=\{activeKey === row\.key\}/u, 'the picker is a pressed-state group of buttons');
@@ -58,4 +59,12 @@ test('phone widths keep rows on one line and targets at 44px', () => {
 test("the phone preview's event line inherits its white ink instead of the global muted <small> gray", () => {
   const stylesheet = fs.readFileSync(path.join(__dirname, "..", "apps", "web", "app", "console", "events", "[id]", "draws", "draws.module.css"), "utf8");
   assert.match(stylesheet, /\.phoneHead small\s*\{[^}]*color:\s*inherit/su, "gray on the navy head measured 1.68:1 in axe");
+});
+
+// Reopened 2026-11-19
+test('Reopened 2026-11-19: picker cards lead, wide screens put the preview beside the actions', () => {
+  assert.match(css, /\.pickRow \{[^}]*grid-template-areas: "icon name name" "meter meter count"/su);
+  assert.match(css, /@media \(min-width: 1200px\) \{\s*\.stageCard \{ grid-template-columns: minmax\(0, 1\.08fr\) minmax\(0, 1fr\);/u);
+  assert.match(css, /\.winnerItem::before \{\s*content: counter\(winner\);/u, 'winners carry a rank mark');
+  assert.match(css, /\.runBlocker \{[^}]*border-left: 4px solid var\(--warning\)/su, 'run limits read as amber notes, not white buttons');
 });

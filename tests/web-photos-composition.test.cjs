@@ -74,3 +74,12 @@ test('per-photo actions keep their confirmations and move to the neighbour after
   assert.match(workspace, /event\.key === "ArrowRight"/u);
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/u, 'tokens only');
 });
+
+// Reopened 2026-11-19: same composition, stronger presentation.
+test('Reopened 2026-11-19: summary band, count chips on the tiles, outlined ZIP pill', () => {
+  assert.match(css, /\.coverage \{[^}]*background: var\(--surface-muted\)/su);
+  assert.match(css, /\.tileCount \{[^}]*position: absolute/su, 'the count sits on the cover photo as a chip');
+  assert.match(css, /\.tileCount\[data-empty\] \{ background: var\(--warning-soft\)/u, 'empty sections stay amber');
+  assert.match(css, /a\[data-native-control="download"\] \{[^}]*border-radius: 999px/su);
+  assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/u);
+});

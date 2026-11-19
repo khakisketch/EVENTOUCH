@@ -247,6 +247,10 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 - A photo is a button that opens a viewer drawer (`ConsoleDialog presentation="drawer"`): large photo, 이전/다음 (and arrow keys), file name and time, 원본 다운로드, 보관 구간 변경, 보관함에서 제외, each behind the existing confirmation. After a move or removal the viewer shows the neighbour or closes.
 - "사진 올리기" is the one orange action; "＋ 사진 추가" ends the gallery; dropping files anywhere on the gallery works. Upload preview, upload history and retry notices keep their existing places and rules.
 
+Reopened 2026-11-19 (owner: 얇은 선·작은 회색 글씨). 구성은 그대로, 표현만 보강했다. 이 항목이 위 설명과 다르면 이 항목이 우선한다.
+- 구간 현황은 옅은 회색 요약 띠(48px 합계 + 12px 8칸 막대 + 비어 있는 구간 이름)다. 구간 타일의 장수는 표지 사진 위 알약 칩(선택된 구간은 잉크 채움, 빈 구간은 앰버 "비어 있음")이고 선택된 타일은 잉크 3px 외곽선이다.
+- 갤러리 머리는 24px 구간 이름과 헤어라인, ZIP 다운로드는 잉크 외곽선 알약, 업로드 안내문은 한 덩어리의 정보 상자다. 사진 모서리는 더 둥글다.
+
 ## 경품 지급 현황 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/rewards/`, option V1). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-rewards-composition.test.cjs` guards it. This is the operator oversight list (blocked prizes, missing recipients, uncertain outcomes); handing a prize to a person at the venue belongs to the staff exit desk.
@@ -257,6 +261,11 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 - The page title and rail label are "경품 지급 현황" (owner decision 2026-11-18, renamed from "경품 수령" because this is an oversight screen, not the handout desk). The in-page list region is named "경품 지급 목록" so the heading and region never share a name. 수령 처리 stays the name of the action.
 - 운영 현황 shows one quiet task-queue row, "경품 확인 필요 N건", only while the 경품 feature is on and the count is above zero. It is appended after the other rows so it never takes the single orange action, and it links here. The count comes from the same `lib/reward-status.ts` rule as this screen. The 운영 현황 composition otherwise does not change.
 
+Reopened 2026-11-19 (owner: 얇은 선·작은 글씨·필터가 다른 버튼과 같아 보임). 구성(요약 카드 → 긴급도 순 원장)은 그대로, 표현을 보강했다. 이 항목이 위 설명과 다르면 이 항목이 우선한다.
+- 상태 타일은 큰 숫자(40px)와 전체(취소 제외) 대비 비율 막대를 가진다. 선택하면 같은 색 외곽선, 0건이면 회색.
+- 상태 탭의 건수는 알약 칩이고 선택된 탭의 칩은 잉크 채움이다. 검색창은 돋보기 글리프가 있는 둥근 입력이다.
+- 그룹 제목은 상태색 원형 마크, 굵은 제목, 오른쪽 큰 건수와 상태색 2px 밑줄이다. 행은 헤어라인으로 나뉘고 경품명이 18px로 커졌다.
+
 ## 추첨·투표 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/draws/`, "미리보기 무대"). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-draws-composition.test.cjs` guards it.
@@ -265,6 +274,11 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 - The card's top is a preview of what the audience really sees: stage draws show the venue-screen scene (violet and gold, from `screen/[slug]/draw-stage.module.css`); vote, roulette and lucky show the attendee phone card. The preview (`StagePreview.tsx`) is a decorative redraw: it loads nothing, runs nothing and must be updated when the real screens change. The venue screen has no vote, roulette or lucky scene today, so those use the phone.
 - Under the preview: facts (state kicker, name, one meta line, big number and gauge) on the left, actions on the right. The single orange action is the run button ("N명 추첨 실행") beside a large stepper; 무대 터치 실행 is secondary; 결과 공개 is a switch; 설정 수정, 운영 시작·종료·다시 열기 are ghost.
 - Program create/edit settings open in a dialog (`추첨 프로그램 만들기` in the page header); vote, roulette and lucky settings stay as their existing forms folded under the card. Every blocker line, confirmation, recovery notice and permission lock is unchanged.
+
+Reopened 2026-11-19 (owner: 같은 흰 버튼·얇은 선, 무대 선택이 화면 맨 아래). 이 항목이 위 설명과 다르면 이 항목이 우선한다.
+- "무대 선택"이 카드 위로 올라왔다: 잡 하나가 아이콘·이름·진행 막대·큰 숫자를 가진 카드이고 선택된 카드는 잉크 2px 외곽선이다. 폰에서는 옆으로 스크롤한다. 카드를 누르면 아래 무대 카드가 바뀌는 동작과 앵커(`#draws-vote` 등)는 그대로.
+- 1200px 이상에서는 무대 카드가 왼쪽 청중 화면 미리보기(스크롤 시 고정)와 오른쪽 "지금 할 일"로 나뉜다. 실행 영역은 옅은 회색 패널 안에 있고 실행 버튼이 유일한 오렌지다.
+- 실행 전제·무대 터치 전제는 흰 버튼 모양이 아니라 앰버 왼쪽 띠 알림이고, 연결 링크는 밑줄 텍스트다. 당첨자는 잉크 원 순번과 함께 카드 행으로 보인다.
 
 ## 참여 콘텐츠 확정 구성
 
@@ -368,6 +382,13 @@ The owner approved this composition on 2026-11-15 (`apps/web/app/console/events/
 - 등록 그룹 막대만 쓰는 전용 3색(`--series-blue #2a78d6`, `--series-orange #eb6834`, `--series-aqua #1baf7a`, `apps/web/app/tokens.css`)은 dataviz 스킬 `validate_palette.js`로 라이트모드 검증됨(인접 CVD ΔE 9.2, 일반 ΔE 27.6). 이 화면의 다른 곳과 제품의 나머지 전부는 여전히 잉크+브랜드 오렌지.
 - PPTX 내보내기는 `pptxgenjs`를 클라이언트에서 동적 import해 표지(어두운 배경 + 오렌지 킥커 + 큰 제목) + 핵심 숫자 + 참여 콘텐츠 + 만족도 + 사진 슬라이드를 한 번 채워 내려준다(xlsx export와 같은 패턴, 새 서버 커맨드 없음). 사진은 `/api/events/:id/files/:fileId`를 fetch해 base64로 넣고, 한 장이 실패해도 나머지 내보내기는 계속된다. 버튼 옆에 "꾸미기는 파워포인트·키노트·캔바에서" 안내 문구가 있다.
 - 내보내기 묶음(PPTX/JSON/인쇄)은 ghost 역할로 낮췄다(보조 버튼 수를 줄이는 Action role rules 판단); 내용 편집·취소·닫기 같은 실제 대안 행동은 secondary로 남았다.
+
+Reopened 2026-11-19 (owner: 실제 화면이 밋밋하다 — 작은 회색 글씨·얇은 선, 숫자가 글씨로만 있다). 구성(탭·문서 카드·레일, PPTX/JSON/인쇄)은 그대로, 표현만 도형 중심으로 바꿨다. 이 항목이 위 설명과 다르면 이 항목이 우선한다.
+- 보고서 전환기는 보고서 고유색 막대+제목+상태 칩(점+글자, 초안은 앰버·공유 완료는 초록)을 담은 카드 탭이다. 선택된 카드는 잉크 외곽선. 마감 지도 줄에는 7칸 진행 막대(`StepBar`)가 붙고 "행사 마감" 탭에서는 줄 전체 폭으로 펼쳐진다.
+- 문서 표지는 큰 제목, 상태·집계 기준 시각 알약. 섹션 제목 앞에는 보고서 색 세로 막대. 참가·입장은 입장률 링(`RateRing`)+등록·누적 입장·현재 입장 숫자 타일을 먼저 보여 주고, 기존 한 줄 텍스트는 접근성용(`sr-only`)으로 남긴다. 숫자가 검증되지 않으면 타일 없이 기존 문장을 그대로 보인다.
+- 그룹 구성 막대의 전용 3색(series 토큰)은 폐기했다. 범주는 잉크 농도(진함→연함)와 비율(%)로 구분하며, 이 화면의 도형은 잉크+중립 하나의 색조다(`--series-*` 토큰은 tokens.css에 남아 있으나 화면에서 쓰지 않는다).
+- 참여 콘텐츠는 행마다 이름·막대·건수(0건은 흐리게), 만족도는 큰 평균 점수+5칸 게이지, 항목마다 평균 막대. 원래 텍스트 줄은 그대로 있다.
+- 오른쪽 레일의 결과 분석은 입장률 링+큰 숫자, 3칸 숫자 타일(승인 대기만 앰버)이다. 실행 영역은 주 동작 하나(오렌지)+내용 편집(secondary, 연필 아이콘)+닫기(ghost)이고, 내보내기는 구분선 행 목록, A4/발표용 전환은 잉크 세그먼트 컨트롤(오렌지 아님)이다. 긴 안내문은 `<details>`로 접었다(JSON 원본 범위 안내만 항상 보임).
 
 ## 고객사 확정 구성
 
