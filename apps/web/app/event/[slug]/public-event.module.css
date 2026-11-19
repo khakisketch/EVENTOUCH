@@ -31,6 +31,10 @@
   grid-column: 1 / -1;
 }
 
+.factsStack {
+  grid-template-columns: 1fr;
+}
+
 .fact {
   position: relative;
   display: flex;
@@ -173,6 +177,7 @@
 
 .summary .closedCard {
   background: #f4f4f6;
+  box-shadow: none;
 }
 
 /* The registration card is a link, not a button. */
@@ -180,6 +185,8 @@
   text-decoration: none;
 }
 
+/* Opaque like the home's ticket card: it overlaps the banner, so a translucent
+   fill would lose its text on a dark banner. */
 .closedCard {
   display: flex;
   align-items: center;
@@ -187,7 +194,8 @@
   min-height: 64px;
   padding: 10px 14px;
   border-radius: 18px;
-  background: rgb(255 255 255 / 78%);
+  background: #fff;
+  box-shadow: 0 10px 26px -14px rgb(16 17 20 / 60%);
   color: #17252b;
 }
 

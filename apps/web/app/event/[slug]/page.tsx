@@ -266,8 +266,10 @@ export default async function EventPage({
       )}
     </TabTicketChoice>
   );
+  // A long venue name or address would squeeze two side-by-side tiles; stack them instead.
+  const longFacts = whereText.length > 14 || whereSub.length > 20;
   const facts = whenText || whereText ? (
-    <div className={simple ? styles.factRows : styles.facts}>
+    <div className={simple ? styles.factRows : `${styles.facts}${longFacts ? ` ${styles.factsStack}` : ""}`}>
       {whenText ? (
         <div className={simple ? styles.factRow : styles.fact} data-guide-when>
           <span className={styles.factIcon} aria-hidden="true"><GuideIcon type="calendar" /></span>
