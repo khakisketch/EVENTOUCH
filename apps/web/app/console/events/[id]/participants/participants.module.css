@@ -97,15 +97,11 @@
 /* One participant, requested explicitly. The existing console dialog owns
    focus/dismissal, while all permissions, confirmations and receipts stay
    with the roster's command handlers. */
-.rosterInspector { display: grid; gap: var(--s4); min-width: 0; }
 .editRecovery { display: grid; gap: var(--s2); padding: var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); background: var(--surface-muted); overflow-wrap: anywhere; }
 .editRecovery h3, .editRecovery p { margin: 0; }
 .editActions { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .editActions :global(.astryx-button) { min-height: 44px; }
-.inspectorHead { padding-bottom: var(--s2); border-bottom: 1px solid var(--line); }
-.inspectorIdentity h3 { margin: 0; font-size: var(--body); }
 .participantDetails { display: grid; gap: var(--s3); min-width: 0; }
-.detailFacts { margin: 0; color: var(--muted); font-size: var(--small); overflow-wrap: anywhere; }
 .consentRecord { display: grid; gap: var(--s2); padding-top: var(--s3); border-top: 1px solid var(--line); min-width: 0; }
 .consentRecord h4, .consentRecord p { margin: 0; }
 .consentRecord h4 { font-size: var(--body); }
@@ -246,13 +242,6 @@
   .selectionMore { margin-left: auto; }
 }
 
-@media (min-width: 1200px) {
-  .rosterWorkbench:has([role="dialog"][aria-modal]:not([aria-modal="true"])) { grid-template-columns: minmax(0, 1fr) 320px; }
-  .rosterWorkbench:has([role="dialog"]:not([aria-modal="true"])) {
-    display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--s4); align-items: start;
-  }
-  .rosterWorkbench:has([role="dialog"]:not([aria-modal="true"])) .tableScroll { max-height: 70svh; }
-}
 /* Dense desktop rows retain the full 44px controls without adding 24px around them. */
 
 /* Mobile lookup keeps status, list tools and add on one row. The full
@@ -350,10 +339,6 @@
 .selectionWorkbench :global(.astryx-button:disabled) { opacity: .5; }
 
 /* Inspector: identity first, then a quiet list of actions instead of a pile of pills. */
-.inspectorHead { display: flex; align-items: center; gap: var(--s3); }
-.inspectorIdentity { min-width: 0; display: grid; gap: var(--s1); }
-.inspectorIdentity h3 { color: var(--muted); font-size: var(--small); font-weight: 600; }
-.inspectorBadges { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); margin: 0; }
 .detailActions { display: grid; gap: 0; align-items: stretch; border-top: 1px solid var(--line); }
 .detailActions > :global(.astryx-button), .detailActions > :global(button) { justify-content: flex-start; width: 100%; min-height: 48px; padding-inline: var(--s1); border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; color: var(--ink); font-weight: 600; text-align: left; }
 .detailActions > :global(.astryx-button:hover:not(:disabled)) { background: var(--surface-muted); }
@@ -370,3 +355,102 @@
 .companyHint:empty { display: none; }
 .companyHint b { color: var(--ink); }
 .companyHint :global(.astryx-button) { min-height: 44px; padding-inline: var(--s2); color: var(--brand-text); font-weight: 700; }
+
+/* Details sheet: an overlay over the page (the shared drawer: scrim, focus
+   trap, right edge on desktop, bottom sheet on phones). The table behind it
+   never changes width. The dialog's own title and description become the
+   identity block beside the avatar; everything else stacks under it. */
+:global(.dialog)[role="dialog"]:has(> .rosterSheet) {
+  /* Fixed rows so the close footer can sit on the sheet's bottom edge
+     (row 8 absorbs the free height). */
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto auto auto auto 1fr auto;
+  column-gap: var(--s3);
+  row-gap: 0;
+  align-content: stretch;
+  width: min(100%, 460px);
+  padding: 0 var(--s4) var(--s4);
+  background: var(--paper);
+  animation: sheetIn .22s ease-out;
+}
+:global(.dialog)[role="dialog"]:has(> .rosterSheet) > h2 {
+  grid-area: 2 / 2;
+  align-self: end;
+  padding: var(--s3) 0 0;
+  font-size: var(--h3);
+  font-weight: 800;
+  line-height: 1.25;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+:global(.dialog)[role="dialog"]:has(> .rosterSheet) > h2 + div {
+  grid-area: 3 / 2;
+  align-self: start;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+:global(.dialog)[role="dialog"]:has(> .rosterSheet) > :global(.dialog-actions) {
+  grid-area: 9 / 1 / 10 / -1;
+  position: sticky;
+  bottom: calc(var(--s4) * -1);
+  z-index: 2;
+  margin: 0 calc(var(--s4) * -1) calc(var(--s4) * -1);
+  padding: var(--s3) var(--s4);
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+}
+.rosterSheet { display: contents; }
+.rosterSheet > * { grid-column: 1 / -1; min-width: 0; }
+.rosterSheet > .sheetBadges { grid-row: 4; margin-top: var(--s3); }
+.rosterSheet > .sheetPrimary { grid-row: 5; margin-top: var(--s3); }
+.rosterSheet > .participantDetails { grid-row: 6; margin-top: var(--s2); }
+.rosterSheet > .rowConfirm { grid-row: 7; }
+.sheetNav {
+  grid-row: 1;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  margin: 0 calc(var(--s4) * -1);
+  padding: var(--s2) var(--s3);
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+.sheetStep { min-height: 44px; min-width: 44px; padding-inline: var(--s2); color: var(--ink); font-weight: 600; }
+.chevronBack { transform: scaleX(-1); }
+.sheetPosition { color: var(--muted); font-size: var(--small); font-variant-numeric: tabular-nums; }
+.rosterSheet > .sheetAvatar { grid-area: 2 / 1 / 4 / 2; width: 56px; height: 56px; align-self: center; margin-top: var(--s3); font-size: var(--h3); }
+.sheetBadges { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); margin: 0; }
+.rosterSheet > .sheetPrimary { width: 100%; min-height: 48px; }
+.rosterSheet > .participantDetails { gap: 0; }
+.sheetSection, .consentRecord { display: grid; gap: var(--s2); padding: var(--s3) 0; border-top: 1px solid var(--line); min-width: 0; }
+.sheetSection h3, .sheetSection h4, .sheetSection p { margin: 0; }
+.sheetSection h3, .sheetSection h4, .consentRecord h4 { color: var(--muted); font-size: var(--small); font-weight: 650; }
+.sheetSection h3:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: var(--radius-small); }
+.sheetFacts { display: grid; gap: var(--s2); margin: 0; }
+.sheetFacts > div { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: var(--s2); align-items: baseline; }
+.sheetFacts dt { color: var(--muted); font-size: var(--small); }
+.sheetFacts dd { margin: 0; color: var(--ink); font-size: var(--body); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.sheetFlag { display: inline-block; margin-left: var(--s2); padding: 0 var(--s2); border-radius: 999px; background: var(--warning-soft); color: var(--warning); font-size: var(--small); font-weight: 650; white-space: nowrap; }
+.sheetPresence { color: var(--ink); font-size: var(--body); }
+.participantDetails > p[role="note"] { margin: 0; padding: var(--s3) 0; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--small); word-break: keep-all; overflow-wrap: break-word; }
+.participantDetails > .detailActions { margin-top: var(--s2); }
+.sheetStep { flex-wrap: nowrap; white-space: nowrap; }
+
+@keyframes sheetIn { from { transform: translateX(32px); } to { transform: none; } }
+@keyframes sheetUp { from { transform: translateY(24px); } to { transform: none; } }
+@media (max-width: 768px) {
+  :global(.dialog)[role="dialog"]:has(> .rosterSheet) {
+    width: 100%;
+    max-height: 90svh;
+    padding-top: 0;
+    animation-name: sheetUp;
+  }
+}
+@media (prefers-reduced-motion: reduce) { :global(.dialog)[role="dialog"]:has(> .rosterSheet) { animation: none; } }

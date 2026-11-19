@@ -337,7 +337,8 @@ test('roster quick approval keeps the gated status menu in row details', () => {
     read('app/console/events/[id]/participants/participants.module.css'),
     /\.detailActions select\s*\{[^}]*min-height:\s*44px/su
   );
-  assert.match(list, /rosterInspector/u);
+  // Reopened 2026-11-20: details are an overlay sheet (rosterSheet), no docked inspector.
+  assert.match(list, /rosterSheet/u);
 });
 
 test('roster hands its selection to messages through ?to=', () => {

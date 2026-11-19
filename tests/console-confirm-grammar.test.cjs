@@ -119,7 +119,8 @@ test("the roster keeps one-tap approval and folds the rest of the row tools", ()
   // The toggle keeps its aria-expanded/id contract and the inspector owns
   // the same status/reward gates and cancel confirm.
   assert.match(list, /showRowActions \? \(/u);
-  assert.match(list, /rosterInspector/u);
+  // Reopened 2026-11-20: details are an overlay sheet (rosterSheet), no docked inspector.
+  assert.match(list, /rosterSheet/u);
   assert.match(css, /\.participantActions \.rowToolsToggle \{\s*display: inline-flex;/u);
   assert.match(css, /\.participantDetails \{/u);
   assert.match(css, /\.rowConfirm \{\s*grid-column: 1 \/ -1;/u);

@@ -122,6 +122,8 @@ async function main() {
     assert.equal(await page.locator('#reward-name').getAttribute('readonly'), '');
     await rewardDialog.getByRole('button', { name: '닫기', exact: true }).click();
     await rewardDialog.waitFor({ state: 'hidden' });
+    // The details sheet is modal and reopens under the page: close it to reach the page-level recovery.
+    await page.getByRole('dialog', { name: people[1].name }).getByRole('button', { name: '닫기', exact: true }).click();
     await page.getByRole('button', { name: '경품 등록 다시 확인' }).click();
     mode = 'rejected';
     await rewardDialog.getByRole('button', { name: '같은 요청 다시 시도' }).click();
@@ -133,6 +135,7 @@ async function main() {
     assert.equal(latest.rewards.filter((r) => r.name === '합성 경품' && r.participantId === people[1].id).length, 1);
 
     stage = 'reward pointer after reload';
+    await page.getByRole('button', { name: `${people[1].name} 참가자 상세` }).click();
     await page.getByRole('dialog', { name: people[1].name }).getByRole('button', { name: '경품 등록' }).click();
     await page.locator('#reward-name').fill('합성 재확인 경품');
     mode = 'malformed';
@@ -147,7 +150,10 @@ async function main() {
     const inspector = page.getByRole('dialog', { name: people[1].name });
     assert.equal(await inspector.getByRole('button', { name: '경품 등록' }).isDisabled(), true);
     const beforeCheck = requestIds['reward.create'].length;
+    // The details sheet is modal (2026-11-20): close it to reach the page-level recovery panel, then reopen.
+    await inspector.getByRole('button', { name: '닫기', exact: true }).click();
     await shared.getByRole('button', { name: '서버 처리 확인' }).click();
+    await page.getByRole('button', { name: `${people[1].name} 참가자 상세` }).click();
     await page.waitForFunction(() => [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === '경품 등록' && !button.disabled));
     assert.equal(requestIds['reward.create'].length, beforeCheck, 'server status lookup never creates another reward');
     latest = await workspace();

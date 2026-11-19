@@ -293,6 +293,14 @@ function presenceLabel(person: { inside: boolean; everIn: boolean; status: strin
   return person.status === "APPROVED" ? "미입장" : "입장 기록 없음";
 }
 
+// Sentence form of the same state for the details sheet's 출입 section.
+function presenceSentence(person: { inside: boolean; everIn: boolean; status: string; presenceUnknown: boolean }): string {
+  if (person.presenceUnknown) return "현재 위치를 알 수 없습니다.";
+  if (person.inside === true) return "지금 행사장 안에 있습니다.";
+  if (person.everIn === true) return "입장했다가 퇴장했습니다.";
+  return person.status === "APPROVED" ? "아직 입장한 기록이 없습니다." : "참가 확정 전이라 출입 대상이 아닙니다.";
+}
+
 // One compact page of rows: search, filters, counts, selection, group
 // assignment and the message handoff keep their filter-wide meanings — only
 // the rendered slice and the prev/next position change here.
@@ -413,8 +421,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   const inspectorHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const inspectorStatusRef = useRef<HTMLSelectElement | null>(null);
   const inspectorReturnFocusRef = useRef<HTMLButtonElement | null>(null);
+  // Moving between people keeps the pressed previous/next button focused;
+  // otherwise the sheet's heading takes focus (opening, arrow keys).
+  const sheetNavFocusRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    if (toolsOpenId && inspectorHeadingRef.current) {
+    if (!toolsOpenId) sheetNavFocusRef.current = null;
+    else if (!sheetNavFocusRef.current && inspectorHeadingRef.current) {
       inspectorHeadingRef.current.focus({ preventScroll: true });
     }
   }, [toolsOpenId]);
@@ -1369,9 +1381,10 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     nameSort === "ascending" ? a.name.localeCompare(b.name, "ko") : b.name.localeCompare(a.name, "ko")
   );
   const pagePeople = orderedPeople.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-  // The roster is a table + inspector on desktop, a table + bottom sheet on
-  // phones. The selected row stays the single source for details; no row
-  // grows into a card and no second copy of the actions exists.
+  // Details open in an overlay sheet (right edge on desktop, bottom sheet on
+  // phones) over the full-width table. The selected row stays the single
+  // source for details; no row grows into a card and no second copy of the
+  // actions exists.
   const selectedPerson = toolsOpenId
     ? state.people.find((person) => person.id === toolsOpenId) ?? null
     : null;
@@ -1381,13 +1394,6 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     const company = person.company.trim();
     if (company && person.status !== "CANCELLED") companyCounts.set(company, (companyCounts.get(company) ?? 0) + 1);
   }
-  const selectedDetailFacts = selectedPerson
-    ? [
-        `연락처 ${maskPhone(selectedPerson.phone)}`,
-        selectedPerson.email.trim() ? `이메일 ${selectedPerson.email.trim()}${emailLooksValid(selectedPerson.email) ? "" : " (형식 확인 필요)"}` : "",
-        `출입 ${presenceLabel(selectedPerson)}`,
-      ].map((part) => part.trim()).filter(Boolean).join(" · ")
-    : "";
   // Quick presets ride the exact same setters as the selects (and therefore
   // the same URL sync, counts and selection scope): they are shortcuts, not
   // a second filter system. Counts ignore status/attendance so the chips
@@ -1774,6 +1780,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       : `${styles.participantRow} ${styles.participantRowNoActions}`;
   const anySelected = effectiveSelection.length > 0 || hiddenSelectedCount > 0;
   function closeInspector(): void {
+    sheetNavFocusRef.current = null;
     setToolsOpenId(null);
     window.requestAnimationFrame(() => {
       const trigger = inspectorReturnFocusRef.current;
@@ -1781,6 +1788,38 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       else document.getElementById("roster-search")?.focus({ preventScroll: true });
     });
   }
+  // Previous/next person in the current filtered, sorted roster (all pages).
+  const sheetIndex = toolsOpenId ? orderedPeople.findIndex((person) => person.id === toolsOpenId) : -1;
+  function stepSheet(offset: number, source?: HTMLElement | null) {
+    if (sheetIndex < 0 || (selectedPerson && savingId === selectedPerson.id)) return;
+    const next = orderedPeople[sheetIndex + offset];
+    if (!next) return;
+    sheetNavFocusRef.current = source ?? null;
+    const nextPage = Math.floor((sheetIndex + offset) / PAGE_SIZE) + 1;
+    if (nextPage !== safePage) setPage(nextPage);
+    setToolsOpenId(next.id);
+    window.requestAnimationFrame(() => {
+      const trigger = Array.from(document.querySelectorAll<HTMLButtonElement>("button[data-roster-detail]"))
+        .find((button) => button.dataset.rosterDetail === next.id && button.getClientRects().length) ?? null;
+      if (trigger) {
+        inspectorReturnFocusRef.current = trigger;
+        trigger.scrollIntoView({ block: "nearest" });
+      }
+    });
+  }
+  const sheetOpen = Boolean(showRowActions && selectedPerson && !rewardTarget && !addOpen && !groupDialogOpen && !editTargetId && !ticketTarget && !reviewedExitTarget && !reconcileTarget && !cancellationConflictTarget);
+  // Up/Down move through the roster order while focus is in the sheet, except
+  // where the arrow keys already mean something (fields, menus, disclosures).
+  function sheetArrowKeys(event: React.KeyboardEvent<HTMLElement>) {
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    if ((event.target as HTMLElement).closest("input, select, textarea, summary, [contenteditable='true'], [role='listbox']")) return;
+    event.preventDefault();
+    stepSheet(event.key === "ArrowDown" ? 1 : -1);
+  }
+  // A remounted sheet (after a nested dialog closes) starts on its heading,
+  // never on a button from the previous mount.
+  if (!sheetOpen) sheetNavFocusRef.current = null;
   function selectVisible() {
     const ids = visiblePeople.map((person) => person.id);
     setSelectedIds((current) => [...new Set([...current, ...ids])]);
@@ -2301,7 +2340,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                       {savingId === person.id ? (person.status === "WAITLIST" ? "확정 중…" : "승인 중…") : (person.status === "WAITLIST" ? "확정" : "승인")}
                     </ProductButton> : null}
                     <ProductButton type="button" className={`button button-quiet ${styles.rowToolsToggle}`} aria-expanded={detailsOpen} aria-haspopup="dialog"
-                      aria-label={`${person.name} 참가자 상세`} onClick={(event) => { inspectorReturnFocusRef.current = event.currentTarget; setToolsOpenId(person.id); }}><ChevronRightIcon /></ProductButton>
+                      aria-label={`${person.name} 참가자 상세`} data-roster-detail={person.id} onClick={(event) => { inspectorReturnFocusRef.current = event.currentTarget; setToolsOpenId(person.id); }}><ChevronRightIcon /></ProductButton>
                   </div></td> : null}
                 </tr>;
               })}
@@ -2367,6 +2406,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                         aria-haspopup="dialog"
                         aria-controls={detailsOpen ? detailsId : undefined}
                         aria-label={`${person.name} 참가자 상세`}
+                        data-roster-detail={person.id}
                         onClick={(event) => {
                           if (detailsOpen) {
                             closeInspector();
@@ -2385,25 +2425,50 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
             })}
           </ul>
           </div>
-          {showRowActions && selectedPerson && !rewardTarget && !addOpen && !groupDialogOpen && !editTargetId && !ticketTarget && !reviewedExitTarget && !reconcileTarget && !cancellationConflictTarget ? (
-            <ConsoleDialog presentation="inspector" title={selectedPerson.name} titleId={`participant-details-${selectedPerson.id}`}
+          {sheetOpen && selectedPerson ? (
+            <ConsoleDialog presentation="drawer" title={selectedPerson.name} titleId={`participant-details-${selectedPerson.id}`}
               description={[identityOrg(selectedPerson), maskPhone(selectedPerson.phone)].filter(Boolean).join(" · ")}
-              initialFocusRef={inspectorHeadingRef} busy={savingId === selectedPerson.id} onClose={closeInspector}
+              initialFocusRef={sheetNavFocusRef.current ? sheetNavFocusRef : inspectorHeadingRef} busy={savingId === selectedPerson.id} onClose={closeInspector}
               footer={<ProductButton type="button" className="button button-secondary" disabled={savingId === selectedPerson.id} onClick={closeInspector}>닫기</ProductButton>}>
-              <div className={styles.rosterInspector}>
+              <div className={styles.rosterSheet} onKeyDown={sheetArrowKeys}>
                 <>
-                  <div className={styles.inspectorHead}>
-                    <span className={`${styles.avatar} ${styles.avatarLarge}`} data-status={selectedPerson.status} aria-hidden="true">{[...selectedPerson.name.trim()][0] ?? "?"}</span>
-                    <div className={styles.inspectorIdentity}>
-                      <h3 ref={inspectorHeadingRef} tabIndex={-1}>신청 정보</h3>
-                      <p className={styles.inspectorBadges}>
-                        <span className={`status-chip ${selectedPerson.status === "APPROVED" ? "good" : selectedPerson.status === "WAITLIST" ? "wait" : selectedPerson.status === "CANCELLED" ? "bad" : "info"} ${styles.participantStatus}`}>{statusLabel(selectedPerson.status)}</span>
-                        <span className={selectedPerson.inside ? styles.presenceInside : styles.presence}>{presenceLabel(selectedPerson)}</span>
-                      </p>
-                    </div>
+                  <div className={styles.sheetNav}>
+                    <ProductButton type="button" variant="ghost" className={styles.sheetStep} aria-label="이전 참가자" icon={<ChevronRightIcon className={styles.chevronBack} />}
+                      disabled={sheetIndex < 1 || savingId === selectedPerson.id} onClick={(event) => stepSheet(-1, event.currentTarget)}>이전</ProductButton>
+                    <span role="status" className={styles.sheetPosition}>{sheetIndex >= 0 ? `${sheetIndex + 1} / ${orderedPeople.length}` : "목록 밖"}</span>
+                    <ProductButton type="button" variant="ghost" className={styles.sheetStep} aria-label="다음 참가자"
+                      disabled={sheetIndex < 0 || sheetIndex >= orderedPeople.length - 1 || savingId === selectedPerson.id} endContent={<ChevronRightIcon />} onClick={(event) => stepSheet(1, event.currentTarget)}>다음</ProductButton>
                   </div>
+                  <span className={`${styles.avatar} ${styles.sheetAvatar}`} data-status={selectedPerson.status} aria-hidden="true">{[...selectedPerson.name.trim()][0] ?? "?"}</span>
+                  <p className={styles.sheetBadges}>
+                    <span className={`status-chip ${selectedPerson.status === "APPROVED" ? "good" : selectedPerson.status === "WAITLIST" ? "wait" : selectedPerson.status === "CANCELLED" ? "bad" : "info"} ${styles.participantStatus}`}>{statusLabel(selectedPerson.status)}</span>
+                    <span className={selectedPerson.inside ? styles.presenceInside : styles.presence}>{presenceLabel(selectedPerson)}</span>
+                  </p>
+                  {["PENDING", "WAITLIST"].includes(selectedPerson.status) && selectedPerson.ticketReview !== "cancelled" && canMutateStatus ? (
+                    <ProductButton type="button" variant="primary" className={styles.sheetPrimary} disabled={savingId === selectedPerson.id}
+                      onClick={() => void changeStatus(selectedPerson, "APPROVED")}>
+                      {savingId === selectedPerson.id ? (selectedPerson.status === "WAITLIST" ? "확정 중…" : "승인 중…") : (selectedPerson.status === "WAITLIST" ? "참가 확정" : "참가 승인")}
+                    </ProductButton>
+                  ) : null}
                   <div className={styles.participantDetails}>
-                    <p className={styles.detailFacts}>{selectedDetailFacts}</p>
+                    <section className={styles.sheetSection} aria-label="연락처와 이메일">
+                      <h3 ref={inspectorHeadingRef} tabIndex={-1}>신청 정보</h3>
+                      <dl className={styles.sheetFacts}>
+                        <div><dt>연락처</dt><dd>{maskPhone(selectedPerson.phone)}</dd></div>
+                        <div>
+                          <dt>이메일</dt>
+                          <dd>
+                            {selectedPerson.email.trim() || "미입력"}
+                            {selectedPerson.email.trim() && !emailLooksValid(selectedPerson.email) ? <span className={styles.sheetFlag}>형식 확인 필요</span> : null}
+                          </dd>
+                        </div>
+                        <div><dt>그룹</dt><dd>{selectedPerson.group || "미지정"}</dd></div>
+                      </dl>
+                    </section>
+                    <section className={styles.sheetSection} aria-label="출입">
+                      <h4>출입</h4>
+                      <p className={styles.sheetPresence}>{presenceSentence(selectedPerson)}</p>
+                    </section>
                     {selectedPerson.ticketReview !== "valid" && (selectedPerson.ticketReview !== "cancelled" || selectedPerson.status.toUpperCase() !== "CANCELLED") ? <p role="note" id={`ticket-state-note-${selectedPerson.id}`}>
                       {selectedPerson.ticketReview === "expired" ? "티켓이 만료됐습니다." : selectedPerson.ticketReview === "revoked" ? "티켓이 철회됐습니다." : selectedPerson.ticketReview === "cancelled" ? "신청 상태와 취소 기록이 일치하지 않습니다." : "티켓 상태를 확인할 수 없습니다."}
                       {selectedPerson.ticketReview === "unknown" ? " 최신 목록을 새로고침한 뒤 다시 확인하세요." : selectedPerson.ticketReview === "cancelled" ? selectedPerson.cancellationConflictReview && canResolveCancellationConflict && !participantsLocked ? " 참가자의 의사를 확인한 뒤 아래에서 기록을 검토하세요." : " 행사 담당자나 시스템 관리자에게 확인하세요." : canReissueTicket && !participantsLocked ? " 필요하면 아래 티켓 재발급을 이용하세요." : " 행사 담당자에게 확인하세요."}
@@ -2422,6 +2487,9 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                     </section>
                     {selectedPerson.status === "APPROVED" && (canMutateStatus || (canEditParticipant && !participantsLocked)) ? (
                       <RosterNameTag key={selectedPerson.id} eventId={eventId} person={selectedPerson} eventName={state.eventName} />
+                    ) : null}
+                    {unresolvedRosterReceipt || receiptRefreshLock ? (
+                      <p role="note">이전 작업의 처리 결과를 확인하는 중이라 일부 작업이 잠겨 있습니다. 시트를 닫고 명단 위 안내에서 확인한 뒤 다시 시도하세요.</p>
                     ) : null}
                     <div className={styles.detailActions}>
                       {canReviewExit && selectedPerson.attendanceReview ? <ProductButton type="button" className="button button-secondary" disabled={unconfirmedExit || unconfirmedReconciliation || receiptRefreshLock}

@@ -26,8 +26,8 @@ const check = (name, condition) => { assert.ok(condition, name); checks.push(nam
     const base = `${f.baseUrl}/console/events/${f.eventId}`;
     const a11y = async (p, name) => {
       await p.evaluate(axeSource);
-      const findings = await p.evaluate(async () => (await axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a','wcag2aa','wcag21a','wcag21aa'] } })).violations.filter(v => ['serious','critical'].includes(v.impact)).map(v => v.id));
-      check(`${name}: no blocking accessibility findings`, findings.length === 0);
+      const findings = await p.evaluate(async () => (await axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a','wcag2aa','wcag21a','wcag21aa'] } })).violations.filter(v => ['serious','critical'].includes(v.impact)).map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).join(' | ')}`));
+      check(`${name}: no blocking accessibility findings ${JSON.stringify(findings)}`, findings.length === 0);
     };
     // Event creation asks for its two required fields before optional setup.
     for (const size of [{width:1280,height:900},{width:1280,height:600},{width:390,height:844},{width:320,height:568}]) {
@@ -105,13 +105,12 @@ const check = (name, condition) => { assert.ok(condition, name); checks.push(nam
     const trigger = page.getByRole('button', { name: /참가자 상세/ }).first(); await trigger.click();
     const panel = page.getByRole('dialog');
     await panel.waitFor();
-    await page.waitForFunction(() => document.querySelector('[role="dialog"]')?.getAttribute('aria-modal') !== 'true');
-    check('desktop detail is nonmodal', await panel.getAttribute('aria-modal') !== 'true');
-    check('desktop detail keeps page scrolling', await page.evaluate(() => document.body.style.overflow !== 'hidden'));
-    const choice = page.getByRole('checkbox', { name: /선택$/ }).first(); await choice.check();
-    check('list remains interactive beside the detail', await choice.isChecked());
-    await choice.focus(); await page.keyboard.press('Escape');
-    check('Escape in the list does not close a separate detail', await panel.isVisible());
+    // Reopened 2026-11-20: details are an overlay sheet (modal), not a docked column.
+    await page.waitForFunction(() => document.querySelector('[role="dialog"]')?.getAttribute('aria-modal') === 'true');
+    check('desktop detail is a modal overlay sheet', await panel.getAttribute('aria-modal') === 'true');
+    check('desktop detail locks page scrolling', await page.evaluate(() => document.body.style.overflow === 'hidden'));
+    await page.waitForTimeout(400); const sheetBox = await panel.boundingBox();
+    check('desktop sheet hugs the right edge, 440-480px wide', Boolean(sheetBox) && Math.abs(sheetBox.x + sheetBox.width - 1440) < 2 && sheetBox.width >= 440 && sheetBox.width <= 480);
     await panel.getByRole('heading', { name: '신청 정보' }).focus(); await page.keyboard.press('Escape');
     await panel.waitFor({ state: 'detached' }); await page.waitForFunction(label => document.activeElement?.getAttribute('aria-label') === label, await trigger.getAttribute('aria-label')); check('detail Escape returns focus to its row', await trigger.evaluate(el => el === document.activeElement));
     await trigger.click(); await a11y(page, 'desktop inspector'); await page.screenshot({ path: path.join(out, 'roster-desktop.png') });
@@ -121,7 +120,8 @@ const check = (name, condition) => { assert.ok(condition, name); checks.push(nam
     const printDisclosure = panel.locator('summary').filter({ hasText: '네임택 인쇄' });
     const closeDetail = panel.getByRole('button', { name: '닫기', exact: true });
     await closeDetail.focus(); await page.keyboard.press('Tab');
-    check('phone detail wraps to its first visible control, not a collapsed print field', await printDisclosure.evaluate(el => el === document.activeElement));
+    // The first stop is now the previous/next person control (the first person has no previous), never a collapsed print field.
+    check('phone detail wraps to its first visible control, not a collapsed print field', await panel.getByRole('button', { name: '다음 참가자' }).evaluate(el => el === document.activeElement));
     await page.keyboard.press('Shift+Tab');
     check('phone detail wraps backwards to its close action', await closeDetail.evaluate(el => el === document.activeElement));
     // The name-tag preview mounts after the disclosure's toggle event, so wait for it before tabbing.
