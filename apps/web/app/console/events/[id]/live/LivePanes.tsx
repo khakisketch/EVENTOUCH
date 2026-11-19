@@ -11,6 +11,7 @@ import { participationTypeLabel } from "../../../../../lib/participation-work";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
 import DeviceFrame from "../../../console-ui/DeviceFrame";
 import { ArrowRightIcon, ExternalLinkIcon } from "../../../console-ui/ConsoleIcons";
+import LivePill, { type LivePillTone } from "./LivePill";
 import { titlesMatch, type LiveCue } from "./live-schedule";
 import type { LiveDrawProgram, LiveModel, LiveModule, LiveReward } from "./live-model";
 import styles from "./live.module.css";
@@ -30,6 +31,11 @@ const CUE_LABEL: Record<string, string> = { done: "지난 일정", current: "지
 
 function statusLabel(module: LiveModule): string {
   return STATUS_LABEL[module.status] ?? "상태 확인 필요";
+}
+
+// OPEN reads green, DRAFT is work waiting for the operator (amber), CLOSED is done (quiet).
+function statusTone(module: LiveModule): LivePillTone {
+  return module.status === "OPEN" ? "live" : module.status === "DRAFT" ? "wait" : "neutral";
 }
 
 function timeRange(cue: LiveCue): string {
@@ -94,9 +100,8 @@ export function LiveCuesPane({ model, eventId, cues, cueDate, now, selectedId, o
       {modules.map((module) => (
         <li key={module.id}>
           <button type="button" className={styles.cueEvent} data-status={module.status} aria-pressed={module.id === selectedId} onClick={() => onSelect(module.id)}>
-            <i aria-hidden="true" />
-            <span>{module.title}</span>
-            <em>{participationTypeLabel(module.type)} · {statusLabel(module)}</em>
+            <span className={styles.chipTitle}>{module.title}</span>
+            <span className={styles.chipMeta}>{participationTypeLabel(module.type)} <LivePill tone={statusTone(module)} dot>{statusLabel(module)}</LivePill></span>
           </button>
         </li>
       ))}
@@ -205,8 +210,83 @@ export function LiveStagePane(props: {
 
   return (
     <section className={`${styles.pane} ${styles.paneStage}`} aria-labelledby="live-stage-heading" data-live-pane="stage">
-      <h2 id="live-stage-heading" className={styles.paneTitle}>지금 행사장 화면</h2>
+      <h2 id="live-stage-heading" className={styles.paneTitle}>지금 진행</h2>
 
+      <h3 className={styles.miniTitle} id="live-events-heading">무대 이벤트</h3>
+      {model.modules.length ? (
+        <ul className={styles.pick} aria-labelledby="live-events-heading">
+          {model.modules.map((module) => (
+            <li key={module.id}>
+              <button type="button" className={styles.pickItem} data-status={module.status} aria-pressed={module.id === selected?.id} onClick={() => props.onSelect(module.id)}>
+                <span className={styles.chipTitle}>{module.title}</span>
+                <span className={styles.chipMeta}>{participationTypeLabel(module.type)} <LivePill tone={statusTone(module)} dot>{statusLabel(module)}</LivePill></span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className={styles.empty}>
+          진행할 참여 이벤트가 없습니다.
+          <ProductLink variant="ghost" href={`${base}/programs`}>참여 콘텐츠 보기<ArrowRightIcon /></ProductLink>
+        </p>
+      )}
+
+      {selected ? (
+        <div className={styles.eventPanel} data-live-event={selected.id} data-status={selected.status}>
+          <div className={styles.eventHead}>
+            <div>
+              <h3 className={styles.eventTitle}>{selected.title}</h3>
+              <p className={styles.eventMeta}>
+                {participationTypeLabel(selected.type)} <LivePill tone={statusTone(selected)} dot>{statusLabel(selected)}</LivePill>
+                {selectedPicked ? " · 행사장 화면에 나가는 중" : ""}
+                {` · 받은 ${model.received[selected.id] ?? 0}${receivedUnit(selected.type)}`}
+              </p>
+            </div>
+          </div>
+
+          {writable ? (
+            <div className={styles.bigRow}>
+              {selected.status === "OPEN" ? (
+                <ProductButton type="button" variant="primary" size="lg" disabled={locked} onClick={() => props.onConfirm({ kind: "status", moduleId: selected.id, to: "CLOSED" })}>마감</ProductButton>
+              ) : (
+                <ProductButton type="button" variant={selected.status === "DRAFT" ? "primary" : "secondary"} size="lg" disabled={locked} onClick={() => props.onConfirm({ kind: "status", moduleId: selected.id, to: "OPEN" })}>
+                  {selected.status === "CLOSED" ? "다시 열기" : "열기"}
+                </ProductButton>
+              )}
+              {type === "quiz" && selected.published && !selected.revealed && (selected.status === "OPEN" || selected.status === "CLOSED") ? (
+                <ProductButton type="button" variant="secondary" size="lg" disabled={locked} onClick={() => props.onConfirm({ kind: "reveal", moduleId: selected.id })}>결과 공개 · 정답</ProductButton>
+              ) : null}
+              {(type === "poll" || type === "qa") && selected.published && props.canDisplay && screenOn ? (
+                <ProductButton type="button" variant="secondary" size="lg" disabled={locked || selectedPicked || (type === "qa" && model.displayOptions.approvedQuestions === 0)} title={selectedPicked ? "이미 행사장 화면에 나가고 있습니다" : type === "qa" && model.displayOptions.approvedQuestions === 0 ? "승인된 질문이 있어야 화면에 표시할 수 있습니다" : undefined} onClick={() => props.onShowResults(selected)}>
+                  결과 공개 · 화면에 표시
+                </ProductButton>
+              ) : null}
+              {type === "draw" && props.canDraws ? (
+                <>
+                  <label className={styles.countField} htmlFor={`live-count-${selected.id}`}>
+                    <span>당첨 인원</span>
+                    <input id={`live-count-${selected.id}`} type="number" min={1} max={20} inputMode="numeric" value={props.counts[countKey] ?? "1"} disabled={locked}
+                      aria-invalid={error?.key === countKey} aria-describedby={error?.key === countKey ? "live-count-error" : undefined}
+                      onChange={(event) => props.onCount(countKey, event.target.value)} />
+                  </label>
+                  <ProductButton type="button" variant="secondary" size="lg" disabled={locked || selected.status !== "OPEN"} title={selected.status !== "OPEN" ? "진행 중인 추첨만 실행할 수 있습니다. 먼저 여세요." : undefined}
+                    onClick={() => askCount(countKey, 20, (count) => ({ kind: "draw-run", moduleId: selected.id, count }))}>추첨 실행</ProductButton>
+                  {selected.pendingDrawId ? (
+                    <ProductButton type="button" variant="secondary" size="lg" disabled={locked} onClick={() => props.onConfirm({ kind: "draw-publish", moduleId: selected.id, drawId: selected.pendingDrawId })}>결과 공개 · 최신 추첨</ProductButton>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
+          ) : (
+            <p className={styles.hintLine}>이 계정은 진행 상태를 바꿀 수 없습니다. 상태와 응답만 볼 수 있습니다.</p>
+          )}
+          {error?.key === countKey ? <p id="live-count-error" className={styles.fail} role="alert">{error.message}</p> : null}
+          {confirmBox(confirm, (value) => "moduleId" in value && value.moduleId === selected.id)}
+        </div>
+      ) : null}
+
+      <div className={styles.divider} />
+      <h3 className={styles.miniTitle} id="live-screen-heading">행사장 화면</h3>
       <div className={styles.tv} data-live-tv>
         <div className={styles.tvGlass} aria-hidden="true">
           <DeviceFrame variant="screen" fixed maxDisplayWidth={820} className={styles.tvDevice}>
@@ -258,81 +338,6 @@ export function LiveStagePane(props: {
       ) : null}
       {screenOn && props.canDisplay ? <p className={styles.hintLine}>추첨은 무대별 최근 공개 결과를 고를 수 있습니다. 공개 중인 결과는 다른 출력을 적용할 때까지 유지됩니다.</p> : null}
       {changed ? <p className={styles.hintLine} role="status">선택한 출력은 아직 적용되지 않았습니다. ‘출력 적용’을 누르면 행사장 화면에 나옵니다.</p> : null}
-
-      <div className={styles.divider} />
-      <h3 className={styles.miniTitle} id="live-events-heading">무대 이벤트</h3>
-      {model.modules.length ? (
-        <ul className={styles.pick} aria-labelledby="live-events-heading">
-          {model.modules.map((module) => (
-            <li key={module.id}>
-              <button type="button" className={styles.pickItem} data-status={module.status} aria-pressed={module.id === selected?.id} onClick={() => props.onSelect(module.id)}>
-                <i aria-hidden="true" />
-                <span>{module.title}</span>
-                <em>{participationTypeLabel(module.type)} · {statusLabel(module)}</em>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className={styles.empty}>
-          진행할 참여 이벤트가 없습니다.
-          <ProductLink variant="ghost" href={`${base}/programs`}>참여 콘텐츠 보기<ArrowRightIcon /></ProductLink>
-        </p>
-      )}
-
-      {selected ? (
-        <div className={styles.eventPanel} data-live-event={selected.id} data-status={selected.status}>
-          <div className={styles.eventHead}>
-            <div>
-              <h3 className={styles.eventTitle}>{selected.title}</h3>
-              <p className={styles.eventMeta}>
-                {participationTypeLabel(selected.type)} · <b data-status={selected.status}>{statusLabel(selected)}</b>
-                {selectedPicked ? " · 행사장 화면에 나가는 중" : ""}
-                {` · 받은 ${model.received[selected.id] ?? 0}${receivedUnit(selected.type)}`}
-              </p>
-            </div>
-          </div>
-
-          {writable ? (
-            <div className={styles.bigRow}>
-              {selected.status === "OPEN" ? (
-                <ProductButton type="button" variant="primary" size="lg" disabled={locked} onClick={() => props.onConfirm({ kind: "status", moduleId: selected.id, to: "CLOSED" })}>마감</ProductButton>
-              ) : (
-                <ProductButton type="button" variant={selected.status === "DRAFT" ? "primary" : "secondary"} size="lg" disabled={locked} onClick={() => props.onConfirm({ kind: "status", moduleId: selected.id, to: "OPEN" })}>
-                  {selected.status === "CLOSED" ? "다시 열기" : "열기"}
-                </ProductButton>
-              )}
-              {type === "quiz" && selected.published && !selected.revealed && (selected.status === "OPEN" || selected.status === "CLOSED") ? (
-                <ProductButton type="button" variant="secondary" size="lg" disabled={locked} onClick={() => props.onConfirm({ kind: "reveal", moduleId: selected.id })}>결과 공개 · 정답</ProductButton>
-              ) : null}
-              {(type === "poll" || type === "qa") && selected.published && props.canDisplay && screenOn ? (
-                <ProductButton type="button" variant="secondary" size="lg" disabled={locked || selectedPicked || (type === "qa" && model.displayOptions.approvedQuestions === 0)} title={selectedPicked ? "이미 행사장 화면에 나가고 있습니다" : type === "qa" && model.displayOptions.approvedQuestions === 0 ? "승인된 질문이 있어야 화면에 표시할 수 있습니다" : undefined} onClick={() => props.onShowResults(selected)}>
-                  결과 공개 · 화면에 표시
-                </ProductButton>
-              ) : null}
-              {type === "draw" && props.canDraws ? (
-                <>
-                  <label className={styles.countField} htmlFor={`live-count-${selected.id}`}>
-                    <span>당첨 인원</span>
-                    <input id={`live-count-${selected.id}`} type="number" min={1} max={20} inputMode="numeric" value={props.counts[countKey] ?? "1"} disabled={locked}
-                      aria-invalid={error?.key === countKey} aria-describedby={error?.key === countKey ? "live-count-error" : undefined}
-                      onChange={(event) => props.onCount(countKey, event.target.value)} />
-                  </label>
-                  <ProductButton type="button" variant="secondary" size="lg" disabled={locked || selected.status !== "OPEN"} title={selected.status !== "OPEN" ? "진행 중인 추첨만 실행할 수 있습니다. 먼저 여세요." : undefined}
-                    onClick={() => askCount(countKey, 20, (count) => ({ kind: "draw-run", moduleId: selected.id, count }))}>추첨 실행</ProductButton>
-                  {selected.pendingDrawId ? (
-                    <ProductButton type="button" variant="secondary" size="lg" disabled={locked} onClick={() => props.onConfirm({ kind: "draw-publish", moduleId: selected.id, drawId: selected.pendingDrawId })}>결과 공개 · 최신 추첨</ProductButton>
-                  ) : null}
-                </>
-              ) : null}
-            </div>
-          ) : (
-            <p className={styles.hintLine}>이 계정은 진행 상태를 바꿀 수 없습니다. 상태와 응답만 볼 수 있습니다.</p>
-          )}
-          {error?.key === countKey ? <p id="live-count-error" className={styles.fail} role="alert">{error.message}</p> : null}
-          {confirmBox(confirm, (value) => "moduleId" in value && value.moduleId === selected.id)}
-        </div>
-      ) : null}
 
       {programs.length ? (
         <>
@@ -397,6 +402,28 @@ export function LiveSidePane({ model, eventId, selected, cues, canRewards, locke
 
   return (
     <aside className={`${styles.pane} ${styles.paneSide}`} aria-label="실시간 현황" data-live-pane="side">
+      <section aria-labelledby="live-next-heading" className={styles.block}>
+        <h2 id="live-next-heading" className={styles.paneTitle}>다음에 할 일</h2>
+        {next || waiting.length ? (
+          <ul className={styles.todo}>
+            {next ? (nextModule ? (
+              <li>
+                <button type="button" className={styles.todoButton} onClick={() => onSelect(nextModule.id)}>
+                  <span>{next.title}</span><em>{next.start || "시간 미정"} · {participationTypeLabel(nextModule.type)} 대기</em>
+                </button>
+              </li>
+            ) : <li><span>{next.title}</span><em>{next.start || "시간 미정"}</em></li>) : null}
+            {waiting.map((module) => (
+              <li key={module.id}>
+                <button type="button" className={styles.todoButton} onClick={() => onSelect(module.id)}>
+                  <span>{module.title}</span><em>대기 · {participationTypeLabel(module.type)}</em>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : <p className={styles.empty}>예정된 일정과 대기 중인 이벤트가 없습니다.</p>}
+      </section>
+
       <section aria-labelledby="live-response-heading" className={styles.block}>
         <h2 id="live-response-heading" className={styles.paneTitle}>실시간 응답</h2>
         {selected ? (
@@ -420,28 +447,6 @@ export function LiveSidePane({ model, eventId, selected, cues, canRewards, locke
             ) : null}
           </>
         ) : <p className={styles.empty}>선택한 참여 이벤트가 없습니다.</p>}
-      </section>
-
-      <section aria-labelledby="live-next-heading" className={styles.block}>
-        <h2 id="live-next-heading" className={styles.paneTitle}>다음에 할 일</h2>
-        {next || waiting.length ? (
-          <ul className={styles.todo}>
-            {next ? (nextModule ? (
-              <li>
-                <button type="button" className={styles.todoButton} onClick={() => onSelect(nextModule.id)}>
-                  <span>{next.title}</span><em>{next.start || "시간 미정"} · {participationTypeLabel(nextModule.type)} 대기</em>
-                </button>
-              </li>
-            ) : <li><span>{next.title}</span><em>{next.start || "시간 미정"}</em></li>) : null}
-            {waiting.map((module) => (
-              <li key={module.id}>
-                <button type="button" className={styles.todoButton} onClick={() => onSelect(module.id)}>
-                  <span>{module.title}</span><em>대기 · {participationTypeLabel(module.type)}</em>
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : <p className={styles.empty}>예정된 일정과 대기 중인 이벤트가 없습니다.</p>}
       </section>
 
       <section aria-labelledby="live-review-heading" className={styles.block}>
