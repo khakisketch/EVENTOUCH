@@ -26,6 +26,7 @@ import {
 } from "../../../console-ui/ConsolePageHeader";
 import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleRefreshButton from "../../../console-ui/ConsoleRefreshButton";
+import { MessageIcon, UsersIcon } from "../../../admin-icons";
 import ConsoleSectionNav, { requestConsoleTask } from "../../../console-ui/ConsoleSectionNav";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { consoleFetch, subscribeConsoleFreshness } from "../../../../../lib/console-api";
@@ -3033,8 +3034,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     {composeStep === 1 && reloadSummary ? (
                       <ConsoleFeedback kind="info" id="campaign-reload-summary">{reloadSummary}</ConsoleFeedback>
                     ) : null}
-                    <p className={styles.selectionSummary} id="recipient-summary" role="status">
-                      선택 {selectedCount}명
+                    <p className={styles.selectionSummary} id="recipient-summary" role="status" data-empty={selectedCount === 0 ? "true" : undefined}>
+                      <strong className={styles.selectionCount}>선택 {selectedCount}명</strong>
                       {selectedApproved > 0 ? <> · 확정 {selectedApproved}명</> : null}
                       {selectedPending > 0 ? <> · 승인 대기 {selectedPending}명</> : null}
                       {selectedWaitlist > 0 ? <> · 대기 명단 {selectedWaitlist}명</> : null}
@@ -3170,7 +3171,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                                 checked={selectedSet.has(person.id)}
                                 onChange={() => toggleRecipient(person.id)}
                               />
-                              <span className={styles.recipientName}>{person.name}</span>
+                              <span className={styles.recipientName}><span className={styles.recipientAvatar} data-status={person.status} aria-hidden="true">{[...person.name.trim()][0] ?? "?"}</span>{person.name}</span>
                               <span className={styles.recipientMeta} data-recipient-meta>
                                 {person.company ? `${person.company} · ` : ""}{person.group} · {maskPhone(person.phone)} · {participantStatusLabel(person.status)}
                               </span>
@@ -3685,23 +3686,27 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 <p>{messagesLocked ? "등록된 발송 기록은 이곳에서 확인합니다." : "메시지를 작성하고 수신자를 선택하면 발송 전에 내용을 확인할 수 있습니다."}</p>
               </div>
             ) : (<>
-            {(attentionCampaigns.length > 0 || state.campaigns.some((campaign) => campaign.status === "SCHEDULED") || attentionOnly || historyStatus === "SCHEDULED") ? <div className={styles.historyOverview} role="group" aria-label="발송 빠른 필터">
-              {(attentionCampaigns.length > 0 || attentionOnly) ? (
-              <ProductButton type="button" className={styles.historyOverviewItem} variant="secondary" aria-pressed={attentionOnly} onClick={() => {
-                setAttentionOnly((current) => !current);
-                setHistoryStatus("ALL"); setHistoryQuery(""); setHistoryLimit(10); setHistoryOpen(true);
+            <div className={styles.historyOverview} role="group" aria-label="발송 빠른 필터">
+              <ProductButton type="button" className={styles.historyOverviewItem} variant="ghost" data-overview="all" aria-pressed={!attentionOnly && historyStatus === "ALL"} onClick={() => {
+                setAttentionOnly(false);
+                setHistoryStatus("ALL"); setHistoryQuery(""); setHistoryLimit(10);
               }}>
-                확인 필요한 발송 <strong>{attentionCampaigns.length}건</strong>
-              </ProductButton>) : null}
-              {(state.campaigns.some((campaign) => campaign.status === "SCHEDULED") || historyStatus === "SCHEDULED") ? (
-              <ProductButton type="button" className={styles.historyOverviewItem} variant="secondary" aria-pressed={!attentionOnly && historyStatus === "SCHEDULED"} onClick={() => {
+                <span>전체 발송</span> <strong>{state.campaigns.length}건</strong>
+              </ProductButton>
+              <ProductButton type="button" className={styles.historyOverviewItem} variant="ghost" data-overview="scheduled" aria-pressed={!attentionOnly && historyStatus === "SCHEDULED"} onClick={() => {
                 setAttentionOnly(false);
                 setHistoryStatus((current) => !attentionOnly && current === "SCHEDULED" ? "ALL" : "SCHEDULED");
                 setHistoryQuery(""); setHistoryLimit(10); setHistoryOpen(true);
               }}>
-                예약된 발송 <strong>{state.campaigns.filter((campaign) => campaign.status === "SCHEDULED").length}건</strong>
-              </ProductButton>) : null}
-            </div> : null}
+                <span>예약된 발송</span> <strong>{state.campaigns.filter((campaign) => campaign.status === "SCHEDULED").length}건</strong>
+              </ProductButton>
+              <ProductButton type="button" className={styles.historyOverviewItem} variant="ghost" data-overview="attention" data-alert={attentionCampaigns.length > 0 ? "true" : undefined} aria-pressed={attentionOnly} onClick={() => {
+                setAttentionOnly((current) => !current);
+                setHistoryStatus("ALL"); setHistoryQuery(""); setHistoryLimit(10); setHistoryOpen(true);
+              }}>
+                <span>확인 필요한 발송</span> <strong>{attentionCampaigns.length}건</strong>
+              </ProductButton>
+            </div>
             <div className={styles.historyFilters}>
               <label><span className="sr-only">발송 제목 검색</span><input id="message-history-search" type="search" placeholder="발송 제목 검색" value={historyQuery} onChange={(event) => { setHistoryQuery(event.target.value); setHistoryLimit(10); }} /></label>
               <label><span className="sr-only">발송 상태</span><select id="message-history-status" value={historyStatus} onChange={(event) => { setHistoryStatus(event.target.value); setHistoryLimit(10); }}>
@@ -3752,8 +3757,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                           <td className={styles.historyIdentity}><h3>{campaign.title}</h3>
                             {campaign.simulate && !["SIMULATED", "SCHEDULED"].includes(campaign.status) ? <small>모의 · 실제 전달 없음</small> : null}
                           </td>
-                          <td className={styles.historyChannel} data-history-channel><span className={styles.mobileCellLabel}>채널 </span>{channelLabel(campaign.channel)}</td>
-                          <td className={styles.historyCount} data-history-count><span className={styles.mobileCellLabel}>대상 </span>{campaign.recipientIds.length}명</td>
+                          <td className={styles.historyChannel} data-history-channel><span className={styles.mobileCellLabel}>채널 </span><span className={styles.channelChip}><MessageIcon />{channelLabel(campaign.channel)}</span></td>
+                          <td className={styles.historyCount} data-history-count><span className={styles.mobileCellLabel}>대상 </span><span className={styles.countChip}><UsersIcon />{campaign.recipientIds.length}명</span></td>
                           <td className={styles.historyTime} data-history-time><span><span className={styles.mobileCellLabel}>요청 </span><time dateTime={campaign.at || undefined}>{formatDate(campaign.at)}</time></span>
                             {campaign.scheduled || campaign.status === "SCHEDULED" ? <small>예약 {formatSavedSchedule(campaign.scheduled)}</small> : null}
                           </td>

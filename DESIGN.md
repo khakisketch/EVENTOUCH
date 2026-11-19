@@ -314,6 +314,12 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 - 발송 기록 / 템플릿 관리 tabs use the same ink underline. On the template tab the save button is the one orange action.
 - Review stays a separate step. Scheduling, mock send and the send confirmation live there and keep the existing request gates and receipts.
 
+Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behaviour and the one-orange-action rule):
+
+- 발송 기록 / 템플릿 관리 are a segmented pill control; the chosen segment is ink-filled. Step 1/2/3 of the composer are pills with numbered dots; the current step is ink-filled.
+- History opens with three filter cards (전체 발송, 예약된 발송, 확인 필요한 발송: label over a 32px count, ink outline when chosen, amber only for 확인 필요 when it is above zero). Rows keep the table but show channel and recipient count as quiet chips and status as a pill with a dot.
+- Recipient selection shows the chosen count large on a soft band; each recipient row starts with a status-tinted initial avatar. The step recipient summary is a soft band with the count in heading size.
+
 ## 현장 운영 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/operations/OperationsWorkspace.tsx`, mockup scene A3). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-operations-composition.test.cjs` ("approved operations design stays locked") guards it.

@@ -124,9 +124,14 @@ test('approved messages design stays locked', () => {
   // DESIGN.md "메시지 확정 구성": flat one-sheet composer, ink step row,
   // wide writing column with a narrow preview, one orange action per step.
   assert.match(SOURCE, /surface="plain"/u, 'compose is one flat sheet, not a card panel');
-  assert.match(CSS, /\.composeSteps button\[aria-current="step"\]\s*\{[^}]*border-bottom-color:\s*var\(--ink\)/u, 'active step is an ink underline');
+  // Reopened 2026-11-19: steps are three pills; the active one is ink-filled. History gets
+  // three filter cards (전체·예약·확인 필요) and status pills with a dot beside the colour.
+  assert.match(CSS, /\.composeSteps button\[aria-current="step"\]\s*\{[^}]*border-color:\s*var\(--ink\)[^}]*background:\s*var\(--ink\)/u, 'active step is an ink-filled pill');
+  assert.match(CSS, /\.historyOverviewItem\[aria-pressed="true"\]\s*\{[^}]*border-color:\s*var\(--ink\)/u, 'the chosen history card is an ink outline');
+  assert.match(CSS, /\.status::before\s*\{[^}]*border-radius:\s*50%/u, 'status pills carry a dot, not colour alone');
+  for (const overview of ['all', 'scheduled', 'attention']) assert.match(SOURCE, new RegExp(`data-overview="${overview}"`, 'u'), `${overview} history card`);
   assert.match(CSS, /\.composeGrid\[data-step="2"\] \.composeDraft\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(260px,\s*300px\)/u, 'writing column plus one narrow preview');
-  assert.match(CSS, /\.inkTabs :global\(\[role="tab"\]\[aria-selected="true"\]\)\s*\{[^}]*var\(--ink\)/u, 'history/template tabs use the ink underline');
+  assert.match(CSS, /\.inkTabs :global\(\[role="tab"\]\[aria-selected="true"\]\)\s*\{[^}]*background:\s*var\(--ink\)/u, 'history/template tabs are an ink-filled segment');
   assert.match(CSS, /\.inkLink\s*\{\s*color:\s*var\(--ink\)/u, 'utility links are ink, not orange');
   const personalization = CSS.match(/\.personalizationTools > button\s*\{[^}]*\}/u);
   assert.ok(personalization, 'variable chips keep one neutral rule');
