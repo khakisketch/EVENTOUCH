@@ -49,7 +49,11 @@ async function main() {
     });
     const workspace = async () => (await fixture.harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [fixture.eventId])).rows[0].payload;
     const select = async (name) => {
-      await page.locator('input[type="file"]').setInputFiles({ name, mimeType: 'image/png', buffer: png });
+      const [chooser] = await Promise.all([
+        page.waitForEvent('filechooser'),
+        page.getByRole('button', { name: before ? '파일 찾아보기' : '사진 올리기', exact: true }).click(),
+      ]);
+      await chooser.setFiles({ name, mimeType: 'image/png', buffer: png });
       await page.getByRole('button', { name: '선택한 사진 올리기 (1장)' }).click();
     };
     phase = 'malformed record response';
@@ -85,30 +89,36 @@ async function main() {
     await page.reload({ waitUntil: 'networkidle' });
     const shared = page.getByRole('region', { name: '처리 결과 확인' });
     await shared.waitFor();
-    assert.equal(await page.getByRole('button', { name: '파일 찾아보기' }).isDisabled(), true);
+    assert.equal(await page.locator('#evidence-photo-files').isDisabled(), true);
+    assert.equal(await page.getByRole('button', { name: '사진 올리기', exact: true }).count(), 0);
     const beforeCheck = ids['evidence.photo.add'].length;
     await shared.getByRole('button', { name: '서버 처리 확인' }).click();
-    await page.waitForFunction(() => [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === '파일 찾아보기' && !button.disabled));
+    await page.getByRole('button', { name: '사진 올리기', exact: true }).waitFor();
+    assert.equal(await page.locator('#evidence-photo-files').isEnabled(), true);
     assert.equal(ids['evidence.photo.add'].length, beforeCheck);
     assert.equal((await workspace()).evidencePhotos.filter((item) => item.image.name === 'synthetic-evidence-two.png').length, 1);
 
     phase = 'move status and fresh later action';
     const photo = (await workspace()).evidencePhotos.find((item) => item.image.name === 'synthetic-evidence-one.png');
     const row = page.locator(`#evidence-photo-${photo.id}`);
-    await row.getByText('사진 관리', { exact: true }).click();
-    await row.getByLabel('보관 구간 변경').selectOption('STAGE');
-    await row.getByRole('button', { name: '구간 변경', exact: true }).click();
+    const viewer = page.getByRole('dialog', { name: /^(공간구성|무대연출) ·/ });
+    await row.getByRole('button', { name: /크게 보기$/ }).click();
+    await viewer.getByRole('button', { name: '닫기', exact: true }).waitFor();
+    await viewer.getByLabel('보관 구간 변경').selectOption('STAGE');
+    await viewer.getByRole('button', { name: '구간 변경', exact: true }).click();
     mode = 'malformed';
-    await row.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '구간 변경하기' }).click();
+    await viewer.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '구간 변경하기' }).click();
+    await viewer.waitFor({ state: 'hidden' });
     await shared.waitFor();
     await shared.getByRole('button', { name: '서버 처리 확인' }).click();
-    await page.waitForFunction(() => [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === '파일 찾아보기' && !button.disabled));
+    await page.getByRole('button', { name: '사진 올리기', exact: true }).waitFor();
+    assert.equal(await page.locator('#evidence-photo-files').isEnabled(), true);
     assert.equal((await workspace()).evidencePhotos.find((item) => item.id === photo.id).section, 'STAGE');
-    await page.getByRole('group', { name: '현장 사진 구간 선택' }).getByRole('button', { name: /무대연출/ }).click();
-    await row.getByText('사진 관리', { exact: true }).click();
-    await row.getByLabel('보관 구간 변경').selectOption('SPACE');
-    await row.getByRole('button', { name: '구간 변경', exact: true }).click();
-    await row.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '구간 변경하기' }).click();
+    await page.getByRole('group', { name: '촬영 구간' }).getByRole('button', { name: /무대연출/ }).click();
+    await row.getByRole('button', { name: /크게 보기$/ }).click();
+    await viewer.getByLabel('보관 구간 변경').selectOption('SPACE');
+    await viewer.getByRole('button', { name: '구간 변경', exact: true }).click();
+    await viewer.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '구간 변경하기' }).click();
     await row.waitFor({ state: 'hidden' });
     assert.equal((await workspace()).evidencePhotos.find((item) => item.id === photo.id).section, 'SPACE');
     assert.notEqual(ids['evidence.photo.move'][0], ids['evidence.photo.move'][1]);

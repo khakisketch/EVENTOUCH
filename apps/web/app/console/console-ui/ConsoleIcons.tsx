@@ -13,6 +13,15 @@ function baseClass(className?: string): string {
   return ["action-icon", className].filter(Boolean).join(" ");
 }
 
+export function SearchIcon() {
+  return (
+    <svg className={baseClass()} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m15.4 15.4 4.6 4.6" />
+    </svg>
+  );
+}
+
 export function BarsIcon({ className }: IconProps) {
   return (
     <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
@@ -28,6 +37,16 @@ export function CopyIcon({ className }: IconProps) {
     <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
       <rect x="9" y="9" width="11" height="11" rx="2" />
       <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+    </svg>
+  );
+}
+
+export function ExternalLinkIcon({ className }: IconProps) {
+  return (
+    <svg className={baseClass(className)} aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <path d="M14 4h6v6" />
+      <path d="M20 4l-9 9" />
+      <path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" />
     </svg>
   );
 }

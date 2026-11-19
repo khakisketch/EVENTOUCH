@@ -1,246 +1,439 @@
-.introLine {
-  margin: var(--s2) 0 var(--s5);
-  max-width: var(--web-reading-max, 68ch);
-  color: var(--muted);
-}
+/* The event guide's own pieces. The banner, ticket card, circle shortcuts and
+   link rows come from the attendee home (home/home-layouts.module.css) so the
+   guide reads as the same screen; this file adds only what the guide has and
+   the home does not: the intro line, the closed note, and the white section
+   cards. The section, notice and venue classes are also used by the console's
+   content preview phone. */
 
-/* Hero title: the global .event-intro h1 floors at --display (40px), which
-   overwhelms a 390px phone and wraps the event name mid-syllable. The title
-   leads at h1 scale on mobile and grows only with room. Balance keeps the
-   event code (e.g. trailing "30b1ba") from stranding alone on its own line. */
-.eventTitle {
-  margin: 0 0 var(--s3);
-  font-size: clamp(var(--h1), 8vw, var(--display));
-  line-height: 1.2;
-  letter-spacing: -0.04em;
-  word-break: keep-all;
+.intro {
+  margin: 16px 20px 0;
+  color: var(--lay-ink);
+  font-size: 14px;
+  line-height: 1.55;
   overflow-wrap: anywhere;
-  text-wrap: balance;
 }
 
-/* Published keyvisual: the first thing an invited attendee sees. It scales
-   to the reading width and never shifts the facts below it. */
-.keyvisual {
-  display: block;
-  width: 100%;
-  max-width: var(--web-reading-max, 68ch);
-  height: auto;
-  margin-bottom: var(--s4);
-  border-radius: var(--radius);
+.ticketSub {
+  color: color-mix(in srgb, #17252b 72%, #fff);
+  font-size: 12.5px;
+  font-weight: 600;
 }
 
-/* Facts read as plain lines under the title, not as boxes. */
+/* When and where as two tiles with big icons, like the home's tiles. */
 .facts {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s3);
-  margin-bottom: var(--s5);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px 16px 0;
 }
 
-.facts :global(.event-fact) {
-  padding: 0;
+.facts > :only-child {
+  grid-column: 1 / -1;
+}
+
+.factsStack {
+  grid-template-columns: 1fr;
+}
+
+.fact {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border-radius: var(--lay-radius, 22px);
+  background: #fff;
+  color: #17252b;
+  box-shadow: 0 8px 22px -16px rgb(16 17 20 / 70%);
+}
+
+.factIcon {
+  display: grid;
+  flex: none;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 15px;
+  background: var(--brand-tint, #fdeee4);
+  color: var(--brand, #c8441f);
+}
+
+.factIcon :global(svg) {
+  width: 26px;
+  height: 26px;
+}
+
+.factText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.factMain {
+  font-size: 15.5px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.factSub {
+  color: color-mix(in srgb, #17252b 66%, #fff);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.dday {
+  position: absolute;
+  top: -8px;
+  right: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--brand, #c8441f);
+  color: var(--on-brand, #19191c);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+/* Tile and photo layouts: one plain summary card, not the home's tiles. */
+.summary {
+  margin: 14px 16px 0;
+  padding: 4px 18px 18px;
+  border-radius: var(--lay-radius, 22px);
+  background: #fff;
+  color: #17252b;
+  box-shadow: 0 8px 22px -16px rgb(16 17 20 / 70%);
+}
+
+.factRows {
+  display: grid;
+}
+
+.factRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 0;
+  border-top: 1px solid #e5e5e7;
+}
+
+.factRow:first-child {
+  border-top: 0;
+}
+
+.factRow .dday {
+  position: static;
+  margin-left: auto;
+}
+
+.summary .factIcon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+}
+
+.summaryAction {
+  margin-top: 4px;
+}
+
+.summaryIntro {
+  margin: 14px 2px 0;
+  color: #4a5258;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.primaryBlock {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+
+.primaryAction {
+  display: flex;
+  width: 100%;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.primarySub {
+  margin: 0;
+  color: color-mix(in srgb, #17252b 66%, #fff);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.summary .closedCard {
+  background: #f4f4f6;
+  box-shadow: none;
+}
+
+/* The registration card is a link, not a button. */
+.cardLink {
+  text-decoration: none;
+}
+
+/* Opaque like the home's ticket card: it overlaps the banner, so a translucent
+   fill would lose its text on a dark banner. */
+.closedCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 10px 26px -14px rgb(16 17 20 / 60%);
+  color: #17252b;
+}
+
+.closedCard :global(svg) {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  color: color-mix(in srgb, #17252b 60%, #fff);
+}
+
+.registrationClosed {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.recoveryDetails {
+  margin: 8px 20px 0;
+  color: var(--lay-ink);
+}
+
+.recoveryDetails summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.recoveryNote {
+  margin: 0 0 6px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 78%);
+  color: #17252b;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.sections {
+  display: grid;
+  gap: 0;
+  padding: 8px 16px 0;
+}
+
+.sectionLabel {
+  margin: 22px 4px 10px;
+}
+
+.section {
+  scroll-margin-top: 16px;
+}
+
+.card {
+  padding: 6px 18px 16px;
+  border-radius: var(--lay-radius, 22px);
+  background: #fff;
+  color: #17252b;
+  box-shadow: 0 8px 22px -16px rgb(16 17 20 / 70%);
+}
+
+.card :global(.event-facts) {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  margin: 0;
+}
+
+/* Rows, not boxes: the card is already the surface. */
+.card :global(.event-fact) {
+  padding: 12px 0;
   border: 0;
+  border-top: 1px solid #e5e5e7;
   border-radius: 0;
   background: transparent;
 }
 
-.facts :global(.event-fact) dd {
-  font-size: var(--h3);
+.card :global(.event-fact):first-child {
+  border-top: 0;
 }
 
-.cta {
-  display: flex;
-  align-items: stretch;
-  flex-wrap: wrap;
-  gap: var(--s2);
-  margin-top: var(--s4);
-}
-
-/* One primary per screen: the signup fills the row, the way-back links share
-   the next row at the same 44px target without competing for it. */
-.cta > a:first-child,
-.cta > p:first-child {
-  flex: 1 1 100%;
-}
-
-.recoveryLink {
-  max-width: 100%;
-  flex: 1 1 auto;
-}
-
-.homeLink {
-  max-width: 100%;
-  flex: 1 1 auto;
-}
-
-/* Closed intake is information with a way forward, not a dead end: the
-   find-my-ticket link below becomes the one primary action. */
-.registrationClosed {
-  margin: 0;
-  padding: var(--s4);
-  border-radius: 16px;
-  background: var(--surface-muted);
-  color: var(--ink);
-  font-weight: 700;
-}
-
-.cta :global(.button) {
-  min-height: 56px;
-  border-radius: 16px;
-  font-size: var(--body);
-}
-
-.cta .recoveryLink:not(:global(.button-primary)),
-.cta .homeLink {
-  border-color: transparent;
-  background: transparent;
-  color: var(--muted);
-  min-height: 48px;
-  font-size: var(--small);
-}
-
-/* Recovery guidance that shares the CTA row: the same device-binding rule is
-   repeated on the register and ticket screens, so here it reads as one info
-   strip (the register outcome-note voice) instead of a quiet paragraph that
-   splits the primary from the way-back links. */
-.recoveryNote {
-  margin: 0;
-  padding: var(--s4);
-  border-radius: 16px;
-  background: var(--surface-muted);
-  color: var(--ink);
-  font-size: var(--small);
-  font-weight: 700;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
-  word-break: keep-all;
-  flex: 1 1 100%;
-}
-
-.section {
-  max-width: var(--web-content-max, 1120px);
-  margin: var(--s6) auto 0;
-  padding: 0 clamp(var(--s4), 4vw, var(--s6));
-}
-
-.section h2 {
-  margin: 0 0 var(--s3);
-  font-size: var(--h2);
-  letter-spacing: -0.02em;
-}
-
-.noticeList,
-.programList {
+.noticeList {
   display: grid;
-  gap: var(--s3);
+  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.noticeList li,
-.programList li {
-  padding: var(--s4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
+.noticeList li {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid #e5e5e7;
 }
 
-.noticeList h3,
-.programList h3 {
-  margin: 0 0 var(--s2);
-  font-size: var(--h3);
+/* Inside the console's content preview the list has no icon column. */
+.noticeList li:not(:has(.noticeIcon)) {
+  display: block;
+}
+
+.noticeIcon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 13px;
+  background: var(--brand-tint, #fdeee4);
+  color: var(--brand, #c8441f);
+}
+
+.noticeIcon :global(svg) {
+  width: 22px;
+  height: 22px;
+}
+
+.noticeBody {
+  min-width: 0;
+}
+
+.noticeList li[data-pinned] .noticeIcon {
+  background: var(--brand, #c8441f);
+  color: var(--on-brand, #19191c);
+}
+
+.noticeList li:first-child {
+  border-top: 0;
+}
+
+.noticeList h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.4;
   letter-spacing: -0.01em;
 }
 
-.noticeList p,
-.programList p {
+.noticeList p {
   margin: 0;
 }
 
-.noticeList p + p,
-.programList p + p {
-  margin-top: var(--s2);
+.noticeList p + p {
+  margin-top: 8px;
+}
+
+.noticeList :global(.rich-text) {
+  color: #4a5258;
+  font-size: 14.5px;
+  line-height: 1.6;
 }
 
 .pin {
   display: inline-flex;
+  min-height: 24px;
   align-items: center;
-  min-height: 28px;
-  margin-right: var(--s2);
-  padding-inline: var(--s2);
-  border: 1px solid var(--line-strong);
+  margin-right: 8px;
+  padding-inline: 8px;
   border-radius: 999px;
-  background: var(--paper);
-  color: var(--ink);
-  font-size: var(--small);
-  font-weight: 700;
-  vertical-align: baseline;
+  background: var(--brand-tint, #fdeee4);
+  color: var(--brand-text, #8e351f);
+  font-size: 12px;
+  font-weight: 800;
+  vertical-align: middle;
 }
 
-.programMeta {
-  color: var(--muted);
-  font-size: var(--small);
-  font-variant-numeric: tabular-nums;
+/* The venue: a big pin, the place name, its address and a map button. */
+.venueHead {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding-top: 12px;
 }
 
-.programSpeaker {
-  color: var(--brand-text);
-  font-size: var(--small);
+.venueBubble {
+  display: grid;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 17px;
+  background: var(--brand-tint, #fdeee4);
+  color: var(--brand, #c8441f);
+}
+
+.venueBubble :global(svg) {
+  width: 30px;
+  height: 30px;
+}
+
+.venueBody {
+  display: grid;
+  flex: 1;
+  gap: 10px;
+  min-width: 0;
+}
+
+.venueName {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+.mapLink {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 44px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px;
+  border-radius: 14px;
+  background: #17252b;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.mapLink:focus-visible {
+  outline: 3px solid var(--focus, #2453a6);
+  outline-offset: 3px;
 }
 
 .venueText {
   white-space: pre-wrap;
 }
 
-/* The global .event-facts grid holds two columns at every width; on a phone
-   each fact squeezes to ~165px and the date wraps mid-phrase. One column on
-   narrow screens keeps 일정·장소 readable. Globals stay untouched. */
-@media (max-width: 768px) {
-  :global(.event-facts) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .cta > a:first-child,
-  .cta > p:first-child {
-    flex: 1 1 100%;
-  }
-}
-
-@media (max-width: 768px) {
-  .section {
-    margin-top: var(--s5);
-    padding: 0 var(--s4);
-  }
-
-  .noticeList li,
-  .programList li {
-    padding: var(--s3);
-  }
-}
-
-/* 390px-class phones: the CTA keeps primary-first rhythm (full-width primary,
-   one shared row for the way-back links) with a tighter gap so the recovery
-   strip, the primary, and the links read as one decision group. */
-@media (max-width: 480px) {
-  .eventTitle {
-    font-size: clamp(var(--h1), 7vw, 30px);
-  }
-
-  .cta {
-    gap: var(--s2);
-  }
-}
-
-/* Published booth map: the image scales, markers ride percentage positions
-   normalized by the editor, so any board size stays aligned. */
 .mapWrap {
   position: relative;
   display: inline-block;
   max-width: 100%;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--paper);
+  margin-top: 12px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
 }
 
 .mapImage {
@@ -252,15 +445,89 @@
 .mapPoint {
   position: absolute;
   transform: translate(-50%, -50%);
-  padding: 2px var(--s2);
+  padding: 2px 8px;
   border-radius: 999px;
   background: var(--brand);
   color: var(--on-brand);
-  font-size: var(--small);
+  font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
   pointer-events: none;
 }
-.venueMap { margin: var(--s4) 0 0; }
-.venueMap img { display: block; width: auto; max-width: 100%; height: auto; }
-.venueMap figcaption { margin-top: var(--s2); }
+
+.venueMap {
+  margin: 14px 0 0;
+}
+
+.venueMap img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  border-radius: 14px;
+}
+
+.venueMap figcaption {
+  margin-top: 10px;
+}
+
+.addressRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s3);
+  align-items: center;
+}
+
+.address {
+  overflow-wrap: anywhere;
+}
+
+.addressCopy {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+}
+
+.addressValue {
+  min-width: 0;
+  flex: 1 1 20ch;
+  min-height: 42px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--small);
+}
+
+.addressButton {
+  min-height: 44px;
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.addressButton:hover {
+  background: var(--surface-muted);
+}
+
+.addressStatus {
+  flex: 1 1 100%;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.addressButton:focus-visible,
+.addressValue:focus-visible {
+  outline: 3px solid var(--focus, #2453a6);
+  outline-offset: 3px;
+}

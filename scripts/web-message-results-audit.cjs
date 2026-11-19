@@ -112,7 +112,8 @@ async function main() {
       const changedDetail = page.locator(`[id="campaign-detail-${reservation.id}"]`);
       await changed.getByRole('button', { name: `${title} 상세`, exact: true }).press('Enter');
       assert.match(await changed.innerText(), /수신자 변경 · 발송 보류/);
-      assert.match(await changedDetail.innerText(), /수신자가 2명입니다/);
+      await changedDetail.getByRole('heading', { name: '변경된 수신자 2명', exact: true }).waitFor();
+      assert.equal(await changedDetail.getByRole('list', { name: '변경된 수신자 목록' }).getByRole('listitem').count(), 2);
       await changed.scrollIntoViewIfNeeded();
       await page.screenshot({ path: path.join(out, 'recipient-hold-390.png') });
       await changed.getByRole('button', { name: '예약 취소', exact: true }).press('Enter');

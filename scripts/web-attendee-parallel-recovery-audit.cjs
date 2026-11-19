@@ -72,9 +72,9 @@ async function main() {
       await blockedA;
       await route.fulfill({ response });
     });
-    const clickA = a.getByRole('button', { name: '내 티켓 열기', exact: true }).click();
+    const clickA = a.getByRole('button', { name: '내 티켓 열기' }).click();
     await readyA;
-    await b.getByRole('button', { name: '내 티켓 열기', exact: true }).click();
+    await b.getByRole('button', { name: '내 티켓 열기' }).click();
     await b.getByRole('heading', { name: '내 티켓' }).waitFor();
     releaseA();
     await clickA;
@@ -111,9 +111,9 @@ async function main() {
       assert.equal(response.status(), 200);
       await route.abort('failed');
     });
-    await c.getByRole('button', { name: '내 티켓 열기', exact: true }).click();
+    await c.getByRole('button', { name: '내 티켓 열기' }).click();
     await c.getByText('인증 결과를 확인하지 못했습니다.', { exact: false }).waitFor();
-    await d.getByRole('button', { name: '내 티켓 열기', exact: true }).click();
+    await d.getByRole('button', { name: '내 티켓 열기' }).click();
     await d.getByRole('img', { name: /합성 참가자 라님의/ }).waitFor();
     await c.getByRole('button', { name: '연결된 티켓 확인', exact: true }).click();
     await c.getByText('이 연락처로 연결된 티켓을 확인하지 못했습니다.', { exact: false }).waitFor();
@@ -133,7 +133,7 @@ async function main() {
       if (!interrupted) { interrupted = true; await route.abort('failed'); }
       else await route.continue();
     });
-    await e.getByRole('button', { name: '내 티켓 열기', exact: true }).click();
+    await e.getByRole('button', { name: '내 티켓 열기' }).click();
     await e.getByRole('button', { name: '다시 시도', exact: true }).click();
     await e.getByRole('img', { name: /합성 참가자 마님의/ }).waitFor();
     await e.getByText('이 브라우저에서 탭 보관이 차단되어 있습니다.', { exact: false }).waitFor();

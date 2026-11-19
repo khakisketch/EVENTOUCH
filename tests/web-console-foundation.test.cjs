@@ -50,7 +50,7 @@ function quotedList(block) {
 
 const HOOK_CALL = /\buse(?:State|Effect|Memo|Callback|Ref|Id)\s*\(/u;
 
-test('navigation registry covers all sixteen menu pages as metadata only', () => {
+test('navigation registry covers all seventeen menu pages as metadata only', () => {
   const nav = readWeb('app/console/console-navigation.ts');
 
   const unionBlock = nav.match(/export type ConsolePageId =([\s\S]*?);/u);
@@ -58,7 +58,7 @@ test('navigation registry covers all sixteen menu pages as metadata only', () =>
   assert.deepEqual(quotedList(unionBlock[1]), [
     'events', 'clients', 'team', 'overview', 'participants', 'participantImport',
     'messages', 'operations', 'programs', 'draws', 'photos', 'content',
-    'attendeePage', 'rewards', 'settings', 'reports',
+    'attendeePage', 'rewards', 'settings', 'reports', 'analysis',
   ]);
 
   // The rail names the participants destination apart from its hub: the
@@ -68,7 +68,7 @@ test('navigation registry covers all sixteen menu pages as metadata only', () =>
     participants: '참가자 명단', participantImport: '명단 가져오기', messages: '메시지',
     operations: '현장 운영', programs: '참여 콘텐츠', draws: '추첨·투표',
     photos: '현장 사진', content: '공지·안내', attendeePage: '참가자 페이지',
-    rewards: '경품 지급 현황', settings: '행사 설정', reports: '결과 보고서',
+    rewards: '경품 지급 현황', settings: '행사 설정', reports: '결과 보고서', analysis: '기간 분석',
   };
   for (const [id, label] of Object.entries(labels)) {
     const scope = ['events', 'clients', 'team'].includes(id) ? 'organization' : 'event';
@@ -89,7 +89,7 @@ test('navigation exposes rail order, root ids and existing routes', () => {
     'pageIds: ["overview", "participants", "messages"]',
     'pageIds: ["operations", "draws", "rewards", "photos"]',
     'pageIds: ["attendeePage", "content", "programs", "settings"]',
-    'pageIds: ["reports"]',
+    'pageIds: ["reports", "analysis"]',
   ]) assert.ok(nav.includes(pages), `work group keeps ${pages}`);
   const hubOrder = ['"today"', '"onsite"', '"prepare"', '"results"'].map((id) => nav.indexOf(`{ id: ${id}`));
   assert.ok(hubOrder.every((position) => position >= 0));

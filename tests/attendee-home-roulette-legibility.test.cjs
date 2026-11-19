@@ -93,10 +93,13 @@ test("home surface ink guarantees the 4.5 floor into the mid-luminance band", ()
   // Brand-adjacent dark/light first; pure black/white escalation only when
   // neither clears the floor (with margin). Mid-tones like #75828E fall in
   // the gap where both brand candidates sit below 4.5:1.
-  assert.match(shell, /contrast\(dark, homeStyle\.backgroundColor\) >= contrast\(light, homeStyle\.backgroundColor\)/u);
-  assert.match(shell, /contrast\(ink, homeStyle\.backgroundColor\) < 4\.55/u);
-  assert.match(shell, /"#000000"/u);
-  assert.match(shell, /"--home-background-copy": ink/u);
+  // The ink rule lives in lib/home-surface.ts so the home and the event guide share it.
+  const surface = fs.readFileSync(path.join(root, "apps/web/lib/home-surface.ts"), "utf8");
+  assert.match(shell, /homeSurfaceStyle\(state\.homeStyle\)/u, "the home draws its ground through the shared helper");
+  assert.match(surface, /contrast\(dark, homeStyle\.backgroundColor\) >= contrast\(light, homeStyle\.backgroundColor\)/u);
+  assert.match(surface, /contrast\(ink, homeStyle\.backgroundColor\) < 4\.55/u);
+  assert.match(surface, /"#000000"/u);
+  assert.match(surface, /"--home-background-copy": ink/u);
 });
 
 test("participant guidance/result copy wraps by eojeol, data and banner untouched", () => {

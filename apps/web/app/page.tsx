@@ -171,7 +171,7 @@ export default function Home() {
                 </button>
               ))}
             </div>
-            <figure className={styles.consoleEvidence} role="tabpanel" aria-label={activeHero.caption}>
+            <section className={styles.consoleEvidence} role="tabpanel" aria-label={activeHero.caption}>
               <div className={styles.windowBar} aria-hidden="true">
                 <i />
                 <i />
@@ -179,11 +179,11 @@ export default function Home() {
                 <span>{activeHero.caption}</span>
               </div>
               <ProductPreview variant={activeHero.id} />
-              <figcaption>
+              <p className={styles.consoleCaption}>
                 <strong>{activeHero.caption}</strong>
                 <span>{activeHero.note}</span>
-              </figcaption>
-            </figure>
+              </p>
+            </section>
           </div>
 
           <ul className={styles.factStrip} aria-label="도입 전 핵심 사실">
@@ -414,9 +414,9 @@ export default function Home() {
         <span><Link href="/login">운영자·스태프 로그인</Link> · 이용약관·개인정보처리방침 준비 중</span>
       </footer>
 
-      <div className={styles.mobileCta}>
+      <nav className={styles.mobileCta} aria-label="모바일 도입 문의">
         <a href={INQUIRY_HREF}>이메일로 도입 문의</a>
-      </div>
+      </nav>
     </div>
   );
 }

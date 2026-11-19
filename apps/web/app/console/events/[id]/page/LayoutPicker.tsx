@@ -8,20 +8,18 @@
 import type { CSSProperties } from "react";
 import AttendeeHomeLanding from "../../../../event/[slug]/home/AttendeeHomeLanding";
 import attendeeHomeStyles from "../../../../event/[slug]/home/home.module.css";
-import { readableInk, type HomeLayout, type HomePhoto, type HomeStyle, type MenuShape } from "../../../../../lib/attendee-home";
+import { readableInk, type HomeLayout, type HomePhoto, type HomeStyle } from "../../../../../lib/attendee-home";
 import type { HomeMenus, HomeProgram } from "../../../../../lib/attendee-home-menus";
 import styles from "./layout-picker.module.css";
 
 const LAYOUTS: Array<{ id: HomeLayout; name: string; hint: string }> = [
   { id: "tile", name: "타일형", hint: "정사각 타일 메뉴" },
   { id: "poster", name: "포스터형", hint: "큰 배너와 아이콘 메뉴" },
-  { id: "typography", name: "타이포형", hint: "이미지 없이 큰 글자" },
   { id: "instagram", name: "인스타형", hint: "참가자 사진 피드" },
 ];
 
 type Props = {
   value: HomeLayout;
-  menuShape: MenuShape;
   homeStyle: HomeStyle;
   eventName: string;
   keyvisual: string | null;
@@ -32,10 +30,9 @@ type Props = {
   unavailable: Array<"notice" | "lucky" | "roulette" | "vote" | "stamp">;
   disabled?: boolean;
   onLayout: (layout: HomeLayout) => void;
-  onMenuShape: (shape: MenuShape) => void;
 };
 
-export default function LayoutPicker({ value, menuShape, homeStyle, eventName, keyvisual, defaultHomeBanner, homeMenus, programs, photos, unavailable, disabled = false, onLayout, onMenuShape }: Props) {
+export default function LayoutPicker({ value, homeStyle, eventName, keyvisual, defaultHomeBanner, homeMenus, programs, photos, unavailable, disabled = false, onLayout }: Props) {
   return (
     <div className={styles.picker}>
       <div className={styles.cards} role="radiogroup" aria-label="홈 레이아웃">
@@ -85,17 +82,6 @@ export default function LayoutPicker({ value, menuShape, homeStyle, eventName, k
           );
         })}
       </div>
-      {value === "poster" ? (
-        <div className={styles.shapes} role="radiogroup" aria-label="포스터형 메뉴 모양">
-          <span className={styles.shapesLabel}>메뉴 모양</span>
-          {(["circle", "list"] as const).map((shape) => (
-            <button key={shape} type="button" role="radio" aria-checked={menuShape === shape} className={styles.shape} disabled={disabled} onClick={() => onMenuShape(shape)}>
-              <span className={styles.shapeArt} data-shape={shape} aria-hidden="true"><i /><i /><i /></span>
-              {shape === "circle" ? "원형 아이콘" : "목록"}
-            </button>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }

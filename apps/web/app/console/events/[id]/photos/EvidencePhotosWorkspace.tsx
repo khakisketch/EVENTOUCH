@@ -651,6 +651,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
       await load(true);
     } catch (error) {
       if (activeEventRef.current !== requestEventId) return;
+      setViewerId(null);
       setFailure(error instanceof Error ? error.message : "사진 구간을 변경하지 못했습니다.");
     } finally {
       if (activeEventRef.current === requestEventId) { setBusyPhotoId(null); setMovePending(null); }
@@ -686,6 +687,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
       await load(true);
     } catch (error) {
       if (activeEventRef.current !== requestEventId) return;
+      setViewerId(null);
       setFailure(error instanceof Error ? error.message : "보관함에서 제외하지 못했습니다.");
     } finally {
       if (activeEventRef.current === requestEventId) { setBusyPhotoId(null); setRemovePending(null); }
@@ -1012,7 +1014,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
       </div>
 
       {viewerPhoto ? (
-        <ConsoleDialog title={`${sectionLabel(viewerPhoto.section)} · ${viewerIndex + 1} / ${selectedPhotos.length}`} titleId="evidence-photo-viewer-title" presentation="drawer" busy={busyPhotoId !== null} onClose={() => setViewerId(null)}>
+        <ConsoleDialog title={`${sectionLabel(viewerPhoto.section)} · ${viewerIndex + 1} / ${selectedPhotos.length}`} titleId="evidence-photo-viewer-title" presentation="drawer" stickyChrome busy={busyPhotoId !== null} onClose={() => setViewerId(null)}>
           <div className={styles.viewer} onKeyDown={(event) => {
             const target = event.target as HTMLElement;
             if (target.closest("select, input, textarea")) return;

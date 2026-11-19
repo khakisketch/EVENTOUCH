@@ -1,11 +1,12 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useState } from "react";
 import type { CSSProperties } from "react";
 import ProductLink from "../../../ui/ProductLink";
 import ProductButton from "../../../ui/ProductButton";
-import { HOME_FEED_LIMIT, bannerFillCss, bannerFillTone, normalizeHomeStyle, readableInk, type HomePhoto, type HomeStyle } from "../../../../lib/attendee-home";
+import { HOME_FEED_LIMIT, normalizeHomeStyle, readableInk, type HomePhoto, type HomeStyle } from "../../../../lib/attendee-home";
 import { normalizeHomeMenus, type HomeMenus, type HomeProgram } from "../../../../lib/attendee-home-menus";
+import HomeHero from "./HomeHero";
 import styles from "./home.module.css";
 import L from "./home-layouts.module.css";
 
@@ -53,14 +54,14 @@ type AttendeeHomeLandingProps = {
   photos?: HomePhoto[];
 };
 
-// One landing, four compositions (homeStyle.layout): tile (compact banner,
-// square tiles), poster (tall banner, circle or list menus), typography (no
-// banner, large type) and instagram (slim banner, a feed of approved
-// participant photos, list menus). Entries, ticket gating, group labels, links
-// and the preview/disabled behavior are the same in every composition; only the
-// arrangement changes. The photo-first layout needs approved photos to say
-// anything: a public page with none reads as the tile home, while the
-// console preview keeps the layout and shows where the photos will go.
+// One landing, three compositions (homeStyle.layout): tile (compact banner,
+// square tiles), poster (tall banner, round icon menus) and instagram (slim
+// banner, a feed of approved participant photos, list menus). Entries, ticket
+// gating, group labels, links and the preview/disabled behavior are the same in
+// every composition; only the arrangement changes. The photo-first layout needs
+// approved photos to say anything: a public page with none reads as the tile
+// home, while the console preview keeps the layout and shows where the photos
+// will go. The event guide wears the same banner (HomeHero) and ground.
 export default function AttendeeHomeLanding({
   eventName,
   hasTicket,
@@ -77,34 +78,9 @@ export default function AttendeeHomeLanding({
   programs = [],
   photos = [],
 }: AttendeeHomeLandingProps) {
-  const [imageFailed, setImageFailed] = useState(false);
   // Stored or partial styles always read through the same defaults.
   const homeStyle = normalizeHomeStyle(homeStyleInput);
   const layout = homeStyle.layout === "instagram" && !photos.length && !preview ? "tile" : homeStyle.layout;
-  const fill = bannerFillCss(homeStyle);
-  const imageMode = fill === null;
-  const neutralBanner = imageMode && (imageFailed || (!keyvisual && defaultHomeBanner === "neutral"));
-  const imageSource = imageMode && !imageFailed ? keyvisual || (defaultHomeBanner === "neutral" ? null : "/attendee-home-banner.png") : null;
-  const title = homeStyle.heroTitle?.trim() || eventName;
-  const textHidden = imageMode && homeStyle.heroLayout === "image-only" && !neutralBanner;
-  // A color banner reads its own tone; a picture follows the chosen tone.
-  const tone = fill ? bannerFillTone(homeStyle) : neutralBanner ? "light" : homeStyle.textTone;
-  const heroClass = [
-    L.hero,
-    tone === "dark" ? L.toneDark : L.toneLight,
-    L[`align${capitalize(homeStyle.textAlign)}`],
-    homeStyle.titleScale === "large" ? L.titleLarge : "",
-    layout === "tile" && homeStyle.heroLayout === "bottom-overlay" ? L.textBottom : "",
-    imageMode && homeStyle.overlay !== "none" ? L[`overlay${capitalize(homeStyle.overlay)}${capitalize(tone)}`] : "",
-    homeStyle.imageFocus === "top" ? L.focusTop : homeStyle.imageFocus === "bottom" ? L.focusBottom : "",
-  ].filter(Boolean).join(" ");
-
-  useEffect(() => setImageFailed(false), [keyvisual]);
-
-  // The console builder embeds this landing inside its own preview section
-  // (under the preview h2): there it renders an h3 with identical styling so
-  // the builder page keeps a single h1. The public page keeps the h1.
-  const Title = preview ? "h3" : "h1";
   const menuSettings = normalizeHomeMenus(homeMenus);
   const ordered = ["qr", ...menuSettings.order].flatMap((key) => HOME_MENUS.filter((menu) => menu.key === key));
   // Preserve the two existing groups while allowing order changes inside each.
@@ -118,31 +94,20 @@ export default function AttendeeHomeLanding({
   const programById = new Map(programs.map((program) => [program.id, program]));
   const selectedPrograms = menuSettings.programs.flatMap((id) => programById.has(id) ? [programById.get(id)!] : []);
   const showLinks = Boolean(slug || preview);
-  const shape = layout === "tile" ? "tile" : layout === "poster" && homeStyle.menuShape === "circle" ? "circle" : "row";
+  const shape = layout === "tile" ? "tile" : layout === "poster" ? "circle" : "row";
   const feedPhotos = photos.slice(0, HOME_FEED_LIMIT);
   const rootStyle = { "--lay-ink": readableInk(homeStyle.backgroundColor) } as CSSProperties;
 
-  const heroText = (
-    <div className={`${L.heroText}${textHidden ? ` ${styles.visuallyHidden}` : ""}`}>
-      <Title className={L.title}>{title}</Title>
-      {homeStyle.heroLayout !== "image-only" && homeStyle.heroSubtitle.trim() ? <p className={L.subtitle}>{homeStyle.heroSubtitle}</p> : null}
-    </div>
-  );
-
-  const hero = layout === "typography" ? (
-    <header className={`${L.typoHead} ${homeStyle.titleScale === "large" ? L.titleLarge : ""} ${L[`align${capitalize(homeStyle.textAlign)}`]}`} aria-label={`${eventName} 참가자 홈`}>
-      {heroText}
-    </header>
-  ) : (
-    <section className={heroClass} style={fill ? { background: fill } : undefined} aria-label={`${eventName} 참가자 홈`} data-neutral={neutralBanner || undefined}>
-      {imageSource ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img className={L.artwork} src={imageSource} alt="" onError={() => setImageFailed(true)} />
-      ) : imageMode && imageFailed ? (
-        <div className={styles.bannerImageFailure} role="status">배너 이미지를 불러오지 못했습니다.</div>
-      ) : null}
-      {heroText}
-    </section>
+  const hero = (
+    <HomeHero
+      eventName={eventName}
+      homeStyle={homeStyle}
+      layout={layout}
+      keyvisual={keyvisual}
+      defaultHomeBanner={defaultHomeBanner}
+      preview={preview}
+      label={`${eventName} 참가자 홈`}
+    />
   );
 
   const ticketEntry = ticket ? (
@@ -255,10 +220,6 @@ function FeedCard({ photo }: { photo: HomePhoto }) {
       ) : null}
     </li>
   );
-}
-
-function capitalize(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function ApplicationEntry({ shape, menuButtonRef, onOpen, preview }: {

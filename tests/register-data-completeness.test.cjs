@@ -13,24 +13,24 @@ const ts = require(require.resolve('typescript', { paths: [web] }));
 const { publicEvent, publicWorkspace } = require('../server/public-events');
 const { normalizeWorkspace } = require('../server/state');
 
-function loadParser() {
-  const compile = file => ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+function loadModule(file) {
+  const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS },
   }).outputText;
-  const contact = {};
-  vm.runInNewContext(compile(path.join(web, 'lib/public-recovery-contact.ts')), { exports: contact });
-  const parser = {};
-  vm.runInNewContext(compile(path.join(web, 'app/event/[slug]/register/register-data.ts')), {
-    exports: parser,
+  const exports = {};
+  vm.runInNewContext(code, {
+    exports,
     require(id) {
-      if (id === '../../../../lib/public-recovery-contact') return contact;
+      if (id.startsWith('.')) return loadModule(path.resolve(path.dirname(file), `${id}.ts`));
       throw new Error(`Unexpected import ${id}`);
     },
   });
-  return parser.parseRegisterData;
+  return exports;
 }
 
-const parse = loadParser();
+const { parseRegisterData: parse, parsePublishedRegisterFields } = loadModule(path.join(web, 'app/event/[slug]/register/register-data.ts'));
+const registerPage = fs.readFileSync(path.join(web, 'app/event/[slug]/register/page.tsx'), 'utf8');
+const registerForm = fs.readFileSync(path.join(web, 'app/event/[slug]/register/RegisterForm.tsx'), 'utf8');
 const event = publicEvent({ id: 'fixture', slug: 'fixture', payload: {
   name: '합성 행사', stage: 'READY', features: [],
 } });
@@ -49,16 +49,65 @@ test('normal and normalized legacy public projections remain readable', () => {
   assert.equal(normal.consentText, '합성 동의');
   assert.equal(normal.consentVersion, 3);
   assert.equal(normal.verificationRequired, true);
-  assert.equal(normal.fields.length, 1);
+  assert.deepEqual(Array.from(normal.fields, (field) => field.id), ['name', 'phone', 'meal']);
   const legacy = parse(projection({ registrationOpen: true, publishedVersion: 1, publishedFields: [] }));
   assert.ok(legacy, 'legacy values are filled by the real public projection');
   assert.equal(legacy.consentVersion, 1);
   const noConsent = valid(); noConsent.workspace.consentText = '';
   assert.ok(parse(noConsent), 'an explicitly empty consent is not a missing consent field');
   const oldField = valid(); oldField.workspace.publishedFields[2].type = 'SELECT';
-  assert.equal(parse(oldField).fields[0].type, 'select', 'legacy case matches the server validator');
+  assert.equal(parse(oldField).fields[2].type, 'select', 'legacy case matches the server validator');
   const optionalEmpty = valid(); optionalEmpty.workspace.publishedFields[2].required = false; optionalEmpty.workspace.publishedFields[2].options = [];
   assert.ok(parse(optionalEmpty), 'a legacy optional field without choices can still be skipped');
+});
+
+test('published built-ins keep organizer labels, required status, order, and inclusion on the public form', () => {
+  const fields = [
+    { id: 'meal', label: '식사', type: 'select', required: true, options: ['일반', '채식'] },
+    { id: 'company', label: '소속 기관', type: 'text', required: true, options: [] },
+    { id: 'name', label: '참가자 이름', type: 'text', required: true, options: [] },
+    { id: 'memo', label: '요청 사항', type: 'text', required: false, options: [] },
+    { id: 'phone', label: '휴대전화', type: 'text', required: true, options: [] },
+  ];
+  const configured = parse(projection({ registrationOpen: true, publishedVersion: 2, publishedFields: fields }));
+  assert.ok(configured);
+  assert.deepEqual(Array.from(configured.fields, (field) => field.id), ['meal', 'company', 'name', 'memo', 'phone']);
+  assert.equal(configured.fields[1].label, '소속 기관');
+  assert.equal(configured.fields[1].required, true);
+  assert.equal(configured.fields[2].label, '참가자 이름');
+  assert.equal(configured.fields[4].label, '휴대전화');
+
+  const excludedCompany = parse(projection({ registrationOpen: true, publishedVersion: 3,
+    publishedFields: fields.filter((field) => field.id !== 'company') }));
+  assert.deepEqual(Array.from(excludedCompany.fields, (field) => field.id), ['meal', 'name', 'memo', 'phone']);
+
+  const readdedCompany = parse(projection({ registrationOpen: true, publishedVersion: 4,
+    publishedFields: [fields[0], fields[1], fields[2], fields[3], fields[4]] }));
+  assert.deepEqual(Array.from(readdedCompany.fields, (field) => field.id), ['meal', 'company', 'name', 'memo', 'phone']);
+
+  const oldWorkspace = parse(projection({ registrationOpen: true, publishedVersion: 1, publishedFields: [] }));
+  assert.deepEqual(Array.from(oldWorkspace.fields, (field) => field.id), ['name', 'phone', 'company'],
+    'an older empty published projection retains the established built-in fields');
+});
+
+test('initial render and in-place version recovery both use the parsed published field sequence', () => {
+  assert.match(registerPage, /fields=\{data\.fields\}/u);
+  assert.doesNotMatch(registerPage, /\[\.\.\.BUILT_IN_FIELDS/u);
+  assert.match(registerForm, /const nextFields = next\.fields/u);
+  assert.doesNotMatch(registerForm, /\[\.\.\.BUILT_IN_FIELDS/u);
+});
+
+test('an operator reads the same published order and requirements as the public form', () => {
+  const publishedFields = [
+    { id: 'company', label: '소속 기관', type: 'text', required: true },
+    { id: 'phone', label: '휴대폰', type: 'text', required: true },
+    { id: 'name', label: '참가자 성명', type: 'text', required: true },
+  ];
+  const workspacePreview = parsePublishedRegisterFields(publishedFields, 'workspace');
+  const attendee = parse(projection({ registrationOpen: true, publishedVersion: 4, publishedFields }));
+  assert.ok(attendee);
+  assert.deepEqual(workspacePreview, attendee.fields);
+  assert.equal(parsePublishedRegisterFields(publishedFields), null, 'the public response still needs complete metadata');
 });
 
 test('partial or malformed successful public responses do not become a new form', () => {

@@ -76,12 +76,14 @@ test('compact work rows and mobile page action retain readable names and control
   assert.match(source, /<ConsoleTaskQueue items=\{nowItems\}/);
   assert.match(queue, /item\.hint \? <p className=\{styles\.hint\}>/);
   assert.match(source, /aria-label="참가자 페이지 열기"/);
-  assert.match(source, /className=\{styles\.pageLinkShort\}>참가자 페이지</);
+  assert.match(source, /<ExternalLinkIcon className=\{styles\.pageLinkIcon\} \/>/);
   assert.match(source, /참가자 페이지 링크 복사/);
   assert.match(source, /href=\{eventCloseHref\(eventId\)\}/);
   assert.match(queueCss, /\.queue > li \{ display: grid; grid-template-columns: minmax\(0, 1fr\) auto;/);
   assert.match(queueCss, /\.action\s*\{[^}]*min-height: var\(--control-min-size\)/s);
   const tokens = fs.readFileSync(path.join(__dirname, '..', 'apps/web/app/tokens.css'), 'utf8');
   assert.match(tokens, /--control-min-size:\s*44px/u, 'shared control token retains the 44px floor');
-  assert.match(css, /\.pageLinkShort \{ display: inline; \}/);
+  assert.match(css, /\.pageLinkIcon \{ display: inline-block; \}/);
+  const shared = fs.readFileSync(path.join(__dirname, "..", "apps/web/app/console/console-ui/console-ui.module.css"), "utf8");
+  assert.match(shared, /grid-template-areas: "back back" "context context" "title actions" "meta meta" "badges updated";/, "phone overview header keeps actions beside the title and the check time in the badge row");
 });

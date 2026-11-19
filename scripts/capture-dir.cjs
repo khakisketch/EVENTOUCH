@@ -35,7 +35,8 @@
 //   elsewhere (e.g. CI's EVENTOUCH_CAPTURE_ROOT) keep the generic write-bit
 //   rule.
 // - refuses repo-inside paths and the base dirs themselves (callers name a
-//   leaf run dir), refuses any symlink component (lstat, best-effort TOCTOU).
+//   leaf run dir). It normalizes only macOS's known /tmp and /var temp aliases
+//   before lstat checks, which still reject any symlink below those roots.
 // - leaf creation is a single mkdir(0700) with no follow-up chmod: 0700 masked
 //   by ANY umask stays group/other-free, while chmod-after-mkdir would follow
 //   a swapped-in symlink. The leaf is verified afterwards (not a symlink, a
@@ -54,10 +55,25 @@ const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
 
+function normalizeKnownTemporaryPath(dir) {
+  // macOS exposes the same system directories through /tmp and /var aliases.
+  // Normalize those fixed roots only, then let the callers lstat every
+  // remaining path component so user-controlled links are still rejected.
+  const resolved = path.resolve(dir);
+  if (process.platform !== 'darwin') return resolved;
+  if ((resolved === '/tmp' || resolved.startsWith('/tmp/')) && fs.realpathSync('/tmp') === '/private/tmp') {
+    return path.join('/private/tmp', path.relative('/tmp', resolved));
+  }
+  if (/^\/var\/folders\/[^/]+\/[^/]+\/T(?:\/|$)/.test(resolved) && fs.realpathSync('/var') === '/private/var') {
+    return path.join('/private/var', path.relative('/var', resolved));
+  }
+  return resolved;
+}
+
 function defaultPrivateBase() {
   // Mirrors the verify-system defaultBase so standalone runs land in the same
   // private per-user tree without relying on the shared /tmp/opencode tree.
-  return path.join('/tmp', `eventouch-private-${process.getuid?.() ?? 'user'}`);
+  return path.join(normalizeKnownTemporaryPath('/tmp'), `eventouch-private-${process.getuid?.() ?? 'user'}`);
 }
 
 let cachedStamp = null;
@@ -157,7 +173,7 @@ function assertTrustedParentChain(parent, label) {
 function resolveAndGuard(dir) {
   if (typeof process.getuid !== 'function') throw new Error('캡처 경로 소유자를 확인할 수 없습니다. POSIX 사용자 환경에서 실행하세요.');
   const label = String(dir);
-  const resolved = path.resolve(label);
+  const resolved = normalizeKnownTemporaryPath(label);
   if (isInsideRepo(resolved)) {
     throw new Error(`캡처 경로는 저장소 밖이어야 합니다: ${resolved}`);
   }
@@ -246,13 +262,17 @@ function ensureRunTmpDir(runDir) {
   // fixture, gateway, Next child, or browser starts.
   ensurePrivateUmask();
   const inherited = (process.env.TMPDIR || '').trim();
-  const shared = path.join('/tmp', 'opencode');
-  const resolvedInherited = inherited ? path.resolve(inherited) : '';
+  const systemTmp = normalizeKnownTemporaryPath('/tmp');
+  const shared = path.join(systemTmp, 'opencode');
+  const inheritedPath = inherited ? path.resolve(inherited) : '';
+  const resolvedInherited = inherited ? normalizeKnownTemporaryPath(inherited) : '';
   const unsafeShared = resolvedInherited === shared
     || resolvedInherited.startsWith(`${shared}${path.sep}`);
-  if (resolvedInherited && !unsafeShared) {
+  const systemDefault = resolvedInherited === systemTmp
+    || (process.platform === 'darwin' && /^\/private\/var\/folders\/[^/]+\/[^/]+\/T$/.test(resolvedInherited));
+  if (resolvedInherited && !unsafeShared && !systemDefault) {
     assertUsableExplicitTmpDir(resolvedInherited);
-    return resolvedInherited;
+    return inheritedPath;
   }
   const tmp = ensureCaptureDir(path.join(path.resolve(runDir), 'tmp'));
   process.env.TMPDIR = tmp;
@@ -264,7 +284,7 @@ function prepareCaptureDir(dir) {
   ensurePrivateUmask();
   const resolved = resolveAndGuard(dir);
   const base = defaultPrivateBase();
-  const broad = new Set(['/tmp', base, path.join(base, 'eventouch-captures')]);
+  const broad = new Set([normalizeKnownTemporaryPath('/tmp'), base, path.join(base, 'eventouch-captures')]);
   if (broad.has(resolved)) {
     throw new Error(`캡처 경로는 공유 디렉터리가 아닌 실행별 하위 경로여야 합니다: ${resolved}`);
   }
@@ -306,4 +326,4 @@ function ensureCaptureDir(dir) {
   return resolved;
 }
 
-module.exports = { defaultPrivateBase, defaultCaptureDir, runStamp, prepareCaptureDir, ensureCaptureDir, ensureRunTmpDir, assertPrivateBase };
+module.exports = { defaultPrivateBase, defaultCaptureDir, runStamp, prepareCaptureDir, ensureCaptureDir, ensureRunTmpDir, assertPrivateBase, normalizeKnownTemporaryPath };

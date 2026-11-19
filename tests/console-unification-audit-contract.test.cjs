@@ -50,12 +50,13 @@ const EXPECTED_TITLES = {
   rewards: '경품 지급 현황',
   settings: '행사 설정',
   reports: '결과 보고서',
+  analysis: '기간 분석',
 };
 
-test('console-audit-covers-all-16-menus-with-registry-titles', () => {
+test('console-audit-covers-all-17-menus-with-registry-titles', () => {
   const audit = require('../scripts/web-console-audit.cjs');
   assert.ok(Array.isArray(audit.SCREENS));
-  assert.equal(audit.SCREENS.length, 16);
+  assert.equal(audit.SCREENS.length, 17);
   const navigation = read('apps/web/app/console/console-navigation.ts');
   for (const [key, title] of Object.entries(EXPECTED_TITLES)) {
     const screen = audit.SCREENS.find((item) => item.key === key);
@@ -64,7 +65,7 @@ test('console-audit-covers-all-16-menus-with-registry-titles', () => {
     assert.match(navigation, new RegExp(`title: "${title}"`), `registry still ships ${JSON.stringify(title)}`);
   }
   const paths = audit.SCREENS.map((screen) => screen.path);
-  for (const suffix of ['/participants/import', '/participants', '/messages', '/reports', '/settings', '/page']) {
+  for (const suffix of ['/participants/import', '/participants', '/messages', '/reports', '/analysis', '/settings', '/page']) {
     assert.ok(paths.some((path) => path.endsWith(suffix)), `audit covers *${suffix}`);
   }
 });

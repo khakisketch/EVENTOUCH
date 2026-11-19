@@ -58,6 +58,7 @@ const menuPages = [
   ['app/console/events/[id]/rewards/RewardsWorkspace.tsx', 'rewards'],
   ['app/console/events/[id]/settings/SettingsWorkspace.tsx', 'settings'],
   ['app/console/events/[id]/reports/ReportsWorkspace.tsx', 'reports'],
+  ['app/console/events/[id]/analysis/PeriodAnalysisWorkspace.tsx', 'analysis'],
 ];
 
 function findNodes(node, predicate, found = []) {
@@ -136,7 +137,7 @@ test('state panel unifies loading, alert and shell-aware retry', () => {
   assert.match(state, /actions\?: ReactNode/);
 });
 
-test('all sixteen menus use the registry-owned page frame, not individual title chrome', () => {
+test('all seventeen menus use the registry-owned page frame, not individual title chrome', () => {
   for (const [target, pageId] of menuPages) {
     const source = read(target);
     for (const component of ['ConsolePage', 'ConsoleStatePanel']) {

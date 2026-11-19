@@ -581,173 +581,6 @@
   }
 }
 
-.periodBlock {
-  display: grid;
-  gap: var(--s2);
-  margin-top: var(--s5);
-  padding-top: var(--s4);
-  border-top: 1px solid var(--line);
-  overflow-x: auto;
-}
-
-.periodTable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--small);
-}
-
-.periodDefinitions {
-  margin: 0;
-}
-
-.periodDefinitions > summary {
-  display: flex;
-  min-height: 44px;
-  align-items: center;
-  cursor: pointer;
-  color: var(--muted);
-  font-size: var(--small);
-  font-weight: 650;
-}
-
-.periodDefinitions > p {
-  margin: 0 0 var(--s2);
-  color: var(--muted);
-  font-size: var(--small);
-}
-
-.periodTable th,
-.periodTable td {
-  padding: var(--s2) var(--s3);
-  border-bottom: 1px solid var(--line);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.periodTable thead th {
-  color: var(--muted);
-  font-weight: 650;
-}
-
-.periodTable tbody th {
-  color: var(--ink);
-  font-weight: 650;
-  text-align: left;
-}
-
-.periodTable tbody tr:last-child th,
-.periodTable tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.periodTable thead th:first-child {
-  text-align: left;
-}
-
-.rangeBlock {
-  display: grid;
-  gap: var(--s2);
-  margin-top: var(--s4);
-  padding-top: var(--s3);
-  border-top: 1px dashed var(--line-strong);
-}
-
-.rangeTitle {
-  margin: 0;
-  font-size: var(--body);
-}
-
-.rangeNote {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--small);
-  overflow-wrap: anywhere;
-}
-
-.rangeError {
-  margin: 0;
-  color: var(--danger);
-  font-size: var(--small);
-  font-weight: 650;
-}
-
-.rangeFields {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2) var(--s4);
-}
-
-.rangeFields > div {
-  display: grid;
-  gap: var(--s1);
-  font-size: var(--small);
-  font-weight: 650;
-}
-
-.rangeFields input {
-  min-height: 44px;
-  font-size: var(--body);
-}
-
-.rangeSummary {
-  margin: 0;
-  font-size: var(--small);
-  font-weight: 650;
-  overflow-wrap: anywhere;
-}
-
-.rangeChart {
-  width: 100%;
-  height: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-medium);
-  background: var(--paper);
-}
-
-.rangeGrid {
-  stroke: var(--line);
-  stroke-width: 1;
-}
-
-.rangeAxis {
-  fill: var(--muted);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-
-.rangeBarApplications {
-  fill: var(--brand);
-}
-
-.rangeBarEntries {
-  fill: var(--info);
-}
-
-.rangeLegend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2) var(--s4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: var(--small);
-  color: var(--muted);
-}
-
-.rangeLegend li {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s1);
-  min-height: 44px;
-}
-
-.rangeSwatch {
-  display: inline-block;
-  width: var(--s3);
-  height: var(--s3);
-  border-radius: var(--radius-small);
-}
-
 /* 준비 상태 index: rail 할 일 타일이 유일한 행동 표면이므로, 본문은
    같은 목적지의 가벼운 상태 목록으로 둔다. 버튼·아이콘 행을 두지 않는다. */
 .readinessIndex {
@@ -917,37 +750,6 @@
 .recentCompactEmpty {
   flex-basis: 100%;
   margin: 0;
-}
-
-/* Analysis is a secondary drill-down: the overview first answers what needs
-   action, then opens the period table and chart on demand. */
-.analysisDetails {
-  border-top: 1px solid var(--line);
-  padding-top: var(--s2);
-}
-
-.analysisDetails > summary {
-  display: flex;
-  min-height: 44px;
-  align-items: center;
-  gap: var(--s2);
-  color: var(--brand-text);
-  font-size: var(--small);
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.analysisDetails > summary::before {
-  content: "+";
-  font-weight: 800;
-}
-
-.analysisDetails[open] > summary::before {
-  content: "−";
-}
-
-.analysisDetails[open] > summary {
-  margin-bottom: var(--s3);
 }
 
 /* The rail keeps the monitor status and the next-up schedule beside the
@@ -1209,12 +1011,14 @@
 .deskName { overflow-wrap: anywhere; }
 .runbookCopy span { overflow: visible; white-space: normal; }
 .rail { position: static; }
-.pageLinkShort { display: none; }
+.pageLinkIcon { display: none; }
+/* Phone: the open link is an icon beside the title (see console-ui header),
+   and the check time drops its prefix so it fits the stage-badge row. */
 @media (max-width: 768px) {
-  .pageLinkFull { display: none; }
-  .pageLinkShort { display: inline; }
+  .pageLinkFull, .updatedLabel { display: none; }
+  .pageLink { width: var(--control-min-size); min-height: var(--control-min-size); padding: 0; justify-content: center; }
+  .pageLinkIcon { display: inline-block; }
 }
-.regionMetrics .analysisDetails { margin-top: var(--s3); }
 .runbookCue.done .runbookDot { background: var(--surface-muted); border-color: var(--line-strong); }
 .runbookCue.done .runbookStatus { color: var(--muted); }
 @media (max-width: 560px) {
@@ -1232,10 +1036,13 @@
 /* 승인 대기 진입은 사이드 내비 뱃지와 지금 할 일에 둔다. 개요 뱃지행 링크는 렌더하지 않는다. */
 .mobilePriority { display: none; }
 
-@media (min-width: 1025px) {
-  .entryMetricsLayout .analysisDetails { margin: 0; padding: 0; border: 0; }
-}
 .regionAnalysis { grid-area: analysis; min-width: 0; border-top: 1px solid var(--line); }
+/* 기간 분석은 전용 화면이 맡고, 여기엔 오늘 숫자와 링크 한 줄만 둔다. */
+.periodLine { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s5); margin: 0; padding-block: var(--s2); font-size: var(--small); font-variant-numeric: tabular-nums; }
+.periodLine strong { font-weight: 800; }
+.periodMuted { color: var(--muted); }
+.periodMuted strong { color: var(--ink); }
+.periodLink { margin-left: auto; min-height: 44px; display: inline-flex; align-items: center; }
 .overviewCanvas .entryMetricsLayout { display: block; }
 .overviewCanvas .entryMetricsLayout .entryProgress { display: grid; gap: var(--s3); }
 .overviewUpdated { display: flex; align-items: center; gap: var(--s2); color: var(--muted); font-size: var(--small); }

@@ -69,6 +69,7 @@ const SCREENS = [
   { key: 'rewards', path: '/console/events/:id/rewards', title: '경품 지급 현황', scope: 'event', marker: { role: 'region', name: '경품 지급 목록' } },
   { key: 'settings', path: '/console/events/:id/settings', title: '행사 설정', scope: 'event', marker: { css: '#settings-basics' } },
   { key: 'reports', path: '/console/events/:id/reports', title: '결과 보고서', scope: 'event', marker: { role: 'tab', name: '보고서' } },
+  { key: 'analysis', path: '/console/events/:id/analysis', title: '기간 분석', scope: 'event', marker: { css: '#period-preset-2' } },
 ];
 
 const ERROR_TEXT = ['Application error', 'Something went wrong', 'Minified React'];
@@ -603,7 +604,7 @@ async function main() {
       return context;
     };
 
-    // Phase A — all 16 menus, both viewports: one H1, context, loaded
+    // Phase A — all 17 menus, both viewports: one H1, context, loaded
     // marker, common header geometry, no overflow, axe.
     const geometries = [];
     for (const viewport of VIEWPORTS) {
@@ -1167,7 +1168,7 @@ async function main() {
         const expected = people.filter((person) => person.status === 'APPROVED' && person.everIn !== true);
         if (!expected.length) throw new Error('seed has no never-entered approved people');
         if (expected.length >= people.length) throw new Error('subset is not a subset');
-        const countText = (await page.locator('p[role="status"]').first().innerText()).replace(/\s+/g, ' ');
+        const countText = (await page.locator('p[role="status"]').filter({ hasText: /전체 \d+명/ }).first().innerText()).replace(/\s+/g, ' ');
         if (!countText.includes(`${expected.length}명 / 전체 ${people.length}명`)) {
           throw new Error(`filtered count is ${JSON.stringify(countText)}`);
         }
@@ -1202,7 +1203,7 @@ async function main() {
         // Reset through the visible filters restores the full list and URL.
         await page.getByLabel('상태별 보기', { exact: true }).selectOption('');
         await page.getByLabel('출입 상태별 보기', { exact: true }).selectOption('');
-        const resetCount = (await page.locator('p[role="status"]').first().innerText()).replace(/\s+/g, ' ');
+        const resetCount = (await page.locator('p[role="status"]').filter({ hasText: /전체 \d+명/ }).first().innerText()).replace(/\s+/g, ' ');
         if (!resetCount.includes(`전체 ${people.length}명`) || resetCount.includes('/')) {
           throw new Error(`reset count is ${JSON.stringify(resetCount)}`);
         }
@@ -2412,7 +2413,7 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  process.stdout.write('[console-audit] console unification outcomes hold across 16 menus\n');
+  process.stdout.write('[console-audit] console unification outcomes hold across 17 menus\n');
 }
 
 if (require.main === module) {

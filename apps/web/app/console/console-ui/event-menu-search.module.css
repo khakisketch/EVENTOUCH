@@ -1,0 +1,64 @@
+.search {
+  position: relative;
+  display: block;
+  margin: 0 var(--s1) var(--s1);
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--control-min-size);
+  padding-inline: var(--s3) var(--s1);
+  border-radius: var(--radius);
+  background: var(--nav-hover);
+  color: var(--nav-muted);
+  cursor: text;
+}
+
+.field svg, .clear svg {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+}
+
+.field:focus-within {
+  outline: 2px solid var(--nav-text);
+  outline-offset: -2px;
+}
+
+.field input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-min-size);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--nav-text);
+  font: inherit;
+  font-size: var(--small);
+  outline: none;
+  box-shadow: none;
+}
+
+.field input:not(:placeholder-shown) { padding-inline-end: var(--control-min-size); }
+.field input::placeholder { color: var(--nav-muted); opacity: 1; }
+.field input::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+.search .clear {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  min-width: var(--control-min-size);
+  min-height: var(--control-min-size);
+  padding: 0;
+  color: var(--nav-text);
+  background: transparent;
+}
+
+.status {
+  margin: var(--s1) var(--s2) 0;
+  color: var(--nav-muted);
+  font-size: var(--small);
+}

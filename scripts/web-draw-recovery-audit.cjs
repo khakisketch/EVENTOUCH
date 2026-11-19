@@ -173,7 +173,7 @@ async function main() {
       return slot?.contains(active) && active?.querySelector('[role="alert"]')?.textContent.includes('추첨 내용이 다른 곳에서 바뀌었습니다');
     }, `draw-program-${concurrent.id}`);
     assert.equal(ids.length, beforeConflict + 1, 'refresh never resends the rejected draw');
-    assert.match(await concurrentSlot.innerText(), /당첨 1명 · 남은 2명/);
+    assert.match(await concurrentSlot.innerText(), /1\s*\/\s*3명 당첨 · 남은 2명/);
     assert.equal(await recovery.count(), 0, 'a definitive conflict is not a lost response');
     await conflictNotice.scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(out, 'draw-conflict-390.png') });
@@ -214,8 +214,8 @@ async function main() {
     const latest = (await readWorkspace()).modules.find(item => item.id === module.id).drawHistory[0];
     assert.equal(latest.programId, backstage.id);
     await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/operations`);
-    await page.getByRole('tab', { name: '전광판 출력', exact: true }).click();
     const output = page.locator('[data-workspace-section="ops-display"]');
+    await output.scrollIntoViewIfNeeded();
     await output.getByText(new RegExp(`현재 추첨 결과 · ${concurrent.name}`)).waitFor();
     const choice = output.getByLabel('전광판 출력 선택');
     await choice.selectOption(`draw|${module.id}|${latest.id}`);
@@ -235,7 +235,7 @@ async function main() {
     await otherTitle.waitFor({ state: 'hidden' });
     assert.equal(await stageTitle.count(), 0, 'withdrawing the selected result must not replace it with another draw');
     await page.reload();
-    await page.getByRole('tab', { name: '전광판 출력', exact: true }).click();
+    await output.scrollIntoViewIfNeeded();
     await output.getByText('현재 기본 화면 · 선택한 추첨 결과 출력 불가', { exact: true }).waitFor();
     assert.equal((await audience.cookies()).some(cookie => cookie.name === 'etko_session'), false);
     await audience.close();

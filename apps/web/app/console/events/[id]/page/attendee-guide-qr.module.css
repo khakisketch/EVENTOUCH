@@ -1,0 +1,179 @@
+.preview {
+  display: grid;
+  justify-items: center;
+  gap: var(--s3);
+  min-width: 0;
+  padding: var(--s2) 0;
+  text-align: center;
+}
+
+.eventName {
+  max-width: 28ch;
+  margin: 0;
+  font-size: var(--h3);
+  line-height: 1.35;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.qrFrame,
+.printQrFrame {
+  display: grid;
+  place-items: center;
+  width: fit-content;
+  max-width: 100%;
+  padding: var(--s6);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: #fff;
+}
+
+.qrFrame svg {
+  display: block;
+  width: min(256px, calc(100vw - 128px));
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.addressLabel {
+  justify-self: stretch;
+  margin: var(--s1) 0 calc(var(--s1) * -1);
+  font-size: var(--small);
+  font-weight: 650;
+  text-align: start;
+}
+
+.address {
+  width: 100%;
+  min-height: 48px;
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-small);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--body);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+
+.address:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.openLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  color: var(--brand-text);
+  font-weight: 650;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.openLink:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.copyMessage {
+  min-height: 1.5em;
+  color: var(--ink);
+  font-size: var(--small);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.printSheet {
+  display: none;
+}
+
+@page attendeeGuideQr {
+  size: A4 portrait;
+  margin: 0;
+}
+
+@media print {
+  :global(body):has(> .printSheet) {
+    display: block;
+    overflow: visible !important;
+    margin: 0;
+    page: attendeeGuideQr;
+  }
+
+  :global(body):has(> .printSheet) > :not(.printSheet) {
+    display: none !important;
+  }
+
+  .printSheet {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    justify-items: center;
+    align-items: center;
+    gap: 14mm;
+    box-sizing: border-box;
+    width: 210mm;
+    min-height: 287mm;
+    margin: 0;
+    padding: 24mm 20mm;
+    background: #fff !important;
+    color: #111318 !important;
+    font-family: sans-serif;
+    text-align: center;
+    page: attendeeGuideQr;
+    break-inside: avoid;
+  }
+
+  .printSheet header {
+    align-self: end;
+    max-width: 100%;
+  }
+
+  .printSheet h1 {
+    margin: 0;
+    color: #111318;
+    font-size: 30pt;
+    line-height: 1.2;
+    font-weight: 750;
+    overflow-wrap: anywhere;
+  }
+
+  .printSheet header p {
+    margin: 5mm 0 0;
+    font-size: 15pt;
+  }
+
+  .printQrFrame {
+    align-self: center;
+    padding: 16mm;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .printQrFrame svg {
+    display: block;
+    width: 84mm;
+    height: 84mm;
+  }
+
+  .printSheet > p {
+    align-self: start;
+    max-width: 100%;
+    margin: 0;
+    color: #111318;
+    font-size: 10pt;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+}

@@ -292,7 +292,7 @@
 .state {
   margin: 0;
   padding: var(--s5);
-  color: var(--muted);
+  color: var(--engage-ink, var(--ink));
   text-align: center;
 }
 

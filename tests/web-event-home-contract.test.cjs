@@ -59,7 +59,8 @@ test('event-home-leads-with-action-and-keeps-stage-metrics-and-optional-design-c
   const bandAt = overview.indexOf('stageBand');
   assert.ok(bandAt >= 0 && bandAt < metricsAt, 'stage band tops the preparation flow');
   assert.ok(overview.indexOf('headingId="event-close-status-heading"') < metricsAt, 'finished events keep close status ahead of metrics');
-  assert.match(overview, /analysisDetails/u);
+  assert.match(overview, /href=\{`\$\{base\}\/analysis`\}/u, '기간 분석은 전용 화면으로 연결하는 한 줄만 둔다');
+  assert.doesNotMatch(overview, /analysisDetails|<summary>기간 분석<\/summary>/u, '운영 현황에는 기간 분석 접이식을 두지 않는다');
   assert.match(overview, /recentCompact/u);
   assert.match(overview, /기본 디자인 사용 중/u);
   assert.match(overview, /꾸미기는 선택 사항/u);

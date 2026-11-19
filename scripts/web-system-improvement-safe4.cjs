@@ -172,10 +172,10 @@ async function runSafe4Audit() {
     await page.setViewportSize({ width: 1280, height: 900 });
 
     // ---- C. Arbitrary period analysis reuses the fixed-bucket definitions.
-    await page.goto(`${f.baseUrl}/console/events/${f.eventId}`);
-    await page.getByRole('heading', { name: '운영 현황', exact: true }).waitFor();
-    // The period analysis sits in the overview's collapsed "기간 분석" disclosure.
-    await page.locator('summary').filter({ hasText: '기간 분석' }).first().click();
+    await page.goto(`${f.baseUrl}/console/events/${f.eventId}/analysis`);
+    await page.getByRole('heading', { name: '기간 분석', exact: true }).waitFor();
+    // The period analysis is its own screen; date inputs appear under 직접 선택.
+    await page.getByRole('radio', { name: '직접 선택' }).check();
     const rangeFrom = page.locator('#range-from');
     await rangeFrom.waitFor();
     check('range analysis offers browser-local from/to inputs', await page.locator('#range-to').count() === 1);

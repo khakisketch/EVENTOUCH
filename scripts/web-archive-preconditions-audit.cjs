@@ -58,8 +58,7 @@ async function main() {
     assert.match(await page.innerText('body'), /참가자.*참여 콘텐츠 자료를 확인할 수 없/);
     assert.match(await page.innerText('body'), /집계를 표시할 수 없습니다/);
     assert.equal(await page.getByRole('progressbar').count(), 0);
-    await page.locator('summary').filter({ hasText: '기간 분석' }).click();
-    assert.match(await page.innerText('body'), /기간 분석을 표시할 수 없습니다/);
+    assert.match(await page.innerText('body'), /기간 집계를 표시할 수 없습니다/);
     await page.evaluate(() => { document.activeElement?.blur(); window.scrollTo(0, 0); });
     await page.evaluate(axe);
     for (const width of [320, 390, 1280]) {
@@ -68,6 +67,8 @@ async function main() {
       assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious','critical'].includes(v.impact)).map(v => v.id)), []);
       if (width !== 320) await page.screenshot({ path: path.join(out, `overview-unavailable-${width}.png`), fullPage: true });
     }
+    await page.goto(`${f.baseUrl}/console/events/${f.eventId}/analysis`, { waitUntil: 'networkidle' });
+    assert.match(await page.innerText('body'), /기간 분석을 표시할 수 없습니다/);
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/participants`, { waitUntil: 'networkidle' });
     assert.match(await page.innerText('body'), /참가자 명단을 (완전히 )?확인할 수 없습니다/);
     assert.doesNotMatch(await page.innerText('body'), /아직 등록된 참가자가 없습니다/);

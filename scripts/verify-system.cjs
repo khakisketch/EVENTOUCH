@@ -5,10 +5,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const { defaultPrivateBase, normalizeKnownTemporaryPath } = require('./capture-dir.cjs');
 
 const ROOT = path.join(__dirname, '..');
 const SCRIPTS = [
-  'security:audit', 'build', 'test', 'web:console:audit', 'web:system:audit',
+  'security:audit', 'build', 'test', 'web:console:audit', 'web:period-analysis:audit', 'web:system:audit',
   'web:organizations:audit', 'web:organization-roles:audit', 'web:recovery:audit', 'web:theme-freshness:audit', 'web:page-visibility-review:audit', 'web:page-publication-context:audit',
   'web:display-continuity:audit',
   'web:preparation:audit', 'web:venue-map:audit', 'web:home-menus:audit', 'web:theme-recovery:audit', 'web:draw-recovery:audit', 'web:reward-recovery:audit', 'web:reward-cancellation-conflict:audit', 'web:draw-operations-recovery:audit', 'web:program-operations-recovery:audit', 'web:template-recovery:audit', 'web:template-library:audit', 'web:message-authoring:audit', 'web:message-focus:audit', 'web:message-targeting:audit', 'web:camera-recovery:audit', 'web:camera-fallback:audit', 'web:staff-recovery:audit', 'web:staff-manual-presence:audit', 'web:staff-inline-recovery:audit', 'web:operations-recovery:audit', 'web:settings-recovery:audit', 'web:org-write-recovery:audit', 'web:team-recovery:audit', 'web:team-role-switch:audit', 'web:team-refresh-recovery:audit', 'web:roster-uncertain:audit', 'web:import-recovery:audit', 'web:content-recovery:audit', 'web:publication:audit', 'web:publication-context:audit', 'web:participation-navigation:audit', 'web:report-recovery:audit', 'web:report-export-scope:audit', 'web:report-data-availability:audit', 'web:report-live-availability:audit', 'web:report-cancellation-review:audit', 'web:archive-preconditions:audit', 'web:staff-source-integrity:audit', 'web:waitlist-approval:audit', 'web:waitlist-overview:audit', 'web:roulette-schedule:audit', 'web:roulette-conflict:audit', 'web:lucky-capacity:audit', 'web:lucky-batches:audit', 'web:lucky-range-config:audit', 'web:question-recovery:audit', 'web:question-like:audit', 'web:module-recovery:audit', 'web:evidence-recovery:audit', 'web:signup-retry:audit', 'web:register-field-error:audit', 'web:attendee-identity:audit', 'web:attendee-multievent-recovery:audit', 'web:attendee:audit', 'web:attendee-approval-state:audit', 'web:attendee-visibility:audit', 'web:attendee-retry:audit', 'web:attendee-receipt:audit', 'web:attendee-result:audit', 'web:operator-receipt:audit', 'web:operator-cross-tab-receipt:audit', 'web:ticket-postponement:audit', 'web:ticket-reissue-resume:audit', 'web:ticket-copy-recovery:audit', 'web:ticket-loading-recovery:audit', 'web:message-ticket-availability:audit', 'web:message-cancellation-conflict:audit', 'web:message-routing-review:audit', 'web:message-routing-details:audit', 'web:message-name-review:audit', 'web:attendee-booth-retry:audit', 'web:booth-receipt:audit', 'web:crossrole:audit', 'web:lifecycle:audit',
@@ -71,9 +72,13 @@ function stepEnvironment(base, script) {
   return env;
 }
 
+function defaultCaptureRoot(stamp) {
+  return path.join(defaultPrivateBase(), `system-verification-${stamp}`);
+}
+
 function createCaptureRoot(captureRoot, { privateParent = false } = {}) {
   if (typeof process.getuid !== 'function') throw new Error('캡처 경로 소유자를 확인할 수 없습니다. POSIX 사용자 환경에서 실행하세요.');
-  captureRoot = path.resolve(captureRoot);
+  captureRoot = normalizeKnownTemporaryPath(captureRoot);
   if (captureRoot === ROOT || captureRoot.startsWith(`${ROOT}${path.sep}`)) throw new Error('캡처는 저장소 밖의 안전한 디렉터리에 보관하세요.');
   // Never follow a link or rely on a parent another user can rename entries
   // in. A sticky, root-owned directory (normally /tmp) is safe for entries
@@ -140,11 +145,10 @@ async function main(argv = process.argv.slice(2)) {
     return;
   }
   if (argv.length) throw new Error('사용법: npm run verify:system [-- --list]. DB와 캡처 경로는 환경변수로 지정하세요.');
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const stamp = `${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`;
   // A private per-user base under sticky /tmp avoids relying on the shared,
   // group-writable /tmp/opencode tree. It remains outside the repository.
-  const defaultBase = path.join('/tmp', `eventouch-private-${process.getuid?.() ?? 'user'}`);
-  const captureRoot = path.resolve(process.env.EVENTOUCH_CAPTURE_ROOT || path.join(defaultBase, `system-verification-${stamp}`));
+  const captureRoot = normalizeKnownTemporaryPath(process.env.EVENTOUCH_CAPTURE_ROOT || defaultCaptureRoot(stamp));
   const env = verificationEnvironment(process.env, captureRoot);
   createCaptureRoot(captureRoot, { privateParent: !process.env.EVENTOUCH_CAPTURE_ROOT });
   // The test runner and browsers must not inherit a shared writable TMPDIR.
@@ -218,4 +222,4 @@ async function main(argv = process.argv.slice(2)) {
 }
 
 if (require.main === module) main().catch(error => { process.stderr.write(`[verify:system] ${error.message}\n`); process.exitCode = 1; });
-module.exports = { SCRIPTS, verificationEnvironment, stepEnvironment, createCaptureRoot, createReportWriter, verifyBuildId, main };
+module.exports = { SCRIPTS, verificationEnvironment, stepEnvironment, defaultCaptureRoot, createCaptureRoot, createReportWriter, verifyBuildId, main };

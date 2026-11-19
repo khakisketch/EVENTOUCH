@@ -31,6 +31,7 @@ import ConsoleDialog from "../../../console-ui/ConsoleDialog";
 import { Switch } from "@astryxdesign/core/Switch";
 import ColorField from "./ColorField";
 import LayoutPicker from "./LayoutPicker";
+import AttendeeGuideQr from "./AttendeeGuideQr";
 import { ChoiceCards, Seg } from "./StudioControls";
 import studio from "./studio.module.css";
 import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
@@ -341,7 +342,6 @@ const HOME_STYLE_LABELS: Array<[keyof HomeStyle, string]> = [
   ["textTone", "문구 색상"],
   ["overlay", "읽기 배경"],
   ["layout", "레이아웃"],
-  ["menuShape", "메뉴 모양"],
   ["bannerKind", "배너 종류"],
   ["bannerColor", "배너 색"],
   ["bannerColor2", "배너 끝 색"],
@@ -365,7 +365,7 @@ function describeChangedDesign(from: DesignForm, to: DesignForm): string[] {
 }
 
 function comparisonRows(fromForm: DesignForm, fromFields: PageFields, toForm: DesignForm, toFields: PageFields, programs: Array<HomeProgram>): Array<{ label: string; before: string; after: string }> {
-  const choices: Record<string, string> = { centered: "가운데 제목", "bottom-overlay": "아래쪽 제목", "image-only": "이미지만", standard: "기본", large: "크게", center: "가운데", left: "왼쪽", right: "오른쪽", top: "위쪽", bottom: "아래쪽", light: "흰색", dark: "짙은 색", none: "없음", soft: "부드럽게", strong: "강하게", tile: "타일형", poster: "포스터형", typography: "타이포형", circle: "원형 아이콘", list: "목록", image: "이미지", gradient: "그라데이션", solid: "단색", diagonal: "대각선", vertical: "위에서 아래", horizontal: "왼쪽에서 오른쪽" };
+  const choices: Record<string, string> = { centered: "가운데 제목", "bottom-overlay": "아래쪽 제목", "image-only": "이미지만", standard: "기본", large: "크게", center: "가운데", left: "왼쪽", right: "오른쪽", top: "위쪽", bottom: "아래쪽", light: "흰색", dark: "짙은 색", none: "없음", soft: "부드럽게", strong: "강하게", tile: "타일형", poster: "포스터형", image: "이미지", gradient: "그라데이션", solid: "단색", diagonal: "대각선", vertical: "위에서 아래", horizontal: "왼쪽에서 오른쪽" };
   const display = (value: unknown) => typeof value === "boolean" ? (value ? "보기" : "숨김") : typeof value === "string" ? (choices[value] || value || "기본값") : "기본값";
   const rows = HOME_STYLE_LABELS.flatMap(([key, label]) => fromForm.homeStyle[key] !== toForm.homeStyle[key]
     ? [{ label, before: display(fromForm.homeStyle[key]), after: display(toForm.homeStyle[key]) }] : []);
@@ -425,7 +425,7 @@ async function loadSnapshot(eventId: string, afterWrite = false): Promise<Snapsh
   }
 }
 
-export default function ThemeWorkspace({ eventId }: { eventId: string }) {
+export default function ThemeWorkspace({ eventId, publicBase = null }: { eventId: string; publicBase?: string | null }) {
   const router = useRouter();
   const [state, setState] = useState<EditorState>({ kind: "loading" });
   // Which sub-panel replaces the settings list (null = the list), and the
@@ -1412,8 +1412,6 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
       homeStyle: {
         ...form.homeStyle,
         layout: next,
-        // Large type reads best on a dark page; only move off the untouched default.
-        ...(next === "typography" && form.homeStyle.backgroundColor === DEFAULT_HOME_STYLE.backgroundColor ? { backgroundColor: "#1E2026" } : {}),
       },
     }));
   }
@@ -1437,6 +1435,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
       eventId={eventId}
       eventName={state.eventName}
       meta={state.eventMeta}
+      headerActions={publicAvailable ? <AttendeeGuideQr eventName={state.eventName} slug={state.slug} publicBase={publicBase} /> : undefined}
       feedback={
         <>
           {failure ? <div id="theme-error" tabIndex={-1}><ConsoleFeedback kind="error">{failure.message}</ConsoleFeedback></div> : null}
@@ -1609,7 +1608,6 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
                 <fieldset className={studio.bare} disabled={editsLocked}>
                   <LayoutPicker
                     value={homeStyle.layout}
-                    menuShape={homeStyle.menuShape}
                     homeStyle={homeStyle}
                     eventName={state.eventName}
                     keyvisual={imageUrl}
@@ -1620,7 +1618,6 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
                     unavailable={state.unavailableMenus}
                     disabled={editsLocked}
                     onLayout={selectLayout}
-                    onMenuShape={(shape) => changeHomeStyle("menuShape", shape)}
                   />
                 </fieldset>
               </section>
@@ -1631,7 +1628,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
                 </fieldset>
               </section>
               <ul className={studio.rows}>
-                {homeStyle.layout !== "typography" ? <li>{studioRow("banner", "배너", bannerSummary, bannerSwatch, imageDirty || bannerDirty)}</li> : null}
+                <li>{studioRow("banner", "배너", bannerSummary, bannerSwatch, imageDirty || bannerDirty)}</li>
                 <li>{studioRow("text", "제목과 문구", homeStyle.heroTitle?.trim() || state.eventName, null, copyDirty)}</li>
                 <li>{studioRow("menus", "홈 메뉴", menuSummary, null, menusDirty)}</li>
                 <li>{studioRow("exposure", "소개와 공개 범위", exposureSummary, null, exposureDirty)}</li>
@@ -1790,7 +1787,7 @@ export default function ThemeWorkspace({ eventId }: { eventId: string }) {
                     <Seg label="제목 크기" value={homeStyle.titleScale} onChange={(scale) => changeHomeStyle("titleScale", scale)} options={[{ value: "standard", name: "기본" }, { value: "large", name: "크게" }]} />
                     <p className={studio.groupTitle}>글 정렬</p>
                     <Seg label="글 정렬" value={homeStyle.textAlign} onChange={(align) => changeHomeStyle("textAlign", align)} options={[{ value: "left", name: "왼쪽" }, { value: "center", name: "가운데" }, { value: "right", name: "오른쪽" }]} />
-                    {homeStyle.layout !== "typography" && homeStyle.bannerKind === "image" ? (
+                    {homeStyle.bannerKind === "image" ? (
                       <>
                         <p className={studio.groupTitle}>글자 색</p>
                         <Seg label="글자 색" value={homeStyle.textTone} onChange={(tone) => changeHomeStyle("textTone", tone)} options={[{ value: "light", name: "흰색" }, { value: "dark", name: "짙은 색" }]} />

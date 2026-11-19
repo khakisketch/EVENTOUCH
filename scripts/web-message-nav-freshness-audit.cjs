@@ -60,14 +60,20 @@ async function main() {
     let directoryReads = 0;
     if (process.argv[2] === 'create') {
       let heldSummary = false;
+      const releaseSummaries = Promise.withResolvers();
       await page.route('**/bootstrap?messageAttentionSummary=1*', async route => {
-        if (heldSummary) return route.continue();
         heldSummary = true;
-        await new Promise(resolve => setTimeout(resolve, 2500));
+        // Keep the connection stalled through the client's timeout and any
+        // intervening poll, until the operator's uncertainty indicator appears.
+        await releaseSummaries.promise;
         return route.continue().catch(() => {});
       });
       const unknown = page.getByRole('img', { name: '예약 발송 상태를 확인하지 못했습니다', exact: true }).first();
-      await unknown.waitFor({ timeout: 5000 });
+      try {
+        await unknown.waitFor({ timeout: 5000 });
+      } finally {
+        releaseSummaries.resolve();
+      }
       await unknown.waitFor({ state: 'hidden', timeout: 5000 });
       assert.equal(heldSummary, true, 'a stalled read shows uncertainty and then retries');
       await page.unroute('**/bootstrap?messageAttentionSummary=1*');

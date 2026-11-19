@@ -144,10 +144,44 @@ test('every non-redirect application page has an actual capture destination', ()
   assert.match(read('staff/login/page.tsx'), /redirect\(safe \? `\/login\?next=/);
 });
 
+test('overview role check follows the live primary contract instead of an always-orange approval', () => {
+  const audit = fs.readFileSync(path.join(__dirname, '../scripts/web-white-product-audit.cjs'), 'utf8');
+  assert.doesNotMatch(audit, /\[data-task="approval"\] a/);
+  assert.match(audit, /overviewStage === 'LIVE'/u);
+  assert.match(audit, /live task queue stays ghost/u);
+  assert.match(audit, /first task owns the single primary/u);
+  assert.match(audit, /archived overview keeps no primary/u);
+});
+
+test('draws and rewards markers wait on the actual named regions', () => {
+  const audit = fs.readFileSync(path.join(__dirname, '../scripts/web-white-product-audit.cjs'), 'utf8');
+  assert.ok(audit.includes(`['draws', '/console/events/:id/draws', 'section[aria-label="무대"]']`), 'stage ids are dynamic per kind');
+  assert.ok(audit.includes(`['rewards', '/console/events/:id/rewards', { role: 'link', name: '참가자 명단' }]`), 'empty rewards have no list region, so wait for the loaded page action');
+  assert.doesNotMatch(audit, /#draws-programs|#rewards-list/);
+  assert.ok(audit.includes("getByRole('heading', { name: '무대 선택', exact: true })"));
+  assert.ok(audit.includes("picker.getByRole('button', { pressed: true })"));
+  assert.match(audit, /참여 콘텐츠에서 추첨 무대를 만들고 공개하세요/u);
+});
+
+test('white product readiness follows loaded content, design, settings and reports rather than closed editors', () => {
+  const audit = fs.readFileSync(path.join(__dirname, '../scripts/web-white-product-audit.cjs'), 'utf8');
+  for (const marker of ['#content-panel', '#theme-save-draft', '#settings-basics']) assert.ok(audit.includes(marker), marker);
+  assert.ok(audit.includes("{ role: 'tab', name: /^보고서/ }"));
+  assert.doesNotMatch(audit, /#content-notices|#home-intro|#set-name|#reports-list/);
+});
+
 test('account-form captures explicitly use mock-only mail and never request delivery', () => {
   const audit = fs.readFileSync(path.join(__dirname, '../scripts/web-white-product-audit.cjs'), 'utf8');
   assert.match(audit, /process\.env\.EVENTOUCH_MAIL_MOCK = '1'/);
   assert.match(audit, /process\.env\.EVENTOUCH_PUBLIC_URL = 'http:\/\/127\.0\.0\.1:1'/);
   assert.match(audit, /mockOutbox\.length === initialMailCount/);
   assert.ok(audit.includes("account.getByRole('alert')"), 'framework route announcements are outside account-form error checks');
+});
+
+test('attendee icon geometry measures visible text instead of an obsolete CSS class', () => {
+  const audit = fs.readFileSync(path.join(__dirname, '../scripts/web-white-product-audit.cjs'), 'utf8');
+  assert.doesNotMatch(audit, /querySelector\('\[class\*="menuLabel"\]'\)/);
+  assert.match(audit, /labelRight: label\?\.right/);
+  assert.match(audit, /item\.labelRight <= item\.buttonRight \+ 1/);
+  assert.match(audit, /item\.iconBottom <= item\.labelTop \+ 1/);
 });

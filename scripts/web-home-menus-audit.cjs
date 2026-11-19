@@ -44,7 +44,7 @@ async function main() {
     await editor.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/page`, { waitUntil: 'networkidle' });
     await editor.getByRole('button', { name: '초안 저장', exact: true }).waitFor();
     await stale.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/page`, { waitUntil: 'networkidle' });
-    await stale.locator('summary', { hasText: '홈 메뉴 구성' }).click();
+    await stale.getByRole('button', { name: /^홈 메뉴/ }).click();
     await stale.getByRole('checkbox', { name: '부스 인증', exact: true }).uncheck();
     await attendee.goto(`${fixture.baseUrl}/event/${fixture.slug}/home`, { waitUntil: 'networkidle' });
     const attendeeMenu = attendee.getByRole('navigation', { name: '참가 메뉴' });
@@ -53,7 +53,7 @@ async function main() {
     await editor.screenshot({ path: path.join(out, 'before-editor-1280.png'), fullPage: true });
 
     phase = 'editor changes and preview';
-    await editor.locator('summary', { hasText: '홈 메뉴 구성' }).click();
+    await editor.getByRole('button', { name: /^홈 메뉴/ }).click();
     const config = editor.locator('fieldset').filter({ has: editor.getByText('메뉴 표시와 순서', { exact: true }) });
     await config.getByRole('checkbox', { name: '공지사항', exact: true }).uncheck();
     await config.getByRole('button', { name: '순위 투표 위로 이동' }).click();
@@ -64,10 +64,10 @@ async function main() {
     assert.equal(await config.getByRole('checkbox', { name: /꺼진 설문/ }).isDisabled(), true);
     const programRows = await config.getByRole('heading', { name: '개별 참여 콘텐츠', exact: true }).locator('..').locator('ol > li').allTextContents();
     assert.match(programRows[0], /관객 질문/); assert.match(programRows[1], /무대 질문/);
-    await editor.getByRole('button', { name: '티켓 없음', exact: true }).click();
+    await editor.getByLabel('참가자 티켓').selectOption('no');
     const preview = editor.getByRole('region', { name: /홈 디자인 미리보기/ });
     assert.equal(await preview.getByRole('button', { name: '공지사항', exact: true }).count(), 0);
-    assert.equal(await preview.getByRole('button', { name: '모바일 티켓', exact: true }).count(), 1);
+    assert.equal(await preview.getByRole('button', { name: /모바일 티켓/ }).count(), 1);
     assert.equal(await preview.getByRole('button', { name: /내 신청 정보/ }).count(), 1);
     assert.ok((await preview.getByText('티켓 필요').count()) > 0);
     const previewLinks = await preview.getByRole('navigation', { name: '행사 안내와 참여' }).locator('button').allTextContents();
@@ -120,12 +120,12 @@ async function main() {
     await editor.getByRole('dialog', { name: '참가자 페이지 게시 검토', exact: true }).getByRole('button', { name: '게시하기', exact: true }).click();
     assert.equal((await publish).status(), 200);
     await attendee.reload({ waitUntil: 'networkidle' });
-    await attendeeMenu.getByRole('button', { name: '모바일 티켓', exact: true }).waitFor();
+    await attendee.getByRole('button', { name: /모바일 티켓/ }).waitFor();
     assert.equal(await attendeeMenu.getByRole('button', { name: '공지사항', exact: true }).count(), 0);
     const menuText = await attendeeMenu.locator('button').allTextContents();
     assert.ok(menuText.findIndex(item => item.includes('순위 투표')) < menuText.findIndex(item => item.includes('룰렛 이벤트')));
     const more = attendee.getByRole('navigation', { name: '행사 안내와 참여' });
-    assert.equal(await more.getByRole('button', { name: /내 신청 정보/ }).count(), 1);
+    assert.equal(await attendee.getByRole('button', { name: /내 신청 정보/ }).count(), 1);
     const links = await more.locator('a').allTextContents();
     assert.ok(links.findIndex(item => item.includes('관객 질문')) < links.findIndex(item => item.includes('무대 질문')));
     assert.equal(await more.getByText('미게시 질문').count(), 0);

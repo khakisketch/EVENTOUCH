@@ -406,7 +406,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   // stays directly visible on PENDING rows.
   const [toolsOpenId, setToolsOpenId] = useState<string | null>(null);
   const [editTargetId, setEditTargetId] = useState<string | null>(null);
-  const [ticketTarget, setTicketTarget] = useState<Pick<Person, "id" | "name" | "ticketRevision"> | null>(null);
+  const [ticketTarget, setTicketTarget] = useState<(Pick<Person, "id" | "name" | "ticketRevision"> & { company: string; maskedPhone: string }) | null>(null);
   const [bulkCancelTargets, setBulkCancelTargets] = useState<Array<{ id: string; name: string; status: string; inside: boolean; company: string; phone: string }> | null>(null);
   const inspectorHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const inspectorStatusRef = useRef<HTMLSelectElement | null>(null);
@@ -2410,6 +2410,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                             id: selectedPerson.id,
                             name: selectedPerson.name,
                             ticketRevision: selectedPerson.ticketRevision,
+                            company: selectedPerson.company,
+                            maskedPhone: maskPhone(selectedPerson.phone),
                           });
                         }}>티켓 재발급</ProductButton>
                       ) : null}
@@ -2590,7 +2592,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       {cancellationConflictTarget ? <CancellationConflictReview key={`${eventId}-cancellation-${cancellationConflictTarget}`} eventId={eventId} participantId={cancellationConflictTarget}
         onRefresh={() => load(true)} onClose={() => { setCancellationConflictTarget(null); window.requestAnimationFrame(() => inspectorHeadingRef.current?.focus({ preventScroll: true })); }}
         onDone={() => { setCancellationConflictTarget(null); setFailure(null); setNotice("참가 취소 기록 확인을 저장했습니다. 기존 티켓은 무효 상태입니다. 필요하면 새 티켓을 발급해 전달하세요."); }} /> : null}
-      {ticketTarget ? <TicketReissue key={`${eventId}-${ticketTarget.id}`} eventId={eventId} slug={state.eventSlug} person={ticketTarget}
+      {ticketTarget ? <TicketReissue key={`${eventId}-${ticketTarget.id}`} eventId={eventId} slug={state.eventSlug} eventName={state.eventName} person={ticketTarget}
         onRefresh={() => load(true)} onClose={() => setTicketTarget(null)}
         onIssued={(ticketRevision) => setState((current) => current.kind === "ready" ? {
           ...current,

@@ -7,6 +7,7 @@ const axeSource = require('axe-core').source;
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
+const { openSettingsBasics } = require('./ui-journey-helpers.cjs');
 const before = process.argv.includes('--before');
 let phase = 'setup';
 async function main() {
@@ -53,16 +54,20 @@ async function main() {
     const tab = async (name) => {
       // No tab strip: sections are always visible, basics editing opens a drawer.
       if (name === '기본 정보') {
-        if (!await page.locator('#set-name:visible').count()) {
-          await page.getByRole('button', { name: '수정', exact: true }).click();
-        }
-        await page.locator('#set-name').waitFor({ state: 'visible', timeout: 15000 });
+        await openSettingsBasics(page);
         return;
       }
       const id = { '참가 접수': 'settings-intake', '진행 단계': 'settings-stage', '운영 기능': 'settings-features' }[name];
       if (!id) throw new Error(`settings: unknown zone ${name}`);
       await page.locator(`#${id}`).scrollIntoViewIfNeeded();
     };
+    async function checkBasicsLock(expected) {
+      await openSettingsBasics(page);
+      const drawer = page.getByRole('dialog', { name: '기본 정보', exact: true });
+      assert.equal(await drawer.locator('#set-name').isDisabled(), expected);
+      await drawer.getByRole('button', { name: '닫기', exact: true }).click();
+      await drawer.waitFor({ state: 'hidden' });
+    }
     const panel = page.getByRole('region', { name: '행사 설정 처리 확인 필요' });
     const original = '합성 설정 복구 원래 요청';
     await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/settings`, { waitUntil: 'networkidle' });
@@ -85,14 +90,12 @@ async function main() {
     await panel.waitFor();
     await panel.getByText(/기본 정보 저장 요청이 반영됐을 수 있습니다/).waitFor();
     await page.waitForFunction(() => document.activeElement?.id === 'settings-recovery-heading');
-    await page.getByRole('button', { name: '수정', exact: true }).click();
-    await page.locator('#set-name').waitFor({ state: 'visible', timeout: 15000 });
-    assert.equal(await page.locator('#set-name').isDisabled(), true);
+    await checkBasicsLock(true);
     const denied = page.waitForResponse((item) => item.status() === 403 && item.url().includes('/commands'));
     await panel.getByRole('button', { name: '같은 요청 다시 시도' }).click();
     await denied;
     await page.waitForFunction(() => [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === '같은 요청 다시 시도' && !button.disabled));
-    assert.equal(await page.locator('#set-name').isDisabled(), true, 'later denial cannot settle an earlier loss');
+    await checkBasicsLock(true);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: path.join(out, 'unconfirmed-390.png'), fullPage: true });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
@@ -138,7 +141,8 @@ async function main() {
     phase = 'publish retains the original consent';
     await tab('참가 접수');
     assert.equal(await page.locator('#set-consent').inputValue(), '합성 동의 초안');
-    await page.getByRole('button', { name: '양식 게시·접수 열기', exact: true }).click();
+    const publishChanges = page.getByRole('button', { name: '변경 게시', exact: true });
+    await publishChanges.click();
     await panel.waitFor();
     await panel.getByRole('button', { name: '서버 처리 확인' }).click();
     await panel.waitFor({ state: 'hidden' });
@@ -147,11 +151,13 @@ async function main() {
     assert.equal(requests.get('publish').length, 1);
     await page.locator('#set-consent').fill('');
     const publishCount = publishRequests;
-    await page.getByRole('button', { name: '양식 게시·접수 열기', exact: true }).click();
+    await publishChanges.click();
     await page.getByText('빈 동의 안내는 저장되지 않습니다. 기존 안내를 유지하거나 내용을 입력하세요.').first().waitFor();
     assert.equal(await page.getByText('빈 동의 안내는 저장되지 않습니다. 기존 안내를 유지하거나 내용을 입력하세요.').count(), 1);
     for (const notice of await page.getByText('서버에 설정이 반영된 것을 확인했습니다. 최신 내용을 확인하세요.', { exact: false }).all()) {
-      assert.equal(await notice.isVisible(), false, 'an older success must not compete with the current field error');
+      if (await notice.isVisible()) {
+        assert.equal(await notice.getAttribute('data-settings-section-status'), 'features', 'only the independent features section may retain its previous confirmation');
+      }
     }
     assert.equal(publishRequests, publishCount, 'an empty editor never silently reuses stored consent');
     assert.equal(await page.locator('#set-consent').inputValue(), '');
@@ -177,17 +183,19 @@ async function main() {
     await page.reload({ waitUntil: 'networkidle' });
     const shared = page.getByRole('region', { name: '처리 결과 확인' });
     await shared.waitFor();
-    await page.getByRole('button', { name: '수정', exact: true }).click();
-    await page.locator('#set-name').waitFor({ state: 'visible', timeout: 15000 });
-    assert.equal(await page.locator('#set-name').isDisabled(), true);
+    await checkBasicsLock(true);
     const beforeCheck = requests.get(reloaded).length;
     await shared.getByRole('button', { name: '서버 처리 확인' }).click();
     await shared.getByText(/원래 화면에서 같은 요청을 다시 확인/).waitFor();
-    assert.equal(await page.locator('#set-name').isDisabled(), true);
+    await checkBasicsLock(true);
     await shared.getByRole('button', { name: '목록에서 지우기' }).click();
     const dismiss = page.getByRole('dialog', { name: '처리 결과 확인에서 지우기' });
     await dismiss.getByRole('button', { name: '목록에서 지우기' }).click();
-    await page.waitForFunction(() => !document.querySelector('#set-name')?.disabled);
+    await dismiss.waitFor({ state: 'hidden' });
+    await shared.getByRole('status').filter({ hasText: /목록에서 지웠습니다/ }).waitFor();
+    assert.equal(await shared.getByRole('button', { name: '서버 처리 확인' }).count(), 0);
+    assert.equal(await page.evaluate(() => sessionStorage.getItem('eventouch.receipts.operator')), null);
+    await checkBasicsLock(false);
     assert.equal(requests.get(reloaded).length, beforeCheck);
     assert.equal((await event()).name, reloaded);
 

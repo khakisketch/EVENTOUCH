@@ -62,11 +62,13 @@ test('intake reads as a status band plus the participant form', () => {
   // The honest publicity lines stay verbatim.
   assert.match(workspace, /현재 \{state\.registrationOpen \? "접수 중" : "접수 닫힘"\} · 게시된 양식 버전 \{state\.publishedVersion\}/u);
   assert.match(workspace, /\(설정\) · 게시된 양식 버전 \{state\.publishedVersion\}/u);
-  // The application reads as the form the participant sees.
+  // Use the published snapshot whenever there is a live form.
   assert.match(workspace, /className=\{styles\.formPreview\}/u);
-  assert.match(workspace, /참가 신청서/u);
+  assert.match(workspace, /현재 게시된 신청서/u);
+  assert.match(workspace, /신청서 초안/u);
   assert.match(workspace, /항목 편집/u);
-  assert.match(workspace, /state\.fields\.map/u);
+  assert.match(workspace, /hasPublishedForm \? state\.publishedFields : state\.fields/u);
+  assert.match(workspace, /formPreviewFields\.map/u);
   // The publish button stays visible because application fields change on
   // their own page: even a clean consent may need a publish (a version
   // conflict then surfaces in review). Unpublished edits rename it 변경 게시.

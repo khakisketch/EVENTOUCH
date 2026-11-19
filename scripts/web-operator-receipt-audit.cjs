@@ -49,6 +49,9 @@ async function main() {
     await page.getByRole('button', { name: '수정', exact: true }).click();
     await page.locator('#set-name').waitFor({ state: 'visible', timeout: 15000 });
     assert.equal(await page.locator('#set-name').inputValue(), '합성 결과 확인 행사');
+    const basics = page.getByRole('dialog', { name: '기본 정보', exact: true });
+    await basics.getByRole('button', { name: '닫기', exact: true }).click();
+    await basics.waitFor({ state: 'hidden' });
     await panel.getByRole('button', { name: '서버 처리 확인' }).click();
     const status = panel.getByRole('status').filter({ hasText: '서버에 행사 정보 저장 기록이 있습니다' });
     await status.waitFor();

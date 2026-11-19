@@ -1,0 +1,228 @@
+/* 기간 분석: 기간 버튼 → 숫자 셋 → 막대 → 일별 표. 카드 상자 없이 한 열로
+   읽고, 직접 선택일 때만 날짜 입력이 나온다. */
+.view {
+  display: grid;
+  gap: var(--s4);
+  min-width: 0;
+  max-width: 860px;
+}
+
+.updated {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.preset {
+  position: relative;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding-inline: var(--s4);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--small);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.preset input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.preset:has(input:checked) {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.preset:has(input:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.rangeFields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s4);
+}
+
+.rangeFields > div {
+  display: grid;
+  gap: var(--s1);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.rangeFields input {
+  min-height: 44px;
+  font-size: var(--body);
+}
+
+.dateLine {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  font-variant-numeric: tabular-nums;
+}
+
+.dateLine:empty { display: none; }
+
+.note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  overflow-wrap: anywhere;
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--small);
+  font-weight: 650;
+}
+
+.totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3) var(--s6);
+  margin: 0;
+  padding-block: var(--s3);
+  border-block: 1px solid var(--line);
+}
+
+.totals > div {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.totals dt {
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.totals dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.totals dd small {
+  margin-left: 2px;
+  color: var(--muted);
+  font-size: var(--body);
+  font-weight: 650;
+}
+
+.chart {
+  width: 100%;
+  height: auto;
+}
+
+.grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.axis {
+  fill: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.barApplications { fill: var(--brand); }
+.barEntries { fill: var(--ink); }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: var(--small);
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  min-height: 44px;
+}
+
+.basisToggle { margin-left: auto; }
+
+.swatch {
+  display: inline-block;
+  width: var(--s3);
+  height: var(--s3);
+  border-radius: var(--radius-small);
+}
+
+.swatchApplications { background: var(--brand); }
+.swatchEntries { background: var(--ink); }
+
+.tableWrap {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--small);
+}
+
+.table th,
+.table td {
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.table thead th {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.table tbody th {
+  color: var(--ink);
+  font-weight: 650;
+  text-align: left;
+}
+
+.table thead th:first-child {
+  text-align: left;
+}
+
+@media (max-width: 768px) {
+  .updatedLabel { display: none; }
+  .totals { gap: var(--s3) var(--s5); }
+  .totals dd { font-size: 24px; }
+}

@@ -54,8 +54,9 @@ async function main() {
     });
     const workspace = async () => (await fixture.harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [fixture.eventId])).rows[0].payload;
     await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/draws`, { waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '순위 투표', exact: true }).click();
-    await page.locator('#draws-team-name').evaluate((element) => { element.closest('details').open = true; });
+    await page.getByRole('button', { name: /^순위 투표/ }).click();
+    await page.locator('summary').filter({ hasText: /^투표 설정/ }).click();
+    await page.locator('summary').filter({ hasText: /^투표 팀 등록/ }).click();
     const team = page.locator('#draws-team-name');
     const submit = page.getByRole('button', { name: '팀 등록', exact: true });
     const panel = page.getByRole('region', { name: '추첨·투표 처리 확인 필요' });
@@ -113,8 +114,9 @@ async function main() {
     assert.ok(storage.includes('team.save') && !storage.includes(reloaded));
     const reloadWrites = requests.get(reloaded).length;
     await page.reload({ waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '순위 투표', exact: true }).click();
-    await team.evaluate((element) => { element.closest('details').open = true; });
+    await page.getByRole('button', { name: /^순위 투표/ }).click();
+    await page.locator('summary').filter({ hasText: /^투표 설정/ }).click();
+    await page.locator('summary').filter({ hasText: /^투표 팀 등록/ }).click();
     const shared = page.getByRole('region', { name: '처리 결과 확인' });
     await shared.getByText('투표 팀 저장', { exact: true }).waitFor();
     await team.fill('합성 확인 후 팀');
@@ -132,7 +134,7 @@ async function main() {
     assert.equal((await workspace()).teams.filter((entry) => entry.name === reloaded).length, 1);
 
     phase = 'lucky batch lost response and status-only lookup';
-    await page.getByRole('tab', { name: '럭키번호', exact: true }).click();
+    await page.getByRole('button', { name: /^럭키번호 사전 배정/ }).click();
     await page.getByRole('checkbox', { name: /승인 참가자 전체/ }).check();
     const assign = page.getByRole('button', { name: /명 번호 일괄 배정/ });
     await assign.click();

@@ -1,0 +1,41 @@
+.context {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--s1) var(--s2);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.context[data-align="start"] {
+  justify-content: flex-start;
+}
+
+.separator {
+  color: var(--line-strong);
+}
+
+.place {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.guideLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin: calc(var(--s1) * -1) 0;
+  color: var(--brand-text);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.guideLink:focus-visible {
+  outline: 2px solid var(--focus, #2453a6);
+  outline-offset: 2px;
+}

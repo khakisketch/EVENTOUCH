@@ -103,6 +103,74 @@ class RewardContextError extends Error {
   constructor(message: string, readonly reason: "desk" | "identity") { super(message); }
 }
 
+type ManualHandoffCandidate = { person: DeskParticipant; count: number; sameNameCount: number };
+
+function StaffIdentityHandoff({
+  eventId,
+  eventName,
+  placeName,
+  actionLabel,
+  candidate,
+  disabled,
+}: {
+  eventId: string;
+  eventName: string;
+  placeName: string;
+  actionLabel: string;
+  candidate: ManualHandoffCandidate;
+  disabled: boolean;
+}) {
+  const [fallbackVisible, setFallbackVisible] = useState(false);
+  const [copyStatus, setCopyStatus] = useState("");
+  const fallbackRef = useRef<HTMLTextAreaElement>(null);
+  const person = candidate.person;
+  const company = person.company.trim() || "소속 미입력";
+  const handoffPath = `/console/events/${encodeURIComponent(eventId)}/participants`;
+  const handoffText = [
+    "현장 참가자 확인 요청",
+    `행사: ${eventName}`,
+    `업무 위치: ${placeName} · ${actionLabel}`,
+    `명단 확인 대상: ${person.name} · ${company}`,
+    `같은 이름 후보: ${candidate.sameNameCount}명 · 같은 이름·소속 후보: ${candidate.count}명`,
+    `행사 참가자 명단: ${typeof window === "undefined" ? handoffPath : new URL(handoffPath, window.location.origin).href}`,
+    "요청: 참가자 명단에서 이름·소속·마스킹된 연락처를 확인해 대상을 특정해 주세요. 대상 확인 후 티켓이 없거나 사용할 수 없으면 참가자 상세에서 검토 재발급하고, 새 QR·코드를 참가자에게 전달해 주세요. 스태프는 이 업무 화면에서 새 QR·코드를 다시 스캔합니다.",
+  ].join("\n");
+
+  useEffect(() => {
+    if (!fallbackVisible) return;
+    fallbackRef.current?.focus();
+    fallbackRef.current?.select();
+  }, [fallbackVisible]);
+
+  async function copyHandoff() {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
+      await navigator.clipboard.writeText(handoffText);
+      setFallbackVisible(false);
+      setCopyStatus("확인 요청을 복사했습니다. 현장 책임자에게 직접 전달하세요.");
+    } catch {
+      setFallbackVisible(true);
+      setCopyStatus("자동 복사를 할 수 없습니다. 아래 문구가 선택됐습니다. 직접 복사해 책임자에게 전달하세요.");
+    }
+  }
+
+  return (
+    <section className={prizeStyles.manualHandoffCandidate} aria-label={`${person.name} 책임자 확인 요청`}>
+      <p><strong>{person.name}</strong> · {company} · 같은 이름 {candidate.sameNameCount}명 · 같은 이름·소속 {candidate.count}명</p>
+      <ProductButton type="button" variant="primary" aria-label={`${person.name} ${company} 책임자 확인 요청 복사`} disabled={disabled} onClick={() => void copyHandoff()}>
+        책임자 확인 요청 복사
+      </ProductButton>
+      {copyStatus ? <p role="status">{copyStatus}</p> : null}
+      {fallbackVisible ? (
+        <label className={prizeStyles.manualHandoffFallback}>
+          책임자에게 전달할 확인 요청
+          <textarea ref={fallbackRef} readOnly rows={8} value={handoffText} onFocus={(event) => event.currentTarget.select()} />
+        </label>
+      ) : null}
+    </section>
+  );
+}
+
 function canHandOutReward(reward: DeskReward): boolean {
   const method = reward.method.trim().toUpperCase();
   return !method || method === "ONSITE";
@@ -915,10 +983,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     const active = document.activeElement;
     if (scanEditRevisionRef.current !== scanEditAtSubmitRef.current) return;
     if (active && active !== document.body && (active !== scanFocusAtSubmitRef.current || !scanInputRef.current?.contains(active))) return;
-    // "nearest" can align the heading at the top while leaving the retry
-    // below a short viewport. Center the whole recovery group before focusing
-    // without a second browser scroll, so the verdict and action stay together.
+    // The result has its own scroll area. Reveal the panel first, then move
+    // only as far as needed inside it to show the focused recovery action.
     scanFailureRef.current?.scrollIntoView({ block: "center", behavior: "instant" });
+    retryFailedRef.current?.scrollIntoView({ block: "nearest", behavior: "instant" });
     retryFailedRef.current?.focus({ preventScroll: true });
   }, [result]);
 
@@ -1049,6 +1117,25 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         const name = person.name.trim().toLocaleLowerCase();
         return manualSearchTerm.length === 1 ? name === manualSearchTerm : name.includes(manualSearchTerm);
       }) : [];
+  const manualIdentityCounts = new Map<string, number>();
+  const manualNameCounts = new Map<string, number>();
+  for (const person of deskParticipants) {
+    const key = identityKey(person);
+    manualIdentityCounts.set(key, (manualIdentityCounts.get(key) ?? 0) + 1);
+    const normalizedName = person.name.trim().toLocaleLowerCase();
+    manualNameCounts.set(normalizedName, (manualNameCounts.get(normalizedName) ?? 0) + 1);
+  }
+  const manualHandoffGroups = [...manualMatches.reduce((groups, person) => {
+    const key = identityKey(person);
+    const count = manualIdentityCounts.get(key) ?? 0;
+    if (person.company.trim() && count < 2) return groups;
+    if (!groups.has(key)) groups.set(key, {
+      person,
+      count,
+      sameNameCount: manualNameCounts.get(person.name.trim().toLocaleLowerCase()) ?? 0,
+    });
+    return groups;
+  }, new Map<string, ManualHandoffCandidate>()).values()];
   const manualTargetCurrent = manualTarget && deskParticipants.find((person) => person.id === manualTarget.id && identityKey(person) === identityKey(manualTarget));
   const manualTargetDistinct = manualTargetCurrent && manualTargetCurrent.company.trim() !== "" && deskParticipants.filter((person) => identityKey(person) === identityKey(manualTargetCurrent)).length === 1;
 
@@ -2387,8 +2474,27 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             <p id="staff-manual-search-help">이름을 두 글자 이상 입력하세요. 한 글자 이름은 그대로 입력합니다. 연락처와 티켓 코드는 표시하지 않습니다.</p>
             <p role="status">{refreshing ? "명단을 다시 확인하고 있습니다." : loadError ? "최신 명단을 확인하지 못했습니다. 표시된 출입 상태는 이전 확인 기준입니다." : "출입 상태는 마지막으로 확인한 명단 기준입니다. 처리할 때 서버가 다시 확인합니다."}</p>
             {manualSearchTerm && deskSourcesAvailable ? (
-              <div aria-live="polite">
-                <p>{manualMatches.length ? `${manualMatches.length}명 검색됨${manualMatches.length > manualVisibleLimit ? ` · ${manualVisibleLimit}명 표시` : ""}` : "일치하는 참가자가 없습니다. 이름을 확인하세요."}</p>
+              <div>
+                <p role="status">{manualMatches.length ? `${manualMatches.length}명 검색됨${manualMatches.length > manualVisibleLimit ? ` · ${manualVisibleLimit}명 표시` : ""}` : "일치하는 참가자가 없습니다. 이름을 확인하세요."}</p>
+                {manualHandoffGroups.length ? (
+                  <section id="staff-manual-handoff" className={prizeStyles.manualHandoff} aria-label="현장 책임자 확인 요청">
+                    <h3>이름·소속 확인이 필요합니다</h3>
+                    <p>확인 요청을 복사해 현장 책임자에게 직접 전달하세요. 행사와 처리 위치, 확인할 이름이 포함됩니다.</p>
+                    {manualHandoffGroups.map((candidate) => (
+                      <StaffIdentityHandoff
+                        key={candidate.person.id}
+                        eventId={activeScope.eventId}
+                        eventName={activeScope.eventName}
+                        placeName={selectedDesk?.name ?? "데스크"}
+                        actionLabel={selectedDesk?.action === "OUT" ? "퇴장" : "입장"}
+                        candidate={candidate}
+                        disabled={!ready || writeLocked || submitting || manualRefreshRequired}
+                      />
+                    ))}
+                    <ProductButton id="staff-manual-handoff-return" type="button" variant="ghost" className={prizeStyles.manualHandoffReturn} disabled={scanControlsLocked || submitting}
+                      onClick={() => setEntryMode("scan")}>책임자 확인 후 스캔 화면으로 돌아가기</ProductButton>
+                  </section>
+                ) : null}
                 <ul className={prizeStyles.manualResults} aria-label="참가자 검색 결과">
                   {manualMatches.slice(0, manualVisibleLimit).map((person, index) => {
                     const ambiguous = deskParticipants.filter((item) => identityKey(item) === identityKey(person)).length > 1;

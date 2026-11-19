@@ -100,7 +100,7 @@ test('menu closes on arrival, never on click, so a guard cancel keeps state', ()
   const source = shell();
   assert.match(
     source,
-    /globalFocusPendingRef\.current = false;\s*setGlobalMenuOpen\(false\);\s*\}, \[pathname\]/su
+    /globalFocusPendingRef\.current = false;\s*setGlobalMenuOpen\(false\);\s*setEventMenuQuery\(""\);\s*\}, \[pathname, organization\.context\?\.organizationId\]/su
   );
   // Links stay plain client-side Links: no onClick closer that could run
   // before the draft guard answers.
@@ -114,6 +114,27 @@ test('menu closes on arrival, never on click, so a guard cancel keeps state', ()
   );
   assert.doesNotMatch(eventsRenderer, /onClick/u);
   assert.doesNotMatch(clientsRenderer, /onClick/u);
+});
+
+test('event menu searches operator terms inside the existing visible page list', () => {
+  const { EVENT_HUBS, matchesEventMenu } = require('../apps/web/app/console/console-navigation.ts');
+  const matches = (query) => EVENT_HUBS.flatMap(hub =>
+    hub.pageIds.filter(id => matchesEventMenu(id, hub.label, query)));
+  assert.deepEqual(matches('문자'), ['messages']);
+  assert.deepEqual(matches('체크인'), ['operations']);
+  assert.deepEqual(matches('안내 qr'), ['attendeePage']);
+  assert.deepEqual(matches('없는 메뉴 예시'), []);
+  assert.match(shell(), /isPageVisible\(id\) && matchesEventMenu\(id,/u);
+});
+
+test('event menu finds intake and application-field destinations by the names operators see', () => {
+  const { eventMenuShortcuts } = require('../apps/web/app/console/console-navigation.ts');
+  const search = query => eventMenuShortcuts('settings', 'demo event', query).map(({ label, href }) => [label, href]);
+  assert.deepEqual(search('신청 항목 편집'), [['신청 항목', '/console/events/demo%20event/settings/fields']]);
+  assert.deepEqual(search('참가 접수'), [['참가 접수', '/console/events/demo%20event/settings#settings-intake']]);
+  assert.deepEqual(search(''), []);
+  assert.deepEqual(eventMenuShortcuts('settings', undefined, '참가 접수'), []);
+  assert.deepEqual(eventMenuShortcuts('participants', 'demo event', '신청 항목'), []);
 });
 
 test('current-destination link closes the menu; guarded leaves stay open', () => {
@@ -158,14 +179,16 @@ test('Escape restores trigger focus; leaving never steals focus', () => {
   assert.doesNotMatch(source, /["']Tab["']/u);
 });
 
-test('opening focuses the first permitted link; desktop width closes silently', () => {
+test('opening focuses the first permitted link unless a menu control already has focus', () => {
   const source = shell();
-  // Menu rows are hub labels and page subitems now, not rail items: the
-  // first-link focus still lands on the first permitted href.
   assert.match(
     source,
-    /globalMenuRef\.current\s*\?\.querySelector<HTMLElement>\("a\[href\]"\)\s*\?\.focus\(\)/su
+    /const menu = globalMenuRef\.current;\s*if \(!menu \|\| menu\.hidden \|\| menu\.contains\(document\.activeElement\)\) return;\s*menu\.querySelector<HTMLElement>\("a\[href\]"\)\?\.focus\(\)/su
   );
+});
+
+test('desktop width closes the phone menu silently', () => {
+  const source = shell();
   assert.match(source, /min-width:\s*769px/u);
 });
 

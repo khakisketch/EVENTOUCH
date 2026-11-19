@@ -26,7 +26,8 @@ export type ConsolePageId =
   | "attendeePage"
   | "rewards"
   | "settings"
-  | "reports";
+  | "reports"
+  | "analysis";
 
 export type ConsolePageScope = "organization" | "event";
 
@@ -78,6 +79,7 @@ export const CONSOLE_PAGES: Record<ConsolePageId, ConsolePageMeta> = {
   rewards: { label: "경품 지급 현황", title: "경품 지급 현황", scope: "event", layout: "workspace" },
   settings: { label: "행사 설정", title: "행사 설정", scope: "event", layout: "workspace" },
   reports: { label: "결과 보고서", title: "결과 보고서", scope: "event", layout: "workspace" },
+  analysis: { label: "기간 분석", title: "기간 분석", scope: "event", layout: "workspace" },
 };
 
 /**
@@ -90,11 +92,52 @@ export const EVENT_HUBS: readonly ConsoleHub[] = [
   { id: "today", label: "운영", pageIds: ["overview", "participants", "messages"], defaultPageId: "overview" },
   { id: "onsite", label: "현장·참여", pageIds: ["operations", "draws", "rewards", "photos"], defaultPageId: "operations" },
   { id: "prepare", label: "행사 준비", pageIds: ["attendeePage", "content", "programs", "settings"], defaultPageId: "attendeePage" },
-  { id: "results", label: "결과", pageIds: ["reports"], defaultPageId: "reports" },
+  { id: "results", label: "결과", pageIds: ["reports", "analysis"], defaultPageId: "reports" },
 ];
 
 /** Flattened order for callers that only need a page list. */
 export const EVENT_PAGE_IDS: readonly ConsolePageId[] = EVENT_HUBS.flatMap((hub) => hub.pageIds);
+
+const EVENT_MENU_TERMS: Partial<Record<ConsolePageId, string>> = {
+  overview: "대시보드 오늘 할 일 입장률",
+  participants: "승인 대기 참석자 검색 명찰 티켓 등록자 엑셀 CSV",
+  messages: "문자 발송 SMS LMS MMS 알림톡 예약",
+  operations: "체크인 입장 퇴장 데스크 부스 스태프 전광판",
+  draws: "투표 추첨 당첨 룰렛",
+  rewards: "경품 수령 지급",
+  photos: "증빙 보관함 사진 ZIP",
+  content: "공지사항 일정 시간표 장소 오시는 길",
+  programs: "참여 설문 퀴즈 질문 게시판",
+  attendeePage: "안내 QR 안내판 배너 디자인 인쇄",
+  settings: "신청 접수 양식 진행 단계 정원",
+  reports: "결과 보고서 PDF 인쇄 마감",
+  analysis: "통계 기간별 일별 신청 입장",
+};
+
+function matchesMenuWords(label: string, query: string): boolean {
+  const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const searchable = label.toLowerCase().replace(/[\s·]/g, "");
+  return terms.every((term) => searchable.includes(term.replace(/·/g, "")));
+}
+
+export function matchesEventMenu(pageId: ConsolePageId, hubLabel: string, query: string): boolean {
+  const page = CONSOLE_PAGES[pageId];
+  return matchesMenuWords([page.label, page.title, hubLabel, EVENT_MENU_TERMS[pageId] ?? ""].join(" "), query);
+}
+
+const SETTINGS_MENU_SHORTCUTS = [
+  { label: "참가 접수", terms: "양식 게시 접수 열기 접수 닫기 접수 마감", target: "#settings-intake" },
+  { label: "신청 항목", terms: "신청 항목 편집 필수 항목 등록 질문 필드", target: "/fields" },
+];
+
+/** Search can lead to a section of a visible page without adding more rail items. */
+export function eventMenuShortcuts(pageId: ConsolePageId, eventId: string | undefined, query: string) {
+  if (pageId !== "settings" || !query.trim()) return [];
+  const href = consolePageHref(pageId, eventId);
+  if (!href) return [];
+  return SETTINGS_MENU_SHORTCUTS.filter(({ label, terms }) => matchesMenuWords(`${label} ${terms}`, query))
+    .map(({ label, target }) => ({ label, href: `${href}${target}` }));
+}
 
 /** Finds the hub that owns a page. Organization pages return undefined. */
 export function consoleHubForPage(pageId: ConsolePageId): ConsoleHub | undefined {
@@ -129,7 +172,8 @@ export function consolePageHref(pageId: ConsolePageId, eventId?: string): string
     case "attendeePage":
     case "rewards":
     case "settings":
-    case "reports": {
+    case "reports":
+    case "analysis": {
       const id = eventId?.trim();
       if (!id) return undefined;
       const base = `/console/events/${encodeURIComponent(id)}`;
@@ -160,6 +204,8 @@ export function consolePageHref(pageId: ConsolePageId, eventId?: string): string
           return `${base}/settings`;
         case "reports":
           return `${base}/reports`;
+        case "analysis":
+          return `${base}/analysis`;
       }
     }
   }
@@ -224,6 +270,8 @@ export function resolveConsolePage(pathname: string): ConsolePageResolution | nu
         return { pageId: "settings", eventId };
       case "reports":
         return { pageId: "reports", eventId };
+      case "analysis":
+        return { pageId: "analysis", eventId };
       default:
         return null;
     }

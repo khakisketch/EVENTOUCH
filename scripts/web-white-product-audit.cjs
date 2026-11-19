@@ -43,14 +43,15 @@ const CONSOLE = [
   ['messages', '/console/events/:id/messages', '#history-heading'],
   ['operations', '/console/events/:id/operations', '#ops-desks'],
   ['programs', '/console/events/:id/programs', 'button:has-text("콘텐츠 만들기")'],
-  ['draws', '/console/events/:id/draws', '#draws-programs'],
+  ['draws', '/console/events/:id/draws', 'section[aria-label="무대"]'],
   ['photos', '/console/events/:id/photos', '#evidence-photo-sections'],
-  ['content', '/console/events/:id/content', '#content-notices'],
-  ['page', '/console/events/:id/page', '#home-intro'],
-  ['rewards', '/console/events/:id/rewards', '#rewards-list'],
-  ['settings', '/console/events/:id/settings', '#set-name'],
+  ['content', '/console/events/:id/content', '#content-panel'],
+  ['page', '/console/events/:id/page', '#theme-save-draft'],
+  ['rewards', '/console/events/:id/rewards', { role: 'link', name: '참가자 명단' }],
+  ['settings', '/console/events/:id/settings', '#settings-basics'],
   ['application-fields', '/console/events/:id/settings/fields', '#application-fields-heading'],
-  ['reports', '/console/events/:id/reports', '#reports-list'],
+  ['reports', '/console/events/:id/reports', { role: 'tab', name: /^보고서/ }],
+  ['analysis', '/console/events/:id/analysis', '#period-preset-2'],
 ];
 
 async function main() {
@@ -172,10 +173,21 @@ async function main() {
       if (name === 'attendee') {
         const geometry = await page.locator('nav[aria-label="참가 메뉴"] button').evaluateAll(buttons => buttons.map(button => {
           const icon = button.querySelector('svg')?.getBoundingClientRect();
-          const label = button.querySelector('[class*="menuLabel"]')?.getBoundingClientRect();
-          return { iconRight: icon?.right, labelLeft: label?.left, labelWidth: label?.width };
+          const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
+          let label;
+          while (walker.nextNode()) {
+            if (!walker.currentNode.textContent.trim()) continue;
+            const range = document.createRange();
+            range.selectNodeContents(walker.currentNode);
+            label = [...range.getClientRects()].find(rect => rect.width > 1 && rect.height > 1);
+            if (label) break;
+          }
+          const bounds = button.getBoundingClientRect();
+          return { iconRight: icon?.right, iconBottom: icon?.bottom, labelLeft: label?.left, labelTop: label?.top,
+            labelWidth: label?.width, labelRight: label?.right, labelBottom: label?.bottom,
+            buttonLeft: bounds.left, buttonRight: bounds.right, buttonBottom: bounds.bottom };
         }));
-        check(`${name}@${width}: menu icons precede readable labels`, geometry.length > 0 && geometry.every(item => item.iconRight <= item.labelLeft + 1 && item.labelWidth >= 40), geometry);
+        check(`${name}@${width}: menu icons and labels do not overlap or clip`, geometry.length > 0 && geometry.every(item => (item.iconRight <= item.labelLeft + 1 || item.iconBottom <= item.labelTop + 1) && item.labelWidth > 0 && item.labelLeft >= item.buttonLeft - 1 && item.labelRight <= item.buttonRight + 1 && item.labelBottom <= item.buttonBottom + 1), geometry);
       }
       await page.evaluate(axe);
       const violations = await page.evaluate(async () => (await window.axe.run()).violations.map(item => ({ id: item.id, impact: item.impact, targets: item.nodes.map(node => node.target) })));
@@ -191,7 +203,13 @@ async function main() {
         for (const [name, route, marker] of routes) {
           const target = route.replace(':id', f.eventId);
           await page.goto(f.baseUrl + target, { waitUntil: 'networkidle' });
-          await page.locator(marker).first().waitFor({ state: 'visible' });
+          const ready = typeof marker === 'string' ? page.locator(marker).first() : page.locator('main').getByRole(marker.role, { name: marker.name, exact: true });
+          try {
+            await ready.waitFor({ state: 'visible' });
+          } catch (error) {
+            console.error(`[white-product] readiness ${name}@${width}: ${page.url()}`, (await page.locator('main').innerText({ timeout: 2000 }).catch(readError => readError.message)).slice(0, 2000));
+            throw error;
+          }
           check(`${name}@${width}: actual destination`, new URL(page.url()).pathname === target.split('?')[0]);
           if (role === 'public' && name === 'engage' && await page.getByText('게시된 프로그램이 없습니다.', { exact: true }).isVisible()) {
             check(`engage@${width}: empty state has one return to the menu`, await page.getByRole('link', { name: /참가 메뉴로/ }).count() === 1);
@@ -204,6 +222,9 @@ async function main() {
           }
           if (role === 'owner' && name !== 'account-email') {
             if (name === 'draws') {
+              // 무대 ID는 선택 종류마다 달라지므로 이름 있는 영역과 별도 선택기를 확인한다.
+              const picker = page.getByRole('heading', { name: '무대 선택', exact: true }).locator('xpath=following-sibling::ul[1]');
+              await picker.getByRole('button', { pressed: true }).waitFor({ state: 'visible' });
               const prerequisite = page.getByRole('link', { name: '참여 콘텐츠에서 추첨 무대를 만들고 공개하세요.', exact: true });
               check(`draws@${width}: prerequisite action is separate from its explanation`,
                 await prerequisite.isVisible() && await prerequisite.evaluate(link => !link.closest('p')));
@@ -222,8 +243,35 @@ async function main() {
             const expectedTitle = width <= 768 ? '26px' : '30px';
             check(`${name}@${width}: white workspace and ink rail`, visual.body === 'rgb(255, 255, 255)' && visual.nav === 'rgb(16, 17, 20)' && visual.workspace === 'rgb(255, 255, 255)' && visual.shell === 'rgb(255, 255, 255)' && visual.title === expectedTitle && visual.font.includes('Pretendard') && visual.headings === 1, visual);
             if (name === 'overview') {
-              const priorityAction = await page.locator('[data-task="approval"] a').first().evaluate(element => ({ background: getComputedStyle(element).backgroundColor, color: getComputedStyle(element).color }));
-              check(`overview@${width}: priority action has a distinct fill`, priorityAction.background === 'rgb(199, 68, 28)' && priorityAction.color === 'rgb(255, 255, 255)' && contrastRatio(priorityAction.color, priorityAction.background) >= 4.5, priorityAction);
+              // 화면 색상에서 정답을 역추론하지 않고 실제 행사 단계의 역할 계약을 확인한다.
+              const stageResponse = await context.request.get(`${f.baseUrl}/api/events/${f.eventId}/bootstrap`);
+              if (!stageResponse.ok()) throw new Error(`overview stage read: ${stageResponse.status()}`);
+              const stageBody = await stageResponse.json();
+              const overviewStage = stageBody.state.events.find(event => event.id === f.eventId)?.stage;
+              if (!overviewStage) throw new Error('overview stage is missing');
+              const actions = await page.locator('[data-task] a, a:has-text("현장 운영 열기")').evaluateAll(elements => elements.map(element => ({
+                task: element.closest('[data-task]')?.getAttribute('data-task') ?? null,
+                variant: element.getAttribute('data-action-variant'),
+                background: getComputedStyle(element).backgroundColor,
+                color: getComputedStyle(element).color,
+              })));
+              const isPrimary = action => action?.variant === 'primary' && action.background === 'rgb(199, 68, 28)' && action.color === 'rgb(255, 255, 255)' && contrastRatio(action.color, action.background) >= 4.5;
+              const isGhost = action => action?.variant === 'ghost' && contrastRatio(action.color, 'rgb(255, 255, 255)') >= 4.5;
+              const field = actions.find(action => action.task === null);
+              const queue = actions.filter(action => action.task !== null);
+              const primaryCount = await page.locator('main [data-action-variant="primary"]:visible').count();
+              if (overviewStage === 'LIVE') {
+                check(`overview@${width}: live primary keeps its distinct fill`, isPrimary(field) && primaryCount === 1, field);
+                check(`overview@${width}: live task queue stays ghost`, queue.every(isGhost), queue);
+              } else if (overviewStage === 'ARCHIVED') {
+                check(`overview@${width}: archived overview keeps no primary`, primaryCount === 0);
+              } else if (queue.length) {
+                check(`overview@${width}: field action stays ghost away from live`, !field || isGhost(field), field ?? null);
+                check(`overview@${width}: first task owns the single primary`, isPrimary(queue[0]) && primaryCount === 1, queue[0]);
+                check(`overview@${width}: remaining tasks stay ghost`, queue.slice(1).every(isGhost), queue.slice(1));
+              } else {
+                check(`overview@${width}: overview without tasks keeps no primary`, primaryCount === 0);
+              }
               const contrast = await page.evaluate(() => {
                 const rgb = value => value.match(/[\d.]+/g).map(Number);
                 const blend = (foreground, background) => {

@@ -1330,9 +1330,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
               </button>
             ))}
           </div>
-        ) : (
-          <p className={styles.help}>아직 보고서가 없습니다. 보고서 만들기 버튼으로 첫 버전을 생성하세요.</p>
-        )}
+        ) : null}
         <div className={styles.content}>
           <div className={styles.deskColumn}>
             {detail ? (

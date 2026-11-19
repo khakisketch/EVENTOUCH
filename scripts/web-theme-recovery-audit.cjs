@@ -68,6 +68,7 @@ async function main() {
     });
     const workspace = async () => (await fixture.harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [fixture.eventId])).rows[0].payload;
     await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/page`, { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: /^소개와 공개 범위/ }).click();
     const intro = page.locator('#home-intro');
     const save = page.getByRole('button', { name: '초안 저장', exact: true });
     const original = '합성 페이지 복구 원래 요청';
@@ -108,13 +109,13 @@ async function main() {
       try {
         await Promise.race([firstCommitted, new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error('the initial save did not commit')), 15000); })]);
       } finally { clearTimeout(deadline); }
-      await page.getByRole('button', { name: '티켓 있음', exact: true }).focus();
+      await page.getByLabel('참가자 티켓').focus();
       releaseFirstLoss();
     }
     await page.getByRole('alert').filter({ hasText: /저장 응답을 확인하지 못했습니다/ }).waitFor();
     if (!before) {
       await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-      assert.equal(await page.evaluate(() => document.activeElement?.textContent?.trim()), '티켓 있음', 'a later error must not steal focus moved by the operator');
+      assert.equal(await page.getByLabel('참가자 티켓').evaluate((element) => element === document.activeElement), true, 'a later error must not steal focus moved by the operator');
     }
     const denied = page.waitForResponse((item) => item.status() === 403 && item.url().includes('/commands'));
     await save.click();
@@ -179,7 +180,9 @@ async function main() {
     assert.equal((await workspace()).pageExperience.publishedVersion, afterPartial.draftVersion);
 
     phase = 'banner upload retains the same file and request';
-    await page.locator('input[type="file"]').first().setInputFiles({ name: 'synthetic-banner.png', mimeType: 'image/png', buffer: floorplanPng() });
+    await page.getByRole('button', { name: '설정', exact: true }).click();
+    await page.getByRole('button', { name: /^배너/ }).click();
+    await page.getByLabel('배너 이미지 선택').setInputFiles({ name: 'synthetic-banner.png', mimeType: 'image/png', buffer: floorplanPng() });
     const fileAlert = page.getByRole('alert').filter({ hasText: /업로드 응답을 확인하지 못했습니다/ });
     await fileAlert.waitFor();
     const deniedUpload = page.waitForResponse((item) => item.status() === 403 && item.url().includes('/files?'));
@@ -198,6 +201,8 @@ async function main() {
     assert.equal((await fixture.harness.database.query('SELECT id FROM stored_files WHERE event_id=$1 AND original_name=$2', [fixture.eventId, 'synthetic-banner.png'])).rowCount, 1);
 
     phase = 'edited draft remains visible if a later different request is denied';
+    await page.getByRole('button', { name: '설정', exact: true }).click();
+    await page.getByRole('button', { name: /^소개와 공개 범위/ }).click();
     const earlier = '합성 페이지 복구 수정 전 유실';
     const edited = '합성 페이지 복구 수정 후 거부';
     await intro.fill(earlier);

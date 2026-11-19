@@ -10,8 +10,9 @@ import { createPortal } from "react-dom";
 import Link from "../ui/ProductLink";
 import { usePathname, useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../auth-redirect";
-import { CONSOLE_PAGES, EVENT_HUBS, consoleHubForPage, consolePageHref, resolveConsolePage, type ConsoleHub, type ConsolePageId } from "./console-navigation";
+import { CONSOLE_PAGES, EVENT_HUBS, consoleHubForPage, consolePageHref, eventMenuShortcuts, matchesEventMenu, resolveConsolePage, type ConsolePageId } from "./console-navigation";
 import { BarsIcon } from "./console-ui/ConsoleIcons";
+import EventMenuSearch from "./console-ui/EventMenuSearch";
 import { useConsoleLeaveConfirmation } from "./console-draft-guard";
 import { consoleFetch, invalidateConsoleReads, subscribeConsoleFreshness } from "../../lib/console-api";
 import freshnessStyles from "./console-ui/freshness.module.css";
@@ -150,6 +151,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const [operatorMenuOpen, setOperatorMenuOpen] = useState(false);
   const [operatorMenuPosition, setOperatorMenuPosition] = useState<CSSProperties | null>(null);
   const [globalMenuOpen, setGlobalMenuOpen] = useState(false);
+  const [eventMenuQuery, setEventMenuQuery] = useState("");
   const [portalReady, setPortalReady] = useState(false);
   const [logoutPending, setLogoutPending] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -595,7 +597,8 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     // the link state stay exactly as they were.
     globalFocusPendingRef.current = false;
     setGlobalMenuOpen(false);
-  }, [pathname]);
+    setEventMenuQuery("");
+  }, [pathname, organization.context?.organizationId]);
 
   useEffect(() => {
     if (!globalMenuOpen) return;
@@ -625,6 +628,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing) return;
       if (event.key === "Escape") {
         event.preventDefault();
         closeGlobalMenu(true);
@@ -632,6 +636,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       }
       if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
       if (!globalMenuRef.current?.contains(document.activeElement)) return;
+      if (document.activeElement?.matches("input")) return;
       const items = Array.from(
         globalMenuRef.current?.querySelectorAll<HTMLElement>(
           "a[href]"
@@ -675,9 +680,9 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     if (!globalMenuOpen || !globalFocusPendingRef.current) return;
     globalFocusPendingRef.current = false;
     const frame = window.requestAnimationFrame(() => {
-      globalMenuRef.current
-        ?.querySelector<HTMLElement>("a[href]")
-        ?.focus();
+      const menu = globalMenuRef.current;
+      if (!menu || menu.hidden || menu.contains(document.activeElement)) return;
+      menu.querySelector<HTMLElement>("a[href]")?.focus();
     });
     return () => window.cancelAnimationFrame(frame);
   }, [globalMenuOpen]);
@@ -722,6 +727,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     if (globalMenuOpen) {
       closeGlobalMenu();
     } else {
+      setEventMenuQuery("");
       // The two popups are mutually exclusive.
       menuFocusPendingRef.current = false;
       setOperatorMenuOpen(false);
@@ -734,13 +740,12 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   function handleGlobalMenuNavigate(event: React.MouseEvent<HTMLElement>) {
     // Capture precedes Next Link's bubble onClick, which marks navigation
     // defaultPrevented before a parent bubble handler can see it. Handle
-    // ONLY the already-here destination; different paths stay untouched for
+    // Only handle links within the current page; different paths stay with
     // the shared draft guard and pathname effect regardless of React's
     // delegated/native capture ordering. A cancelled leave keeps the menu,
     // focus and input intact.
     //
-    // Bounded to the already-here destination only, for a normal unmodified
-    // primary click.
+    // Native section navigation should also work from the mobile disclosure.
     if (
       event.defaultPrevented || event.button !== 0 ||
       event.metaKey || event.ctrlKey || event.shiftKey || event.altKey
@@ -758,6 +763,17 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     }
     if (url.origin !== window.location.origin) return;
     if (url.pathname !== window.location.pathname) return;
+    if (link.hasAttribute("data-event-menu-shortcut") && url.hash && url.search === window.location.search) {
+      closeGlobalMenu();
+      const section = document.getElementById(url.hash.slice(1));
+      if (!section) return;
+      event.preventDefault();
+      window.location.hash = url.hash;
+      section.scrollIntoView({ block: "start" });
+      section.setAttribute("tabindex", "-1");
+      section.focus({ preventScroll: true });
+      return;
+    }
     // Same destination: no navigation will arrive to close the menu, so
     // close here and stay put without a same-page scroll reset.
     event.preventDefault();
@@ -830,9 +846,12 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     return true;
   }
 
-  function visiblePagesForHub(hub: ConsoleHub): ConsolePageId[] {
-    return hub.pageIds.filter(isPageVisible);
-  }
+  const matchingHubs = EVENT_HUBS.map((hub) => ({
+    hub,
+    pages: hub.pageIds.filter((id) => isPageVisible(id) && matchesEventMenu(id, hub.label, eventMenuQuery)),
+    shortcuts: hub.pageIds.flatMap((id) => isPageVisible(id) ? eventMenuShortcuts(id, eventId ?? undefined, eventMenuQuery) : []),
+  })).filter(({ pages, shortcuts }) => pages.length + shortcuts.length > 0);
+  const menuResultCount = matchingHubs.reduce((count, { pages, shortcuts }) => count + pages.length + shortcuts.length, 0);
 
 
   function renderPageBadges(pageId: ConsolePageId) {
@@ -853,13 +872,17 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     return null;
   }
 
+  function renderShortcuts(shortcuts: ReturnType<typeof eventMenuShortcuts>, className: string) {
+    return shortcuts.map(({ label, href }) => <Link key={href} className={className}
+      href={href} data-event-menu-shortcut="" aria-current={pathname === href ? "page" : undefined}>{label}</Link>);
+  }
+
   function renderEventHubs() {
-    return EVENT_HUBS.map((hub) => {
-      const pages = visiblePagesForHub(hub);
-      if (!pages.length) return null;
+    return matchingHubs.map(({ hub, pages, shortcuts }) => {
       return (
         <div key={hub.id} className="console-nav-group" role="group" aria-label={hub.label}>
           <p className="nav-section-label">{hub.label}</p>
+          {renderShortcuts(shortcuts, "console-nav-item console-workspace-link")}
           {pages.map((pageId) => {
             const href = pageHref(pageId);
             if (!href) return null;
@@ -887,10 +910,9 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         <p className="console-menu-section-label">현재 행사</p>
         <p className="console-menu-event-name">{shellData?.currentEventName}</p>
         <p className="console-menu-event-meta">{meta}</p>
-        <div className="console-menu-hubs">
-          {EVENT_HUBS.map((hub) => {
-            const pages = visiblePagesForHub(hub);
-            if (!pages.length) return null;
+        <EventMenuSearch query={eventMenuQuery} onChange={setEventMenuQuery} resultCount={menuResultCount} resultsId="mobile-event-menu-results" />
+        <div id="mobile-event-menu-results" className="console-menu-hubs">
+          {matchingHubs.map(({ hub, pages, shortcuts }) => {
             return (
               <div key={hub.id} className="console-menu-hub-group">
                 <p
@@ -900,6 +922,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
                   {hub.label}
                 </p>
                 <div className="console-menu-subnav">
+                  {renderShortcuts(shortcuts, "console-menu-subitem")}
                   {pages.map((pageId) => {
                     const pageLink = pageHref(pageId);
                     if (!pageLink) return null;
@@ -949,7 +972,8 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
               <strong title={shellData?.currentEventName ?? undefined}>{shellData?.currentEventName}</strong>
             </div>
           )}
-          <div className="console-hub-list">{renderEventHubs()}</div>
+          <EventMenuSearch query={eventMenuQuery} onChange={setEventMenuQuery} resultCount={menuResultCount} resultsId="rail-event-menu-results" />
+          <div id="rail-event-menu-results" className="console-hub-list">{renderEventHubs()}</div>
         </div>
         {shellData && shellData.triage.length ? (
           <div className="nav-triage" role="group" aria-label="손봐야 할 행사">

@@ -297,11 +297,13 @@ function parseModule(value: unknown): Module | null {
 class CommandFailure extends Error {
   field: string | null;
   code: string | null;
+  statusCode: number | null;
 
-  constructor(failure: Failure & { code?: string | null }) {
+  constructor(failure: Failure & { code?: string | null; statusCode?: number | null }) {
     super(failure.message);
     this.field = failure.field;
     this.code = failure.code ?? null;
+    this.statusCode = failure.statusCode ?? null;
   }
 }
 
@@ -335,7 +337,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     questionConflictReadRef.current?.abort();
     questionConflictReadRef.current = null;
   }, [eventId]);
-  const [answerFailure, setAnswerFailure] = useState<{ id: string; message: string; field: string | null } | null>(null);
+  const [answerFailure, setAnswerFailure] = useState<{ id: string; message: string; field: string | null; statusCode?: number | null } | null>(null);
   const moduleSaveRetryRef = useRef<ModuleSaveAttempt | null>(null);
   const [moduleSaveRetry, setModuleSaveRetry] = useState<ModuleSaveAttempt | null>(null);
   const [checkingModuleSave, setCheckingModuleSave] = useState(false);
@@ -972,6 +974,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
         throw new CommandFailure({
           message: uncertain ? "응답을 확인하지 못했습니다. 같은 내용으로 다시 시도하세요." : typeof data?.error === "string" ? data.error : "요청을 처리하지 못했습니다.",
           field: typeof data?.field === "string" ? data.field : null,
+          statusCode: response.status,
         });
       }
       if (!data || Array.isArray(data)) { rememberOperation(); throw new Error("응답을 확인하지 못했습니다. 같은 내용으로 다시 시도하세요."); }
@@ -1409,6 +1412,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
         id: payload.id,
         message: error instanceof Error ? error.message : "질문을 처리하지 못했습니다.",
         field: error instanceof CommandFailure ? error.field : null,
+        statusCode: error instanceof CommandFailure ? error.statusCode : null,
       });
     } finally {
       setBusy(null);
@@ -1751,7 +1755,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       eventName={state.eventName}
       meta={state.eventMeta}
       headerActions={
-        <div className={styles.headerActions}>
+        <div className={`${styles.headerActions} console-header-group`}>
           <ProductLink variant="ghost" href={returnBack}>{returnLabel}</ProductLink>
           {state.canManage ? <ConsoleRefreshButton label="새로고침" disabled={busy !== null} onRefresh={() => load(true)} /> : null}
           {state.canManage ? (
@@ -1772,6 +1776,13 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
           {questionManageRetry ? (
             <div className={styles.recoveryStrip} role="region" aria-label="질문 처리 확인">
               <span>질문 처리가 반영됐을 수 있습니다. 서버 확인은 요청을 다시 보내지 않습니다.</span>
+              {answerFailure?.id === questionManageRetry.payload.id ? (
+                <p role="alert">
+                  {answerFailure.statusCode === 403
+                    ? "다시 보낸 요청이 서버에서 거부되었습니다 (403). 원래 처리가 반영됐는지는 아직 확인되지 않았습니다. 서버 처리 확인으로 상태를 조회하거나 같은 요청을 다시 확인하세요."
+                    : answerFailure.message}
+                </p>
+              ) : null}
               <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingQuestion || abandonQuestionConfirm} onClick={() => void checkQuestionManagement()}>서버 처리 확인</ProductButton>
               <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingQuestion || abandonQuestionConfirm || writeLocked} onClick={() => void submitQuestionManagement(questionManageRetry)}>원래 질문 처리 다시 확인</ProductButton>
               <ProductButton type="button" variant="secondary" disabled={busy !== null || checkingQuestion || abandonQuestionConfirm} onClick={() => setAbandonQuestionConfirm(true)}>확인 전 그만두기</ProductButton>

@@ -48,6 +48,7 @@ async function main() {
     await newTab.screenshot({ path: path.join(out, 'ticket-new-tab-390.png') });
     stage = 'missing contact and protected form exit';
     await newTab.getByRole('link', { name: '행사 안내 확인' }).click();
+    await newTab.locator('summary').filter({ hasText: '이미 신청하셨나요?' }).click();
     await newTab.getByText('행사 초대 안내', { exact: false }).waitFor();
     await newTab.getByRole('link', { name: '참가 신청하기' }).click();
     await newTab.locator('#field-name').fill('합성 신청자');

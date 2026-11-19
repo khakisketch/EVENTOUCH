@@ -12,6 +12,7 @@ import type { CSSProperties } from "react";
 import AttendeeHomeLanding from "../../../../event/[slug]/home/AttendeeHomeLanding";
 import attendeeHomeStyles from "../../../../event/[slug]/home/home.module.css";
 import publicStyles from "../../../../event/[slug]/public-event.module.css";
+import PublicProgramSchedule, { type PublicProgramScheduleItem } from "../../../../event/[slug]/PublicProgramSchedule";
 import type { HomeStyle } from "../../../../../lib/attendee-home";
 import type { HomeMenus } from "../../../../../lib/attendee-home-menus";
 import ProductLink from "../../../../ui/ProductLink";
@@ -23,16 +24,18 @@ export type PreviewScreen = "home" | "notice" | "program" | "venue";
 export type PreviewDesign = {
   homeStyle: HomeStyle;
   homeMenus: HomeMenus;
+  accent: string;
   keyvisualUrl: string | null;
   defaultHomeBanner: "legacy" | "neutral";
   intro: string;
+  showSchedule: boolean;
   showAnnouncements: boolean;
   showPrograms: boolean;
   showVenue: boolean;
 };
 
 export type PreviewNotice = { id: string; title: string; body: string; pinned: boolean; editing: boolean; unpublished: boolean };
-export type PreviewProgram = { id: string; title: string; meta: string; description: string; editing: boolean; unpublished: boolean };
+export type PreviewProgram = PublicProgramScheduleItem & { editing: boolean; unpublished: boolean };
 export type PreviewVenue = { name: string; address: string; directions: string; contact: string; description: string; mapUrl: string | null; mapAlt: string; editing: boolean };
 
 const SCREENS: Array<{ id: PreviewScreen; label: string }> = [
@@ -57,6 +60,7 @@ function readableInk(color: string): string {
 
 type Props = {
   eventName: string;
+  eventDate: string;
   screen: PreviewScreen;
   onScreen: (screen: PreviewScreen) => void;
   design: PreviewDesign;
@@ -72,7 +76,7 @@ type Props = {
   onClose?: () => void;
 };
 
-export default function ContentPhonePreview({ eventName, screen, onScreen, design, notices, programs, venue, designHref, imageSrc, mode = "rail", onExpand, onClose }: Props) {
+export default function ContentPhonePreview({ eventName, eventDate, screen, onScreen, design, notices, programs, venue, designHref, imageSrc, mode = "rail", onExpand, onClose }: Props) {
   const stage = mode === "stage";
   const hostRef = useRef<HTMLDivElement | null>(null);
   // Stage fit: on a real phone the screen fills the viewport edge to edge
@@ -96,7 +100,13 @@ export default function ContentPhonePreview({ eventName, screen, onScreen, desig
     return () => observer.disconnect();
   }, [stage]);
   const screenRef = useRef<HTMLDivElement | null>(null);
-  const editingKey = [...notices, ...programs].find((item) => item.editing)?.id ?? (venue?.editing ? "venue" : "");
+  const editingNotice = notices.find((item) => item.editing);
+  const editingProgram = programs.find((item) => item.editing);
+  const editingKey = editingNotice
+    ? `notice:${editingNotice.id || "new"}`
+    : editingProgram
+      ? `program:${editingProgram.id || "new"}:${editingProgram.date}`
+      : venue?.editing ? "venue" : "";
   useEffect(() => {
     const node = screenRef.current?.querySelector<HTMLElement>("[data-editing='true']");
     if (node && typeof node.scrollIntoView === "function") node.scrollIntoView({ block: "nearest" });
@@ -137,7 +147,7 @@ export default function ContentPhonePreview({ eventName, screen, onScreen, desig
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={design.keyvisualUrl} alt="" />
               ) : null}
-              <h3 style={{ color: readableInk(background) }}>{eventName}</h3>
+              <h2 style={{ color: readableInk(background) }}>{eventName}</h2>
             </header>
             <p className={styles.intro}>{design.intro}</p>
             {screen === "notice" ? (
@@ -165,16 +175,9 @@ export default function ContentPhonePreview({ eventName, screen, onScreen, desig
                 <h2>프로그램</h2>
                 {hidden(design.showPrograms)}
                 {programs.length ? (
-                  <ul className={publicStyles.programList}>
-                    {programs.map((item) => (
-                      <li key={item.id || "new"} data-editing={item.editing || undefined} className={item.editing ? styles.editing : undefined}>
-                        <h3>{item.title || "제목 없음"}</h3>
-                        {item.meta ? <p className={publicStyles.programMeta}>{item.meta}</p> : null}
-                        {item.description ? <p>{item.description}</p> : null}
-                        {item.editing && item.unpublished ? <p className={styles.draftTag}>게시 전 · 초안 미리보기</p> : null}
-                      </li>
-                    ))}
-                  </ul>
+                  <div style={{ "--event-accent": design.accent } as CSSProperties}>
+                    <PublicProgramSchedule key={editingKey} program={programs} eventDate={design.showSchedule ? eventDate : ""} preview />
+                  </div>
                 ) : <p className={styles.emptyNote}>게시된 일정이 없습니다.</p>}
               </section>
             ) : null}

@@ -59,14 +59,18 @@ test('the phone shows published items plus the edited draft, outlined, with no c
   assert.match(workspace, /previewNotices: PreviewNotice\[\]/u);
   assert.match(workspace, /noticeDialogOpen && noticeDraft\.id === item\.id/u);
   assert.match(workspace, /return item\.published \?/u, 'unpublished items stay off the phone unless being edited');
+  assert.match(workspace, /eventDate=\{state\.eventMeta\.date \?\? ""\}/u, 'the event date supplies dates missing from program entries');
+  assert.match(workspace, /showSchedule: publishedDesign\.showSchedule !== false/u, 'the preview follows published event date visibility');
+  assert.match(workspace, /date: programDraft\.date, start: programDraft\.start, end: programDraft\.end, place: programDraft\.place/u, 'the preview receives timeline fields rather than a flattened meta string');
   assert.match(workspace, /const venueEditing = venueDraft !== null && \(venueDirty \|\| Boolean\(venueFile\)\)/u);
   assert.match(preview, /data-editing=\{item\.editing \|\| undefined\}/u);
   assert.match(preview, /scrollIntoView\(\{ block: "nearest" \}\)/u, 'the edited item scrolls into view');
   assert.match(preview, /게시 전 · 초안 미리보기/u, 'an unpublished edit says it is not live yet');
-  // The 홈 screen is the real attendee landing; 공지·일정·장소 reuse the public page classes.
+  // The 홈 screen is the real attendee landing; 공지·일정·장소 reuse public attendee components and classes.
   assert.match(preview, /<AttendeeHomeLanding/u);
   assert.match(preview, /publicStyles\.noticeList/u);
-  assert.match(preview, /publicStyles\.programList/u);
+  assert.match(preview, /<PublicProgramSchedule key=\{editingKey\} program=\{programs\}/u, 'opening another draft clears the previous preview date selection');
+  assert.match(preview, /eventDate=\{design\.showSchedule \? eventDate : ""\} preview/u);
   assert.match(preview, /publicStyles\.venueText/u);
   // Theme link: the published 참가자 페이지 design feeds the phone.
   assert.match(workspace, /normalizeHomeStyle\(publishedDesign\.homeStyle\)/u);
