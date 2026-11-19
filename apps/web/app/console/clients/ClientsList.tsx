@@ -14,7 +14,10 @@ import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../auth-redirect";
 import ConsoleConfirm from "../console-ui/ConsoleConfirm";
 import ConsolePage from "../console-ui/ConsolePage";
-import { PlusIcon, SearchIcon } from "../console-ui/ConsoleIcons";
+import { ChevronRightIcon, PlusIcon, SearchIcon } from "../console-ui/ConsoleIcons";
+import ConsoleAvatar from "../console-ui/ConsoleAvatar";
+import ConsoleEmptyState from "../console-ui/ConsoleEmptyState";
+import StatusPill from "../console-ui/StatusPill";
 import ConsoleToolbar from "../console-ui/ConsoleToolbar";
 import ConsoleFeedback from "../console-ui/ConsoleFeedback";
 import ConsoleDialog from "../console-ui/ConsoleDialog";
@@ -510,8 +513,8 @@ export default function ClientsList() {
           <img className={styles.fileThumb} src={url} alt={`${client.name} 로고`} />
         ) : null}
         <div className={styles.fileText}>
-          <strong>{noun}</strong>
-          <span>{fileId ? "등록됨" : kind === "logo" ? "등록 안 됨 · JPG·PNG·WebP, 600KB 이하" : "등록 안 됨 · PDF, 600KB 이하"}</span>
+          <strong>{noun} <StatusPill tone={fileId ? "ok" : "neutral"} size="sm">{fileId ? "등록됨" : "등록 안 됨"}</StatusPill></strong>
+          {fileId ? null : <span>{kind === "logo" ? "JPG·PNG·WebP, 600KB 이하" : "PDF, 600KB 이하"}</span>}
         </div>
         {kind === "doc" && fileId ? <a className={styles.fileAction} href={url}>보기</a> : null}
         <label className={styles.fileAction} data-disabled={filesLocked || undefined}>
@@ -609,38 +612,44 @@ export default function ClientsList() {
               { key: "logo", label: "로고 등록", count: state.clients.filter((client) => client.logoFileId).length, srLabel: `로고 등록 · ${state.clients.filter((client) => client.logoFileId).length}개` },
               { key: "doc", label: "사업자등록증 등록", count: state.clients.filter((client) => client.docFileId).length, srLabel: `사업자등록증 등록 · ${state.clients.filter((client) => client.docFileId).length}개` },
             ]}
+            aside={
+              <span className={styles.count} role="status" data-quiet={!(clientSearch || fileFilter !== "all") || undefined}>
+                {clientSearch || fileFilter !== "all"
+                  ? `검색 결과 ${visibleClients.length}개 / 전체 ${state.clients.length}개`
+                  : `전체 ${state.clients.length}개`}
+              </span>
+            }
           />
         ) : null}
-        <p className={`participant-count ${styles.count}`} role="status">
-          {clientSearch || fileFilter !== "all"
-            ? `검색 결과 ${visibleClients.length}개 / 전체 ${state.clients.length}개`
-            : `전체 ${state.clients.length}개`}
-        </p>
         {!state.clients.length ? (
-          <div className={consoleUiStyles.empty}>
-            <h3>등록된 고객사가 없습니다.</h3>
-            <p>새 행사의 고객사는 행사 만들기에서 함께 지정할 수 있습니다.</p>
-          </div>
+          <ConsoleEmptyState
+            titleAs="h3"
+            title="등록된 고객사가 없습니다."
+            description="새 행사의 고객사는 행사 만들기에서 함께 지정할 수 있습니다."
+          />
         ) : !visibleClients.length ? (
-          <div className={consoleUiStyles.empty}>
-            <h3>조건에 맞는 고객사가 없습니다.</h3>
-            <p>검색어를 바꾸거나 다른 이름·담당자·이메일로 찾아보세요.</p>
-          </div>
+          <ConsoleEmptyState
+            kind="filtered"
+            titleAs="h3"
+            title="조건에 맞는 고객사가 없습니다."
+            description="검색어를 바꾸거나 다른 이름·담당자·이메일로 찾아보세요."
+            action={<ProductButton type="button" variant="ghost" onClick={() => { setClientQuery(""); setFileFilter("all"); }}>필터 초기화</ProductButton>}
+          />
         ) : (
           <ul className={styles.clientList} aria-label="고객사 목록">
             {visibleClients.map((client) => (
               <li className={styles.clientRow} key={client.id}>
-                <span className={styles.clientAvatar} data-tone={(client.name.trim().codePointAt(0) ?? 0) % 5} aria-hidden="true">
-                  {client.logoFileId ? (
-                    // eslint-disable-next-line @next/next/no-img-element
+                {client.logoFileId ? (
+                  <span className={styles.clientLogo} aria-hidden="true">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={`/api/clients/${encodeURIComponent(client.id)}/files/${encodeURIComponent(client.logoFileId)}`}
                       alt=""
                     />
-                  ) : (
-                    [...client.name.trim()][0] ?? "·"
-                  )}
-                </span>
+                  </span>
+                ) : (
+                  <ConsoleAvatar name={client.name} size="lg" />
+                )}
                 <h3 className={styles.clientName}>
                   {/* The name button's ::after covers the row, so the whole row is
                       one entry into the detail drawer without nesting controls. */}
@@ -665,18 +674,14 @@ export default function ClientsList() {
                   ) : <span className={styles.clientNone}>담당자 없음</span>}
                 </p>
                 <p className={styles.clientFiles}>
-                  <span data-state={client.logoFileId ? "yes" : "no"}>
+                  <StatusPill tone={client.logoFileId ? "ok" : "neutral"} size="sm" dot>
                     로고<span className="sr-only"> {client.logoFileId ? "등록됨" : "없음"}</span>
-                  </span>
-                  <span data-state={client.docFileId ? "yes" : "no"}>
+                  </StatusPill>
+                  <StatusPill tone={client.docFileId ? "ok" : "neutral"} size="sm" dot>
                     사업자등록증<span className="sr-only"> {client.docFileId ? "등록됨" : "없음"}</span>
-                  </span>
+                  </StatusPill>
                 </p>
-                <span className={styles.clientArrow} aria-hidden="true">
-                  <svg viewBox="0 0 20 20" focusable="false">
-                    <path d="M7 4l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
+                <span className={styles.clientArrow} aria-hidden="true"><ChevronRightIcon /></span>
               </li>
             ))}
           </ul>

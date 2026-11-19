@@ -1,3 +1,7 @@
+/* 팀·권한 (2026-11-20 디자인 시스템 적용, C1 정밀형).
+   구성원 위에는 개수 탭(CountTabs, 목록을 좁히는 로컬 필터), 아바타는 ConsoleAvatar,
+   역할·상태는 StatusPill, 빈 상태는 ConsoleEmptyState. 행은 평면 hairline이고 행 안에는
+   컨트롤이 이름 버튼 하나뿐이다. 글자 크기·모서리·굵기는 tokens.css 토큰만. */
 .teamFields {
   min-width: 0;
   margin: 0;
@@ -34,7 +38,15 @@
   overflow-wrap: anywhere;
 }
 
-/* People are a flat list: initial, name and contact, role, state, arrow.
+/* Page tabs (구성원 / 행사별 권한 / 연동·활동): one segmented pill row. */
+.tabsHost :global([role="tablist"]) { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--surface-sunken); }
+.tabsHost :global([role="tab"]) { min-height: var(--control-min-size); padding: 0 var(--s5); border: 0; border-radius: var(--r-pill); font-weight: var(--fw-strong); }
+.tabsHost :global([role="tab"][aria-selected="true"]) { background: var(--ink); color: var(--paper); font-weight: var(--fw-heavy); }
+.tabsHost :global([role="tab"]:hover:not([aria-selected="true"])) { background: var(--paper); color: var(--ink); }
+
+.peopleTabs { margin: 0 0 var(--s3); }
+
+/* People are a flat list: avatar, name and contact, role, state, arrow.
    A row holds no buttons; the name button's ::after covers it, so the whole
    row is one entry into the drawer. Hairlines divide, no card. */
 .peopleList {
@@ -54,39 +66,23 @@
   align-items: center;
   gap: var(--s4);
   min-width: 0;
-  min-height: 68px;
-  padding-block: var(--s2);
+  min-height: 76px;
+  padding: var(--s2);
   border-bottom: 1px solid var(--line);
 }
 .personRow {
-  grid-template-columns: 40px minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.8fr) 20px;
+  grid-template-columns: 48px minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.8fr) var(--s5);
 }
 .permRow {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 300px) 20px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 300px) var(--s5);
   min-height: 72px;
 }
 .personRow:hover,
-.permRow:hover { background: var(--surface-muted); }
+.permRow:hover { background: var(--surface-sunken); }
 .personRow:has(.rowOpen:focus-visible),
 .permRow:has(.rowOpen:focus-visible) {
   outline: 3px solid var(--focus);
   outline-offset: -3px;
-}
-
-.avatar {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: var(--surface-muted);
-  color: var(--muted);
-  font-weight: 800;
-}
-.avatarInvite {
-  border-style: dashed;
-  background: var(--paper);
 }
 
 .personMain { min-width: 0; }
@@ -94,17 +90,17 @@
 .personName {
   margin: 0;
   color: var(--ink);
-  font-size: var(--body);
-  font-weight: 750;
-  letter-spacing: -0.015em;
+  font-size: var(--text-md);
+  font-weight: var(--fw-strong);
+  letter-spacing: var(--ls-heading);
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
 .selfMark {
   margin-left: var(--s2);
   color: var(--muted);
-  font-size: var(--small);
-  font-weight: 650;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
 }
 
 .rowOpen {
@@ -130,47 +126,37 @@
 .personContact {
   margin: 2px 0 0;
   color: var(--muted);
-  font-size: var(--small);
+  font-size: var(--text-sm);
   word-break: keep-all;
   overflow-wrap: break-word;
 }
 
 .personRole {
   display: grid;
-  gap: 2px;
+  justify-items: start;
+  gap: var(--s1);
   margin: 0;
-  font-weight: 650;
   word-break: keep-all;
   overflow-wrap: break-word;
 }
 .personRole small {
   color: var(--muted);
-  font-size: var(--small);
-  font-weight: 500;
+  font-size: var(--text-xs);
+  font-weight: var(--fw-regular);
 }
 
 .personState {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0 var(--s2);
+  display: grid;
+  justify-items: start;
+  gap: var(--s1);
   margin: 0;
   color: var(--ink);
-  font-size: var(--small);
-  font-weight: 700;
+  font-size: var(--text-sm);
 }
-.personState small { color: var(--muted); font-weight: 500; }
-.inviteDot,
-.offDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-.inviteDot { background: var(--warning); }
-.offDot { background: var(--paper); box-shadow: inset 0 0 0 2px var(--line-strong); }
+.personState small { color: var(--muted); font-size: var(--text-xs); font-weight: var(--fw-regular); }
 
 .rowArrow { display: inline-flex; color: var(--muted); }
-.rowArrow svg { width: 20px; height: 20px; }
+.rowArrow svg { width: var(--s5); height: var(--s5); }
 .personRow:hover .rowArrow,
 .permRow:hover .rowArrow { color: var(--ink); }
 
@@ -180,18 +166,18 @@
   display: grid;
   gap: 2px;
   margin-bottom: var(--s3);
-  font-weight: 700;
+  font-weight: var(--fw-strong);
 }
 .eventPick > span {
   color: var(--muted);
-  font-size: var(--small);
+  font-size: var(--text-sm);
 }
 .eventPick select {
   justify-self: start;
-  min-height: 44px;
+  min-height: var(--control-min-size);
   max-width: 100%;
-  font-size: var(--h3);
-  font-weight: 800;
+  font-size: var(--text-lg);
+  font-weight: var(--fw-heavy);
 }
 
 .gauge { display: grid; gap: 6px; min-width: 0; }
@@ -204,15 +190,15 @@
   word-break: keep-all;
   overflow-wrap: break-word;
 }
-.gaugeTop strong { font-weight: 800; }
+.gaugeTop strong { font-weight: var(--fw-heavy); }
 .gaugeTop strong[data-level="readonly"],
 .gaugeTop strong[data-level="none"] { color: var(--muted); }
-.gaugeTop span { color: var(--muted); font-size: var(--small); }
-.gaugeBars { display: flex; gap: 4px; }
+.gaugeTop span { color: var(--muted); font-size: var(--text-sm); }
+.gaugeBars { display: flex; gap: var(--s1); }
 .gaugeBars i {
   flex: 1;
-  height: 8px;
-  border-radius: 2px;
+  height: 10px;
+  border-radius: var(--r-pill);
   background: var(--line);
 }
 .gaugeBars i[data-on] { background: var(--ink); }
@@ -230,8 +216,8 @@
 .drawerHeading {
   margin: 0;
   color: var(--muted);
-  font-size: var(--small);
-  font-weight: 700;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
   letter-spacing: 0.04em;
 }
 .accountActions {
@@ -242,7 +228,7 @@
 }
 .viewFacts { display: grid; gap: var(--s3); margin: 0; }
 .viewFacts > div { display: grid; gap: 2px; }
-.viewFacts dt { color: var(--muted); font-size: var(--small); font-weight: 650; }
+.viewFacts dt { color: var(--muted); font-size: var(--text-sm); font-weight: var(--fw-strong); }
 .viewFacts dd { margin: 0; overflow-wrap: anywhere; }
 
 /* Role choices read as a name plus what the role can do. */
@@ -250,13 +236,13 @@
   display: flex;
   align-items: flex-start;
   gap: var(--s3);
-  min-height: 44px;
+  min-height: var(--control-min-size);
   padding: var(--s2) 0;
   cursor: pointer;
 }
-.roleChoice input { flex: none; width: 20px; height: 20px; margin-top: 2px; }
+.roleChoice input { flex: none; width: var(--s5); height: var(--s5); margin-top: 2px; }
 .roleChoice span { display: grid; gap: 2px; min-width: 0; }
-.roleChoice small { color: var(--muted); font-size: var(--small); }
+.roleChoice small { color: var(--muted); font-size: var(--text-sm); }
 
 /* Permission levels in the drawer: pick a level and the bars show what the
    row will read afterwards. The radio is visually hidden; the card is the
@@ -264,19 +250,19 @@
 .levelList { display: grid; gap: var(--s2); }
 .levelCard {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
+  grid-template-columns: var(--text-lg) minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--s3);
   min-height: 56px;
   padding: var(--s3);
   border: 1px solid var(--line);
-  border-radius: var(--radius-large);
+  border-radius: var(--r-card);
   cursor: pointer;
 }
 .levelCard::before {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
+  width: var(--text-lg);
+  height: var(--text-lg);
+  border-radius: var(--r-pill);
   box-shadow: inset 0 0 0 2px var(--line-strong);
   content: "";
 }
@@ -291,24 +277,24 @@
 }
 .levelCard:has(input:disabled) { cursor: not-allowed; }
 .levelText { display: grid; gap: 2px; min-width: 0; word-break: keep-all; overflow-wrap: break-word; }
-.levelText small { color: var(--muted); font-size: var(--small); }
+.levelText small { color: var(--muted); font-size: var(--text-sm); }
 .levelText em {
   margin-left: var(--s2);
   color: var(--brand-text);
-  font-size: var(--small);
+  font-size: var(--text-sm);
   font-style: normal;
-  font-weight: 700;
+  font-weight: var(--fw-strong);
 }
 .miniBars { display: flex; gap: 2px; width: 72px; }
-.miniBars i { flex: 1; height: 6px; border-radius: 2px; background: var(--line); }
+.miniBars i { flex: 1; height: 6px; border-radius: var(--r-pill); background: var(--line); }
 .miniBars i[data-on] { background: var(--ink); }
 
 .scopeGroups { display: grid; gap: var(--s2); }
 .scopeGroupLabel {
   margin: var(--s2) 0 0;
   color: var(--muted);
-  font-size: var(--small);
-  font-weight: 700;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
   letter-spacing: 0.04em;
 }
 
@@ -320,14 +306,14 @@
   display: grid;
   gap: var(--s2);
   padding: var(--s3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-muted);
+  border-radius: var(--r-ctl);
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 
 .assignLead {
   margin: 0;
-  font-size: var(--small);
+  font-size: var(--text-sm);
   word-break: keep-all;
   overflow-wrap: break-word;
 }
@@ -335,20 +321,20 @@
 .assignField {
   display: grid;
   gap: var(--s1);
-  font-size: var(--small);
-  font-weight: 650;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
 }
 
 .assignField select {
-  min-height: 44px;
+  min-height: var(--control-min-size);
 }
 
 .assignLink {
   display: inline-flex;
-  min-height: 44px;
+  min-height: var(--control-min-size);
   align-items: center;
   color: var(--brand-text);
-  font-weight: 700;
+  font-weight: var(--fw-strong);
 }
 
 .assignLink:focus-visible {
@@ -364,17 +350,17 @@
 
 .activityTech summary {
   display: inline-flex;
-  min-height: 44px;
+  min-height: var(--control-min-size);
   align-items: center;
   color: var(--brand-text);
-  font-size: var(--small);
-  font-weight: 700;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
   cursor: pointer;
 }
 
 .activityTech code {
   font-family: var(--mono-font);
-  font-size: var(--small);
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
@@ -384,53 +370,48 @@
   display: flex;
   align-items: flex-start;
   gap: var(--s2);
-  min-height: 44px;
+  min-height: var(--control-min-size);
   padding: var(--s1) 0;
-  font-size: var(--small);
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
 .scopeCheck input {
   flex: none;
-  width: 20px;
-  height: 20px;
+  width: var(--s5);
+  height: var(--s5);
   margin-top: 2px;
 }
 
 .scopeCheck span { display: grid; gap: 2px; min-width: 0; }
 .scopeCheck small { color: var(--muted); }
 
-/* Team empty/error notices: Korean wraps by word (eojeol), never
-   mid-syllable like 있/습니다 at 320px. keep-all holds syllable blocks
-   together; break-word still breaks a token wider than the row itself so
-   nothing overflows. Doubled self-class (same-module hash twice) outranks
-   the other module's `.empty h3` / global `p` regardless of module order;
-   shared internals stay untouched. Never pair with a foreign-module class
-   here — each CSS module hashes its own names, so a cross-module selector
-   like `.teamEmpty.empty` can never match (see regression test). */
-.teamEmpty.teamEmpty h3,
-.teamEmpty.teamEmpty p,
+/* Revoke alert keeps Korean words together; a token wider than the row still
+   breaks instead of overflowing. (ConsoleEmptyState already does this for the
+   empty and error notices.) */
 .inlineAlert {
   word-break: keep-all;
   overflow-wrap: break-word;
 }
 
 @media (max-width: 768px) {
+  .tabsHost :global([role="tab"]) { padding: 0 var(--s3); }
+
   .personRow {
-    grid-template-columns: 40px minmax(0, 1fr) 20px;
+    grid-template-columns: 48px minmax(0, 1fr) var(--s5);
     grid-template-rows: auto auto auto;
     column-gap: var(--s3);
     row-gap: 2px;
-    padding-block: var(--s3);
+    padding: var(--s3) 0;
   }
-  .personRow > .avatar { grid-row: 1 / span 3; align-self: start; }
+  .personRow > :first-child { grid-row: 1 / span 3; align-self: start; }
   .personRow > .personMain { grid-column: 2; grid-row: 1; }
-  .personRow > .personRole { grid-column: 2; grid-row: 2; font-size: var(--small); }
+  .personRow > .personRole { grid-column: 2; grid-row: 2; font-size: var(--text-sm); }
   .personRow > .personState { grid-column: 2; grid-row: 3; }
   .personRow > .rowArrow { grid-column: 3; grid-row: 1 / span 3; }
 
   .permRow {
-    grid-template-columns: minmax(0, 1fr) 20px;
+    grid-template-columns: minmax(0, 1fr) var(--s5);
     row-gap: var(--s2);
     padding-block: var(--s3);
   }
@@ -447,57 +428,4 @@
 .dockSlot [role="dialog"] { max-height: none; overflow: visible; }
 @media (min-width: 1200px) {
   .memberLayout[data-open] { grid-template-columns: minmax(0, 1fr) minmax(360px, 400px); }
-}
-
-/* ---- 재설계 2026-11-19 ----
-   구성원 위에 현황 카드(전체 인원과 역할 분포 막대, 대기 초대, 사용 중지), 탭은 분절 알약,
-   아바타는 역할색, 역할·상태는 알약으로 읽히게 한다. 행은 여전히 평면 hairline이고 행 안에는 컨트롤이 없다. */
-.tabsHost :global([role="tablist"]) { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-muted); }
-.tabsHost :global([role="tab"]) { min-height: 44px; padding: 0 var(--s5); border: 0; border-radius: 999px; font-weight: 650; }
-.tabsHost :global([role="tab"][aria-selected="true"]) { background: var(--ink); color: var(--paper); font-weight: 750; }
-.tabsHost :global([role="tab"]:hover:not([aria-selected="true"])) { background: var(--paper); color: var(--ink); }
-
-/* Reopened 2026-11-20 (owner: 카드 띠 → 개수 탭): the status cards are one slim line of
-   counts. They summarise the loaded accounts; the list below is not filtered by them. */
-.teamSummary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); margin: 0 0 var(--s3); padding: 0; list-style: none; color: var(--muted); font-size: var(--small); font-weight: 600; }
-.teamSummary li { display: inline-flex; align-items: baseline; gap: var(--s1); min-width: 0; }
-.teamSummary b { color: var(--ink); font-variant-numeric: tabular-nums; }
-.teamSummary small { margin-left: -2px; font-size: inherit; font-weight: 600; }
-.sumTotal { color: var(--ink); }
-.sumTotal b { font-size: var(--h3); letter-spacing: -0.02em; }
-.sumRole { align-items: center; }
-.sumRole::before { content: ""; width: 8px; height: 8px; margin-right: var(--s1); border-radius: 50%; background: var(--line-strong); align-self: center; }
-.sumRole[data-role="AGENCY"]::before { background: var(--ink); }
-.sumRole[data-role="MANAGER"]::before { background: var(--info); }
-.sumRole[data-role="STAFF"]::before { background: var(--success); }
-.sumFlag[data-tone="wait"] { align-items: center; padding: 2px var(--s3); border-radius: 999px; background: var(--warning-soft); box-shadow: inset 0 0 0 1px var(--warning-line); color: var(--warning); }
-.sumFlag[data-tone="wait"] b { color: var(--warning); }
-
-.peopleList { border-top: 0; }
-.personRow { grid-template-columns: 48px minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.8fr) 20px; min-height: 76px; padding-inline: var(--s2); }
-.avatar { width: 44px; height: 44px; border: 0; color: var(--ink); font-size: var(--body); }
-.avatar[data-role="AGENCY"] { background: var(--ink); color: var(--paper); }
-.avatar[data-role="MANAGER"] { background: var(--info-soft); color: var(--info); }
-.avatar[data-role="STAFF"] { background: var(--success-soft); color: var(--success); }
-.avatarInvite { border: 1px dashed var(--line-strong); background: var(--paper); color: var(--muted); }
-.rolePill { justify-self: start; padding: 3px 12px; border-radius: 999px; background: var(--surface-muted); color: var(--ink); font-size: var(--small); font-weight: 700; }
-.rolePill[data-role="AGENCY"] { background: var(--ink); color: var(--paper); }
-.rolePill[data-role="MANAGER"] { background: var(--info-soft); color: var(--info); }
-.rolePill[data-role="STAFF"] { background: var(--success-soft); color: var(--success); }
-.personState:has(.inviteDot) { justify-self: start; padding: 4px 12px; border-radius: 999px; background: var(--warning-soft); color: var(--warning); }
-.personState:has(.offDot) { justify-self: start; padding: 4px 12px; border-radius: 999px; background: var(--surface-muted); color: var(--muted); }
-
-.gaugeBars { gap: 4px; }
-.gaugeBars i { height: 10px; border-radius: 999px; }
-
-@media (max-width: 768px) {
-  .tabsHost :global([role="tab"]) { padding: 0 var(--s3); }
-  .personRow { padding-inline: 0; }
-}
-
-/* 앞의 데스크톱 열 정의가 좁은 화면 규칙보다 뒤에 오므로 휴대폰 배치를 다시 선언한다. */
-.personState:has(.inviteDot), .personState:has(.offDot) { border-radius: var(--radius-large); }
-@media (max-width: 768px) {
-  .personRow { grid-template-columns: 48px minmax(0, 1fr) 20px; padding-block: var(--s3); }
-  .personRow > .personState:has(.inviteDot), .personRow > .personState:has(.offDot) { justify-self: start; }
 }

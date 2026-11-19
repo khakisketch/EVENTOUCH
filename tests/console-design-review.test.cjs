@@ -80,13 +80,13 @@ test("the shared confirm keeps its primary default and focus contract", () => {
 test("team identity splits name from role with tokens only", () => {
   const css = read("console/team/team.module.css");
   noNewHex(css, "team.module.css");
-  assert.match(css, /\.personName\s*\{[^}]*font-weight:\s*750/s);
+  assert.match(css, /\.personName\s*\{[^}]*font-weight:\s*var\(--fw-strong\)/s);
   assert.match(css, /\.personContact\s*\{[^}]*color:\s*var\(--muted\)/s);
-  assert.match(css, /\.personContact\s*\{[^}]*font-size:\s*var\(--small\)/s);
+  assert.match(css, /\.personContact\s*\{[^}]*font-size:\s*var\(--text-sm\)/s);
   assert.match(css, /\.personRole small\s*\{[^}]*color:\s*var\(--muted\)/s);
   const workspace = read("console/team/TeamWorkspace.tsx");
   assert.match(workspace, /<h3 className=\{teamStyles\.personName\}>/);
-  assert.match(workspace, /\{roleLabel\(invitation\.role\)\}<\/span>\s*<small>/);
+  assert.match(workspace, /<StatusPill tone=\{ROLE_PILL_TONE\[invitation\.role\] \?\? "neutral"\} size="sm">\{roleLabel\(invitation\.role\)\}<\/StatusPill>\s*<small>/);
   assert.match(workspace, />\{account\.name\}<\/button>/);
 });
 

@@ -10,7 +10,13 @@ import ProductLink from "../../ui/ProductLink";
 import { buildStaffAssignHandoffHref, sortTeamEventsForAssign, teamEventOptionLabel } from "../console-handoff";
 import { loginHrefForLocation } from "../../auth-redirect";
 import ConsoleConfirm from "../console-ui/ConsoleConfirm";
-import { CopyIcon, PlusIcon } from "../console-ui/ConsoleIcons";
+import { ChevronRightIcon, CopyIcon, PlusIcon } from "../console-ui/ConsoleIcons";
+import ConsoleAvatar from "../console-ui/ConsoleAvatar";
+import type { ConsoleAvatarTone } from "../console-ui/ConsoleAvatar";
+import ConsoleEmptyState from "../console-ui/ConsoleEmptyState";
+import CountTabs from "../console-ui/CountTabs";
+import StatusPill from "../console-ui/StatusPill";
+import type { StatusPillTone } from "../console-ui/StatusPill";
 import ConsolePage from "../console-ui/ConsolePage";
 import ConsoleToolbar from "../console-ui/ConsoleToolbar";
 import ConsoleFeedback from "../console-ui/ConsoleFeedback";
@@ -166,9 +172,12 @@ const ROLE_NOTES: Record<string, string> = {
   STAFF: "현장에서 스캔·경품 지급만 합니다. 행사 배정이 필요합니다.",
 };
 
-function initialOf(name: string): string {
-  return [...name.trim()][0] ?? "·";
-}
+// Role colours are the shared console pairs: owner ink, member blue, staff green.
+const ROLE_PILL_TONE: Record<string, StatusPillTone> = { AGENCY: "ink", MANAGER: "info", STAFF: "ok" };
+const ROLE_AVATAR_TONE: Record<string, ConsoleAvatarTone> = { AGENCY: "neutral", MANAGER: "info", STAFF: "ok" };
+
+// The count tabs above the member list also narrow it (local only, no API).
+type PeopleFilter = "all" | "AGENCY" | "MANAGER" | "STAFF" | "invites" | "inactive";
 
 // Row actions that own a frozen request report whether it is in flight or
 // unknown, so the drawer that hosts them never closes over an unsettled write.
@@ -241,6 +250,7 @@ export default function TeamWorkspace() {
   const roleEditorRef = useRef<RoleEditorHandle>(null);
   // Which tab is showing: the docked member drawer hides with its tab instead of unmounting, so a draft or a frozen request survives a tab switch.
   const [activeTab, setActiveTab] = useState("team-members");
+  const [peopleFilter, setPeopleFilter] = useState<PeopleFilter>("all");
   // Account actions (disable/reactivate) and invitation revoke report here; a
   // frozen request keeps its drawer open, an unknown one asks before closing.
   const memberActionRef = useRef<UnsettledState>(null);
@@ -475,6 +485,13 @@ export default function TeamWorkspace() {
 
   const memberRow = state.accounts.find((account) => account.id === memberId) ?? null;
   const inviteRow = state.invitations.find((invitation) => invitation.id === inviteViewId) ?? null;
+  const inactiveCount = state.accounts.filter((account) => !account.active).length;
+  const showInvites = state.isOwner && (peopleFilter === "all" || peopleFilter === "invites");
+  const visibleAccounts = state.accounts.filter((account) =>
+    peopleFilter === "all" ? true
+      : peopleFilter === "invites" ? false
+        : peopleFilter === "inactive" ? !account.active
+          : account.role === peopleFilter);
   const tabItems = [
     { id: "team-members", label: "구성원" },
     ...(state.isOwner ? [{ id: "team-event-permissions", label: "행사별 권한" }] : []),
@@ -568,18 +585,23 @@ export default function TeamWorkspace() {
       <div className={teamStyles.memberLayout} data-open={memberRow && state.canManageTeam ? "" : undefined}>
       <ConsoleSection headingId="team-members" title="구성원" surface="plain" width="full" className={teamStyles.hiddenHead}>
         {state.accounts.length ? (
-          <ul className={teamStyles.teamSummary} aria-label="구성원 현황">
-            <li className={teamStyles.sumTotal}>전체 구성원 <b>{state.accounts.length}</b><small>명</small></li>
-            {(["AGENCY", "MANAGER", "STAFF"] as const).map((role) => (
-              <li key={role} className={teamStyles.sumRole} data-role={role}>{roleLabel(role)} <b>{state.accounts.filter((account) => account.role === role).length}</b></li>
-            ))}
-            {state.isOwner ? (
-              <li className={teamStyles.sumFlag} data-tone={state.invitations.length > 0 ? "wait" : undefined}>대기 중인 초대 <b>{state.invitations.length}</b><small>건</small></li>
-            ) : null}
-            <li className={teamStyles.sumFlag}>사용 중지 <b>{state.accounts.filter((account) => !account.active).length}</b><small>명</small></li>
-          </ul>
+          <CountTabs
+            className={teamStyles.peopleTabs}
+            ariaLabel="구성원 보기"
+            value={peopleFilter}
+            onChange={(key) => setPeopleFilter(key as PeopleFilter)}
+            items={[
+              { key: "all", label: "전체", count: state.accounts.length, srLabel: `전체 구성원 · ${state.accounts.length}명` },
+              ...(["AGENCY", "MANAGER", "STAFF"] as const).map((role) => {
+                const count = state.accounts.filter((account) => account.role === role).length;
+                return { key: role, label: roleLabel(role), count, srLabel: `${roleLabel(role)} · ${count}명` };
+              }),
+              ...(state.isOwner ? [{ key: "invites", label: "대기 중인 초대", count: state.invitations.length, tone: state.invitations.length > 0 ? "wait" as const : "default" as const, srLabel: `대기 중인 초대 · ${state.invitations.length}건` }] : []),
+              { key: "inactive", label: "사용 중지", count: inactiveCount, srLabel: `사용 중지 · ${inactiveCount}명` },
+            ]}
+          />
         ) : null}
-        {state.isOwner && state.invitations.length ? (
+        {showInvites && state.invitations.length ? (
           <ConsoleSection headingId="pending-invites" title="대기 중인 초대" surface="plain" width="full">
             <ul className={teamStyles.peopleList} aria-label="대기 중인 초대 목록">
               {state.invitations.map((invitation) => {
@@ -592,7 +614,7 @@ export default function TeamWorkspace() {
                 const expiry = invitation.expiresAt ? formatInviteExpiry(invitation.expiresAt) : "";
                 return (
                   <li className={teamStyles.personRow} key={invitation.id}>
-                    <span className={`${teamStyles.avatar} ${teamStyles.avatarInvite}`} aria-hidden="true">{initialOf(invitation.name)}</span>
+                    <ConsoleAvatar name={invitation.name} size="lg" tone="wait" />
                     <div className={teamStyles.personMain}>
                       <h3 className={teamStyles.personName}>
                         <button type="button" id={`invite-open-${invitation.id}`} className={teamStyles.rowOpen} onClick={() => setInviteViewId(invitation.id)}>{invitation.name}</button>
@@ -600,14 +622,14 @@ export default function TeamWorkspace() {
                       <p className={teamStyles.personContact}><SafeContact value={invitation.email} /></p>
                     </div>
                     <p className={teamStyles.personRole}>
-                      <span className={teamStyles.rolePill} data-role={invitation.role}>{roleLabel(invitation.role)}</span>
+                      <StatusPill tone={ROLE_PILL_TONE[invitation.role] ?? "neutral"} size="sm">{roleLabel(invitation.role)}</StatusPill>
                       <small>{eventName ? `담당 행사: ${eventName}` : "담당 행사 미지정"}</small>
                     </p>
                     <p className={teamStyles.personState}>
-                      <span className={teamStyles.inviteDot} aria-hidden="true" />
-                      대기 중{expiry ? <small>만료 {expiry}</small> : null}
+                      <StatusPill tone="wait" size="sm" dot>대기 중</StatusPill>
+                      {expiry ? <small>만료 {expiry}</small> : null}
                     </p>
-                    <span className={teamStyles.rowArrow} aria-hidden="true"><svg viewBox="0 0 20 20" focusable="false"><path d="M7 4l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+                    <span className={teamStyles.rowArrow} aria-hidden="true"><ChevronRightIcon /></span>
                   </li>
                 );
               })}
@@ -615,21 +637,30 @@ export default function TeamWorkspace() {
           </ConsoleSection>
         ) : state.isOwner && refreshState !== "idle" ? (
           // An unknown queue is never reported as an empty one.
-          <div className={`${consoleUiStyles.empty} ${teamStyles.teamEmpty}`}>
-            <h3>대기 중인 초대를 확인할 수 없습니다.</h3>
-            <p>팀 정보를 다시 불러오면 최신 초대 목록을 확인할 수 있습니다.</p>
-          </div>
+          <ConsoleEmptyState
+            kind="error-soft"
+            titleAs="h3"
+            title="대기 중인 초대를 확인할 수 없습니다."
+            description="팀 정보를 다시 불러오면 최신 초대 목록을 확인할 수 있습니다."
+          />
+        ) : peopleFilter === "invites" ? (
+          <ConsoleEmptyState
+            kind="filtered"
+            titleAs="h3"
+            title="대기 중인 초대가 없습니다."
+            description="구성원 초대 버튼으로 새 초대를 보낼 수 있습니다."
+          />
         ) : null}
-        {state.accounts.length ? (
+        {peopleFilter === "invites" ? null : visibleAccounts.length ? (
           <ul className={teamStyles.peopleList} aria-label="구성원 목록">
-            {state.accounts.map((account) => {
+            {visibleAccounts.map((account) => {
               const isSelf = account.id === state.userId;
               const grantedEvents = state.isOwner && account.role === "MANAGER"
                 ? new Set(state.memberships.filter((item) => item.accountId === account.id).map((item) => item.eventId)).size
                 : 0;
               return (
                 <li className={teamStyles.personRow} key={account.id}>
-                  <span className={teamStyles.avatar} data-role={account.role} aria-hidden="true">{initialOf(account.name)}</span>
+                  <ConsoleAvatar name={account.name} size="lg" tone={account.active ? ROLE_AVATAR_TONE[account.role] ?? "neutral" : "neutral"} />
                   <div className={teamStyles.personMain}>
                     <h3 className={teamStyles.personName}>
                       {/* The name button's ::after covers the row, so the whole row is
@@ -647,24 +678,33 @@ export default function TeamWorkspace() {
                     <p className={teamStyles.personContact}><SafeContact value={account.email} /></p>
                   </div>
                   <p className={teamStyles.personRole} data-role={account.role}>
-                    <span className={teamStyles.rolePill} data-role={account.role}>{roleLabel(account.role)}</span>
+                    <StatusPill tone={ROLE_PILL_TONE[account.role] ?? "neutral"} size="sm">{roleLabel(account.role)}</StatusPill>
                     {grantedEvents ? <small>쓰기 권한 {grantedEvents}개 행사</small> : null}
                   </p>
                   <p className={teamStyles.personState}>
-                    {!account.active ? <><span className={teamStyles.offDot} aria-hidden="true" />사용 중지</> : null}
+                    {!account.active ? <StatusPill tone="neutral" size="sm" dot>사용 중지</StatusPill> : null}
                   </p>
                   {state.canManageTeam ? (
-                    <span className={teamStyles.rowArrow} aria-hidden="true"><svg viewBox="0 0 20 20" focusable="false"><path d="M7 4l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+                    <span className={teamStyles.rowArrow} aria-hidden="true"><ChevronRightIcon /></span>
                   ) : <span />}
                 </li>
               );
             })}
           </ul>
+        ) : state.accounts.length ? (
+          <ConsoleEmptyState
+            kind="filtered"
+            titleAs="h3"
+            title="조건에 맞는 구성원이 없습니다."
+            description="다른 역할이나 상태를 선택해 보세요."
+            action={<ProductButton type="button" variant="ghost" onClick={() => setPeopleFilter("all")}>전체 보기</ProductButton>}
+          />
         ) : (
-          <div className={`${consoleUiStyles.empty} ${teamStyles.teamEmpty}`}>
-            <h3>등록된 구성원이 없습니다.</h3>
-            <p>필요하면 구성원 초대 버튼으로 첫 초대를 보내세요.</p>
-          </div>
+          <ConsoleEmptyState
+            titleAs="h3"
+            title="등록된 구성원이 없습니다."
+            description="필요하면 구성원 초대 버튼으로 첫 초대를 보내세요."
+          />
         )}
       </ConsoleSection>
       {memberRow && state.canManageTeam ? (
@@ -1189,16 +1229,17 @@ function EventPermissionEditor({
                       {[0, 1, 2].map((index) => <i key={index} data-on={index < copy.bars || undefined} />)}
                     </span>
                   </div>
-                  <span className={teamStyles.rowArrow} aria-hidden="true"><svg viewBox="0 0 20 20" focusable="false"><path d="M7 4l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+                  <span className={teamStyles.rowArrow} aria-hidden="true"><ChevronRightIcon /></span>
                 </li>
               );
             })}
           </ul>
         ) : (
-          <div className={`${consoleUiStyles.empty} ${teamStyles.teamEmpty}`}>
-            <h3>행사 권한을 정할 구성원이 없습니다</h3>
-            <p>조직 구성원을 초대하면 여기서 행사마다 권한을 정할 수 있습니다.</p>
-          </div>
+          <ConsoleEmptyState
+            titleAs="h3"
+            title="행사 권한을 정할 구성원이 없습니다"
+            description="조직 구성원을 초대하면 여기서 행사마다 권한을 정할 수 있습니다."
+          />
         )
       ) : events.length ? (
         <p className={teamStyles.assignLead} role="status">행사를 선택하면 구성원별 쓰기 권한이 나타납니다.</p>

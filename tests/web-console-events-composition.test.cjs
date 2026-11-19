@@ -3,7 +3,8 @@
 // Event list (행사), approved 2026-11-14 (design-review events-options.html,
 // B2). Reopened 2026-11-19: the stage tabs became filter cards (big count plus
 // share bar), the running event a dark board, rows gained a date tile and a
-// stage pill, and the search/toggle/view switch became pills. Source-only;
+// stage pill, and the search/toggle/view switch became pills. Reopened 2026-11-20
+// (디자인 시스템 적용): StatusPill/ConsoleEmptyState, an urgent group on top. Source-only;
 // rendering rides the real browser check.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -34,16 +35,31 @@ test("approved event list design stays locked", () => {
   assert.match(home, /placeholder="행사 검색"/u);
   assert.match(home, /aria-label="행사명·고객사·장소 검색"/u);
 
-  // Groups, in this order: running card, upcoming, past.
-  const groups = ["styles.liveCard", "다가오는 행사", "지난 행사"].map((t) => home.indexOf(t));
-  assert.ok(groups.every((p) => p >= 0) && groups[0] < groups[1] && groups[1] < groups[2]);
+  // Groups, in this order: running card, what needs attention now, upcoming, past.
+  // Reopened 2026-11-20 (디자인 시스템 적용, 업무 점검): "급한 행사·오늘 일정이 목록 속에 묻힘"
+  // → running / today / tomorrow / approvals waiting rise into their own group at the top.
+  const groups = ["styles.liveCard", "지금 챙길 행사", "다가오는 행사", "지난 행사"].map((t) => home.indexOf(t));
+  assert.ok(groups.every((p) => p >= 0) && groups[0] < groups[1] && groups[1] < groups[2] && groups[2] < groups[3]);
+  assert.match(home, /function isUrgentEvent\(event: ConsoleEvent, todayKey: string\): boolean \{\s*if \(event\.stage === "ENDED" \|\| event\.stage === "ARCHIVED"\) return false;/u, "closed events are never urgent");
+  assert.match(home, /event\.stage === "LIVE" \|\| event\.pending > 0/u);
+  assert.match(home, /recency === "오늘" \|\| recency === "내일"/u);
+  assert.match(home, /urgencyRank\(a, todayKey\) - urgencyRank\(b, todayKey\)\s*\|\| b\.pending - a\.pending/u, "today first, then tomorrow, then the most approvals waiting");
+  assert.match(css, /\.groupTitle\[data-urgent\] \.groupCount\s*\{[^}]*background:\s*var\(--ink\)/su);
+  // The running event's own queue is one tap from its card.
+  assert.match(home, /className=\{styles\.liveQueue\}[\s\S]{0,200}participants\?status=PENDING/u);
+  // Empty and filtered-out states are the shared ConsoleEmptyState.
+  assert.equal([...home.matchAll(/<ConsoleEmptyState/gu)].length, 2);
+  assert.doesNotMatch(home, /styles\.emptyState/u);
 });
 
 test("a row is name, one date line, countdown, arrow; the next action is a sibling link", () => {
   // Reopened 2026-11-19: a date tile leads and the stage is a tinted pill with a dot.
+  // Reopened 2026-11-20: that pill is the shared StatusPill (green running, blue
+  // preparing, grey closed; amber is kept for approvals waiting).
   assert.match(row, /styles\.dateTile/u, "a date tile leads the row");
-  assert.match(row, /styles\.stageChip/u, "the stage reads as a tinted pill");
-  assert.match(row, /styles\.stageDot/u, "the pill keeps the dot shape beside the colour");
+  assert.match(row, /<StatusPill tone=\{STAGE_PILL_TONE\[tone\]\} size="sm" dot>\{stageLabel\}<\/StatusPill>/u, "the stage reads as a tinted pill with a dot");
+  assert.doesNotMatch(row, /styles\.stageChip|styles\.stageDot/u, "no hand-rolled stage chip");
+  assert.match(home, /const STAGE_PILL_TONE[^=]*= \{\s*live: "ok",\s*prep: "info",\s*done: "neutral",/u);
   assert.doesNotMatch(row, /stage-badge|eventStageClassName/u);
   assert.match(row, /<strong>\{lead\}<\/strong>/u, "the date leads in strong type");
   assert.match(row, /"일정 미정"/u, "unknown dates stay explicit");
@@ -63,7 +79,7 @@ test("a row is name, one date line, countdown, arrow; the next action is a sibli
   assert.ok(row.indexOf("</ProductLink>") < row.indexOf("styles.rowAction"), "the action is not nested in the entry link");
   assert.equal((row.match(/<ProductLink/g) || []).length, 2, "one entry and one optional action");
   assert.match(css, /\.rowAction\s*\{[^}]*min-height:\s*44px/su);
-  assert.match(css, /\.rowActionPill\s*\{[^}]*var\(--warning-soft\)/su, "waiting work is the amber pill");
+  assert.match(row, /<StatusPill tone="wait" className=\{styles\.rowActionPill\}>승인 대기 \{event\.pending\}명 처리 ›<\/StatusPill>/u, "waiting work is the amber StatusPill");
   assert.match(css, /\.rowAction\s*\{[^}]*word-break:\s*keep-all[^}]*overflow-wrap:\s*anywhere/su);
   for (const sel of [".eventRowLink:focus-visible", ".rowAction:focus-visible"]) {
     assert.ok(css.includes(sel), `${sel} keeps a visible focus style`);
@@ -73,7 +89,9 @@ test("a row is name, one date line, countdown, arrow; the next action is a sibli
 test("the countdown stays quiet text; only today and tomorrow are emphasised", () => {
   assert.doesNotMatch(css, /\.eventRecency\s*\{[^}]*background/su, "the countdown stays text unless it is today or tomorrow");
   assert.match(css, /\.eventRecency\s*\{[^}]*color:\s*var\(--muted\)[^}]*font-variant-numeric:\s*tabular-nums/su);
-  assert.match(css, /\.eventRecency\[data-soon\]\s*\{[^}]*background:\s*var\(--ink\)[^}]*font-weight:\s*800/su, "today and tomorrow become an ink pill");
+  // Reopened 2026-11-20: today and tomorrow become an ink StatusPill and the date tile itself turns ink.
+  assert.match(row, /<StatusPill tone="ink" className=\{styles\.eventRecency\}>\{recency\}<\/StatusPill>/u, "today and tomorrow become an ink pill");
+  assert.match(css, /\.dateTile\[data-soon\]\s*\{[^}]*background:\s*var\(--ink\)/su, "the tile is ink on the same days");
   assert.match(home, /recency === "오늘" \|\| recency === "내일"/u);
   for (const token of ["오늘", "내일", "어제", "D-${days}", "D+${days}"]) assert.ok(home.includes(token), `countdown keeps ${token}`);
   assert.match(home, /event\.date > todayKey/u);
@@ -97,4 +115,6 @@ test("phones stack the row to one column and tokens only", () => {
   assert.match(phone, /\.liveCard\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/su);
   assert.match(css, /\.eventName\s*\{[^}]*word-break:\s*keep-all[^}]*overflow-wrap:\s*anywhere/su);
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b|rgb\(/u);
+  // 2026-11-20: sizes, radii and weights are tokens (guard: tests/web-design-tokens-guard.test.cjs).
+  assert.doesNotMatch(css.replace(/\/\*[\s\S]*?\*\//g, ""), /font-weight:\s*(?:[1-9]\d\d)\b(?!\))/u, "only var(--fw-*) weights");
 });

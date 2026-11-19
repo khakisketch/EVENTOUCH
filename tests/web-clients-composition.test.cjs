@@ -2,7 +2,9 @@
 
 // Clients (고객사), approved 2026-11-16 (design-review clients-options.html,
 // option A). Reopened 2026-11-19: a three-card file-status strip tops the list,
-// avatars are tinted tiles and file state is a pill (dot plus word). The list
+// avatars are tinted tiles and file state is a pill (dot plus word). Reopened
+// 2026-11-20 (디자인 시스템 적용): ConsoleAvatar, StatusPill, CountTabs and
+// ConsoleEmptyState replace the hand-made parts. The list
 // stays flat and rows still hold no controls. Source-only; rendering rides the
 // real browser check.
 const assert = require("node:assert/strict");
@@ -23,14 +25,17 @@ test("approved clients design stays locked", () => {
   assert.match(row, /<h3 className=\{styles\.clientName\}>/u, "the name keeps its heading level");
   assert.match(css, /\.clientOpen::after\s*\{[^}]*inset:\s*0/su, "the whole row opens the drawer");
 
-  // Row order: logo or initial, name, contact, file state, arrow.
-  const order = ["styles.clientAvatar", "styles.clientName", "styles.clientContact", "styles.clientFiles", "styles.clientArrow"].map((t) => row.indexOf(t));
+  // Row order: logo or initial, name, contact, file state, arrow. Reopened 2026-11-20:
+  // the initial is the shared ConsoleAvatar and the logo keeps a local white tile.
+  const order = ["styles.clientLogo", "styles.clientName", "styles.clientContact", "styles.clientFiles", "styles.clientArrow"].map((t) => row.indexOf(t));
   assert.ok(order.every((p) => p >= 0) && order.every((p, i) => i === 0 || order[i - 1] < p));
+  assert.match(row, /<ConsoleAvatar name=\{client\.name\} size="lg" \/>/u, "no hand-rolled initial avatar");
 
-  // File state is a dot plus the word; color is never the only signal.
-  assert.match(row, /data-state=\{client\.logoFileId \? "yes" : "no"\}/u);
+  // File state is a StatusPill (dot plus the word); color is never the only signal.
+  assert.match(row, /<StatusPill tone=\{client\.logoFileId \? "ok" : "neutral"\} size="sm" dot>/u);
+  assert.match(row, /<StatusPill tone=\{client\.docFileId \? "ok" : "neutral"\} size="sm" dot>/u);
   assert.match(row, /className="sr-only"> \{client\.logoFileId \? "등록됨" : "없음"\}/u);
-  assert.match(css, /\.clientFiles > span\[data-state="no"\]::before\s*\{[^}]*box-shadow:\s*inset/su);
+  assert.doesNotMatch(css, /\.clientAvatar|\.clientFiles > span/u, "avatar and pill shapes live in console-ui now");
 
   // One orange action on the page; the count stays, the section title is assistive-only.
   assert.equal([...list.matchAll(/button-primary/gu)].length, 2, "고객사 등록 and the drawer save, nothing else");
@@ -38,15 +43,18 @@ test("approved clients design stays locked", () => {
   assert.doesNotMatch(list, /검색 지우기/u, "the search input clears itself");
 });
 
-test("reopened 2026-11-19: file-status counts and tinted avatars, from real data only", () => {
-  // Reopened 2026-11-20 (owner: 카드 띠도 개수 탭으로): the three cards became count tabs
-  // that also filter the loaded list locally (전체 / 로고 등록 / 사업자등록증 등록).
+test("reopened 2026-11-20 (디자인 시스템 적용): count tabs with the quiet count, shared empty states, from real data only", () => {
+  // The three cards became count tabs that also filter the loaded list locally
+  // (전체 / 로고 등록 / 사업자등록증 등록); the result count rides the tabs' aside.
   assert.match(list, /<CountTabs\s+className=\{styles\.fileTabs\}\s+ariaLabel="고객사 자료 보기"/u);
   assert.doesNotMatch(css, /\.stat\b|\.stats\b|\.statBar/u, 'the stat cards are gone');
   assert.match(list, /state\.clients\.filter\(\(client\) => client\.logoFileId\)\.length/u);
   assert.match(list, /state\.clients\.filter\(\(client\) => client\.docFileId\)\.length/u);
-  assert.match(list, /data-tone=\{\(client\.name\.trim\(\)\.codePointAt\(0\) \?\? 0\) % 5\}/u);
-  assert.match(css, /\.clientFiles > span\[data-state="yes"\]\s*\{[^}]*var\(--success-soft\)/su);
+  assert.match(list, /aside=\{\s*<span className=\{styles\.count\} role="status" data-quiet=/u);
+  assert.doesNotMatch(list, /participant-count|consoleUiStyles\.empty/u, "no global count class and no hand-rolled empty box");
+  assert.equal([...list.matchAll(/<ConsoleEmptyState/gu)].length, 2, "none registered, and nothing matches the filter");
+  assert.match(list, /kind="filtered"[\s\S]{0,500}variant="ghost"[\s\S]{0,200}필터 초기화/u, "a filtered-out list offers the reset");
+  assert.match(list, /<StatusPill tone=\{fileId \? "ok" : "neutral"\} size="sm">/u, "the drawer file rows show the same state pill");
 });
 
 test("info and files are managed in one drawer with the write gates intact", () => {

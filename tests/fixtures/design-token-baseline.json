@@ -1,19 +1,19 @@
 {
   "note": "Ratchet baseline for tests/web-design-tokens-guard.test.cjs. Counts may only go down. Refresh with: node tests/web-design-tokens-guard.test.cjs --update",
   "totals": {
-    "fontSizePx": 175,
-    "radius": 122,
+    "fontSizePx": 172,
+    "radius": 116,
     "hex": 182
   },
   "files": {
     "console/clients/clients.module.css": {
       "fontSizePx": 0,
-      "radius": 1,
+      "radius": 0,
       "hex": 0
     },
     "console/console-home.module.css": {
-      "fontSizePx": 3,
-      "radius": 3,
+      "fontSizePx": 0,
+      "radius": 0,
       "hex": 0
     },
     "console/console-ui/console-avatar.module.css": {
@@ -203,7 +203,7 @@
     },
     "console/team/team.module.css": {
       "fontSizePx": 0,
-      "radius": 2,
+      "radius": 0,
       "hex": 0
     },
     "event/[slug]/engage/engage.module.css": {

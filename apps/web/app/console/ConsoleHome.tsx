@@ -11,6 +11,9 @@ import ConsoleToolbar from "./console-ui/ConsoleToolbar";
 import ConsoleSection from "./console-ui/ConsoleSection";
 import ConsoleStatePanel from "./console-ui/ConsoleStatePanel";
 import ConsoleFeedback from "./console-ui/ConsoleFeedback";
+import ConsoleEmptyState from "./console-ui/ConsoleEmptyState";
+import StatusPill from "./console-ui/StatusPill";
+import type { StatusPillTone } from "./console-ui/StatusPill";
 import { ArrowRightIcon, ChevronRightIcon, PlusIcon, SearchIcon } from "./console-ui/ConsoleIcons";
 import { CalendarIcon, RowsIcon } from "./admin-icons";
 import CreateEventDialog from "./CreateEventDialog";
@@ -157,7 +160,8 @@ function formatEventDay(date: string, todayKey: string): string {
   return `${prefix}${month}월 ${day}일 (${weekday})`;
 }
 
-// One dot says the stage; the countdown stays a quiet number on the right.
+// One pill says the stage (green running, blue preparing, grey closed); amber
+// is kept for work waiting on a person, so a stage never borrows it.
 function stageDotTone(stage: string): "live" | "prep" | "done" | "unknown" {
   if (stage === "LIVE") return "live";
   if (stage === "DRAFT" || stage === "READY") return "prep";
@@ -165,14 +169,41 @@ function stageDotTone(stage: string): "live" | "prep" | "done" | "unknown" {
   return "unknown";
 }
 
+const STAGE_PILL_TONE: Record<ReturnType<typeof stageDotTone>, StatusPillTone> = {
+  live: "ok",
+  prep: "info",
+  done: "neutral",
+  unknown: "neutral",
+};
+
+// "Needs attention now": a running event, one that is today or tomorrow, or
+// one with approvals waiting. Closed events never are, whatever they hold.
+function isUrgentEvent(event: ConsoleEvent, todayKey: string): boolean {
+  if (event.stage === "ENDED" || event.stage === "ARCHIVED") return false;
+  if (event.stage === "LIVE" || event.pending > 0) return true;
+  const recency = eventRecency(event.date, todayKey);
+  return recency === "오늘" || recency === "내일";
+}
+
+// Today first, then tomorrow, then the most approvals waiting, then the date.
+function urgencyRank(event: ConsoleEvent, todayKey: string): number {
+  const recency = eventRecency(event.date, todayKey);
+  if (event.stage === "LIVE") return 0;
+  if (recency === "오늘") return 1;
+  if (recency === "내일") return 2;
+  return 3;
+}
+
 function EventRow({
   event,
   clientName,
   todayKey,
+  urgent = false,
 }: {
   event: ConsoleEvent;
   clientName: string;
   todayKey: string;
+  urgent?: boolean;
 }) {
   const recency = eventRecency(event.date, todayKey);
   const stageKnown = KNOWN_STAGES.includes(event.stage);
@@ -191,16 +222,17 @@ function EventRow({
     ? ({ "--card-zone": theme.background } as CSSProperties)
     : undefined;
   const [, tileMonth, tileDay] = event.date ? event.date.split("-") : [];
+  const soon = recency === "오늘" || recency === "내일";
 
   return (
-    <article className={styles.eventRow} data-tone={tone}>
+    <article className={styles.eventRow} data-tone={tone} data-urgent={urgent || undefined}>
       {/* The row body is one entry into the event home. The approval
           follow-up stays outside this link so there are no nested controls. */}
       <ProductLink
         className={styles.eventRowLink}
         href={`/console/events/${encodeURIComponent(event.id)}`}
       >
-        <span className={styles.dateTile} data-tone={tone} aria-hidden="true">
+        <span className={styles.dateTile} data-tone={tone} data-soon={soon || undefined} aria-hidden="true">
           {tileMonth && tileDay ? (
             <>
               <small>{Number(tileMonth)}월</small>
@@ -213,9 +245,8 @@ function EventRow({
         <div className={styles.eventRowMain}>
           <div className={styles.eventNameRow}>
             <h3 className={styles.eventName} style={zoneStyle}>{event.name}</h3>
-            <span className={styles.stageChip} data-tone={tone} aria-hidden="true">
-              <span className={styles.stageDot} data-tone={tone} />
-              {stageLabel}
+            <span aria-hidden="true">
+              <StatusPill tone={STAGE_PILL_TONE[tone]} size="sm" dot>{stageLabel}</StatusPill>
             </span>
           </div>
           <p className={styles.eventDateTime}>
@@ -223,7 +254,11 @@ function EventRow({
             {rest ? ` ${rest}` : ""}
           </p>
         </div>
-        {recency ? <span className={styles.eventRecency} data-soon={recency === "오늘" || recency === "내일" || undefined}>{recency}</span> : <span />}
+        {recency ? (
+          soon
+            ? <StatusPill tone="ink" className={styles.eventRecency}>{recency}</StatusPill>
+            : <span className={styles.eventRecency}>{recency}</span>
+        ) : <span />}
         <span className={styles.rowArrow} aria-hidden="true">
           <ChevronRightIcon />
         </span>
@@ -237,7 +272,7 @@ function EventRow({
           href={`/console/events/${encodeURIComponent(event.id)}/participants?status=PENDING`}
           aria-label={`${event.name} 승인 대기 ${event.pending}명 처리`}
         >
-          <span className={styles.rowActionPill}>승인 대기 {event.pending}명 처리 ›</span>
+          <StatusPill tone="wait" className={styles.rowActionPill}>승인 대기 {event.pending}명 처리 ›</StatusPill>
         </ProductLink>
       ) : null}
     </article>
@@ -610,19 +645,30 @@ export default function ConsoleHome() {
       items={FILTERS.map((item) => ({ key: item.id, label: item.label, count: counts[item.id] }))}
     />
   );
-  // Upcoming and past read as two groups; the nearest running event leads as
-  // the page's one card. Order inside a group is already set by visibleEvents.
+  // Four groups, in this order: the running event as the page's one card, the
+  // events that need attention now (running, today, tomorrow, approvals
+  // waiting), then upcoming and past. Closed events are never "urgent".
   const renderGroups = (list: ConsoleEvent[]) => {
     const clientOf = (event: ConsoleEvent) => event.clientId ? state.clients.get(event.clientId) ?? "" : "";
     const live = list.filter((event) => event.stage === "LIVE")[0] ?? null;
     const rest = live ? list.filter((event) => event.id !== live.id) : list;
-    const upcoming = rest.filter((event) => !event.date || event.date >= todayKey);
-    const past = rest.filter((event) => event.date && event.date < todayKey);
-    const renderRows = (rows: ConsoleEvent[]) => (
+    const urgent = rest
+      .filter((event) => isUrgentEvent(event, todayKey))
+      .sort((a, b) =>
+        urgencyRank(a, todayKey) - urgencyRank(b, todayKey)
+        || b.pending - a.pending
+        || a.date.localeCompare(b.date)
+        || a.start.localeCompare(b.start)
+        || a.name.localeCompare(b.name, "ko-KR"));
+    const urgentIds = new Set(urgent.map((event) => event.id));
+    const calm = rest.filter((event) => !urgentIds.has(event.id));
+    const upcoming = calm.filter((event) => !event.date || event.date >= todayKey);
+    const past = calm.filter((event) => event.date && event.date < todayKey);
+    const renderRows = (rows: ConsoleEvent[], rowUrgent = false) => (
       <ul className={styles.eventGrid}>
         {rows.map((event) => (
           <li key={event.id}>
-            <EventRow event={event} clientName={clientOf(event)} todayKey={todayKey} />
+            <EventRow event={event} clientName={clientOf(event)} todayKey={todayKey} urgent={rowUrgent} />
           </li>
         ))}
       </ul>
@@ -638,11 +684,28 @@ export default function ConsoleHome() {
                 {[eventRecency(live.date, todayKey) === "오늘" ? "오늘" : formatEventDay(live.date, todayKey), [live.start, live.end].filter(Boolean).join("–"), clientOf(live), live.venue].filter(Boolean).join(" · ")}
               </p>
             </div>
-            <ProductLink className={styles.liveLink} href={`/console/events/${encodeURIComponent(live.id)}`}>
-              운영 현황 열기
-              <ArrowRightIcon />
-            </ProductLink>
+            <div className={styles.liveActions}>
+              <ProductLink className={styles.liveLink} href={`/console/events/${encodeURIComponent(live.id)}`}>
+                운영 현황 열기
+                <ArrowRightIcon />
+              </ProductLink>
+              {live.pending > 0 ? (
+                <ProductLink
+                  className={styles.liveQueue}
+                  href={`/console/events/${encodeURIComponent(live.id)}/participants?status=PENDING`}
+                  aria-label={`${live.name} 승인 대기 ${live.pending}명 처리`}
+                >
+                  승인 대기 {live.pending}명 처리 ›
+                </ProductLink>
+              ) : null}
+            </div>
           </section>
+        ) : null}
+        {urgent.length ? (
+          <>
+            <h3 className={styles.groupTitle} data-urgent="true">지금 챙길 행사 <span className={styles.groupCount}>{urgent.length}</span></h3>
+            {renderRows(urgent, true)}
+          </>
         ) : null}
         {upcoming.length ? (
           <>
@@ -813,22 +876,27 @@ export default function ConsoleHome() {
         ) : null}
 
         {!state.events.length ? (
-          <div className={styles.emptyState}>
-            <h3>아직 등록된 행사가 없습니다</h3>
-            <p>새 행사를 만들면 일정과 참가 접수 준비를 시작할 수 있습니다.</p>
-          </div>
+          <ConsoleEmptyState
+            titleAs="h3"
+            title="아직 등록된 행사가 없습니다"
+            description="새 행사를 만들면 일정과 참가 접수 준비를 시작할 수 있습니다."
+          />
         ) : !visibleEvents.length ? (
-          <div className={styles.emptyState}>
-            <h3>조건에 맞는 행사가 없습니다</h3>
-            <p>검색어를 바꾸거나 다른 진행 단계·날짜에서 찾아보세요.</p>
-            <ProductButton
-              type="button"
-              className="button button-secondary"
-              onClick={clearAll}
-            >
-              필터 초기화
-            </ProductButton>
-          </div>
+          <ConsoleEmptyState
+            kind="filtered"
+            titleAs="h3"
+            title="조건에 맞는 행사가 없습니다"
+            description="검색어를 바꾸거나 다른 진행 단계·날짜에서 찾아보세요."
+            action={
+              <ProductButton
+                type="button"
+                className="button button-secondary"
+                onClick={clearAll}
+              >
+                필터 초기화
+              </ProductButton>
+            }
+          />
         ) : (
           <>
             {view === "calendar" && selectedDate ? (

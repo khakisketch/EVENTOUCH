@@ -4,7 +4,8 @@
 // team-options-b.html → team-options-b4.html, option A: three-bar gauge).
 // Reopened 2026-11-19: a status strip tops the list, tabs are a segmented pill
 // control, avatars take the role colour and role/state read as pills. Rows stay
-// flat and hold one control. Source-only; rendering rides the real browser check.
+// flat and hold one control. Reopened 2026-11-20 (디자인 시스템 적용): count tabs, ConsoleAvatar,
+// StatusPill and ConsoleEmptyState replace the hand-made parts. Source-only; rendering rides the real browser check.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -44,15 +45,23 @@ test("approved team design stays locked: three tabs, flat people rows, no button
   assert.match(team, /className="button button-primary"\s+disabled=\{hasUnconfirmedInvite \|\| refreshState !== "idle"\}/u);
 });
 
-test("reopened 2026-11-19: status counts from loaded accounts, role-tinted avatars and pills", () => {
-  // Reopened 2026-11-20 (owner: 카드 띠도 개수 탭으로): the three cards are one slim summary line.
-  assert.match(team, /<ul className=\{teamStyles\.teamSummary\} aria-label="구성원 현황">/u);
-  assert.doesNotMatch(css, /\.teamStats|\.statTotal|\.statWait|\.statOff|\.roleBar/u, "the status cards are gone");
+test("reopened 2026-11-20 (디자인 시스템 적용): count tabs that also narrow the list, shared avatar, role and state pills", () => {
+  // The status line became CountTabs: all / the three roles / waiting invitations
+  // (owner only) / stopped accounts. They count the loaded accounts and narrow
+  // the people list locally (no API). The default tab is 전체, so every row,
+  // id and drawer entry the audits use is present on first paint.
+  assert.match(team, /<CountTabs\s+className=\{teamStyles\.peopleTabs\}\s+ariaLabel="구성원 보기"/u);
+  assert.doesNotMatch(css, /\.teamStats|\.statTotal|\.statWait|\.statOff|\.roleBar|\.teamSummary|\.sumFlag/u, "the status cards and the summary line are gone");
   assert.match(team, /state\.accounts\.filter\(\(account\) => account\.role === role\)\.length/u);
-  assert.match(team, /state\.isOwner \? \(\s*<li className=\{teamStyles\.sumFlag\}/u, "the invitation count is owner-only like the queue");
-  assert.match(css, /\.sumFlag\[data-tone="wait"\]\s*\{[^}]*var\(--warning-line\)/su, "waiting invitations are the only amber count");
-  assert.match(css, /\.rolePill\[data-role="AGENCY"\]\s*\{[^}]*background:\s*var\(--ink\)/su);
-  assert.match(css, /\.avatar\[data-role="MANAGER"\]/u);
+  assert.match(team, /\.\.\.\(state\.isOwner \? \[\{ key: "invites", label: "대기 중인 초대"/u, "the invitation count is owner-only like the queue");
+  assert.match(team, /tone: state\.invitations\.length > 0 \? "wait" as const : "default" as const/u, "waiting invitations are the only amber count");
+  assert.match(team, /const \[peopleFilter, setPeopleFilter\] = useState<PeopleFilter>\("all"\)/u);
+  assert.match(team, /<ConsoleAvatar name=\{account\.name\} size="lg"/u, "the shared avatar, not a hand-rolled one");
+  assert.match(team, /<ConsoleAvatar name=\{invitation\.name\} size="lg" tone="wait" \/>/u);
+  assert.match(team, /const ROLE_PILL_TONE: Record<string, StatusPillTone> = \{ AGENCY: "ink", MANAGER: "info", STAFF: "ok" \}/u);
+  assert.match(team, /<StatusPill tone="wait" size="sm" dot>대기 중<\/StatusPill>/u);
+  assert.match(team, /<StatusPill tone="neutral" size="sm" dot>사용 중지<\/StatusPill>/u);
+  assert.doesNotMatch(css, /\.rolePill|\.avatar\b|\.inviteDot|\.offDot/u, "role, avatar and state shapes live in console-ui now");
   assert.doesNotMatch(css, /\.(?:personRow|permRow)\s*\{[^}]*(?:box-shadow|border-radius)/su, "a row is still not a card");
 });
 

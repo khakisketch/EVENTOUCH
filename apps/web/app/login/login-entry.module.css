@@ -26,12 +26,12 @@
   right: -70px;
   width: 220px;
   height: 220px;
-  border-radius: 50%;
+  border-radius: var(--r-pill);
   background: radial-gradient(circle, color-mix(in srgb, var(--brand) 34%, transparent), transparent 70%);
   content: "";
   pointer-events: none;
 }
-.stage:global(.login-page) :global(.auth-brand) :global(.wordmark) { position: relative; z-index: 1; color: var(--paper); font-size: 24px; }
+.stage:global(.login-page) :global(.auth-brand) :global(.wordmark) { position: relative; z-index: 1; color: var(--paper); font-size: var(--text-xl); }
 .stage:global(.login-page) :global(.auth-brand) :global(.wordmark)::first-letter { color: var(--brand); }
 .stage:global(.login-page) :global(.auth-brand) :global(.wordmark) span { color: color-mix(in srgb, var(--paper) 72%, transparent); }
 .stage:global(.login-page) :global(.auth-promise) { position: relative; z-index: 1; color: color-mix(in srgb, var(--paper) 72%, transparent); font-size: var(--body); }
@@ -48,20 +48,20 @@
   background: var(--paper);
   box-shadow: none;
 }
-.stage:global(.login-page) :global(.auth-card) :global(h1) { margin: 0 0 var(--s4); font-size: 28px; letter-spacing: -0.04em; }
+.stage:global(.login-page) :global(.auth-card) :global(h1) { margin: 0 0 var(--s4); font-size: var(--text-2xl); letter-spacing: var(--ls-heading); }
 
 /* The form fills the sheet: fields up top, the submit (and the one error line
    above it) at the bottom where the thumb is. */
 .stage:global(.login-page) :global(.auth-form) { flex: 1; gap: var(--s4); align-content: start; grid-template-rows: none; display: flex; flex-direction: column; }
-.stage:global(.login-page) :global(.auth-form) input { min-height: 56px; border-radius: 14px; font-size: 16px; }
+.stage:global(.login-page) :global(.auth-form) input { min-height: 56px; border-radius: var(--r-ctl); font-size: var(--body); }
 .stage:global(.login-page) :global(.auth-form) :global(button[type="submit"]),
 .stage:global(.login-page) :global(.auth-form) :global(.product-action[type="submit"]) {
   min-height: 56px;
   margin-top: auto;
-  border-radius: 16px;
+  border-radius: var(--r-ctl);
   font-size: var(--body);
 }
-.stage:global(.login-page) :global(.auth-form) > p[role="alert"] { margin: 0; padding: var(--s3); border-radius: 12px; background: var(--danger-soft); color: var(--danger); font-weight: 650; }
+.stage:global(.login-page) :global(.auth-form) > p[role="alert"] { margin: 0; padding: var(--s3); border-radius: var(--r-ctl); background: var(--danger-soft); color: var(--danger); font-weight: var(--fw-strong); }
 .stage:global(.login-page) :global(.auth-form) > p[role="alert"]:has(+ :global(button)) { margin-top: auto; }
 .stage:global(.login-page) :global(.auth-form) > p[role="alert"] + :global(button),
 .stage:global(.login-page) :global(.auth-form) > p[role="alert"] + :global(.product-action) { margin-top: 0; }

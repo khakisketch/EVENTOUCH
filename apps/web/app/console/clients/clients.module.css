@@ -1,7 +1,9 @@
-/* Clients directory: a flat list. A row is the logo (or the name's first
-   letter), the name, who to contact, and which files exist; the whole row
-   opens one drawer where info and files are managed. No card around the list
-   and no buttons inside rows. The only orange is the page's 고객사 등록. */
+/* Clients directory (2026-11-20 디자인 시스템 적용, C1 정밀형): a flat list.
+   A row is the logo (or ConsoleAvatar initial), the name, who to contact, and
+   which files exist as StatusPills; the whole row opens one drawer where info
+   and files are managed. No card around the list and no buttons inside rows.
+   The only orange is the page's 고객사 등록. Sizes, radii and weights come from
+   tokens.css only. */
 
 /* The page title already says "고객사"; the section title stays for assistive
    technology only. */
@@ -15,11 +17,16 @@
   white-space: nowrap;
 }
 
-.count {
-  margin: 0 0 var(--s2);
-  color: var(--muted);
-  font-size: var(--small);
-}
+/* Count tabs on top (console-ui/CountTabs); the quiet count sits at their end. */
+.fileTabs { margin: 0 0 var(--s3); }
+.count { color: var(--ink); font-size: var(--text-sm); font-weight: var(--fw-strong); }
+/* Unfiltered, the first tab already says "전체 N": the sentence stays for assistive technology only. */
+.count[data-quiet] { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.searchField { position: relative; display: block; }
+.searchGlyph { position: absolute; inset-block: 0; left: var(--s3); z-index: 1; display: inline-flex; align-items: center; color: var(--muted); pointer-events: none; }
+.searchGlyph svg { width: var(--text-lg); height: var(--text-lg); }
+.searchField :global(input) { width: 100%; min-height: var(--control-min-size); padding-left: calc(var(--s3) + var(--text-lg) + var(--s2)); border-radius: var(--r-pill); }
 
 .clientList {
   display: grid;
@@ -28,52 +35,49 @@
   padding: 0;
   min-width: 0;
   list-style: none;
-  border-top: 1px solid var(--line);
 }
 
 .clientRow {
   position: relative;
   display: grid;
-  grid-template-columns: 40px minmax(0, 1.1fr) minmax(0, 1.3fr) auto 20px;
+  grid-template-columns: 48px minmax(0, 1.1fr) minmax(0, 1.3fr) auto var(--s5);
   align-items: center;
   gap: var(--s4);
   min-width: 0;
-  min-height: 72px;
-  padding-block: var(--s2);
+  min-height: 80px;
+  padding: var(--s2);
   border-bottom: 1px solid var(--line);
 }
-.clientRow:hover { background: var(--surface-muted); }
+.clientRow:hover { background: var(--surface-sunken); }
 .clientRow:has(.clientOpen:focus-visible) {
   outline: 3px solid var(--focus);
   outline-offset: -3px;
 }
 
-.clientAvatar {
+/* A client's own logo sits in a white tile with a hairline; without one the
+   shared ConsoleAvatar initial stands in. */
+.clientLogo {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-muted);
-  color: var(--muted);
-  font-size: var(--body);
-  font-weight: 800;
+  border-radius: var(--r-ctl);
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
-.clientAvatar img {
+.clientLogo img {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  background: var(--paper);
 }
 
 .clientName {
   margin: 0;
   min-width: 0;
-  font-size: var(--body);
-  font-weight: 750;
-  letter-spacing: -0.015em;
+  font-size: var(--text-md);
+  font-weight: var(--fw-strong);
+  letter-spacing: var(--ls-heading);
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
@@ -101,38 +105,25 @@
   gap: 2px;
   margin: 0;
   min-width: 0;
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
-.clientContact small { color: var(--muted); font-size: var(--small); }
+.clientContact small { color: var(--muted); font-size: var(--text-xs); }
+.clientContact > span { color: var(--ink); }
 .clientNone { color: var(--muted); }
 
 .clientFiles {
   display: flex;
-  gap: var(--s3);
+  gap: var(--s2);
   margin: 0;
-  color: var(--muted);
-  font-size: var(--small);
-  font-weight: 650;
   white-space: nowrap;
 }
-.clientFiles > span::before {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: 6px;
-  border-radius: 50%;
-  vertical-align: 1px;
-  content: "";
-}
-.clientFiles > span[data-state="yes"] { color: var(--ink); }
-.clientFiles > span[data-state="yes"]::before { background: var(--success); }
-.clientFiles > span[data-state="no"]::before { background: var(--paper); box-shadow: inset 0 0 0 2px var(--line-strong); }
 
 .clientArrow { display: inline-flex; color: var(--muted); }
-.clientArrow svg { width: 20px; height: 20px; }
+.clientArrow svg { width: var(--s5); height: var(--s5); }
 .clientRow:hover .clientArrow { color: var(--ink); }
 
-/* Drawer: files under the form, each a quiet row of words. */
+/* Drawer: files under the form, each a quiet row of words with its state pill. */
 .fileSection {
   display: grid;
   gap: var(--s1);
@@ -143,8 +134,8 @@
 .fileHeading {
   margin: 0;
   color: var(--muted);
-  font-size: var(--small);
-  font-weight: 700;
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
   letter-spacing: 0.04em;
 }
 .fileRow {
@@ -158,13 +149,14 @@
   flex: none;
   width: 40px;
   height: 40px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--r-ctl);
   background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--line);
   object-fit: contain;
 }
-.fileText { display: grid; flex: 1 1 auto; min-width: 0; }
-.fileText span { color: var(--muted); font-size: var(--small); overflow-wrap: anywhere; }
+.fileText { display: grid; flex: 1 1 auto; gap: var(--s1); min-width: 0; }
+.fileText strong { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); font-weight: var(--fw-strong); }
+.fileText span { color: var(--muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
 .fileAction {
   display: inline-flex;
   align-items: center;
@@ -172,7 +164,7 @@
   min-height: 44px;
   padding-inline: var(--s2);
   color: var(--brand-text);
-  font-weight: 700;
+  font-weight: var(--fw-strong);
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
@@ -180,55 +172,26 @@
 .fileAction:hover { text-decoration: underline; text-underline-offset: 3px; }
 .fileAction:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 .fileAction[data-disabled] { color: var(--muted); cursor: not-allowed; }
-.fileNote { margin: 0; color: var(--muted); font-size: var(--small); }
+.fileNote { margin: 0; color: var(--muted); font-size: var(--text-sm); }
 
 .viewFacts { display: grid; gap: var(--s3); margin: 0; }
 .viewFacts > div { display: grid; gap: 2px; }
-.viewFacts dt { color: var(--muted); font-size: var(--small); font-weight: 650; }
+.viewFacts dt { color: var(--muted); font-size: var(--text-sm); font-weight: var(--fw-strong); }
 .viewFacts dd { margin: 0; overflow-wrap: anywhere; }
 
 @media (max-width: 768px) {
   .clientRow {
-    grid-template-columns: 40px minmax(0, 1fr) 20px;
+    grid-template-columns: 48px minmax(0, 1fr) var(--s5);
     grid-template-rows: auto auto auto;
     column-gap: var(--s3);
     row-gap: 2px;
-    padding-block: var(--s3);
+    padding: var(--s3) 0;
   }
-  .clientAvatar { grid-row: 1 / span 3; align-self: start; }
+  /* The leading logo or ConsoleAvatar spans the three text lines. */
+  .clientRow > :first-child { grid-row: 1 / span 3; align-self: start; }
   .clientRow > .clientName { grid-column: 2; grid-row: 1; }
-  .clientRow > .clientContact { grid-column: 2; grid-row: 2; font-size: var(--small); }
+  .clientRow > .clientContact { grid-column: 2; grid-row: 2; }
   .clientRow > .clientContact small { display: none; }
   .clientRow > .clientFiles { grid-column: 2; grid-row: 3; }
   .clientRow > .clientArrow { grid-column: 3; grid-row: 1 / span 3; }
-}
-
-/* ---- 재설계 2026-11-19 ----
-   위에 자료 현황 개수 탭(2026-11-20: 카드 3칸 → console-ui/CountTabs), 행은 색이 도는 이니셜 타일과 알약형 자료 상태로 읽히게 한다. */
-.fileTabs { margin: 0 0 var(--s3); }
-
-.searchField { position: relative; display: block; }
-.searchGlyph { position: absolute; inset-block: 0; left: var(--s3); z-index: 1; display: inline-flex; align-items: center; color: var(--muted); pointer-events: none; }
-.searchGlyph svg { width: 18px; height: 18px; }
-.searchField :global(input) { width: 100%; min-height: 44px; padding-left: calc(var(--s3) + 18px + var(--s2)); border-radius: 999px; }
-
-.count { color: var(--ink); font-weight: 650; }
-.clientList { border-top: 0; }
-.clientRow { grid-template-columns: 48px minmax(0, 1.1fr) minmax(0, 1.3fr) auto 20px; min-height: 80px; padding-inline: var(--s2); }
-.clientAvatar { width: 48px; height: 48px; border: 0; border-radius: 14px; font-size: var(--h3); }
-.clientAvatar[data-tone="0"] { background: var(--info-soft); color: var(--info); }
-.clientAvatar[data-tone="1"] { background: var(--success-soft); color: var(--success); }
-.clientAvatar[data-tone="2"] { background: var(--warning-soft); color: var(--warning); }
-.clientAvatar[data-tone="3"] { background: var(--danger-soft); color: var(--danger); }
-.clientAvatar[data-tone="4"] { background: var(--brand-tint); color: var(--brand-text); }
-.clientAvatar:has(img) { background: var(--paper); box-shadow: inset 0 0 0 1px var(--line); }
-.clientContact > span { color: var(--ink); font-weight: 550; }
-.clientFiles > span { display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 999px; background: var(--surface-muted); }
-.clientFiles > span[data-state="yes"] { background: var(--success-soft); color: var(--success); }
-.clientFiles > span::before { margin-right: 6px; }
-.clientFiles > span[data-state="no"] { box-shadow: inset 0 0 0 1px var(--line); }
-
-@media (max-width: 768px) {
-  .clientRow { grid-template-columns: 48px minmax(0, 1fr) 20px; padding-inline: 0; }
-  .clientFiles > span { padding: 2px 10px; }
 }

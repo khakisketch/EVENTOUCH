@@ -232,8 +232,8 @@ test("team assignment styles use tokens with full touch targets", () => {
   const css = read("console/team/team.module.css");
   const found = css.match(/#[0-9a-fA-F]{3,8}\b/g) || [];
   assert.deepEqual(found, [], `team.module.css must use tokens, found literals: ${found.join(", ")}`);
-  assert.match(css, /\.assignField select\s*\{[^}]*min-height:\s*44px/s);
-  assert.match(css, /\.assignLink\s*\{[^}]*min-height:\s*44px/s);
+  assert.match(css, /\.assignField select\s*\{[^}]*min-height:\s*var\(--control-min-size\)/s);
+  assert.match(css, /\.assignLink\s*\{[^}]*min-height:\s*var\(--control-min-size\)/s);
 });
 
 // --- 5. Response-loss fault routing + journey script coverage ---------------
