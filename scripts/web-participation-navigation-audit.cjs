@@ -149,7 +149,8 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
     await page.setViewportSize({ width: 1280, height: 960 });
     phase = 'operations';
     await page.goto(base + '/operations', { waitUntil: 'networkidle' });
-    await page.getByRole('heading', { name: '현장 운영', exact: true }).waitFor(); await capture('02-operations-1280');
+    // Reopened 2026-11-20: 현장 운영 is 입장·스태프; participation work moved to 현장 모드 (/live).
+    await page.getByRole('heading', { name: '입장·스태프', exact: true }).waitFor(); await capture('02-operations-1280');
     phase = 'participation collection';
     await page.goto(base + '/programs', { waitUntil: 'networkidle' });
     await page.locator('#program-search-label').waitFor({ state: 'attached' }); await capture('03-participation-1280');
@@ -159,7 +160,7 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
       const check = (name, condition) => { assert.ok(condition, name); checks.push(name); };
       const programs = async (query = '') => {
         await page.goto(base + '/programs' + query, { waitUntil: 'networkidle' });
-        await page.getByRole('heading', { name: '참여 콘텐츠', exact: true }).waitFor();
+        await page.getByRole('heading', { name: '참여 이벤트', exact: true }).waitFor();
       };
       const qaRow = () => page.locator(`[id="moderation-question-${question.id}"]`);
       const assess = async name => {
@@ -186,8 +187,8 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
       await page.setViewportSize({ width: 1280, height: 960 });
       check('actual initial page count is 12 of 15', await page.getByRole('button', { name: '더 보기 (3)' }).count() === 1);
       const preparation = page.getByRole('group', { name: '행사 준비', exact: true });
-      check('preparation distinguishes guidance from participation content', await preparation.getByRole('link', { name: '공지·안내', exact: true }).count() === 1 && await preparation.getByRole('link', { name: '참여 콘텐츠', exact: true }).count() === 1);
-      check('onsite group leads with operational destinations', await page.getByRole('group', { name: '현장·참여', exact: true }).getByRole('link', { name: '참여 콘텐츠', exact: true }).count() === 0);
+      check('preparation distinguishes guidance from participation content', await preparation.getByRole('link', { name: '공지·안내', exact: true }).count() === 1 && await preparation.getByRole('link', { name: '참여 이벤트', exact: true }).count() === 1);
+      check('onsite group leads with operational destinations', await page.getByRole('group', { name: '당일', exact: true }).getByRole('link', { name: '참여 이벤트', exact: true }).count() === 0);
       check('old participation title is absent', await page.getByRole('heading', { name: '참여 프로그램', exact: true }).count() === 0);
       phase = 'home work queue';
       await page.goto(base, { waitUntil: 'networkidle' });
@@ -245,7 +246,7 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
       await page.goto(base, { waitUntil: 'networkidle' });
       phase = 'home to QA handoff';
       await qaTask().getByRole('link', { name: '질문 승인 검토' }).click();
-      await page.getByRole('heading', { name: '참여 콘텐츠', exact: true }).waitFor();
+      await page.getByRole('heading', { name: '참여 이벤트', exact: true }).waitFor();
       // The shortcut opens the review drawer on its first matching question.
       await page.waitForFunction(() => /^review-question-/.test(document.activeElement?.id || ''));
       const reviewRow = () => page.locator(`[id="review-question-${question.id}"]`);
@@ -281,24 +282,21 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
       await page.getByRole('link', { name: '운영 현황으로', exact: true }).first().click();
       await qaTask().waitFor();
       check('return to home refreshes the remaining work count', /질문 1개/.test(await qaTask().innerText()) && /미답변 1건 · 승인 대기 1건/.test(await qaTask().innerText()));
-      phase = 'operations participation tab';
-      await page.goto(base + '/operations#ops-participation', { waitUntil: 'networkidle' });
-      const opsPanel = () => page.locator('[data-workspace-section="ops-participation"]');
+      phase = 'live mode participation work';
+      await page.goto(base + '/live', { waitUntil: 'networkidle' });
+      const opsPanel = () => page.locator('[data-live-pane="side"]');
       await opsPanel().waitFor({ state: 'visible' });
-      // The operations board has no tabs now; the return URL lands on the 참여 진행 section.
-      check('the participation section is the return URL target', await opsPanel().getByRole('heading', { name: '참여 진행', exact: true }).isVisible());
-      check('operations queue agrees with home', /질문 1개/.test(await opsPanel().locator('[data-task="qa"]').innerText()));
-      check('operations lists exactly two published open modules', await opsPanel().getByRole('link', { name: /^진행 관리/ }).count() === 2);
-      await assess('operations desktop'); await capture('07-participation-operations-1280');
+      // Reopened 2026-11-20: the review queue and open events live in the 현장 모드 side and schedule panes.
+      check('the live room carries the review queue', await opsPanel().getByRole('heading', { name: '검토 대기', exact: true }).isVisible());
+      check('live mode queue agrees with home', /Q&A 확인/.test(await opsPanel().innerText()) && /질문 1개/.test(await opsPanel().innerText()));
+      check('live mode lists exactly two published open modules', await page.locator('[data-live-pane="stage"] [data-status="OPEN"]').count() === 2);
+      await assess('live desktop'); await capture('07-participation-live-1280');
       const priorWrites = writes.length;
-      await opsPanel().getByRole('link', { name: '진행 관리 · 파트너 라이브 Q&A', exact: true }).click();
+      await programs('?module=' + qa.id);
       await page.waitForFunction(id => document.activeElement?.tagName === 'SUMMARY' && document.activeElement.closest('li')?.querySelector('h2,h3')?.id === `module-title-${id}`, qa.id);
       check('module handoff opens the existing progress panel', await qaRow().isVisible());
       check('module handoff remains read only', writes.length === priorWrites);
-      await page.getByRole('link', { name: '참여 진행으로', exact: true }).first().click();
-      await opsPanel().waitFor({ state: 'visible' });
-      check('return restores the participation tab', page.url().endsWith('#ops-participation'));
-      await opsPanel().getByRole('link', { name: '참여 콘텐츠 보기', exact: true }).click();
+      await programs('?status=OPEN');
       await page.waitForFunction(() => document.querySelector('[aria-label="진행 상태별 보기"] button[aria-pressed="true"]')?.textContent.startsWith('진행 중'));
       check('open-content handoff filters without opening an editor', await page.getByRole('dialog').count() === 0);
       check('only two open modules are shown', (await page.getByRole('status').allTextContents()).some(text => /검색·필터 결과 2개/.test(text)));
@@ -333,8 +331,8 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
         check(`entry precedes the task queue with a 44px roster link inside the panel at ${width}`,
           entryBox && queueBox && firstRow && rosterGroup && entryBox.y + entryBox.height <= queueBox.y &&
           firstRow.height >= 44 && firstRow.width >= 44 && firstRow.x >= rosterGroup.x && firstRow.x + firstRow.width <= rosterGroup.x + rosterGroup.width + 1);
-        await page.goto(base + '/operations#ops-participation', { waitUntil: 'networkidle' });
-        await opsPanel().waitFor({ state: 'visible' }); await assess(`operations ${width}`); await capture(`10-operations-${width}`);
+        await page.goto(base + '/live', { waitUntil: 'networkidle' });
+        await opsPanel().waitFor({ state: 'visible' }); await assess(`live ${width}`); await capture(`10-live-${width}`);
       }
       phase = 'feature-aware work queue';
       await call('event.features', { features: ['quiz', 'photo', 'board', 'venue', 'screen'] });
@@ -365,12 +363,13 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
       await page.getByText('지금 확인할 운영 항목이 없습니다.', { exact: true }).waitFor();
       check('handled questions and posts leave a quiet truthful home', await page.locator('[data-task="qa"], [data-task="post"]').count() === 0);
       check('the entry readout and roster stay visible with no tasks', await progress.isVisible() && await rosterLinks.count() === 1);
-      await page.goto(base + '/operations#ops-participation', { waitUntil: 'networkidle' });
-      await page.getByText('확인할 질문이나 참여 응답이 없습니다.', { exact: true }).waitFor();
-      check('operations has a matching empty queue', await opsPanel().locator('[data-task]').count() === 0);
+      await page.goto(base + '/live', { waitUntil: 'networkidle' });
+      await page.getByText('검토할 질문이나 참여 응답이 없습니다.', { exact: true }).waitFor();
+      check('live mode has a matching empty review queue', await opsPanel().getByRole('link', { name: /질문|게시글|사진/ }).count() === 0);
       await call('event.features', { features: [] });
       await page.reload({ waitUntil: 'networkidle' });
-      check('events without participation features hide the participation section', await opsPanel().count() === 0);
+      await page.getByText('진행할 참여 이벤트가 없습니다.', { exact: false }).waitFor();
+      check('events without participation features list no participation events', await page.locator('[data-live-pane="stage"] [data-live-event]').count() === 0);
       check('disabling all participation features preserves the modules', (await read()).modules.length === 15);
       check('only explicit question and post operations generated commands', writes.length === priorWrites + 1 && writes.at(-1).command === 'post.moderate');
       phase = 'live overview automatic refresh and recovery';

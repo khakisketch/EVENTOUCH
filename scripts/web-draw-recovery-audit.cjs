@@ -213,11 +213,12 @@ async function main() {
     stage = 'manual venue output and withdrawal';
     const latest = (await readWorkspace()).modules.find(item => item.id === module.id).drawHistory[0];
     assert.equal(latest.programId, backstage.id);
-    await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/operations`);
-    const output = page.locator('[data-workspace-section="ops-display"]');
+    // Reopened 2026-11-20: the venue-display output is picked in 현장 모드.
+    await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/live`);
+    const output = page.locator('[data-live-pane="stage"]');
     await output.scrollIntoViewIfNeeded();
-    await output.getByText(new RegExp(`현재 추첨 결과 · ${concurrent.name}`)).waitFor();
-    const choice = output.getByLabel('전광판 출력 선택');
+    await output.getByText(new RegExp(`현재 출력 · 추첨 결과 · ${concurrent.name}`)).waitFor();
+    const choice = output.getByLabel('행사장 화면 출력 선택');
     await choice.selectOption(`draw|${module.id}|${latest.id}`);
     await output.getByRole('status').filter({ hasText: '아직 적용되지 않았습니다' }).waitFor();
     await output.scrollIntoViewIfNeeded();
@@ -226,7 +227,7 @@ async function main() {
     await page.evaluate(axeSource);
     assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter(item => ['serious', 'critical'].includes(item.impact)).map(item => item.id)), []);
     await output.getByRole('button', { name: '출력 적용', exact: true }).click();
-    await output.getByText(new RegExp(`현재 추첨 결과 · ${backstage.name}`)).waitFor();
+    await output.getByText(new RegExp(`현재 출력 · 추첨 결과 · ${backstage.name}`)).waitFor();
     const otherTitle = screen.getByRole('heading', { name: backstage.name, exact: true });
     await screen.bringToFront();
     await otherTitle.waitFor();
@@ -236,7 +237,7 @@ async function main() {
     assert.equal(await stageTitle.count(), 0, 'withdrawing the selected result must not replace it with another draw');
     await page.reload();
     await output.scrollIntoViewIfNeeded();
-    await output.getByText('현재 기본 화면 · 선택한 추첨 결과 출력 불가', { exact: true }).waitFor();
+    await output.getByText('현재 출력 · 기본 화면 · 선택한 추첨 결과 출력 불가', { exact: true }).waitFor();
     assert.equal((await audience.cookies()).some(cookie => cookie.name === 'etko_session'), false);
     await audience.close();
     assert.deepEqual(errors, []);

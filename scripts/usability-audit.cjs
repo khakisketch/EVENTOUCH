@@ -1632,16 +1632,16 @@ async function main() {
       const { context, page } = await newOperatorPage();
       attachErrorListeners(page, task, baseUrl);
       try {
-        await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/operations`, { waitUntil: 'networkidle', timeout: 30000 });
-        // 현장 운영 is one board now: every section is on the page, so there is no tab to pick.
-        await page.locator('#ops-display').waitFor({ state: 'visible', timeout: 15000 });
+        // Reopened 2026-11-20: the venue-display output is set from 현장 모드, not 입장·스태프.
+        await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/live`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.locator('#live-display-pick').waitFor({ state: 'visible', timeout: 15000 });
         await verifySkipLink(page, task);
         await installScrollCounter(page);
-        await act(task, () => page.locator('#ops-display-pick').selectOption(`notice|${seed.noticeId}`));
+        await act(task, () => page.locator('#live-display-pick').selectOption(`notice|${seed.noticeId}`));
         const submit = page.getByRole('button', { name: '출력 적용', exact: true });
         await probeKeyboard(page, task, submit, '출력 적용 버튼');
         await act(task, () => submit.click());
-        await page.getByText('전광판 출력을 바꿨습니다').first().waitFor({ timeout: 15000 });
+        await page.getByText('행사장 화면 출력을 바꿨습니다').first().waitFor({ timeout: 15000 });
         const bodyText = await page.evaluate(() => document.body.innerText).catch(() => '');
         task.resultVisible = bodyText.includes(seed.noticeTitle);
         task.resultNote = `적용 안내 + 현재 출력에 "${seed.noticeTitle}" 표시`;

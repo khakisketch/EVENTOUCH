@@ -148,7 +148,9 @@ test("each owned screen probes the scope its writes need", () => {
     ["apps/web/app/console/events/[id]/content/ContentWorkspace.tsx", ["notice.save", "program.save"]],
     ["apps/web/app/console/events/[id]/settings/SettingsWorkspace.tsx", ["event.update", "form.publish"]],
     ["apps/web/app/console/events/[id]/page/ThemeWorkspace.tsx", ["attendee.page.save"]],
-    ["apps/web/app/console/events/[id]/operations/OperationsWorkspace.tsx", ["desk.save", "booth.save", "display.set"]],
+    // Reopened 2026-11-20: the display.set write moved from 입장·스태프 to 현장 모드.
+    ["apps/web/app/console/events/[id]/operations/OperationsWorkspace.tsx", ["desk.save", "booth.save"]],
+    ["apps/web/app/console/events/[id]/live/LiveWorkspace.tsx", ["display.set", "module.status", "draw.program.run", "reward.fulfill"]],
     ["apps/web/app/console/events/[id]/draws/DrawsWorkspace.tsx", ["draw.run", "reward.assign"]],
     ["apps/web/app/console/events/[id]/rewards/RewardsWorkspace.tsx", ["reward.create"]],
     ["apps/web/app/console/events/[id]/photos/EvidencePhotosWorkspace.tsx", ["evidence.photo.add"]],
