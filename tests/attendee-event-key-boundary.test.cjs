@@ -17,7 +17,9 @@ function loadPage(relative) {
   // The ticket page reads the event's published look (Reopened 2026-11-19);
   // the stub answers with the default look so the page runs without a server.
   const theme = { __esModule: true, loadAttendeeTheme: async () => ({}), attendeeGroundStyle: () => ({}) };
-  vm.runInNewContext(code, { exports, require: id => id === 'react/jsx-runtime' ? jsx : /event-theme$/.test(id) ? theme : { __esModule: true, default: function Child() {} } });
+  // Reopened 2026-11-20: the page wears the attendee look (a1/a2); the stub answers with the default look.
+  const look = { __esModule: true, attendeeLook: () => ({ mode: 'a1', color: '#EA552E', ground: null }) };
+  vm.runInNewContext(code, { exports, require: id => id === 'react/jsx-runtime' ? jsx : /event-theme$/.test(id) ? theme : /attendee-look$/.test(id) ? look : { __esModule: true, default: function Child() {} } });
   return exports.default;
 }
 
