@@ -485,4 +485,23 @@
   color: var(--ink);
 }
 [data-attendee-mode="a2"] .pageFooter { background: var(--paper); }
-[data-attendee-mode="a2"] .typeTab:not([aria-pressed="true"]) .todoDot { background: var(--paper); }
+[data-attendee-mode="a2"] .typeTab:not([aria-pressed="true"]) .todoDot { background: var(--ev-ground-ink); }
+
+/* The primary actions inside a program card wear the event color like the rest of the page (the Astryx primary is the product orange). */
+.moduleCard [data-product-variant="primary"] {
+  border-color: var(--ev-accent, var(--brand));
+  background: var(--ev-accent, var(--brand));
+  color: var(--ev-on-accent, var(--on-brand));
+}
+.moduleCard [data-product-variant="primary"]:hover:not(:disabled) {
+  background: var(--ev-accent-strong, var(--brand-hover));
+  color: var(--ev-on-accent, var(--on-brand-hover));
+}
+
+/* Narrow phones: the state chip drops under the title so the title keeps a readable measure. */
+@media (max-width: 400px) {
+  .programDisclosure > summary { grid-template-columns: auto minmax(0, 1fr) auto; row-gap: var(--s1); }
+  .programDisclosure > summary h2 { grid-column: 2; grid-row: 1; }
+  .programDisclosure > summary span[data-state] { grid-column: 2 / -1; grid-row: 2; justify-self: start; }
+  .programDisclosure > summary::after { grid-column: 3; grid-row: 1; }
+}

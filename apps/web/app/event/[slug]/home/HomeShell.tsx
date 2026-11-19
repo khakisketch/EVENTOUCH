@@ -1260,9 +1260,7 @@ export default function HomeShell({ slug }: { slug: string }) {
 
           <section className={styles.tabPanel} id={`menu-${activeTab}`} aria-label={activeMenu?.label}>
         {state.refreshFailed && (activeTab === "vote" || activeTab === "roulette") && (
-          <AttendeeStateMessage kind="info" icon="refresh" title="최신 상태를 확인하지 못했습니다." action={{ label: "다시 시도", onClick: refresh }} className={styles.refreshNotice}>
-            연결을 확인하고 다시 시도하세요.
-          </AttendeeStateMessage>
+          <AttendeeStateMessage kind="info" icon="refresh" title="최신 상태를 확인하지 못했습니다. 연결을 확인하고 다시 시도하세요." action={{ label: "다시 시도", onClick: refresh }} className={styles.refreshNotice} />
         )}
         {activeTab === "qr" && <TicketView slug={slug} initialTicket={state.ticketToken} />}
         {activeTab === "application" && <TicketView slug={slug} initialTicket={state.ticketToken} mode="application" />}

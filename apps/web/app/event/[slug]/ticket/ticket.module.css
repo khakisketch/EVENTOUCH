@@ -638,3 +638,18 @@
   background: var(--info-soft);
   color: var(--info);
 }
+
+/* The session check is a plain link (a full reload), styled as the strong action of its card. */
+.sessionCheck {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(var(--s7) + var(--s2));
+  padding: 0 var(--s5);
+  border-radius: var(--radius-large);
+  background: var(--ev-accent, var(--brand));
+  color: var(--ev-on-accent, var(--on-brand));
+  font-weight: 800;
+  text-decoration: none;
+  text-align: center;
+}

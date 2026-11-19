@@ -246,7 +246,8 @@ async function main() {
       });
       const page = await context.newPage();
       await page.goto(`${f.baseUrl}/event/${f.slug}/engage?ticket=${encodeURIComponent(approved.ticket)}`, { waitUntil: 'networkidle' });
-      await page.getByRole('heading', { name: '공개 투표' }).waitFor();
+      // Reopened 2026-11-20: the poll this participant already answered sits in the folded "완료한 참여" list, so it is in the page but not visible.
+      await page.getByRole('heading', { name: '공개 투표' }).waitFor({ state: 'attached' });
       await page.goto(`${f.baseUrl}/event/${nextId}/engage`, { waitUntil: 'networkidle' });
       await page.getByRole('heading', { name: '티켓이 확인되지 않습니다', exact: true }).waitFor();
       assert.equal(new URL(page.url()).searchParams.has('ticket'), false);

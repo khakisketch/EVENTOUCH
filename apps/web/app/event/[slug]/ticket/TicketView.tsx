@@ -491,7 +491,6 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
   if (state.kind === "missing") {
     const ticketBase = `/event/${encodeURIComponent(slug)}`;
     const actions: StateAction[] = [];
-    if (!storageAvailable) actions.push({ label: "이 브라우저에서 인증된 티켓 확인", onClick: () => window.location.assign(`${ticketBase}/ticket?session=1`) });
     if (recoveryBlocked) actions.push({ label: "처음 신청하기", href: `${ticketBase}/register` }, { label: "행사 안내 확인", href: ticketBase });
     else actions.push({ label: "연락처 인증으로 티켓 다시 찾기", href: `${ticketBase}/ticket/recover` }, { label: "처음 신청하기", href: `${ticketBase}/register` });
     return (
@@ -506,6 +505,8 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
             : "신청할 때 쓴 연락처를 인증하면 다시 열 수 있습니다."}
         </AttendeeStateMessage>
         {!storageAvailable ? <p className={styles.ticketIdentityNotice}>브라우저 저장소를 사용할 수 없어 자동으로 티켓을 불러오지 않았습니다. 확인하면 이 브라우저에서 마지막으로 인증한 참가자의 티켓이 열립니다.</p> : null}
+        {/* A plain link on purpose: the document reloads with ?session=1 so the ticket is read again from the verified session. */}
+        {!storageAvailable ? <p className={styles.ticketMessageActions}><a className={styles.sessionCheck} href={`${ticketBase}/ticket?session=1`}>이 브라우저에서 인증된 티켓 확인</a></p> : null}
         {stateActions(actions)}
       </section>
     );

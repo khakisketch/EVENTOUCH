@@ -1,12 +1,12 @@
 'use strict';
 
 // Attendee design system, screen application (2026-11-20): which look an event
-// gets. a1 (white ground, the event color as the accent) is the default; a2 (the
-// agency's own ground color, white cards on it) switches on by itself when a
-// ground color was chosen in 참가자 페이지. The product default sky blue is the
-// value an untouched page stores, not a choice, and white or near-white is a
-// white ground to the eye, so both stay a1. Every attendee page wraps itself in
-// AttendeeSurface with this look.
+// gets. a1 (white ground, the event color as the accent) is for a white ground;
+// a2 (the page's own ground color, white cards on it) switches on by itself for
+// any ground that is not white. An untouched page stores the product default
+// sky blue, so existing events keep their customer sky ground as a2; white or
+// near-white is a white ground to the eye, so it is a1. Every attendee page
+// wraps itself in AttendeeSurface with this look.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -36,15 +36,18 @@ const { attendeeLook } = load('app/event/[slug]/attendee-look.ts', {
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const style = (backgroundColor) => ({ ...plain(home.DEFAULT_HOME_STYLE), backgroundColor });
 
-test('an untouched page (the product default ground) is a1 with the brand accent', () => {
-  assert.deepEqual(plain(attendeeLook(home.DEFAULT_HOME_STYLE, null)), { mode: 'a1', color: '#EA552E', ground: null });
-  assert.deepEqual(plain(attendeeLook(undefined, null)), { mode: 'a1', color: '#EA552E', ground: null }, 'no style at all reads as the default');
+test('an untouched page keeps its customer sky ground as a2 (the audit pins that ground)', () => {
+  const sky = plain(home.DEFAULT_HOME_STYLE).backgroundColor;
+  assert.equal(sky, '#B9DEF0');
+  assert.deepEqual(plain(attendeeLook(home.DEFAULT_HOME_STYLE, null)), { mode: 'a2', color: sky, ground: sky });
+  assert.equal(attendeeLook(undefined, null).mode, 'a2', 'no style at all reads as the default');
 });
 
 test('the published 강조색 is the accent in both modes', () => {
+  assert.equal(attendeeLook(style('#FFFFFF'), '#2b62ee').color, '#2B62EE');
   assert.equal(attendeeLook(home.DEFAULT_HOME_STYLE, '#2b62ee').color, '#2B62EE');
   assert.equal(attendeeLook(style('#14161C'), '#9AA7FF').color, '#9AA7FF');
-  assert.equal(attendeeLook(home.DEFAULT_HOME_STYLE, 'not a color').color, '#EA552E', 'an invalid accent falls back to the brand');
+  assert.equal(attendeeLook(style('#FFFFFF'), 'not a color').color, '#EA552E', 'an invalid accent falls back to the brand');
 });
 
 test('a chosen ground color turns a2 on and becomes the ground', () => {

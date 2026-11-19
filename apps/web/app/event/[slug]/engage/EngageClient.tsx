@@ -286,6 +286,8 @@ export default function EngageClient({ slug }: { slug: string }) {
   const [reloadTick, setReloadTick] = useState(0);
   const [requestedProgram, setRequestedProgram] = useState("");
   const [activeType, setActiveType] = useState("");
+  // Which programs were already finished when the page first rendered them (folded below the ones to do).
+  const foldedAtOpenRef = useRef<Set<string> | null>(null);
   const recoveryBlocked = isRecoveryBlocked(useVerificationMode());
 
   useEffect(() => {
@@ -1232,11 +1234,15 @@ export default function EngageClient({ slug }: { slug: string }) {
   const answerable = state.approved ? state.modules.filter((module) => ["poll", "quiz", "survey"].includes(module.type) && (module.status !== "CLOSED" || state.submittedModuleIds.includes(module.id))) : [];
   const progressTotal = answerable.length;
   const progressDone = answerable.filter((module) => state.submittedModuleIds.includes(module.id)).length;
-  // Programs to do come first; the ones the attendee finished (a submitted poll, quiz or
-  // survey) or that closed fold into one list below.
+  // Programs to do come first; the ones the attendee had finished (a submitted poll, quiz or
+  // survey) or that were closed when the page opened fold into one list below. The set is taken
+  // once per page: a program answered now keeps its place with its "제출 완료" feedback in view
+  // and folds away on the next visit.
   const isDone = (module: PublicModule) => module.status === "CLOSED" || (["poll", "quiz", "survey"].includes(module.type) && state.submittedModuleIds.includes(module.id));
-  const activeModules = visibleModules.filter((module) => !isDone(module));
-  const doneModules = visibleModules.filter(isDone);
+  if (foldedAtOpenRef.current === null) foldedAtOpenRef.current = new Set(state.modules.filter(isDone).map((module) => module.id));
+  const foldedAtOpen = foldedAtOpenRef.current;
+  const activeModules = visibleModules.filter((module) => !foldedAtOpen.has(module.id));
+  const doneModules = visibleModules.filter((module) => foldedAtOpen.has(module.id));
   const renderModule = (module: PublicModule, index: number, folded: boolean) => (
       <li key={module.id} className={styles.moduleCard}>
         <section aria-labelledby={`engage-${module.id}`}>
@@ -1401,8 +1407,9 @@ export default function EngageClient({ slug }: { slug: string }) {
           {activeModules.map((module, index) => renderModule(module, index, false))}
           {doneModules.length ? (
             <li className={styles.doneGroup}>
-              {/* Finished programs fold away so the ones to do stay on top; a ?program= link keeps its own open. */}
-              <details open={doneModules.some((module) => module.id === requestedProgram) || undefined}>
+              {/* Finished programs fold away so the ones to do stay on top. With nothing left to do the list opens
+                  by itself (the programs are all there is), and a ?program= link keeps its own open. */}
+              <details open={activeModules.length === 0 || doneModules.some((module) => module.id === requestedProgram) || undefined}>
                 <summary data-disclosure-indicator="">완료한 참여 {doneModules.length}개</summary>
                 <ul className={styles.moduleList}>
                   {doneModules.map((module, index) => renderModule(module, index, true))}
