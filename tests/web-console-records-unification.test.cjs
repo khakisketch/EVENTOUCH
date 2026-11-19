@@ -231,7 +231,7 @@ test('records use shared body patterns and keep domain specifics', () => {
   assert.match(read(PAGES.participantImport), /styles\.sampleList/u, 'import renders its own flat sample rows');
   // Clients are a flat list of their own (tests/web-clients-composition.test.cjs).
   assert.match(read(PAGES.clients), /styles\.clientRow/u, 'clients render their own flat rows');
-  assert.match(read(PAGES.rewards), /styles\.rowSummary/u, 'rewards render their own flat ledger rows');
+  assert.match(read(PAGES.rewards), /<ListRow\s+as="div"\s+className=\{styles\.ledgerRow\}/u, 'rewards render flat ledger rows on the shared ListRow (2026-11-20)');
   assert.match(read(PAGES.clients), /<h3 className=\{styles\.clientName\}>/u, 'client names keep their heading level');
   assert.match(read(PAGES.team), /headingId="pending-invites" title="대기 중인 초대"/u);
   assert.match(read(PAGES.team), /headingId="team-members" title="구성원"/u);

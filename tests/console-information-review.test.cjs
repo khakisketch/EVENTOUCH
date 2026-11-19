@@ -37,7 +37,8 @@ test("draw program target text names the check-in requirement", () => {
 test("reward list keeps connection-only gifts in 확인 필요 with their own pill", () => {
   const rewards = read("console/events/[id]/rewards/RewardsWorkspace.tsx");
   assert.match(rewards, /function bucketOf\(reward: Reward\): Bucket/u);
-  assert.match(rewards, /reward\.status === "NEEDS_CONNECTION" \? <span className=\{styles\.pill\} data-tone="info">/u);
+  // Reopened 2026-11-20: the pill is the shared StatusPill.
+  assert.match(rewards, /reward\.status === "NEEDS_CONNECTION" \? <StatusPill tone="info" size="sm">연결 필요/u);
   assert.match(rewards, /연결 필요/u);
 });
 

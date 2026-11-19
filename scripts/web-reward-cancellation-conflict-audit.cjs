@@ -37,8 +37,8 @@ const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
     const row = name => page.getByRole('listitem').filter({ hasText: `합성 경품 ${name}` });
     // The reason sentence sits in the row's fold; 수령 처리 itself is only offered when nothing blocks it.
     const reason = async (name, pattern) => {
-      const fold = row(name).locator('details').first();
-      if (!await fold.evaluate(el => el.open)) await fold.locator('summary').first().click();
+      const toggle = row(name).getByRole('button', { name: /상세$/ });
+      if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
       await row(name).getByText(pattern).waitFor();
     };
     const offersFulfil = async name => await row(name).getByRole('button', { name: '수령 처리' }).count() > 0;
@@ -95,6 +95,8 @@ const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
       row('valid').getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '처리한다' }).click(),
     ]);
     assert.equal(completed.status(), 200);
+    // 2026-11-20: a received prize moves into the folded 완료·취소 group; open it to see the row.
+    await page.locator('[data-reward-group="done"] summary').click();
     await row('valid').getByText('수령 완료', { exact: true }).waitFor();
     assert.equal((await read()).rewards.find(reward => reward.id === 'reward-valid').status, 'RECEIVED');
     assert.deepEqual(errors, []);

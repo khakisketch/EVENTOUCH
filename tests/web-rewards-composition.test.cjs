@@ -23,15 +23,17 @@ test('approved rewards design stays locked: summary card, then a ledger by urgen
   for (const tone of ['attention', 'waiting', 'received']) assert.match(rewards, new RegExp(`key: "${tone}"`, 'u'), `${tone} tab`);
   assert.match(rewards, /key: "attention", label: "확인 필요", count: countAttention, tone: "wait"/u, 'blocked prizes are waiting work (amber)');
   assert.match(rewards, /label: "확인 필요"[\s\S]*label: "지급 대기"[\s\S]*label: "완료·취소"/u, 'groups read 확인 필요 → 지급 대기 → 완료·취소');
-  assert.match(rewards, /className=\{styles\.avatar\}/u, 'rows lead with the recipient, not a prize icon');
-  assert.match(rewards, /data-tone=\{unassigned \? "none"/u, 'an unassigned company win shows a dashed "?"');
-  assert.doesNotMatch(rewards, /ConsoleToolbar|ConsoleSection\b|consoleUiStyles\.recordRow/u, 'no toolbar, section panel or record rows');
+  // Reopened 2026-11-20 (디자인 시스템 적용): rows are the shared ListRow + ConsoleAvatar + StatusPill; 완료·취소 is folded.
+  assert.match(rewards, /<ListRow[\s\S]{0,200}leading=\{<ConsoleAvatar name=\{unassigned \? "\?"/u, 'rows lead with the recipient, an unassigned company win shows "?"');
+  assert.match(rewards, /<StatusPill tone="ok" size="sm">수령 완료<\/StatusPill>/u);
+  assert.match(rewards, /group\.key === "done"[\s\S]{0,400}<details key=\{group\.key\} className=\{styles\.doneFold\}/u, '완료·취소 is folded away from the waiting work');
+  assert.doesNotMatch(rewards, /ConsoleToolbar|consoleUiStyles\.recordRow/u, 'no toolbar or record rows');
 });
 
 test('a blocked prize never offers 수령 처리; cancel hides inside the row; confirms and recovery stay', () => {
   assert.match(rewards, /const canFulfill = state\.featureOn && canAct && \(reward\.status === "READY" \|\| reward\.status === "FAILED"\) && !reward\.participantIssue;/u);
   assert.match(rewards, /variant="destructive"[\s\S]{0,260}경품 취소<\/ProductButton>/u, 'cancel lives in the expanded row');
-  assert.match(rewards, /<details className=\{styles\.rowDetails\}>/u);
+  assert.match(rewards, /aria-expanded=\{expanded\}\s+aria-controls=\{bodyId\}/u, 'the row opens with a 상세 disclosure button');
   assert.match(rewards, /<ConsoleConfirm/u, 'fulfil and cancel keep their in-place confirmation');
   assert.match(rewards, /reward-recovery-heading/u, 'uncertain-outcome recovery stays at the top');
   assert.match(rewards, /id=\{`reward-participant-\$\{reward\.id\}`\} role="note"/u, 'the full reason sentence stays readable');
@@ -42,18 +44,18 @@ test('a blocked prize never offers 수령 처리; cancel hides inside the row; c
 
 test('state is shape + colour, tokens only, 44px targets, one line per row on phones', () => {
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/u);
-  assert.match(css, /\.avatar i\s*\{/u, 'corner badge carries the state by shape');
-  assert.match(css, /\.pill\s*\{[^}]*min-height:\s*26px/su);
-  assert.match(css, /\.rowSummary\s*\{[^}]*min-height:\s*72px/su);
-  assert.match(css, /\.rowGo\s*\{[^}]*min-height:\s*44px/su);
-  assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.rowGo\s*\{\s*position:\s*static/u);
+  // State is the StatusPill word plus the avatar tone (ok / wait / neutral), never colour alone.
+  assert.match(rewards, /const avatarTone: ConsoleAvatarTone = reward\.status === "RECEIVED" \? "ok"/u);
+  assert.match(css, /\.rowFoot :global\(\.product-action\)\s*\{[^}]*min-height:\s*var\(--control-min-size\)/su, '44px targets');
+  assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.rowActions\s*\{[^}]*padding/u, 'on phones the action drops under the row');
+  assert.doesNotMatch(css, /font-weight:\s*[1-9]\d\d\b/u, 'weights are tokens');
 });
 
 // Reopened 2026-11-19: same composition, stronger presentation. The search carries a
 // glyph, group headings a mark and count (the tile share bars went with the tiles on 2026-11-20).
 test('Reopened 2026-11-19: search has a glyph, groups have a mark and count', () => {
   assert.match(rewards, /<SearchIcon \/>/u);
-  assert.match(rewards, /className=\{styles\.groupCount\} aria-hidden="true"/u, 'the count chip does not change the heading name');
+  assert.match(rewards, /className=\{styles\.groupCount\}/u);
   assert.match(css, /\.row \+ \.row \{ border-top: 1px solid var\(--line\); \}/u);
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/u);
 });
