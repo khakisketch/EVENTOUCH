@@ -84,7 +84,9 @@ const { launchBrowser } = require('./audit-browser.cjs');
     const guest = await browser.newPage();
     await guest.goto(`${fixture.baseUrl}/event/${fixture.slug}`, { waitUntil: 'networkidle' });
     const publicText = await guest.locator('body').innerText();
-    assert.ok(publicText.includes('2027-02-16') && publicText.includes('2027-01-16') && publicText.includes('합성 개회식'));
+    // The guide writes dates in Korean; the machine-readable day is the <time datetime>.
+    const publicDays = await guest.locator('time[datetime]').evaluateAll(nodes => nodes.map(node => node.getAttribute('datetime')));
+    assert.ok(publicDays.includes('2027-02-16') && publicDays.includes('2027-01-16') && publicText.includes('합성 개회식'), `public days: ${JSON.stringify(publicDays)}`);
     assert.ok(publicText.includes('합성 일정 안내'), 'saving the event does not publish or edit the old notice');
     await guest.screenshot({ path: path.join(out, 'public-unchanged.png'), fullPage: true });
     const timeOnly = await context.newPage();

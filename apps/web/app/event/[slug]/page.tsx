@@ -274,7 +274,7 @@ export default async function EventPage({
         <div className={simple ? styles.factRow : styles.fact} data-guide-when>
           <span className={styles.factIcon} aria-hidden="true"><GuideIcon type="calendar" /></span>
           <span className={styles.factText}>
-            <span className={styles.factMain}>{whenText}</span>
+            <span className={styles.factMain}>{date ? <time dateTime={date.dateTime}>{whenText}</time> : whenText}</span>
             <span className={styles.factSub}>{clock || "시간 미정"}</span>
           </span>
           {dday ? <span className={styles.dday}>{dday}</span> : null}
