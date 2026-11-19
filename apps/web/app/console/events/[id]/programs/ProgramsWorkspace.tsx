@@ -28,10 +28,12 @@ import { useOperatorContextSnapshot } from "../../../../../lib/use-operator-cont
 import styles from "./programs.module.css";
 import ProgramTypeIcon from "./ProgramIcons";
 import ReviewDrawer, { questionNeedsReview, type ReviewTab } from "./ReviewDrawer";
-import StatusTabs from "./StatusTabs";
+import CountTabs from "../../../console-ui/CountTabs";
+import ConsoleEmptyState from "../../../console-ui/ConsoleEmptyState";
+import StatusPill from "../../../console-ui/StatusPill";
 import TemplateChooser, { TemplateGroups } from "./TemplateChooser";
 import DrawEventRow from "./DrawEventRow";
-import { EventStepper, LifecycleMeter, StatusPill } from "./EventLifecycle";
+import { EventStepper, LifecycleMeter, eventPillTone } from "./EventLifecycle";
 import QuizGrading, { type GradePayload, type GradeResult } from "./QuizGrading";
 import { useEventCloseHandoff } from "../../../use-event-close-handoff";
 import { readCloseSnapshot, type CloseSnapshot } from "../../../console-event-close";
@@ -1213,7 +1215,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
   function moduleSaveRecovery(): ReactNode {
     if (!moduleSaveRetry) return null;
     return <section className={styles.recovery} aria-labelledby="module-recovery-heading">
-      <h2 id="module-recovery-heading">콘텐츠 저장 확인 필요</h2>
+      <h2 className={styles.recoveryTitle} id="module-recovery-heading">콘텐츠 저장 확인 필요</h2>
       <p>서버 확인은 콘텐츠를 다시 만들지 않습니다.</p>
       {!dialogOpen && dialogFailure ? <p role="alert">{dialogFailure.message}</p> : null}
       <div className={styles.recoveryActions}>
@@ -1881,7 +1883,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
       {otherOperationReceipt && !pendingOperation ? <ConsoleFeedback kind="warning">이전 콘텐츠 작업의 처리 결과를 화면 위의 ‘처리 결과 확인’에서 먼저 확인하세요.</ConsoleFeedback> : null}
       {refreshingOperation ? <ConsoleFeedback kind="info">최신 콘텐츠와 결과를 불러오고 있습니다.</ConsoleFeedback> : null}
       {pendingOperation ? <section className={styles.recovery} aria-labelledby="program-operation-recovery-heading">
-        <h2 id="program-operation-recovery-heading" tabIndex={-1}>콘텐츠 처리 확인 필요</h2>
+        <h2 className={styles.recoveryTitle} id="program-operation-recovery-heading" tabIndex={-1}>콘텐츠 처리 확인 필요</h2>
         <p>{PROGRAM_OPERATION_LABELS[pendingOperation.command]} 요청이 반영됐을 수 있습니다. 서버 확인은 요청을 다시 보내지 않습니다.</p>
         {state.archived || !state.canWritePrograms ? <p>현재 권한이나 행사 상태에서는 같은 요청을 다시 보낼 수 없습니다. 서버 처리 확인을 이용하세요.</p> : null}
         {operationError ? <p role="alert">{operationError}</p> : null}
@@ -1905,16 +1907,18 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
         totalEvents ? (
           <section className={styles.listSection} aria-label="참여 이벤트 목록">
             <div className={styles.listTools}>
-              <StatusTabs
-                label="진행 상태별 보기"
-                value={programStatusFilter}
-                onChange={setProgramStatusFilter}
-                tabs={[
-                  { value: "", label: "전체", count: totalEvents },
-                  { value: "OPEN", label: "진행 중", count: statusCount("OPEN"), tone: "live" },
-                  { value: "DRAFT", label: "준비 중", count: statusCount("DRAFT"), tone: "prep" },
-                  { value: "CLOSED", label: "종료", count: statusCount("CLOSED") },
+              <CountTabs
+                ariaLabel="진행 상태별 보기"
+                value={programStatusFilter || "all"}
+                onChange={(key) => setProgramStatusFilter(key === "all" ? "" : key)}
+                items={[
+                  { key: "all", label: "전체", count: totalEvents },
+                  { key: "OPEN", label: "진행 중", count: statusCount("OPEN") },
+                  { key: "DRAFT", label: "준비 중", count: statusCount("DRAFT"), tone: "wait" },
+                  { key: "CLOSED", label: "종료", count: statusCount("CLOSED") },
                 ]}
+                dots={{ OPEN: "live" }}
+                aside={<>받은 응답 <b>{state.responses.length}</b>건</>}
               />
               {totalEvents > 8 || hasProgramFilter ? (
                 <label>
@@ -1928,7 +1932,6 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
                   />
                 </label>
               ) : null}
-              <p className={styles.listFacts}>받은 응답 <b>{state.responses.length}</b>건</p>
             </div>
             {hasProgramFilter ? (
               <p className={styles.resultCount} role="status">
@@ -2052,15 +2055,12 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
                 ) : null}
               </>
             ) : (
-              <div className={styles.empty}>
-                <p>조건에 맞는 이벤트가 없습니다.</p>
-                <p>검색어·상태 조건을 바꾸거나 지우고 다시 찾아보세요.</p>
-                <p>
-                  <ProductButton type="button" variant="secondary" onClick={clearProgramFilters}>
-                    검색·필터 지우기
-                  </ProductButton>
-                </p>
-              </div>
+              <ConsoleEmptyState
+                kind="filtered"
+                title="조건에 맞는 이벤트가 없습니다."
+                description="검색어·상태 조건을 바꾸거나 지우고 다시 찾아보세요."
+                action={<ProductButton type="button" variant="secondary" onClick={clearProgramFilters}>검색·필터 지우기</ProductButton>}
+              />
             )}
             <p className={styles.drawsLink}>
               <ProductLink variant="ghost" href={closeHref(`/console/events/${encodeURIComponent(eventId)}/draws`)}>무대 운영 화면 (추첨·룰렛·순위 투표)</ProductLink>
@@ -2068,7 +2068,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
           </section>
         ) : (
           <section className={styles.emptyChooser} aria-label="이벤트 만들기">
-            <h2>첫 이벤트를 만들어 보세요</h2>
+            <h2 className={styles.emptyChooserTitle}>첫 이벤트를 만들어 보세요</h2>
             <p>종류를 고르면 해당 설정이 열립니다.</p>
             <TemplateGroups eventId={eventId} closeHref={closeHref} isTypeEnabled={isTypeEnabled} isDrawEnabled={(key) => state.features.includes(key)}
               disabled={writeLocked || Boolean(moduleSaveRetry) || otherModuleReceipt} onPickModule={openCreateOfType} />
@@ -2320,7 +2320,7 @@ function ModuleCard(props: {
         <summary className={styles.moduleSummary} data-has-action={rowAction ? "true" : undefined}>
           <ProgramTypeIcon type={module.type} state={state} />
           <span className={styles.moduleName}>
-            <h3 id={`module-title-${module.id}`} tabIndex={-1}>{module.title}</h3>
+            <h3 className={styles.moduleTitle} id={`module-title-${module.id}`} tabIndex={-1}>{module.title}</h3>
             <span className={styles.moduleLine}>
               <span>{summary.line}</span>
               {props.rewardCount !== null && props.rewardCount > 0 ? <span>경품 {props.rewardCount}</span> : null}
@@ -2331,7 +2331,7 @@ function ModuleCard(props: {
           </span>
           <LifecycleMeter segments={lifecycleSegments(facts)} />
           <span className={styles.moduleCount}>{summary.count !== null && module.status !== "DRAFT" ? <><b>{summary.count}</b>{summary.unit}</> : null}</span>
-          <StatusPill tone={pill.tone} label={pill.label} />
+          <StatusPill tone={eventPillTone(pill.tone)} dot={pill.tone === "live"} className={styles.rowPill}>{pill.label}</StatusPill>
         </summary>
         <div className={styles.moduleBody}>
           <EventStepper steps={lifecycleSteps(facts)} rewardsHref={props.rewardsHref} rewardCount={props.rewardCount} />

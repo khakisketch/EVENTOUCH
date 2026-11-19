@@ -31,7 +31,7 @@ export function TemplateGroups({ eventId, closeHref, isTypeEnabled, isDrawEnable
     <div className={styles.templateGroups}>
       {TEMPLATE_GROUPS.map((group) => (
         <section key={group.key} className={styles.templateGroup} aria-labelledby={`template-group-${group.key}`}>
-          <h3 id={`template-group-${group.key}`}>{group.label}<span>{group.hint}</span></h3>
+          <h3 className={styles.templateGroupTitle} id={`template-group-${group.key}`}>{group.label}<span>{group.hint}</span></h3>
           <ul>
             {EVENT_TEMPLATES.filter((template) => template.group === group.key).map((template) => {
               const off = template.action === "module" ? !isTypeEnabled(template.moduleType) : !isDrawEnabled(drawFeatureKey(template));

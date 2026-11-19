@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import ProductButton from "../../../../ui/ProductButton";
 import ConsoleDialog from "../../../console-ui/ConsoleDialog";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
+import ConsoleAvatar from "../../../console-ui/ConsoleAvatar";
+import CountTabs from "../../../console-ui/CountTabs";
 import { ArrowUpIcon } from "../../../console-ui/ConsoleIcons";
 import ProgramTypeIcon from "./ProgramIcons";
 import type { Module, Photo, Post, Question } from "./ProgramsWorkspace";
@@ -112,20 +114,17 @@ export default function ReviewDrawer(props: {
         {total ? "" : "검토할 항목을 모두 처리했습니다."}
       </p>
       {tabs.length > 1 ? (
-        <div className={styles.drawerTabs} role="group" aria-label="검토 종류">
-          {tabs.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={styles.drawerTab}
-              aria-pressed={active === tab}
-              onClick={() => { props.onTab(tab); setLimit(PAGE); }}
-            >
-              {tab === "all" ? "전체" : tab === "question" ? "질문" : tab === "photo" ? "사진" : "글"}
-              <small>{counts[tab]}</small>
-            </button>
-          ))}
-        </div>
+        <CountTabs
+          className={styles.drawerTabs}
+          ariaLabel="검토 종류"
+          value={active}
+          onChange={(key) => { props.onTab(key as ReviewTab); setLimit(PAGE); }}
+          items={tabs.map((tab) => ({
+            key: tab,
+            label: tab === "all" ? "전체" : tab === "question" ? "질문" : tab === "photo" ? "사진" : "글",
+            count: counts[tab],
+          }))}
+        />
       ) : null}
 
       {show("question") && questionGroups.length ? questionGroups.map(({ module, items }) => {
@@ -133,7 +132,7 @@ export default function ReviewDrawer(props: {
         if (!shown.length) return null;
         return (
           <section key={module.id} className={styles.drawerGroup} aria-label={module.title}>
-            <h3><ProgramTypeIcon type="qa" small />{module.title}</h3>
+            <h3 className={styles.drawerGroupTitle}><ProgramTypeIcon type="qa" small />{module.title}</h3>
             <ul className={styles.drawerList}>
               {shown.map((question) => {
                 const open = openId === question.id;
@@ -160,7 +159,7 @@ export default function ReviewDrawer(props: {
                     {open ? (
                       <div className={styles.answerCard}>
                         <div className={styles.asker}>
-                          <span className={styles.avatar} aria-hidden="true">{question.name.trim().slice(0, 1) || "?"}</span>
+                          <ConsoleAvatar name={question.name} tone="info" size="md" />
                           <span className={styles.askerName}>{question.name}<small>좋아요 {question.likes}</small></span>
                         </div>
                         <p className={styles.bubble}>{question.text}</p>
@@ -212,7 +211,7 @@ export default function ReviewDrawer(props: {
         if (!shown.length) return null;
         return (
           <section className={styles.drawerGroup} aria-label="참여 사진">
-            <h3><ProgramTypeIcon type="photo" small />{titleOf("photo", "참여 사진")}</h3>
+            <h3 className={styles.drawerGroupTitle}><ProgramTypeIcon type="photo" small />{titleOf("photo", "참여 사진")}</h3>
             <ul className={styles.drawerList}>
               {shown.map((photo) => (
                 <li key={photo.id} id={`review-photo-${photo.id}`} tabIndex={-1} className={styles.drawerItem}>
@@ -257,7 +256,7 @@ export default function ReviewDrawer(props: {
         if (!shown.length) return null;
         return (
           <section className={styles.drawerGroup} aria-label="참여 게시판">
-            <h3><ProgramTypeIcon type="board" small />{titleOf("board", "참여 게시판")}</h3>
+            <h3 className={styles.drawerGroupTitle}><ProgramTypeIcon type="board" small />{titleOf("board", "참여 게시판")}</h3>
             <ul className={styles.drawerList}>
               {shown.map((post) => (
                 <li key={post.id} id={`review-post-${post.id}`} tabIndex={-1} className={styles.drawerItem}>
