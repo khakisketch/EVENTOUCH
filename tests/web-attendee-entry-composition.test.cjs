@@ -1,9 +1,10 @@
 'use strict';
 
-// Locks the approved attendee entry composition (DESIGN.md "참가 신청과 입장
-// 티켓 확정 구성", mockup attendee-ticket-b2.html, "입장 패스 B"): the ticket
-// is a pass whose band carries the state and the name, the QR is the largest
-// thing on it, and the form is a short sheet with its submit in reach.
+// Locks the attendee entry composition (DESIGN.md "참가 신청과 입장 티켓 확정
+// 구성", mockup attendee-ticket-b2.html, "입장 패스 B"), reopened 2026-11-19:
+// the ticket is a pass on the event's own ground that opens with the event's
+// banner, its band carries the state and the name, the QR is the largest thing
+// on it, and the application is a numbered sheet with its submit in reach.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -15,24 +16,45 @@ const ticket = read('ticket/TicketView.tsx');
 const ticketCss = read('ticket/ticket.module.css');
 const ticketPage = read('ticket/page.tsx');
 const register = read('register/RegisterForm.tsx');
+const registerPage = read('register/page.tsx');
+const eventTheme = read('event-theme.ts');
+const bannerSource = read('EventBanner.tsx');
+const bannerCss = read('event-banner.module.css');
 const registerCss = read('register/register.module.css');
 const eventPage = read('page.tsx');
 const eventCss = read('public-event.module.css');
 const recover = read('ticket/recover/RecoverForm.tsx');
 const wakeLock = fs.readFileSync(path.join(__dirname, '../apps/web/lib/use-screen-wake-lock.ts'), 'utf8');
 
-test('the ticket is a pass: a band with state and name, then the QR, then the event', () => {
+test('the ticket is a pass: banner, a band with state and name, then the QR, then the facts', () => {
+  // Reopened 2026-11-19: the pass opens with the event's own banner.
+  const banner = ticket.indexOf('<EventBanner theme={theme}');
   const band = ticket.indexOf('className={styles.ticketBand}');
   const qr = ticket.indexOf('className={styles.ticketQr}');
-  const event = ticket.indexOf('className={styles.ticketEvent}');
   const actions = ticket.indexOf('className={styles.ticketActions}');
-  assert.ok(band > 0 && qr > band && event > qr && actions > event, 'band, QR, event, actions in that order');
-  assert.match(ticket, /<h1>내 티켓<\/h1>/u, 'the heading stays for screen readers and audits');
+  assert.ok(banner > 0 && band > banner && qr > band && actions > qr, 'banner, band, QR, actions in that order');
+  assert.ok(ticket.indexOf('{facts}', qr) > qr && ticket.indexOf('{facts}', qr) < actions, 'the facts sit between the QR and the actions');
+  assert.match(ticket, /kicker=\{<h1>내 티켓<\/h1>\}/u, 'the heading stays for screen readers and audits');
+  assert.match(ticket, /<EventFacts slug=\{slug\} context=\{state\.eventContext\} fallbackDate=\{state\.eventDate\} \/>/u);
   assert.match(ticket, /state\.inside \? "in" : "good"/u, 'an entered attendee reads blue');
   for (const tone of ['wait', 'bad', 'in']) {
     assert.match(ticketCss, new RegExp(`\\.ticketBand\\[data-tone="${tone}"\\]`), `${tone} band tone`);
+    assert.match(ticketCss, new RegExp(`\\.ticketBand \\.ticketEntryState\\[data-tone="${tone}"\\]`), `${tone} state pill`);
   }
   assert.match(ticketCss, /\.ticketBand\s*\{[^}]*var\(--success-soft\)/su, 'confirmed is the default band');
+  assert.match(ticketCss, /\.ticketBand \.ticketEntryState\s*\{[^}]*background:\s*var\(--success\)/su, 'the state is a solid pill');
+});
+
+test('the ticket page sits on the event ground and wears its published banner', () => {
+  assert.match(ticketPage, /loadAttendeeTheme\(slug\)/u);
+  assert.match(ticketPage, /style=\{attendeeGroundStyle\(theme\)\}/u);
+  assert.match(ticketCss, /\.ticketPage:global\(\.site-page\)\s*\{[^}]*background:\s*var\(--home-background-color/su);
+  assert.match(ticketCss, /\.tear i\s*\{[^}]*var\(--home-background-color/su, 'the stub notches are cut in the ground color');
+  assert.match(eventTheme, /normalizeHomeStyle/u);
+  assert.match(bannerSource, /bannerFillCss\(homeStyle\)/u);
+  assert.match(bannerSource, /\/attendee-home-banner\.png/u);
+  assert.match(bannerCss, /data-fill="image"\]::after/u, 'a picture gets a scrim under its text');
+  assert.match(ticketCss, /@media print[\s\S]*\.ticketCard\.pass/u, 'a printed ticket stays the QR and the name on white');
 });
 
 test('the QR stays large and keeps its four-module quiet zone', () => {
@@ -54,17 +76,29 @@ test('the registration receipt is a one-time dark line, not a pass panel', () =>
   assert.match(ticket, /\{state\.fresh \? \(/u, 'it still shows only for a fresh signup');
 });
 
-test('the way back is quiet and the secondary actions under the QR are utilities', () => {
+test('the way back is quiet; the next step is the one primary and the recheck is a utility', () => {
   assert.match(ticketPage, /styles\.returnLink/u);
-  assert.match(ticketCss, /\.ticketActions \.buttonSecondary\s*\{[^}]*background:\s*transparent/su);
+  // Reopened 2026-11-19: with the QR in hand the content link is the primary;
+  // the recheck is ghost. Without a QR the recheck is the primary.
+  assert.match(ticket, /className=\{styles\.buttonPrimary\} href=\{`\/event\/\$\{encodeURIComponent\(slug\)\}\/engage`\}/u);
+  assert.match(ticketCss, /\.buttonGhost\s*\{[^}]*background:\s*transparent/su);
 });
 
-test('the form is short: one lead line, quiet labels, large fields, a sticky submit', () => {
+test('the application is a numbered sheet: banner, facts, sections, a sticky submit', () => {
+  // Reopened 2026-11-19: step titles are visible and numbered; the outcome
+  // heading is still read, not shown.
   assert.match(register, /<h2 className="sr-only">신청하면 어떻게 되나요<\/h2>/u, 'the outcome heading is read, not shown');
+  assert.match(register, /<h2 className=\{styles\.stepTitle\}>참가자 정보<\/h2>/u);
+  assert.match(registerCss, /\.stepTitle::before[\s\S]*?content:\s*counter\(step\)/u, 'each section title carries its step number');
+  assert.match(registerPage, /<EventBanner theme=\{theme\} title=\{data\.name\} titleAs="h1"/u);
+  assert.match(registerPage, /<EventFacts slug=\{slug\} context=\{data\.eventContext\} \/>/u);
+  assert.match(registerCss, /\.page:global\(\.registration-page\)\s*\{[^}]*background:\s*var\(--home-background-color/su);
   assert.match(register, /<span className=\{styles\.req\}>/u);
   assert.match(registerCss, /\.stepSection :global\(\.form-field\) input:not\(\[type="checkbox"\]\)[\s\S]*?min-height:\s*52px/u);
   assert.match(registerCss, /\[aria-invalid="true"\]\s*\{[^}]*var\(--danger\)/su, 'only the field to fix turns red');
   assert.match(registerCss, /\.submitBlock\s*\{[^}]*position:\s*sticky/su);
+  assert.match(registerCss, /\.submitBlock button\[type="submit"\]\s*\{[^}]*min-height:\s*56px/su, 'one strong submit');
+  assert.doesNotMatch(registerCss, /\.sheet\s*\{[^}]*overflow:\s*(?:hidden|clip)/su, 'no overflow clip on the sheet, or the submit bar stops sticking');
   assert.doesNotMatch(registerCss, /\.submitBlock\s*\{[^}]*margin-inline:\s*calc\(/su, 'the bar must not bleed past the page and scroll sideways');
   assert.match(registerCss, /scroll-margin-block-end:\s*220px/u, 'a focused field keeps its error clear of the bar');
 });

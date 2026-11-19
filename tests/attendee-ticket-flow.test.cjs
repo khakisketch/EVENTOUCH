@@ -15,10 +15,12 @@ const register = read("apps/web/app/event/[slug]/register/RegisterForm.tsx");
 
 test("the ticket screen points at what the attendee has to do", () => {
   assert.match(ticket, /입장할 때 이 QR을 보여 주세요/u);
-  // The QR is the thing shown at the desk, so nothing else may look like the
-  // primary action on the same card.
-  assert.match(ticket, /className=\{styles\.buttonSecondary\} href=\{`\/event\/\$\{encodeURIComponent\(slug\)\}\/engage`\}/u);
-  assert.doesNotMatch(ticket, /className=\{styles\.buttonPrimary\} href=\{`\/event\/\$\{encodeURIComponent\(slug\)\}\/engage`\}/u);
+  // Reopened 2026-11-19: with the QR in hand the obvious next step is the
+  // event's content, so it is the one primary below the QR and the facts; the
+  // recheck beside it is a quiet utility. A ticket that cannot show a QR keeps
+  // the recheck as its primary.
+  assert.match(ticket, /className=\{styles\.buttonPrimary\} href=\{`\/event\/\$\{encodeURIComponent\(slug\)\}\/engage`\}/u);
+  assert.match(ticket, /mode === "ticket" \? \(usable \? styles\.buttonGhost : styles\.buttonPrimary\)/u);
 });
 
 test("a missing or failed ticket always offers a way forward", () => {

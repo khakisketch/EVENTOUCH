@@ -1,0 +1,61 @@
+import type { CSSProperties } from "react";
+import { DEFAULT_HOME_STYLE, normalizeHomeStyle, type HomeStyle } from "../../../lib/attendee-home";
+import { homeSurfaceStyle } from "../../../lib/home-surface";
+
+// The look an agency published for an event (ground color, banner fill or
+// picture). The phone screens that follow registration (the application sheet,
+// the ticket, engagement) wear it so the attendee keeps one identity from the
+// guide to the desk. Everything here reads the public projection only.
+export type AttendeeTheme = {
+  homeStyle: HomeStyle;
+  keyvisual: string | null;
+  defaultHomeBanner: "legacy" | "neutral";
+};
+
+export const DEFAULT_ATTENDEE_THEME: AttendeeTheme = {
+  homeStyle: { ...DEFAULT_HOME_STYLE },
+  keyvisual: null,
+  defaultHomeBanner: "legacy",
+};
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function keyvisualSource(slug: string, value: unknown): string | null {
+  const image = record(value);
+  const data = typeof image.data === "string" ? image.data : "";
+  if (/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(data)) return data;
+  const fileId = typeof image.fileId === "string" ? image.fileId : "";
+  if (!/^[A-Za-z0-9_-]{1,160}$/.test(fileId)) return null;
+  return `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`;
+}
+
+/** Reads the published look out of a public workspace projection. */
+export function readAttendeeTheme(slug: string, workspace: unknown): AttendeeTheme {
+  const published = record(record(record(workspace).pageExperience).published);
+  return {
+    homeStyle: normalizeHomeStyle(published.homeStyle),
+    keyvisual: keyvisualSource(slug, published.keyvisual),
+    defaultHomeBanner: published.defaultHomeBanner === "neutral" ? "neutral" : "legacy",
+  };
+}
+
+/** Server-side load for pages whose own data does not carry the look. A failed
+ *  read falls back to the default look; the page never fails because of it. */
+export async function loadAttendeeTheme(slug: string): Promise<AttendeeTheme> {
+  try {
+    const base = process.env.EVENTOUCH_API_URL ?? "http://127.0.0.1:8776";
+    const response = await fetch(`${base}/api/public/events/${encodeURIComponent(slug)}`, { cache: "no-store" });
+    if (!response.ok) return DEFAULT_ATTENDEE_THEME;
+    const data = record(await response.json());
+    return readAttendeeTheme(slug, data.workspace);
+  } catch {
+    return DEFAULT_ATTENDEE_THEME;
+  }
+}
+
+/** Ground color and its readable ink as CSS variables for the page root. */
+export function attendeeGroundStyle(theme: AttendeeTheme): CSSProperties {
+  return homeSurfaceStyle(theme.homeStyle);
+}

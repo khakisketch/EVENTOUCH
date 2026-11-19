@@ -1,0 +1,98 @@
+/* The event identity strip of an attendee phone screen. It reads the published
+   banner (color fill or picture) and keeps its text legible on any of them:
+   a color fill picks its tone from its colors, a picture gets a scrim on the
+   side the text sits. */
+.banner {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--s4);
+  min-height: 132px;
+  padding: var(--s4) var(--s5) var(--s5);
+  overflow: hidden;
+  background: #1e2026;
+  color: #fff;
+}
+
+.banner[data-tone="dark"] { color: #142b35; }
+
+.artwork {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The picture is an unknown quantity: a scrim under the text keeps it above
+   4.5:1 whatever the agency uploaded. */
+.banner[data-fill="image"]::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(to top, rgb(16 17 20 / 70%), rgb(16 17 20 / 18%) 70%, transparent);
+  content: "";
+  pointer-events: none;
+}
+
+.banner[data-fill="image"][data-tone="dark"]::after {
+  background: linear-gradient(to top, rgb(255 255 255 / 78%), rgb(255 255 255 / 24%) 70%, transparent);
+}
+
+.kicker {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+/* A quiet label chip over the banner ("내 티켓", "참가 신청"). */
+.kicker > * {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 28px;
+  margin: 0;
+  padding: 0 var(--s3);
+  border-radius: 999px;
+  background: rgb(16 17 20 / 38%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  word-break: keep-all;
+}
+
+.banner[data-tone="dark"] .kicker > * {
+  background: rgb(255 255 255 / 62%);
+  color: #142b35;
+}
+
+.title {
+  margin: auto 0 0;
+  color: inherit;
+  font-size: clamp(24px, 7.4vw, 30px);
+  font-weight: 800;
+  line-height: 1.18;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.kicker + .title { margin-top: auto; }
+
+/* A pass with no QR needs its next step in the first screen of a small phone. */
+.banner[data-compact] {
+  gap: var(--s2);
+  min-height: 92px;
+  padding: var(--s3) var(--s4) var(--s4);
+}
+
+.banner[data-compact] .title {
+  font-size: clamp(20px, 6vw, 24px);
+}

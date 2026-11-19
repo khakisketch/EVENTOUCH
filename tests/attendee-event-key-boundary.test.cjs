@@ -14,7 +14,10 @@ function loadPage(relative) {
   const source = fs.readFileSync(path.join(web, relative), 'utf8');
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const exports = {};
-  vm.runInNewContext(code, { exports, require: id => id === 'react/jsx-runtime' ? jsx : { __esModule: true, default: function Child() {} } });
+  // The ticket page reads the event's published look (Reopened 2026-11-19);
+  // the stub answers with the default look so the page runs without a server.
+  const theme = { __esModule: true, loadAttendeeTheme: async () => ({}), attendeeGroundStyle: () => ({}) };
+  vm.runInNewContext(code, { exports, require: id => id === 'react/jsx-runtime' ? jsx : /event-theme$/.test(id) ? theme : { __esModule: true, default: function Child() {} } });
   return exports.default;
 }
 

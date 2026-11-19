@@ -11,7 +11,7 @@
   gap: var(--s1);
 }
 
-.pageHeader h1 {
+.pageHeader > h1 {
   margin: 0;
   font-size: var(--h2);
   letter-spacing: -0.01em;
@@ -358,7 +358,7 @@
 }
 .programDisclosure > summary::-webkit-details-marker { display: none; }
 .programDisclosure > summary h2 { font-size: var(--h3); font-weight: 650; word-break: keep-all; overflow-wrap: anywhere; }
-.programDisclosure > summary span { color: var(--brand-text); font-size: var(--small); }
+.programDisclosure > summary span[data-state] { color: var(--brand-text); font-size: var(--small); }
 .programDisclosure[open] > summary { padding-bottom: var(--s3); margin-bottom: var(--s4); border-bottom: 1px solid var(--line); }
 .programDisclosure > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .returnLink { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); background: var(--paper); color: var(--ink); font-size: var(--small); text-decoration: none; }
@@ -377,7 +377,7 @@
   --engage-ink: #17252B;
   max-width: none;
   min-height: 100svh;
-  padding-inline: max(var(--s4), calc((100% - 720px) / 2));
+  padding-inline: max(var(--s4), calc((100% - 520px) / 2));
   background: var(--engage-ground);
   color: var(--engage-ink);
 }
@@ -398,8 +398,8 @@
 .moduleCard h2 { font-size: 20px; line-height: 1.3; letter-spacing: -0.03em; }
 .programDisclosure > summary { min-height: 48px; }
 .programDisclosure[open] > summary { margin-bottom: var(--s3); padding-bottom: 0; border-bottom: 0; }
-.programDisclosure > summary span { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px; border-radius: 999px; font-size: 12.5px; font-weight: 750; white-space: nowrap; }
-.programDisclosure > summary span::before { width: 7px; height: 7px; border-radius: 50%; background: currentColor; content: ""; }
+.programDisclosure > summary span[data-state] { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px; border-radius: 999px; font-size: 12.5px; font-weight: 750; white-space: nowrap; }
+.programDisclosure > summary span[data-state]::before { width: 7px; height: 7px; border-radius: 50%; background: currentColor; content: ""; }
 .programDisclosure > summary span[data-state="todo"] { background: var(--info-soft); color: var(--info); }
 .programDisclosure > summary span[data-state="done"] { background: var(--success-soft); color: var(--success); }
 .programDisclosure > summary span[data-state="check"] { background: var(--warning-soft); color: var(--warning); }
@@ -437,3 +437,47 @@
 .pageFooter a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--s3); border: 0; background: transparent; color: inherit; font-weight: 650; text-decoration: none; }
 .pageFooter a:hover { background: rgb(255 255 255 / 40%); border-radius: 12px; }
 .page { align-content: start; }
+
+/* ---- Reopened 2026-11-19: an activity hub on the event's own ground. The
+   published banner names the event, a progress card says how much of the
+   answerable programs the attendee has done, kinds are icon tabs, each card
+   opens with a kind icon, and the way out is one quiet list. ---- */
+.pageHeader { grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: var(--s3); row-gap: var(--s1); }
+.pageHeader > * { grid-column: 1 / -1; }
+.pageHeader > .wordmark { grid-column: 1; }
+.pageHeader > :global(.eyebrow) { grid-column: 2; margin: 0; font-weight: 700; }
+.banner { min-height: 148px; margin-top: var(--s2); border-radius: 24px; box-shadow: 0 18px 36px -24px rgb(16 17 20 / 55%); }
+
+.progress {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s4);
+  border-radius: 20px;
+  background: var(--paper);
+  box-shadow: var(--shadow-raised);
+  color: var(--ink);
+}
+.progressIcon { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 14px; background: var(--brand-tint); color: var(--brand-text); }
+.progressIcon[data-done] { background: var(--success-soft); color: var(--success); }
+.progressText { display: grid; gap: 2px; min-width: 0; }
+.progressTitle { margin: 0; font-size: var(--h3); font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.progressSub { margin: 0; color: var(--muted); font-size: var(--small); word-break: keep-all; overflow-wrap: break-word; }
+.progressBar { grid-column: 1 / -1; height: 8px; border-radius: 999px; background: var(--chart-track); overflow: hidden; }
+.progressBar i { display: block; height: 100%; border-radius: inherit; background: var(--ink); }
+@media (prefers-reduced-motion: no-preference) { .progressBar i { transition: width var(--enter) ease-out; } }
+
+.typeTab { gap: 6px; }
+.typeTab svg { flex: none; }
+.kindIcon { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: var(--brand-tint); color: var(--brand-text); }
+.programDisclosure > summary { grid-template-columns: auto minmax(0, 1fr) auto auto; gap: var(--s3); }
+.programDisclosure > summary h2 { min-width: 0; }
+.moduleCard .choiceRow input[type="radio"], .moduleCard .choiceRow input[type="checkbox"] { accent-color: var(--brand); }
+
+/* The way out: one quiet list tinted from the page ink, so it reads on any ground. */
+.pageFooter { display: grid; gap: 0; padding: 0 var(--s4); border-radius: 20px; background: color-mix(in srgb, var(--engage-ink) 9%, transparent); }
+.pageFooter a { justify-content: space-between; min-height: 52px; padding: 0; border-top: 1px solid color-mix(in srgb, var(--engage-ink) 16%, transparent); border-radius: 0; font-size: var(--small); }
+.pageFooter a:first-child { border-top: 0; }
+.pageFooter a:hover { background: transparent; text-decoration: underline; }
+.pageFooter a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }

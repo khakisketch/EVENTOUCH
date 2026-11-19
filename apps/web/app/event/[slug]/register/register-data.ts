@@ -1,6 +1,8 @@
 import { publicRecoveryContact } from "../../../../lib/public-recovery-contact";
 import { readPublicEventContext } from "../../../../lib/public-event-context";
 import type { PublicEventContext } from "../../../../lib/public-event-context";
+import { readAttendeeTheme } from "../event-theme";
+import type { AttendeeTheme } from "../event-theme";
 
 export type PublishedField = {
   id: string;
@@ -23,6 +25,8 @@ export type RegisterData = {
   paymentPending: boolean;
   recoveryContact: string;
   fields: PublishedField[];
+  // The banner and ground the agency published: the sheet wears them.
+  theme: AttendeeTheme;
 };
 
 export const BUILT_IN_FIELDS: PublishedField[] = [
@@ -115,5 +119,6 @@ export function parseRegisterData(value: unknown): RegisterData | null {
     paymentPending: event.features.includes("payment") && workspace.price > 0,
     recoveryContact: publicRecoveryContact(workspace, event.features),
     fields,
+    theme: readAttendeeTheme(typeof event.slug === "string" ? event.slug : "", workspace),
   };
 }

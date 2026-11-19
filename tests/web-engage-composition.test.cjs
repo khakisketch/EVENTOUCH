@@ -51,3 +51,22 @@ test('submit, recovery and conflict contracts are unchanged', () => {
     assert.ok(client.includes(text), `${text} stays`);
   }
 });
+
+// Reopened 2026-11-19: the page is an activity hub. The published banner names
+// the event, a progress card counts the attendee's own answered programs, kinds
+// are icon tabs, each card opens with its kind icon, and the way out is one
+// quiet list. The write contracts above do not change.
+test('the hub opens with the published banner and the attendee\'s own progress', () => {
+  assert.match(client, /<EventBanner theme=\{state\.theme\} title=\{state\.eventName\} titleAs="h1"/u);
+  assert.match(client, /theme: readAttendeeTheme\(slug, publicData\.workspace\)/u);
+  assert.match(client, /\["poll", "quiz", "survey"\]\.includes\(module\.type\) && \(module\.status !== "CLOSED" \|\| state\.submittedModuleIds\.includes\(module\.id\)\)/u, 'only answerable programs count, from the attendee\'s own submissions');
+  assert.match(client, /role="progressbar"[^>]*aria-valuenow=\{progressDone\}/u);
+  assert.match(css, /\.progressBar i\s*\{[^}]*var\(--ink\)/su, 'the bar is ink, not orange');
+});
+
+test('kind tabs and cards carry a kind icon; the way out is a quiet list on the page ink', () => {
+  assert.match(client, /<AttendeeIcon name=\{typeIcon\(type\)\} size=\{18\} \/>\{typeLabel\(type\)\}/u);
+  assert.match(client, /className=\{styles\.kindIcon\} aria-hidden="true"/u);
+  assert.match(css, /summary span\[data-state\]\s*\{/u, 'the state chip rule no longer catches the icon');
+  assert.match(css, /\.pageFooter\s*\{[^}]*color-mix\(in srgb, var\(--engage-ink\)/su, 'the footer tint follows the page ink so it reads on any ground');
+});

@@ -9,6 +9,9 @@ import ProductButton from "../../../ui/ProductButton";
 import { fetchWithDeadline, withRequestDeadline } from "../../../../lib/request-deadline";
 import styles from "./engage.module.css";
 import { normalizeHomeStyle, readableInk } from "../../../../lib/attendee-home";
+import EventBanner from "../EventBanner";
+import AttendeeIcon, { type AttendeeIconName } from "../AttendeeIcons";
+import { readAttendeeTheme, type AttendeeTheme } from "../event-theme";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
 import { readGuestReceipts, writeGuestReceipts, type GuestReceiptPointer } from "../../../../lib/receipt-recovery";
 import { confirmsGuestCommand, confirmsGuestPhotoUpload } from "../../../../lib/guest-command-result";
@@ -87,6 +90,8 @@ type EngageState =
       submittedModuleIds: string[];
       // The event's own home color: the page sits on it like the attendee home.
       ground: string;
+      // The banner the agency published, for the page header.
+      theme: AttendeeTheme;
     };
 
 type FormError = { form: string; field: string | null; message: string; uncertain?: boolean };
@@ -654,6 +659,7 @@ export default function EngageClient({ slug }: { slug: string }) {
             posts,
             submittedModuleIds,
             ground: normalizeHomeStyle((publicData.workspace?.pageExperience as { published?: { homeStyle?: unknown } } | undefined)?.published?.homeStyle).backgroundColor,
+            theme: readAttendeeTheme(slug, publicData.workspace),
           });
         }
       } catch {
@@ -1215,13 +1221,19 @@ export default function EngageClient({ slug }: { slug: string }) {
   const requestedType = state.modules.find((module) => module.id === requestedProgram)?.type;
   const currentType = typeOrder.includes(activeType) ? activeType : requestedType ?? typeOrder[0] ?? "";
   const visibleModules = state.modules.filter((module) => module.type === currentType);
+  // Poll, quiz and survey are the programs an attendee answers once; the
+  // count is the participant's own, from the published modules and their
+  // own submissions. A closed program they never answered no longer counts.
+  const answerable = state.approved ? state.modules.filter((module) => ["poll", "quiz", "survey"].includes(module.type) && (module.status !== "CLOSED" || state.submittedModuleIds.includes(module.id))) : [];
+  const progressTotal = answerable.length;
+  const progressDone = answerable.filter((module) => state.submittedModuleIds.includes(module.id)).length;
   return (
     <main id="main-content" tabIndex={-1} className={styles.page} style={{ "--engage-ground": state.ground, "--engage-ink": readableInk(state.ground) } as React.CSSProperties}>
       <header className={styles.pageHeader}>
         <span className={styles.wordmark}>EVENTOUCH</span>
         <span className="eyebrow">참여 콘텐츠</span>
         <ProductLink className={styles.returnLink} href={`/event/${encodeURIComponent(slug)}/home`}>← 참가 메뉴로</ProductLink>
-        <h1>{state.eventName}</h1>
+        <EventBanner theme={state.theme} title={state.eventName} titleAs="h1" className={styles.banner} />
       </header>
       {receiptRecovery}{pendingRecovery}
 
@@ -1230,12 +1242,23 @@ export default function EngageClient({ slug }: { slug: string }) {
         <p className={styles.warning} role="note">참가 확정 후 참여할 수 있습니다. 프로그램 목록은 미리 확인할 수 있습니다.</p>
       ) : null}
 
+      {progressTotal > 0 ? (
+        <section className={styles.progress} aria-label="내 참여 현황">
+          <span className={styles.progressIcon} data-done={progressDone === progressTotal || undefined}><AttendeeIcon name={progressDone === progressTotal ? "check" : "user"} size={22} /></span>
+          <div className={styles.progressText}>
+            <p className={styles.progressTitle}>{progressDone === progressTotal ? "모두 참여했어요" : `참여 ${progressDone}/${progressTotal}`}</p>
+            <p className={styles.progressSub}>{progressDone === progressTotal ? `투표·퀴즈·만족도 ${progressTotal}개를 마쳤습니다.` : `투표·퀴즈·만족도 ${progressTotal}개 중 ${progressDone}개를 마쳤습니다.`}</p>
+          </div>
+          <div className={styles.progressBar} role="progressbar" aria-label="참여 완료" aria-valuemin={0} aria-valuemax={progressTotal} aria-valuenow={progressDone}><i style={{ width: `${Math.round((progressDone / progressTotal) * 100)}%` }} /></div>
+        </section>
+      ) : null}
+
       {typeOrder.length > 1 ? (
         <nav className={styles.typeTabs} aria-label="참여 종류">
           {typeOrder.map((type) => {
             const todo = state.approved && state.modules.some((module) => module.type === type && ["poll", "quiz", "survey"].includes(module.type) && module.status !== "CLOSED" && !state.submittedModuleIds.includes(module.id));
             return <button key={type} type="button" className={styles.typeTab} aria-pressed={type === currentType} onClick={() => { setActiveType(type); setNotice(null); }}>
-              {typeLabel(type)}{todo ? <span className={styles.todoDot} role="img" aria-label="아직 참여하지 않은 프로그램이 있습니다" /> : null}
+              <AttendeeIcon name={typeIcon(type)} size={18} />{typeLabel(type)}{todo ? <span className={styles.todoDot} role="img" aria-label="아직 참여하지 않은 프로그램이 있습니다" /> : null}
             </button>;
           })}
         </nav>
@@ -1247,7 +1270,7 @@ export default function EngageClient({ slug }: { slug: string }) {
             <li key={module.id} className={styles.moduleCard}>
               <section aria-labelledby={`engage-${module.id}`}>
               <details className={styles.programDisclosure} open={requestedProgram ? module.id === requestedProgram : index === 0}>
-                <summary data-disclosure-indicator=""><h2 id={`engage-${module.id}`} tabIndex={-1}>{module.title}</h2><span data-state={hasPending(`${state.eventId}:${module.id}`) ? "check" : state.submittedModuleIds.includes(module.id) ? "done" : module.status === "CLOSED" ? "end" : "todo"}>{typeLabel(module.type)} · {hasPending(`${state.eventId}:${module.id}`) ? "제출 확인 필요" : state.submittedModuleIds.includes(module.id) ? "제출 완료" : module.status === "CLOSED" ? "종료" : "참여하기"}</span></summary>
+                <summary data-disclosure-indicator=""><span className={styles.kindIcon} aria-hidden="true"><AttendeeIcon name={typeIcon(module.type)} size={22} /></span><h2 id={`engage-${module.id}`} tabIndex={-1}>{module.title}</h2><span data-state={hasPending(`${state.eventId}:${module.id}`) ? "check" : state.submittedModuleIds.includes(module.id) ? "done" : module.status === "CLOSED" ? "end" : "todo"}>{typeLabel(module.type)} · {hasPending(`${state.eventId}:${module.id}`) ? "제출 확인 필요" : state.submittedModuleIds.includes(module.id) ? "제출 완료" : module.status === "CLOSED" ? "종료" : "참여하기"}</span></summary>
               {(() => {
                 const formKey = `${state.eventId}:${module.id}`;
                 const responseType = ["poll", "quiz", "survey"].includes(module.type);
@@ -1371,9 +1394,9 @@ export default function EngageClient({ slug }: { slug: string }) {
       )}
 
       <footer className={styles.pageFooter}>
-        {state.modules.length || pendingKeys.length || savedReceipts.length ? <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/home`}>참가 메뉴로</ProductLink> : null}
-        <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket`}>내 티켓으로 이동</ProductLink>
-        <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</ProductLink>
+        {state.modules.length || pendingKeys.length || savedReceipts.length ? <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/home`}>참가 메뉴로<AttendeeIcon name="arrow" size={16} /></ProductLink> : null}
+        <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket`}>내 티켓으로 이동<AttendeeIcon name="arrow" size={16} /></ProductLink>
+        <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로<AttendeeIcon name="arrow" size={16} /></ProductLink>
       </footer>
     </main>
   );
@@ -1410,6 +1433,19 @@ function PreviousResponseDraft({ value, onDiscard, question = false }: { value: 
       <ProductButton type="button" className="button button-secondary" onClick={() => setConfirmDiscard(false)}>계속 보관</ProductButton>
     </div> : null}
   </div>;
+}
+
+function typeIcon(type: string): AttendeeIconName {
+  switch (type) {
+    case "poll": return "poll";
+    case "quiz": return "quiz";
+    case "survey": return "survey";
+    case "qa": return "qa";
+    case "photo": return "photo";
+    case "board": return "board";
+    case "draw": return "draw";
+    default: return "info";
+  }
 }
 
 function typeLabel(type: string): string {

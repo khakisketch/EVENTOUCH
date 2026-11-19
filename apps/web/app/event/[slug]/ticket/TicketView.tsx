@@ -9,6 +9,10 @@ import styles from "./ticket.module.css";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
 import { forgetRecoveredTicket, readRecoveredTicket } from "./recovered-ticket";
 import PublicEventContext from "../PublicEventContext";
+import EventBanner from "../EventBanner";
+import EventFacts from "../EventFacts";
+import AttendeeIcon from "../AttendeeIcons";
+import { DEFAULT_ATTENDEE_THEME, type AttendeeTheme } from "../event-theme";
 import { readPublicEventContext } from "../../../../lib/public-event-context";
 import type { PublicEventContext as EventContext } from "../../../../lib/public-event-context";
 import { allowSessionForTab, clearSessionForTab, clearTicketRejected, getAllowedTicketForTab, isTicketRejected, markTicketRejected, REJECTED_TICKET_BEARER, ticketStorageAvailable } from "../../../../lib/attendee-ticket-identity";
@@ -177,7 +181,10 @@ function rememberRejectedTicket(slug: string): void {
   markTicketRejected(slug);
 }
 
-export default function TicketView({ slug, initialTicket = "", mode = "ticket" }: { slug: string; initialTicket?: string; mode?: "ticket" | "application" }) {
+export default function TicketView({ slug, initialTicket = "", mode = "ticket", theme = DEFAULT_ATTENDEE_THEME }: { slug: string; initialTicket?: string; mode?: "ticket" | "application"; theme?: AttendeeTheme }) {
+  // The ticket screen is a pass on the event's own ground. Inside the attendee
+  // home (application mode) the surrounding page already owns the look.
+  const pass = mode === "ticket";
   const [state, setState] = useState<TicketState>({ kind: "loading" });
   const [reloadTick, setReloadTick] = useState(0);
   // Keep the last confirmed receipt or QR visible while refreshing.
@@ -446,7 +453,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
   }, [recheckTicket, state.kind]);
 
   if (state.kind === "loading") {
-    return <div className="ticket-state">
+    return <div className={`ticket-state${pass ? ` ${styles.passMessage}` : ""}`}>
       <p className={styles.ticketLoadingStatus} role="status">티켓을 확인하고 있습니다.</p>
       <p className={styles.ticketLoadingHelp}>확인이 오래 걸리면 인터넷 연결을 확인해 주세요.</p>
       {/* Native reload still works if hydration fails; once hydrated, retry
@@ -459,7 +466,8 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
   }
   if (state.kind === "missing") {
     return (
-      <section className={`${styles.ticketCard} ${styles.ticketMessage}`}>
+      <section className={`${styles.ticketCard} ${styles.ticketMessage}${pass ? ` ${styles.passMessage}` : ""}`}>
+        {pass ? <span className={styles.messageIcon} data-tone="wait"><AttendeeIcon name="ticket" size={26} /></span> : null}
         {/* Same state, same words as the home entries: the attendee has no
             ticket here, and the way forward is the same everywhere. */}
         <h1>티켓이 확인되지 않습니다</h1>
@@ -490,7 +498,8 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
     // device + operator guidance.
     const showRecover = state.canRecover && !recoveryBlocked;
     return (
-      <section className={`${styles.ticketCard} ${styles.ticketMessage}`}>
+      <section className={`${styles.ticketCard} ${styles.ticketMessage}${pass ? ` ${styles.passMessage}` : ""}`}>
+        {pass ? <span className={styles.messageIcon} data-tone="bad"><AttendeeIcon name="info" size={26} /></span> : null}
         <h1>티켓을 사용할 수 없습니다</h1>
         <p role="alert">{state.message}</p>
         {state.canRecover ? (
@@ -526,7 +535,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
   const recheckButton = (
     <ProductButton
       type="button"
-      className={mode === "ticket" && !usable ? styles.buttonPrimary : styles.buttonSecondary}
+      className={mode === "ticket" ? (usable ? styles.buttonGhost : styles.buttonPrimary) : styles.buttonSecondary}
       disabled={rechecking}
       onClick={() => void recheckTicket()}
     >
@@ -567,8 +576,27 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
   const tone = usable && !statusUnconfirmed
     ? (state.inside ? "in" : "good")
     : state.status === "CANCELLED" ? "bad" : "wait";
+  const facts = (
+    <div className={styles.ticketEvent}>
+      <EventFacts slug={slug} context={state.eventContext} fallbackDate={state.eventDate} />
+    </div>
+  );
+  const recoveryNote = state.ticket ? !storageAvailable ? (
+    <p className={styles.ticketRecovery}>이 브라우저에서 탭 보관이 차단되어 있습니다. 이 화면을 벗어나거나 새로고침하면 티켓을 다시 확인해야 할 수 있습니다. 인증된 세션이 없다면 행사 주최 측에 문의하세요.</p>
+  ) : recoveryBlocked ? (
+    <p className={styles.ticketRecovery}>
+      이 탭에서 티켓을 확인할 수 있습니다. 이 행사에서는 문자로 티켓을 다시 연결할 수 없어
+      다른 탭이나 기기에서는 열리지 않을 수 있습니다. 탭을 찾을 수 없다면 행사 주최 측에 문의하세요.
+    </p>
+  ) : (
+    <p className={styles.ticketRecovery}>
+      이 탭에서 티켓을 확인할 수 있습니다. 다른 기기에서 열 때는{" "}
+      <ProductLink className={styles.inlineLink} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>연락처 인증으로 다시 연결</ProductLink>
+      하세요.
+    </p>
+  ) : null;
   return (
-    <section className={styles.ticketCard}>
+    <div className={styles.ticketStack}>
       {state.recovered ? <p className={styles.ticketSuccess} role="status">연결된 티켓입니다. 참가자 이름이 맞는지 확인하세요.</p> : null}
       {/* Fresh registration lands here directly: the receipt is this banner,
           not a separate screen, and it shows exactly once per signup. It
@@ -581,72 +609,57 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket" }
           <p className={styles.ticketSuccess} role="status">신청이 접수되었습니다. 아래에서 진행 상태를 확인하세요.</p>
         )
       ) : null}
-      {/* The band is the pass: state, then the name read at a glance. */}
-      <header className={styles.ticketBand} data-tone={tone}>
-        <div className={styles.ticketBandTop}>
-          <h1>내 티켓</h1>
+      <section className={`${styles.ticketCard} ${styles.pass}`}>
+        {/* The pass: the event's own banner first, then the band that carries
+            the state and the name read at a glance. */}
+        <EventBanner theme={theme} title={state.eventName} kicker={<h1>내 티켓</h1>} compact={!usable} />
+        <header className={styles.ticketBand} data-tone={tone} data-compact={!usable || undefined}>
           <p className={styles.ticketEntryState} aria-live="polite" data-tone={tone}>
             {statusUnconfirmed ? rechecking ? "상태 확인 중" : "상태 확인 필요" : entryLabel(state)}
           </p>
-        </div>
-        <h2 className={styles.ticketAttendeeName}>{state.name}</h2>
-        {state.company ? <p className={styles.ticketCompany}>{state.company}</p> : null}
-      </header>
-      {usable ? (
-        <>
-          <div className={styles.ticketQrWrapper}>
-            {recheckFeedback}
-            <div className={styles.ticketQr} role="img" aria-label={`${state.name}님의 행사 입장 및 퇴장용 QR`}>
-              <QRCode value={state.ticket} size={220} />
+          <h2 className={styles.ticketAttendeeName}>{state.name}</h2>
+          {state.company ? <p className={styles.ticketCompany}>{state.company}</p> : null}
+        </header>
+        {usable ? (
+          <>
+            <div className={styles.ticketQrWrapper}>
+              <span className={styles.tear} aria-hidden="true"><i /><i /></span>
+              {recheckFeedback}
+              <div className={styles.ticketQr} role="img" aria-label={`${state.name}님의 행사 입장 및 퇴장용 QR`}>
+                <QRCode value={state.ticket} size={220} />
+              </div>
+              <p className={styles.ticketInstruction}>{statusUnconfirmed
+                ? "입장 가능 여부는 현장 데스크에서 확인할 수 있습니다."
+                : "입장할 때 이 QR을 보여 주세요. 퇴장할 때도 같은 QR을 사용합니다."}</p>
+              <p className={styles.ticketBrightness}><AttendeeIcon name="sun" size={16} />화면을 밝게 하면 더 잘 읽혀요</p>
             </div>
-            <p className={styles.ticketInstruction}>{statusUnconfirmed
-              ? "입장 가능 여부는 현장 데스크에서 확인할 수 있습니다."
-              : "입장할 때 이 QR을 보여 주세요. 퇴장할 때도 같은 QR을 사용합니다."}</p>
-            <p className={styles.ticketBrightness}>화면을 밝게 하면 더 잘 읽혀요</p>
-          </div>
-          <div className={styles.ticketEvent}>
-            <p className={styles.ticketEventName}>{state.eventName}</p>
-            <p>{state.eventDate}</p>
-            <PublicEventContext slug={slug} context={state.eventContext} showDate={false} />
-          </div>
-          <div className={styles.ticketActions}>
-            {/* Secondary on purpose: the QR above is what the attendee
-                shows at the desk, not this link. */}
-            <ProductLink className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/engage`}>참여 콘텐츠 보기</ProductLink>
-            {recheckButton}
-          </div>
-        </>
-      ) : (
-        <>
-          <div className={styles.ticketEvent}>
-            <p className={styles.ticketEventName}>{state.eventName}</p>
-            <p>{state.eventDate}</p>
-            <PublicEventContext slug={slug} context={state.eventContext} showDate={false} />
-          </div>
-          <p className={styles.ticketUnusable}>{unusableCopy(state).text}</p>
-          <p className={styles.ticketMessageActions}>{recheckButton}</p>
-          {recheckFeedback}
-          {unusableCopy(state).showRegister ? (
-            <p className={styles.ticketMessageActions}>
-              <ProductLink className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/register`}>다시 신청하기</ProductLink>
-            </p>
-          ) : null}
-        </>
-      )}
-      {state.ticket ? !storageAvailable ? (
-        <p className={styles.ticketRecovery}>이 브라우저에서 탭 보관이 차단되어 있습니다. 이 화면을 벗어나거나 새로고침하면 티켓을 다시 확인해야 할 수 있습니다. 인증된 세션이 없다면 행사 주최 측에 문의하세요.</p>
-      ) : recoveryBlocked ? (
-        <p className={styles.ticketRecovery}>
-          이 탭에서 티켓을 확인할 수 있습니다. 이 행사에서는 문자로 티켓을 다시 연결할 수 없어
-          다른 탭이나 기기에서는 열리지 않을 수 있습니다. 탭을 찾을 수 없다면 행사 주최 측에 문의하세요.
-        </p>
-      ) : (
-        <p className={styles.ticketRecovery}>
-          이 탭에서 티켓을 확인할 수 있습니다. 다른 기기에서 열 때는{" "}
-          <ProductLink className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>연락처 인증으로 다시 연결</ProductLink>
-          하세요.
-        </p>
-      ) : null}
-    </section>
+            {facts}
+            <div className={styles.ticketActions}>
+              {/* The next step once the QR is in hand is the event's content.
+                  The recheck beside it is a quiet utility. */}
+              <ProductLink className={styles.buttonPrimary} href={`/event/${encodeURIComponent(slug)}/engage`}>
+                참여 콘텐츠 보기<AttendeeIcon name="arrow" size={18} />
+              </ProductLink>
+              {recheckButton}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className={styles.ticketPending}>
+              <p className={styles.ticketUnusable}><AttendeeIcon name="info" size={18} />{unusableCopy(state).text}</p>
+              <p className={styles.ticketMessageActions}>{recheckButton}</p>
+              {recheckFeedback}
+              {unusableCopy(state).showRegister ? (
+                <p className={styles.ticketMessageActions}>
+                  <ProductLink className={styles.buttonSecondary} href={`/event/${encodeURIComponent(slug)}/register`}>다시 신청하기</ProductLink>
+                </p>
+              ) : null}
+            </div>
+            {facts}
+          </>
+        )}
+        {recoveryNote}
+      </section>
+    </div>
   );
 }
