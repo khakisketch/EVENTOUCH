@@ -99,11 +99,31 @@ function channelLuminance(color: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-/** Ink that reads on a color: near-black or white, whichever contrasts more. */
+/** WCAG contrast ratio of two #RRGGBB colors (1 to 21). */
+export function contrastRatio(foreground: string, background: string): number {
+  const a = channelLuminance(foreground);
+  const b = channelLuminance(background);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+// The one ink algorithm of every attendee ground (the home ground, the guide,
+// engagement, the event palette). The brand-adjacent near-black or white goes
+// first; on mid-luminance backgrounds both can miss the 4.5:1 body-text floor
+// (e.g. #75828E: dark 4.00, white 3.93), so it escalates to whichever of pure
+// black or white clears it. The guard is 4.55, not 4.5, so boundary picks keep
+// a real margin against float rounding in a checker. It always adapts to the
+// background, never an unconditional gray.
+const INK_DARK = "#17252B";
+const INK_LIGHT = "#FFFFFF";
+export const INK_FLOOR = 4.55;
+
+/** Ink that reads (at least 4.55:1) on a color: near-black or white, whichever contrasts more. */
 export function readableInk(color: string): string {
-  const background = channelLuminance(color);
-  const dark = "#17252B";
-  return (background + 0.05) / (channelLuminance(dark) + 0.05) >= 1.05 / (background + 0.05) ? dark : "#FFFFFF";
+  let ink = contrastRatio(INK_DARK, color) >= contrastRatio(INK_LIGHT, color) ? INK_DARK : INK_LIGHT;
+  if (contrastRatio(ink, color) < INK_FLOOR) {
+    ink = contrastRatio("#000000", color) >= contrastRatio("#FFFFFF", color) ? "#000000" : "#FFFFFF";
+  }
+  return ink;
 }
 
 const ANGLES: Record<BannerAngle, string> = { diagonal: "135deg", vertical: "180deg", horizontal: "90deg" };

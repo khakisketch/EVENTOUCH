@@ -1,0 +1,63 @@
+.step {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  color: var(--ev-ground-ink, var(--ink));
+}
+
+.track {
+  display: flex;
+  flex: 1;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.unit {
+  display: block;
+  height: var(--s1);
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--ev-ground-ink, var(--ink)) 16%, transparent);
+}
+
+.bars .unit {
+  flex: 1;
+}
+
+.dots .track {
+  flex: none;
+}
+
+.dots .unit {
+  width: var(--s2);
+  height: var(--s2);
+  border-radius: 50%;
+}
+
+.dots .current {
+  width: var(--s5);
+  border-radius: var(--radius-small);
+}
+
+/* The filled part uses the accent's text-safe ink, so a pale event color still
+   shows as progress (3:1 or better) on white. */
+.on {
+  background: var(--ev-accent-ink, var(--brand-text));
+}
+
+/* On the event-color ground the progress is drawn in the ground's ink. */
+[data-attendee-mode="a2"] .on {
+  background: var(--ev-ground-ink);
+}
+
+.count {
+  flex: none;
+  font-size: var(--small);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .unit {
+    transition: background-color var(--enter), width var(--enter);
+  }
+}
