@@ -206,3 +206,41 @@ button.rowGo[disabled], button.rowGo[aria-disabled="true"] { background: color-m
   .rowGo { position: static; margin: 0 0 var(--s3) calc(44px + var(--s4)); }
   .rowBody { padding-left: 0; }
 }
+
+/* Reopened 2026-11-19: tiles carry a share bar, the search shows its glyph,
+   group headings read as sections (mark + count), rows are divided by hairlines. */
+.summary { box-shadow: var(--shadow-soft); }
+.tile { transition: box-shadow 0.12s; }
+.tile:hover { box-shadow: inset 0 0 0 1px currentColor; }
+.tile[aria-pressed="true"] { box-shadow: inset 0 0 0 2px currentColor; }
+.tile b { font-size: 40px; }
+.tileBar { display: block; width: 100%; height: 6px; margin-block: var(--s1); border-radius: 999px; background: color-mix(in srgb, currentColor 16%, transparent); overflow: hidden; }
+.tileBar i { display: block; height: 100%; border-radius: inherit; background: currentColor; }
+
+.tabs { gap: var(--s4); }
+.tabs button { display: inline-flex; align-items: center; gap: var(--s2); }
+.tabs small { margin-left: 0; min-width: 24px; padding: 0 var(--s2); border-radius: 999px; background: var(--surface-muted); box-shadow: inset 0 0 0 1px var(--line); text-align: center; font-size: var(--label); line-height: 22px; }
+.tabs button[aria-pressed="true"] small { background: var(--ink); color: var(--paper); box-shadow: none; }
+
+.search { position: relative; }
+.searchGlyph { position: absolute; inset-block: 0; left: var(--s3); z-index: 1; display: inline-flex; align-items: center; color: var(--muted); pointer-events: none; }
+.searchGlyph svg { width: 18px; height: 18px; }
+.search input { padding-left: calc(var(--s3) + 18px + var(--s2)); border-radius: 999px; }
+
+.groupTitle { margin: var(--s6) 0 var(--s2); padding-bottom: var(--s2); border-bottom: 2px solid currentColor; font-size: var(--small); font-weight: 800; letter-spacing: 0; }
+.groupTitle[data-tone="done"] { color: var(--ink); }
+.groupMark { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: color-mix(in srgb, currentColor 12%, var(--paper)); }
+.groupMark svg { width: 16px; height: 16px; }
+.groupCount { margin-left: auto; font-size: var(--h3); font-variant-numeric: tabular-nums; }
+.row + .row { border-top: 1px solid var(--line); }
+.row + .row .rowGo { top: 14px; }
+.rowSummary { padding-block: var(--s3); }
+.rowMain > b { font-size: var(--h3); }
+.rowLine { font-size: var(--small); }
+
+.tabs button { white-space: nowrap; word-break: keep-all; }
+@media (max-width: 768px) {
+  .tabs { gap: var(--s3); overflow-x: auto; scrollbar-width: none; }
+  .tabs button { gap: var(--s1); font-size: var(--small); }
+  .tabs small { min-width: 20px; padding: 0 6px; line-height: 20px; }
+}

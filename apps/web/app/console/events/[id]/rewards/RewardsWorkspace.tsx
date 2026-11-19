@@ -8,6 +8,7 @@ import ProductLink from "../../../../ui/ProductLink";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
+import { SearchIcon } from "../../../console-ui/ConsoleIcons";
 import ConsolePage from "../../../console-ui/ConsolePage";
 import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import RewardGlyph from "./RewardGlyph";
@@ -666,6 +667,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
                 <button key={key} type="button" className={styles.tile} data-tone={count === 0 ? "zero" : key} aria-pressed={rewardStatusFilter === key} onClick={() => setRewardStatusFilter(rewardStatusFilter === key ? "" : key)}>
                   <span className={styles.tileHead}><RewardGlyph name={glyph} />{label}</span>
                   <b>{count}</b>
+                  <span className={styles.tileBar} aria-hidden="true"><i style={{ width: `${activeTotal ? Math.round((count / activeTotal) * 100) : 0}%` }} /></span>
                   <small>{hint}</small>
                 </button>
               ))}
@@ -680,6 +682,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
           {state.rewards.length > 8 || rewardQuery ? (
             <label className={styles.search}>
               <span className="sr-only" id="reward-search-label">경품 검색</span>
+              <span className={styles.searchGlyph} aria-hidden="true"><SearchIcon /></span>
               <input aria-labelledby="reward-search-label" type="search" placeholder="참가자·소속·경품명·추첨명 검색" value={rewardQuery} onChange={(event) => setRewardQuery(event.target.value)} />
             </label>
           ) : null}
@@ -699,7 +702,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
             </div>
           ) : buckets.map((group) => (
             <div key={group.key} className={styles.group}>
-              <h2 className={styles.groupTitle} data-tone={group.key}><RewardGlyph name={group.key === "attention" ? "alert" : group.key === "waiting" ? "clock" : "check"} />{group.label}</h2>
+              <h2 className={styles.groupTitle} data-tone={group.key}><span className={styles.groupMark}><RewardGlyph name={group.key === "attention" ? "alert" : group.key === "waiting" ? "clock" : "check"} /></span>{group.label}<span className={styles.groupCount} aria-hidden="true">{group.rewards.length}</span></h2>
               <ul className={styles.rows} aria-label={`경품 목록 · ${group.label}`}>
                 {group.rewards.map((reward) => {
                   const bucket = bucketOf(reward);

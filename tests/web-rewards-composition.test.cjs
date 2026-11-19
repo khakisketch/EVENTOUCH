@@ -45,3 +45,14 @@ test('state is shape + colour, tokens only, 44px targets, one line per row on ph
   assert.match(css, /\.rowGo\s*\{[^}]*min-height:\s*44px/su);
   assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.rowGo\s*\{\s*position:\s*static/u);
 });
+
+// Reopened 2026-11-19: same composition, stronger presentation. Tiles carry a
+// share bar, the search a glyph, group headings a mark and count.
+test('Reopened 2026-11-19: tiles show a share bar, search has a glyph, groups have a mark and count', () => {
+  assert.match(rewards, /className=\{styles\.tileBar\}/u);
+  assert.match(rewards, /Math\.round\(\(count \/ activeTotal\) \* 100\)/u, 'the bar is count over non-cancelled total, never invented');
+  assert.match(rewards, /<SearchIcon \/>/u);
+  assert.match(rewards, /className=\{styles\.groupCount\} aria-hidden="true"/u, 'the count chip does not change the heading name');
+  assert.match(css, /\.row \+ \.row \{ border-top: 1px solid var\(--line\); \}/u);
+  assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/u);
+});

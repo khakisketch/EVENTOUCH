@@ -251,6 +251,11 @@ The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/
 - The page title and rail label are "경품 지급 현황" (owner decision 2026-11-18, renamed from "경품 수령" because this is an oversight screen, not the handout desk). The in-page list region is named "경품 지급 목록" so the heading and region never share a name. 수령 처리 stays the name of the action.
 - 운영 현황 shows one quiet task-queue row, "경품 확인 필요 N건", only while the 경품 feature is on and the count is above zero. It is appended after the other rows so it never takes the single orange action, and it links here. The count comes from the same `lib/reward-status.ts` rule as this screen. The 운영 현황 composition otherwise does not change.
 
+Reopened 2026-11-19 (owner: 얇은 선·작은 글씨·필터가 다른 버튼과 같아 보임). 구성(요약 카드 → 긴급도 순 원장)은 그대로, 표현을 보강했다. 이 항목이 위 설명과 다르면 이 항목이 우선한다.
+- 상태 타일은 큰 숫자(40px)와 전체(취소 제외) 대비 비율 막대를 가진다. 선택하면 같은 색 외곽선, 0건이면 회색.
+- 상태 탭의 건수는 알약 칩이고 선택된 탭의 칩은 잉크 채움이다. 검색창은 돋보기 글리프가 있는 둥근 입력이다.
+- 그룹 제목은 상태색 원형 마크, 굵은 제목, 오른쪽 큰 건수와 상태색 2px 밑줄이다. 행은 헤어라인으로 나뉘고 경품명이 18px로 커졌다.
+
 ## 추첨·투표 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/draws/`, "미리보기 무대"). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-draws-composition.test.cjs` guards it.
