@@ -55,7 +55,7 @@ async function main() {
     // link from this tab's existing per-event storage. Loading public details
     // alone must never fetch private ticket status.
     await guest.goto(eventUrl);
-    const sameTabTicket = guest.getByRole('link', { name: '내 티켓 열기', exact: true });
+    const sameTabTicket = guest.getByRole('link', { name: '내 티켓 열기' });
     await sameTabTicket.waitFor();
     const eventAddress = new URL(guest.url());
     assert.ok(
@@ -80,7 +80,7 @@ async function main() {
     // isolated to each tab, so another tab must not inherit this ticket.
     const otherTab = await guestContext.newPage();
     await otherTab.goto(eventUrl, { waitUntil: 'networkidle' });
-    assert.equal(await otherTab.getByRole('link', { name: '내 티켓 열기', exact: true }).count(), 0);
+    assert.equal(await otherTab.getByRole('link', { name: '내 티켓 열기' }).count(), 0);
     assert.equal(reads, 1, 'the other tab does not restore or check a ticket');
     await otherTab.close();
 
@@ -91,7 +91,7 @@ async function main() {
     await wrongEventTab.goto(eventUrl);
     await wrongEventTab.evaluate(key => window.sessionStorage.setItem(key, 'fixture-only-ticket'), 'eventouch.ticket.other-fixture-event');
     await wrongEventTab.reload({ waitUntil: 'networkidle' });
-    assert.equal(await wrongEventTab.getByRole('link', { name: '내 티켓 열기', exact: true }).count(), 0);
+    assert.equal(await wrongEventTab.getByRole('link', { name: '내 티켓 열기' }).count(), 0);
     assert.equal(reads, 1, 'a ticket key for a different event is ignored');
     await wrongEventContext.close();
 
@@ -103,10 +103,10 @@ async function main() {
     await clearedTab.goto(eventUrl);
     await clearedTab.evaluate(({ currentKey, ticket }) => window.sessionStorage.setItem(currentKey, ticket), { currentKey: storageKey, ticket: attendee.ticket });
     await clearedTab.reload({ waitUntil: 'networkidle' });
-    await clearedTab.getByRole('link', { name: '내 티켓 열기', exact: true }).waitFor();
+    await clearedTab.getByRole('link', { name: '내 티켓 열기' }).waitFor();
     await clearedTab.evaluate(key => window.sessionStorage.removeItem(key), storageKey);
     await clearedTab.reload({ waitUntil: 'networkidle' });
-    assert.equal(await clearedTab.getByRole('link', { name: '내 티켓 열기', exact: true }).count(), 0);
+    assert.equal(await clearedTab.getByRole('link', { name: '내 티켓 열기' }).count(), 0);
     await clearedContext.close();
     reads = 0;
 

@@ -15,7 +15,11 @@ const { loadComponent } = require('./helpers/render-web-component.cjs');
 const schedule = loadComponent('../event/[slug]/PublicProgramSchedule');
 const addressCopy = loadComponent('../event/[slug]/AddressCopyButton');
 const tabTicketChoice = loadComponent('../event/[slug]/TabTicketChoice');
-const cardTheme = require('../apps/web/app/console/event-card-theme.ts');
+const attendeeHome = require('../apps/web/lib/attendee-home.ts');
+// The surface colors are not what these tests are about; the real helper is covered by the home layout tests.
+const homeSurface = { homeSurfaceStyle: (style) => ({ '--home-background-color': style.backgroundColor }) };
+// Class-name stubs for CSS modules: every key reads as its own name.
+const cssModule = () => ({ __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) });
 
 async function renderVenue(venue, published, features = ['venue'], program = []) {
   const source = fs.readFileSync(path.join(web, 'app/event/[slug]/page.tsx'), 'utf8');
@@ -41,7 +45,12 @@ async function renderVenue(venue, published, features = ['venue'], program = [])
       if (id === 'next/link') return { __esModule: true, default: ({ children, ...props }) => jsx.jsx('a', { ...props, children }) };
       if (id === 'next/navigation') return { notFound: () => { throw new Error('Unexpected 404'); } };
       if (id === '../../event-stage') return { eventStageClassName: () => 'stage', eventStageLabel: () => '운영 준비' };
-      if (id === '../../console/event-card-theme') return cardTheme;
+      if (id === '../../../lib/attendee-home') return attendeeHome;
+      if (id === '../../../lib/home-surface') return homeSurface;
+      if (id === '../../ui/ProductLink') return { __esModule: true, default: ({ children, ...props }) => jsx.jsx('a', { ...props, children }) };
+      if (id === './home/HomeHero') return { __esModule: true, default: ({ eventName, subtitle }) => jsx.jsxs('section', { children: [jsx.jsx('h1', { children: eventName }), subtitle ? jsx.jsx('p', { children: subtitle }) : null] }) };
+      if (id === './home/home.module.css' || id === './home/home-layouts.module.css') return cssModule();
+      if (id === './GuideIcon') return { __esModule: true, default: () => null };
       if (id === '../../../lib/public-event-date') return require('../apps/web/lib/public-event-date.ts');
       if (id === './PublicProgramSchedule') return schedule;
       if (id === './AddressCopyButton') return addressCopy;
@@ -49,7 +58,7 @@ async function renderVenue(venue, published, features = ['venue'], program = [])
       if (id === '../../../lib/verification-mode') return { loadVerificationMode: async () => 'real' };
       if (id === '../../../lib/public-recovery-contact') return recoveryExports;
       if (id === '../../ui/RichText') return { __esModule: true, default: ({ source }) => jsx.jsx('div', { children: source }) };
-      if (id === './public-event.module.css') return { __esModule: true, default: { venueText: 'venueText' } };
+      if (id === './public-event.module.css') return cssModule();
       throw new Error(`Unexpected dependency: ${id}`);
     },
   });

@@ -1,12 +1,18 @@
 import Link from "next/link";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { notFound } from "next/navigation";
-import { eventStageClassName, eventStageLabel } from "../../event-stage";
+import { eventStageLabel } from "../../event-stage";
+import { normalizeHomeStyle, parseHomePhotos, readableInk } from "../../../lib/attendee-home";
+import { homeSurfaceStyle } from "../../../lib/home-surface";
 import { publicEventDate } from "../../../lib/public-event-date";
-import { contrastRatio } from "../../console/event-card-theme";
 import { loadVerificationMode } from "../../../lib/verification-mode";
 import { publicRecoveryContact } from "../../../lib/public-recovery-contact";
+import ProductLink from "../../ui/ProductLink";
 import RichText from "../../ui/RichText";
+import HomeHero from "./home/HomeHero";
+import homeStyles from "./home/home.module.css";
+import L from "./home/home-layouts.module.css";
+import GuideIcon, { type GuideIconType } from "./GuideIcon";
 import PublicProgramSchedule, { type PublicProgramScheduleItem } from "./PublicProgramSchedule";
 import AddressCopyButton from "./AddressCopyButton";
 import TabTicketChoice from "./TabTicketChoice";
@@ -38,7 +44,10 @@ type PublicWorkspace = {
     showVenue?: unknown;
     showPrograms?: unknown;
     keyvisual?: { fileId?: unknown; data?: unknown } | null;
+    defaultHomeBanner?: unknown;
+    homeStyle?: unknown;
   } } | null;
+  photos?: unknown;
   boothMap?: { published?: unknown } | null;
   booths?: unknown;
 };
@@ -105,11 +114,16 @@ export default async function EventPage({
   const showSchedule = published.showSchedule !== false;
   const showVenue = published.showVenue !== false && Array.isArray(event.features) && event.features.includes("venue");
   const showPrograms = published.showPrograms !== false;
-  const accent = /^#[0-9a-f]{6}$/i.test(text(published.accent)) ? text(published.accent).toUpperCase() : "#E76D26";
-  const accentStyle = {
-    "--event-accent": accent,
-    "--event-accent-ink": contrastRatio("#FFFFFF", accent) >= 4.5 ? "#FFFFFF" : "#000000",
-  } as CSSProperties;
+  // The guide wears the design the agency chose for the attendee home: the same
+  // banner, ground color, tone and composition. A photo-first home with no
+  // approved photos reads as the tile home, so the guide does too.
+  const homeStyle = normalizeHomeStyle(published.homeStyle);
+  const defaultHomeBanner = published.defaultHomeBanner === "neutral" ? "neutral" : "legacy";
+  const photos = Array.isArray(event.features) && event.features.includes("photo")
+    ? parseHomePhotos(workspace.photos, (fileId) => `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`)
+    : [];
+  const layout = homeStyle.layout === "instagram" && !photos.length ? "tile" : homeStyle.layout;
+  const rootStyle = { "--lay-ink": readableInk(homeStyle.backgroundColor) } as CSSProperties;
   const keyvisual = keyvisualSource(slug, published.keyvisual);
   const registrationOpen = workspace.registrationOpen === true;
   // The public signup writer only runs on READY/LIVE (participants writer
@@ -200,191 +214,211 @@ export default async function EventPage({
     return { fileId: image.fileId, points, booths };
   })();
   const publicSections = [
-    showAnnouncements && notices.length ? { id: "public-notices", label: "공지" } : null,
-    showPrograms && program.length ? { id: "public-program", label: "프로그램" } : null,
-    boothMap ? { id: "public-booth-map", label: "부스 지도" } : null,
-    showVenue && hasVenue ? { id: "public-venue", label: "오시는 길" } : null,
-  ].filter((section): section is { id: string; label: string } => Boolean(section));
+    showAnnouncements && notices.length ? { id: "public-notices", label: "공지", icon: "notice" as GuideIconType } : null,
+    showPrograms && program.length ? { id: "public-program", label: "프로그램", icon: "program" as GuideIconType } : null,
+    boothMap ? { id: "public-booth-map", label: "부스 지도", icon: "map" as GuideIconType } : null,
+    showVenue && hasVenue ? { id: "public-venue", label: "오시는 길", icon: "venue" as GuideIconType } : null,
+  ].filter((section): section is { id: string; label: string; icon: GuideIconType } => Boolean(section));
+  // The hero's second line, in the home's own subtitle slot: when and where.
+  const clock = event.start ? `${event.start}${event.end ? `–${event.end}` : ""}` : "";
+  const whenText = showSchedule ? [date?.label ?? event.date, clock].filter(Boolean).join(" ") : "";
+  const whereText = showVenue ? venueName || venueAddress : "";
+  const heroLine = [whenText, whereText].filter(Boolean).join(" · ");
+  const stageLabel = eventStageLabel(event.stage);
+  const guideHref = `/event/${encodeURIComponent(slug)}`;
+
+
+  const photoUrl = (fileId: string) => `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`;
+  const sectionLabel = `${L.groupLabel} ${styles.sectionLabel}`;
 
   return (
-    <main id="main-content" tabIndex={-1} className={`site-page public-event-page ${styles.page}`} style={accentStyle}>
-      <header className={`public-page-header ${styles.masthead}`}>
-        <span className="compact-wordmark">EVENTOUCH</span>
-        <span className="eyebrow">행사 안내</span>
-      </header>
-      <section className={`event-intro ${styles.hero} ${keyvisual ? styles.heroWithImage : styles.heroNoImage}`} aria-labelledby="public-event-title">
-        {keyvisual ? (
-          <div className={styles.artwork}>
-            {/* The published event image is kept intact without cropping. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className={styles.keyvisual} src={keyvisual} alt="" fetchPriority="high" />
-          </div>
-        ) : null}
-        <div className={styles.heroCopy}>
-          <h1 className={styles.eventTitle} id="public-event-title">{event.name}</h1>
-          <p className={styles.introLine}>{intro}</p>
-        </div>
-        <div className={styles.heroInfo}>
-          <dl className={`event-facts ${styles.facts}`}>
-            {showSchedule ? (
-              <div className={`event-fact ${styles.fact}`}>
-                <dt>일시</dt>
-                <dd>
-                  <time dateTime={date?.dateTime}>{date?.label ?? event.date}</time>
-                  {event.start ? <span className={styles.clock}>{event.start}{event.end ? `–${event.end}` : ""}</span> : null}
-                </dd>
+    <main id="main-content" tabIndex={-1} className={`${homeStyles.homePage} public-event-page`} style={homeSurfaceStyle(homeStyle)}>
+      <div className={`${L.root} ${L[layout]}`} style={rootStyle} data-layout={layout} data-menu-shape={layout === "poster" ? "circle" : layout === "tile" ? "tile" : "row"}>
+        <HomeHero
+          eventName={event.name}
+          homeStyle={homeStyle}
+          layout={layout}
+          keyvisual={keyvisual}
+          defaultHomeBanner={defaultHomeBanner}
+          subtitle={heroLine}
+          label={`${event.name} 행사 안내`}
+        />
+
+        <div className={L.ticketWrap}>
+          <TabTicketChoice slug={slug} whenPresent={
+            <GuideCard
+              href={`${guideHref}/ticket`}
+              prefetch={false}
+              icon="ticket"
+              label="내 티켓 열기"
+              sub={acceptingSignup ? stageLabel : "현재 신청을 받지 않습니다"}
+              go="열기"
+            />
+          }>
+            {acceptingSignup ? (
+              <GuideCard href={`${guideHref}/register`} icon="register" label="참가 신청하기" sub={`${stageLabel} · 접수 중`} go="신청" />
+            ) : !recoveryBlocked ? (
+              <GuideCard href={`${guideHref}/ticket/recover`} icon="ticket" label="이미 신청했다면 내 티켓 찾기" sub="현재 신청을 받지 않습니다" go="찾기" />
+            ) : (
+              <div className={styles.closedCard}>
+                <GuideIcon type="register" />
+                <p className={styles.registrationClosed} role="status">현재 신청을 받지 않습니다.</p>
               </div>
-            ) : null}
-            {showVenue && (venueName || venueAddress) ? (
-              <div className={`event-fact ${styles.fact}`}><dt>장소</dt><dd>{venueName || venueAddress}</dd></div>
-            ) : null}
-            <div className={`event-fact ${styles.fact}`}>
-              <dt>진행 상태</dt>
-              <dd><span className={eventStageClassName(event.stage)}>{eventStageLabel(event.stage)}</span></dd>
+            )}
+          </TabTicketChoice>
+        </div>
+
+        <p className={styles.intro}>{intro}</p>
+
+        {layout === "poster" && publicSections.length ? (
+          <nav className={L.menus} aria-label="행사 안내 바로가기">
+            <h2 className={L.groupLabel}>바로가기</h2>
+            <div className={`${L.group} ${L.group_circle}`}>
+              {publicSections.map((section) => (
+                <a key={section.id} className={L.circle} href={`#${section.id}`}>
+                  <Anatomy icon={<GuideIcon type={section.icon} />}><span className={L.entryLabel}>{section.label}</span></Anatomy>
+                </a>
+              ))}
             </div>
-          </dl>
-          <div className={styles.cta}>
-            <TabTicketChoice slug={slug} whenPresent={
-              <>
-                {acceptingSignup ? null : <p className={styles.registrationClosed} role="status">현재 신청을 받지 않습니다.</p>}
-                <div className={styles.actionGroup}>
-                  <Link className={`button button-primary ${styles.primaryAction}`} href={`/event/${encodeURIComponent(slug)}/ticket`} prefetch={false}>내 티켓 열기</Link>
-                </div>
-                <div className={styles.returnLinks}>
-                  <Link className={styles.returnLink} href={`/event/${encodeURIComponent(slug)}/home`}>참가자 홈</Link>
-                  {acceptingSignup ? (
-                    <a className={styles.returnLink} href={`/event/${encodeURIComponent(slug)}/register`} target="_blank" rel="noopener noreferrer">
-                      다른 참가자 신청 <span>(새 탭)</span>
-                    </a>
-                  ) : null}
-                </div>
-              </>
-            }>
-              <div className={styles.actionGroup}>
-                {acceptingSignup ? (
-                  <Link className={`button button-primary ${styles.primaryAction}`} href={`/event/${encodeURIComponent(slug)}/register`}>참가 신청하기</Link>
-                ) : (
-                  <p className={styles.registrationClosed} role="status">현재 신청을 받지 않습니다.</p>
-                )}
-                {!recoveryBlocked ? (
-                  <Link className={`button ${acceptingSignup ? "button-secondary" : "button-primary"} ${!acceptingSignup ? styles.primaryAction : ""} ${styles.recoveryLink}`} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>이미 신청했다면 내 티켓 찾기</Link>
-                ) : null}
-                <Link className={`button button-secondary ${styles.homeLink}`} href={`/event/${encodeURIComponent(slug)}/home`}>참가자 홈</Link>
-              </div>
-              {recoveryBlocked ? (
-                <details className={styles.recoveryDetails}>
-                  <summary data-disclosure-indicator>이미 신청하셨나요?</summary>
-                  <p className={styles.recoveryNote} role="note">이미 신청했다면 신청을 완료한 브라우저 탭에서 티켓을 여세요. 이 행사는 문자로 다시 연결할 수 없습니다. {recoveryContact ? `문의: ${recoveryContact}` : "탭을 찾을 수 없다면 행사 초대 안내를 확인하거나 행사 주최 측에 문의하세요."}</p>
-                </details>
-              ) : null}
-            </TabTicketChoice>
-          </div>
-        </div>
-        {publicSections.length ? (
-          <nav className={styles.sectionNav} aria-label="행사 안내 바로가기">
-            {publicSections.map((section) => <Link key={section.id} href={`#${section.id}`}>{section.label}</Link>)}
           </nav>
         ) : null}
-      </section>
 
-      {showAnnouncements && notices.length ? (
-        <section className={styles.section} aria-labelledby="public-notices">
-          <h2 id="public-notices">공지</h2>
-          <ul className={styles.noticeList}>
-            {notices.map((notice) => (
-              <li key={notice.id}>
-                <h3>
-                  {notice.pinned ? <span className={styles.pin}>고정</span> : null}
-                  {notice.title}
-                </h3>
-                {notice.body ? <RichText source={notice.body} imageSrc={(fileId) => `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`} /> : null}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+        <div className={styles.sections}>
+          {showAnnouncements && notices.length ? (
+            <section className={styles.section} aria-labelledby="public-notices">
+              <h2 id="public-notices" className={sectionLabel}>공지</h2>
+              <div className={styles.card}>
+                <ul className={styles.noticeList}>
+                  {notices.map((notice) => (
+                    <li key={notice.id}>
+                      <h3>
+                        {notice.pinned ? <span className={styles.pin}>고정</span> : null}
+                        {notice.title}
+                      </h3>
+                      {notice.body ? <RichText source={notice.body} imageSrc={(fileId) => `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`} /> : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          ) : null}
 
-      {showPrograms && program.length ? (
-        <section className={styles.section} aria-labelledby="public-program">
-          <h2 id="public-program">프로그램</h2>
-          <PublicProgramSchedule program={program} eventDate={showSchedule ? event.date : ""} />
-        </section>
-      ) : null}
+          {showPrograms && program.length ? (
+            <section className={styles.section} aria-labelledby="public-program">
+              <h2 id="public-program" className={sectionLabel}>프로그램</h2>
+              <div className={styles.card}>
+                <PublicProgramSchedule program={program} eventDate={showSchedule ? event.date : ""} />
+              </div>
+            </section>
+          ) : null}
 
-      {boothMap ? (
-        <section className={styles.section} aria-labelledby="public-booth-map">
-          <h2 id="public-booth-map">부스 지도</h2>
-          <div className={styles.mapWrap}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              className={styles.mapImage}
-              src={`/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(boothMap.fileId)}`}
-              alt="행사장 부스 배치도"
-              loading="lazy"
-            />
-            {boothMap.points.map((point) => {
-              const booth = boothMap.booths.find((item) => item.id === point.boothId);
-              if (!booth) return null;
-              return (
-                <span
-                  key={point.boothId}
-                  className={styles.mapPoint}
-                  style={{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }}
-                >
-                  {booth.name}
-                </span>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
+          {boothMap ? (
+            <section className={styles.section} aria-labelledby="public-booth-map">
+              <h2 id="public-booth-map" className={sectionLabel}>부스 지도</h2>
+              <div className={styles.card}>
+                <div className={styles.mapWrap}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img className={styles.mapImage} src={photoUrl(boothMap.fileId)} alt="행사장 부스 배치도" loading="lazy" />
+                  {boothMap.points.map((point) => {
+                    const booth = boothMap.booths.find((item) => item.id === point.boothId);
+                    if (!booth) return null;
+                    return (
+                      <span key={point.boothId} className={styles.mapPoint} style={{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }}>
+                        {booth.name}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+          ) : null}
 
-      {showVenue && hasVenue ? (
-        <section className={styles.section} aria-labelledby="public-venue">
-          <h2 id="public-venue">오시는 길</h2>
-          <dl className="event-facts">
-            {venueName ? (
-              <div className="event-fact">
-                <dt>장소</dt>
-                <dd>{venueName}</dd>
+          {showVenue && hasVenue ? (
+            <section className={styles.section} aria-labelledby="public-venue">
+              <h2 id="public-venue" className={sectionLabel}>오시는 길</h2>
+              <div className={styles.card}>
+                <dl className="event-facts">
+                  {venueName ? (
+                    <div className="event-fact"><dt>장소</dt><dd>{venueName}</dd></div>
+                  ) : null}
+                  {venueAddress ? (
+                    <div className="event-fact"><dt>주소</dt><dd className={styles.addressRow}><AddressCopyButton address={venueAddress} /></dd></div>
+                  ) : null}
+                  {venueDirections ? (
+                    <div className="event-fact"><dt>오시는 길</dt><dd className={styles.venueText}>{venueDirections}</dd></div>
+                  ) : null}
+                  {venueDescription ? (
+                    <div className="event-fact"><dt>행사장 안내</dt><dd className={styles.venueText}>{venueDescription}</dd></div>
+                  ) : null}
+                  {venueContact ? (
+                    <div className="event-fact"><dt>문의</dt><dd>{venueContact}</dd></div>
+                  ) : null}
+                </dl>
+                {venueMap ? <figure className={styles.venueMap}>
+                  {/* A normal image/link preserves zoom and the browser's download controls. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={venueMap.src} alt={venueMap.alt} />
+                  <figcaption><Link className="button button-secondary" href={venueMap.src} target="_blank" rel="noopener noreferrer">안내도 크게 보기 (새 탭)</Link></figcaption>
+                </figure> : null}
               </div>
-            ) : null}
-            {venueAddress ? (
-              <div className="event-fact">
-                <dt>주소</dt>
-                <dd className={styles.addressRow}>
-                  <AddressCopyButton address={venueAddress} />
-                </dd>
-              </div>
-            ) : null}
-            {venueDirections ? (
-              <div className="event-fact">
-                <dt>오시는 길</dt>
-                <dd className={styles.venueText}>{venueDirections}</dd>
-              </div>
-            ) : null}
-            {venueDescription ? (
-              <div className="event-fact">
-                <dt>행사장 안내</dt>
-                <dd className={styles.venueText}>{venueDescription}</dd>
-              </div>
-            ) : null}
-            {venueContact ? (
-              <div className="event-fact">
-                <dt>문의</dt>
-                <dd>{venueContact}</dd>
-              </div>
-            ) : null}
-          </dl>
-          {venueMap ? <figure className={styles.venueMap}>
-            {/* A normal image/link preserves zoom and the browser's download controls. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={venueMap.src} alt={venueMap.alt} />
-            <figcaption><Link className="button button-secondary" href={venueMap.src} target="_blank" rel="noopener noreferrer">안내도 크게 보기 (새 탭)</Link></figcaption>
-          </figure> : null}
-        </section>
-      ) : null}
+            </section>
+          ) : null}
+        </div>
 
+        <TabTicketChoice slug={slug} whenPresent={
+          <nav className={L.links} aria-label="행사 안내와 참여">
+            <ProductLink className="button button-secondary" href={`${guideHref}/home`}>참가자 홈 <span aria-hidden="true">→</span></ProductLink>
+            {acceptingSignup ? (
+              <a className="button button-secondary" href={`${guideHref}/register`} target="_blank" rel="noopener noreferrer">
+                다른 참가자 신청 (새 탭) <span aria-hidden="true">→</span>
+              </a>
+            ) : null}
+            {/* A tab may hold someone else's ticket: recovery stays reachable here, as it was before. */}
+            {!recoveryBlocked ? (
+              <ProductLink className="button button-secondary" href={`${guideHref}/ticket/recover`}>이미 신청했다면 내 티켓 찾기 <span aria-hidden="true">→</span></ProductLink>
+            ) : null}
+          </nav>
+        }>
+          <nav className={L.links} aria-label="행사 안내와 참여">
+            {acceptingSignup && !recoveryBlocked ? (
+              <ProductLink className="button button-secondary" href={`${guideHref}/ticket/recover`}>이미 신청했다면 내 티켓 찾기 <span aria-hidden="true">→</span></ProductLink>
+            ) : null}
+            <ProductLink className="button button-secondary" href={`${guideHref}/home`}>참가자 홈 <span aria-hidden="true">→</span></ProductLink>
+          </nav>
+          {recoveryBlocked ? (
+            <details className={styles.recoveryDetails}>
+              <summary data-disclosure-indicator>이미 신청하셨나요?</summary>
+              <p className={styles.recoveryNote} role="note">이미 신청했다면 신청을 완료한 브라우저 탭에서 티켓을 여세요. 이 행사는 문자로 다시 연결할 수 없습니다. {recoveryContact ? `문의: ${recoveryContact}` : "탭을 찾을 수 없다면 행사 초대 안내를 확인하거나 행사 주최 측에 문의하세요."}</p>
+            </details>
+          ) : null}
+        </TabTicketChoice>
+      </div>
     </main>
+  );
+}
+
+// The home's button anatomy (content span > icon span + label span) on a link,
+// so the home's own rules lay out the guide's ticket card and shortcuts.
+function Anatomy({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return (
+    <span>
+      <span aria-hidden="true">{icon}</span>
+      <span>{children}</span>
+    </span>
+  );
+}
+
+// The registration card: the home's ticket card slot, as a link.
+function GuideCard({ href, prefetch, icon, label, sub, go }: { href: string; prefetch?: boolean; icon: GuideIconType; label: string; sub: string; go: string }) {
+  return (
+    <Link className={`${L.ticket} ${styles.cardLink}`} href={href} prefetch={prefetch}>
+      <Anatomy icon={<GuideIcon type={icon} />}>
+        <span className={L.ticketText}>
+          <span className={L.ticketLabel}>{label}</span>
+          <span className={styles.ticketSub}>{sub}</span>
+        </span>
+        <span className={L.ticketGo} aria-hidden="true">{go}</span>
+      </Anatomy>
+    </Link>
   );
 }

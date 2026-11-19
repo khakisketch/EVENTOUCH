@@ -25,7 +25,12 @@ test('finished overview has one close entry beside its preconditions', () => {
 });
 
 test('public pages keep the top identity without a duplicate identity-only footer', () => {
-  for (const file of ['event/[slug]/page.tsx', 'event/[slug]/register/page.tsx', 'event/[slug]/ticket/page.tsx', 'event/[slug]/ticket/recover/page.tsx']) {
+  // The event guide opens with the attendee home's own banner (the event name is
+  // the page's h1), like the home, so it carries no separate brand header.
+  const guide = read('event/[slug]/page.tsx');
+  assert.match(guide, /<HomeHero\b/u, 'the event guide opens with the attendee banner');
+  assert.doesNotMatch(guide, /public-page-footer/u, 'the event guide has no repeated brand/page-label row');
+  for (const file of ['event/[slug]/register/page.tsx', 'event/[slug]/ticket/page.tsx', 'event/[slug]/ticket/recover/page.tsx']) {
     const source = read(file);
     assert.match(source, /<header\s+className=(?:"|\{`)public-page-header(?=["\s`])/u, `${file} keeps its orientation header`);
     assert.match(source, /EVENTOUCH/u);

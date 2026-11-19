@@ -117,7 +117,7 @@ async function main() {
     await transition.getByLabel('인증번호 6자리').waitFor();
     assert.ok(codes.get(phone));
     await transition.getByLabel('인증번호 6자리').fill(codes.get(phone));
-    await transition.getByRole('button', { name: '내 티켓 열기', exact: true }).click();
+    await transition.getByRole('button', { name: '내 티켓 열기' }).click();
     await transition.getByRole('img', { name: `${name}님의 행사 입장 및 퇴장용 QR` }).waitFor();
     await transition.getByRole('link', { name: '← 참가 메뉴로' }).click();
     await transition.getByRole('button', { name: '내 신청 정보' }).click();
@@ -149,7 +149,7 @@ async function main() {
     await page.getByRole('button', { name: '인증번호 받기', exact: true }).click();
     await page.getByLabel('인증번호 6자리').waitFor();
     await page.getByLabel('인증번호 6자리').fill(codes.get('01098001003'));
-    await page.getByRole('button', { name: '내 티켓 열기', exact: true }).click();
+    await page.getByRole('button', { name: '내 티켓 열기' }).click();
     await page.getByRole('heading', { name: '내 티켓' }).waitFor();
     const shown = await page.locator('h2').first().innerText();
     await page.screenshot({ path: path.join(out, `${before ? 'before' : 'after'}-390.png`), fullPage: true,
@@ -184,7 +184,7 @@ async function main() {
         assert.ok(response.ok());
         await route.abort('failed');
       });
-      await page.getByRole('button', { name: '내 티켓 열기', exact: true }).click();
+      await page.getByRole('button', { name: '내 티켓 열기' }).click();
       await page.getByText('인증 결과를 확인하지 못했습니다.', { exact: false }).waitFor();
       await page.getByRole('button', { name: '연결된 티켓 확인', exact: true }).click();
       await page.getByRole('img', { name: /기존 두 번째 행사 참가자님의/ }).waitFor();
