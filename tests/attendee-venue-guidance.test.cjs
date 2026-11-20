@@ -15,7 +15,12 @@ const { loadComponent } = require('./helpers/render-web-component.cjs');
 const schedule = loadComponent('../event/[slug]/PublicProgramSchedule');
 const addressCopy = loadComponent('../event/[slug]/AddressCopyButton');
 const tabTicketChoice = loadComponent('../event/[slug]/TabTicketChoice');
+// Reopened 2026-11-20: the guide draws its sections with the shared Guide* components (the console phone uses the same ones).
+const guideSection = loadComponent('../event/[slug]/GuideSection');
+const guideNoticeList = loadComponent('../event/[slug]/GuideNoticeList');
+const guideVenueCard = loadComponent('../event/[slug]/GuideVenueCard');
 const attendeeHome = require('../apps/web/lib/attendee-home.ts');
+const jsonGuards = require('../apps/web/lib/json-guards.ts');
 // The surface colors are not what these tests are about; the real helper is covered by the home layout tests.
 const homeSurface = { homeSurfaceStyle: (style) => ({ '--home-background-color': style.backgroundColor }) };
 // Class-name stubs for CSS modules: every key reads as its own name.
@@ -63,7 +68,12 @@ async function renderVenue(venue, published, features = ['venue'], program = [])
       if (id === './ui/AttendeeSurface') return { __esModule: true, default: ({ children, as: Tag = 'div', id: elementId, className }) => jsx.jsx(Tag, { id: elementId, className, children }) };
       if (id === './ui/AttendeeSectionHeader') return { __esModule: true, default: ({ title }) => jsx.jsx('h2', { children: title }) };
       if (id === './ui/AttendeeStateMessage') return { __esModule: true, default: ({ title, children }) => jsx.jsxs('div', { role: 'status', children: [jsx.jsx('p', { children: title }), children] }) };
-      if (id === './attendee-look') return { attendeeLook: () => ({ mode: 'a1', color: '#EA552E', ground: null }) };
+      if (id === '../../../lib/attendee-look') return { attendeeLook: () => ({ mode: 'a1', color: '#EA552E', ground: null }) };
+      if (id === '../../../lib/json-guards') return jsonGuards;
+      if (id === './event-theme') return { readAttendeeTheme: (_slug, workspace) => ({ homeStyle: attendeeHome.normalizeHomeStyle(workspace?.pageExperience?.published?.homeStyle), keyvisual: null, defaultHomeBanner: 'legacy', accent: null }) };
+      if (id === './GuideSection') return { __esModule: true, default: guideSection };
+      if (id === './GuideNoticeList') return { __esModule: true, default: guideNoticeList };
+      if (id === './GuideVenueCard') return { __esModule: true, default: guideVenueCard };
       throw new Error(`Unexpected dependency: ${id}`);
     },
   });

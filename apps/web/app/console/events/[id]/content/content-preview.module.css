@@ -111,13 +111,11 @@
   min-height: 100%;
 }
 
-/* The guide page the attendee sees: the event's ground, the published banner,
-   then white cards under quiet section labels. */
+/* The guide page the attendee sees. The ground and ink come from AttendeeSurface
+   (a1 white, a2 the event ground), the same as the public page. */
 .page {
   min-height: 100%;
   padding-bottom: var(--s5);
-  background: var(--home-background-color, var(--paper));
-  color: var(--home-background-ink, var(--ink));
 }
 
 .editing {
@@ -132,18 +130,9 @@
   font-weight: var(--fw-strong);
 }
 
-.hiddenNote,
-.emptyNote {
+/* Empty and hidden states are AttendeeStateMessage; this only spaces them. */
+.stateNote {
   margin: 0 0 var(--s3);
-  padding: var(--s3);
-  border-radius: var(--r-ctl);
-  background: var(--surface-muted);
-  color: var(--muted);
-  font-size: var(--text-sm);
-}
-
-.venue {
-  margin: 0;
 }
 
 .venueAddress {

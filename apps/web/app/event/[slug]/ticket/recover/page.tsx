@@ -5,7 +5,7 @@ import { attendeeGroundStyle, loadAttendeeTheme } from "../../event-theme";
 import { loadVerificationMode } from "../../../../../lib/verification-mode";
 import { loadPublicRecoveryContact } from "../../../../../lib/public-recovery-contact";
 import AttendeeSurface from "../../ui/AttendeeSurface";
-import { attendeeLook } from "../../attendee-look";
+import { attendeeLook } from "../../../../../lib/attendee-look";
 import styles from "../ticket.module.css";
 
 // Verified recovery entry: a code sent to the registered number reconnects

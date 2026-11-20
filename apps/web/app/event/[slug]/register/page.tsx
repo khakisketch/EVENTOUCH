@@ -14,7 +14,7 @@ import type { AttendeeTheme } from "../event-theme";
 import TabTicketChoice from "../TabTicketChoice";
 import AttendeeSurface from "../ui/AttendeeSurface";
 import AttendeeStateMessage from "../ui/AttendeeStateMessage";
-import { attendeeLook } from "../attendee-look";
+import { attendeeLook } from "../../../../lib/attendee-look";
 export type { PublishedField } from "./register-data";
 
 function apiBase(): string {

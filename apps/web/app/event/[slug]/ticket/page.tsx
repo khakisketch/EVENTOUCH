@@ -3,7 +3,7 @@ import TicketView from "./TicketView";
 import styles from "./ticket.module.css";
 import { attendeeGroundStyle, loadAttendeeTheme } from "../event-theme";
 import AttendeeSurface from "../ui/AttendeeSurface";
-import { attendeeLook } from "../attendee-look";
+import { attendeeLook } from "../../../../lib/attendee-look";
 
 // Slice 3 of the frontend migration: the issued ticket. The bearer arrives
 // in the address once (from registration) and the client component consumes

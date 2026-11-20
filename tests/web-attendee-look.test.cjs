@@ -29,9 +29,10 @@ function load(file, shims = {}) {
 
 const home = load('lib/attendee-home.ts');
 const palette = load('lib/event-palette.ts', { './attendee-home': home });
-const { attendeeLook } = load('app/event/[slug]/attendee-look.ts', {
-  '../../../lib/attendee-home': home,
-  '../../../lib/event-palette': palette,
+// Reopened 2026-11-20: attendeeLook lives in lib so the console previews wear the same look.
+const { attendeeLook } = load('lib/attendee-look.ts', {
+  './attendee-home': home,
+  './event-palette': palette,
 });
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const style = (backgroundColor) => ({ ...plain(home.DEFAULT_HOME_STYLE), backgroundColor });

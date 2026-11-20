@@ -121,9 +121,11 @@ test('every attendee surface renders the body the same safe way; the board shows
   const page = fs.readFileSync(path.join(WEB, 'app/event/[slug]/page.tsx'), 'utf8');
   const home = fs.readFileSync(path.join(WEB, 'app/event/[slug]/home/HomeShell.tsx'), 'utf8');
   const board = fs.readFileSync(path.join(WEB, 'app/screen/[slug]/DisplayBoard.tsx'), 'utf8');
-  for (const [name, source] of [['event page', page], ['home', home]]) {
-    assert.match(source, /<RichText [^>]*source=\{notice\.body\}[^>]*imageSrc=\{\(fileId\) => `\/api\/public\/events\/\$\{encodeURIComponent\(slug\)\}\/files\/\$\{encodeURIComponent\(fileId\)\}`\}/, name);
-  }
+  assert.match(home, /<RichText [^>]*source=\{notice\.body\}[^>]*imageSrc=\{\(fileId\) => `\/api\/public\/events\/\$\{encodeURIComponent\(slug\)\}\/files\/\$\{encodeURIComponent\(fileId\)\}`\}/, 'home');
+  // Reopened 2026-11-20: the guide's notices are GuideNoticeList (shared with the console phone), which renders the body through RichText with the event's file route.
+  assert.match(page, /<GuideNoticeList notices=\{notices\} imageSrc=\{photoUrl\} \/>/, 'event page');
+  assert.match(page, /const photoUrl = \(fileId: string\) => `\/api\/public\/events\/\$\{encodeURIComponent\(slug\)\}\/files\/\$\{encodeURIComponent\(fileId\)\}`/, 'event page file route');
+  assert.match(fs.readFileSync(path.join(WEB, 'app/event/[slug]/GuideNoticeList.tsx'), 'utf8'), /<RichText source=\{notice\.body\} imageSrc=\{imageSrc\} \/>/, 'guide notice list');
   assert.equal((board.match(/richPlainText\(notice\.body\)/g) || []).length, 2, 'selected and cycling notice frames');
   assert.doesNotMatch(board, /\{notice\.body\}/);
   assert.doesNotMatch(page + home, /dangerouslySetInnerHTML/);

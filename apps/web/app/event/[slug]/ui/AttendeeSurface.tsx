@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { readableInk } from "../../../../lib/attendee-home";
+import type { AttendeeMode } from "../../../../lib/attendee-look";
 import { normalizeEventColor, paletteStyle } from "../../../../lib/event-palette";
 import styles from "./AttendeeSurface.module.css";
 
@@ -8,7 +9,7 @@ import styles from "./AttendeeSurface.module.css";
 // attendee component restyles itself from one switch:
 //   a1  white ground, event color as the accent (the default)
 //   a2  the event color is the ground and white cards sit on it (opt-in)
-export type AttendeeMode = "a1" | "a2";
+export type { AttendeeMode };
 
 /** Reads a stored mode; anything but "a2" is the default a1. */
 export function attendeeMode(value: unknown): AttendeeMode {

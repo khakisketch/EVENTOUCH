@@ -268,11 +268,6 @@
   border-top: 1px solid var(--line);
 }
 
-/* Inside the console's content preview the list has no icon column. */
-.noticeList li:not(:has(.noticeIcon)) {
-  display: block;
-}
-
 .noticeIcon {
   display: grid;
   width: 40px;
@@ -295,6 +290,13 @@
 .noticeList li[data-pinned] .noticeIcon {
   background: var(--ev-accent, var(--brand));
   color: var(--ev-on-accent, var(--on-brand));
+}
+
+/* The glyph is an svg that sets its own color (.menuIcon), so the bubble's color
+   never reached it: on a dark event color the pinned glyph was dark on dark. The
+   pinned glyph takes the bubble's on-accent ink, which clears 4.55:1 on the accent. */
+.noticeList li[data-pinned] .noticeIcon :global(svg) {
+  color: inherit;
 }
 
 .noticeList li:first-child {

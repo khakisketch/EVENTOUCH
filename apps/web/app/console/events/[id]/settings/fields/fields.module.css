@@ -42,7 +42,9 @@
 .previewModes { display: flex; flex-wrap: wrap; gap: var(--s1); }
 .previewModes :global(.product-action) { min-height: 40px; }
 .previewNote { margin: 0; color: var(--muted); font-size: var(--text-sm); text-align: center; }
-.phone { min-width: 0; min-height: 100%; margin: 0; padding: var(--s4); border: 0; background: var(--home-background-color, var(--paper)); color: var(--home-background-ink, var(--ink)); }
+/* AttendeeSurface paints the ground and ink (a1 white, a2 the event ground) like the real page. */
+.phoneSurface { min-height: 100%; }
+.phone { min-width: 0; min-height: 100%; margin: 0; padding: var(--s4); border: 0; }
 .phone legend { padding: 0; }
 .phoneBar { display: flex; align-items: center; justify-content: space-between; min-height: 36px; padding-bottom: var(--s2); border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent); font-size: var(--text-sm); }
 .phoneWordmark { font-size: var(--text-md); font-weight: var(--fw-heavy); letter-spacing: 0.04em; }

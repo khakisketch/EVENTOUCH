@@ -17,7 +17,7 @@ import AttendeeSurface from "../ui/AttendeeSurface";
 import AttendeeStateMessage from "../ui/AttendeeStateMessage";
 import BottomAction from "../ui/BottomAction";
 import AttendeeIcon from "../ui/AttendeeIcon";
-import { attendeeLook } from "../attendee-look";
+import { attendeeLook } from "../../../../lib/attendee-look";
 import { readAttendeeTheme } from "../event-theme";
 import { normalizeHomeMenus, type HomeMenus, type HomeProgram } from "../../../../lib/attendee-home-menus";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";

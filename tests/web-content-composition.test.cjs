@@ -70,15 +70,18 @@ test('the phone shows published items plus the edited draft, outlined, with no c
   assert.match(workspace, /showSchedule: publishedDesign\.showSchedule !== false/u, 'the preview follows published event date visibility');
   assert.match(workspace, /date: programDraft\.date, start: programDraft\.start, end: programDraft\.end, place: programDraft\.place/u, 'the preview receives timeline fields rather than a flattened meta string');
   assert.match(workspace, /const venueEditing = venueDraft !== null && \(venueDirty \|\| Boolean\(venueFile\)\)/u);
-  assert.match(preview, /data-editing=\{item\.editing \|\| undefined\}/u);
+  // Reopened 2026-11-20: the notice list and the venue card are the guide's own components; the preview feeds them the item being edited.
+  assert.match(preview, /editing: item\.editing,/u);
+  assert.match(read('../../../../event/[slug]/GuideNoticeList.tsx'), /data-editing=\{notice\.editing \|\| undefined\}/u);
   assert.match(preview, /scrollIntoView\(\{ block: "nearest" \}\)/u, 'the edited item scrolls into view');
   assert.match(preview, /게시 전 · 초안 미리보기/u, 'an unpublished edit says it is not live yet');
   // The 홈 screen is the real attendee landing; 공지·일정·장소 reuse public attendee components and classes.
   assert.match(preview, /<AttendeeHomeLanding/u);
-  assert.match(preview, /publicStyles\.noticeList/u);
+  assert.match(preview, /<GuideNoticeList\b/u);
   assert.match(preview, /<PublicProgramSchedule key=\{editingKey\} program=\{programs\}/u, 'opening another draft clears the previous preview date selection');
   assert.match(preview, /eventDate=\{design\.showSchedule \? eventDate : ""\} preview/u);
-  assert.match(preview, /publicStyles\.venueText/u);
+  assert.match(preview, /<GuideVenueCard\b/u);
+  assert.match(read('../../../../event/[slug]/GuideVenueCard.tsx'), /styles\.venueText/u);
   // Theme link: the published 참가자 페이지 design feeds the phone.
   assert.match(workspace, /normalizeHomeStyle\(publishedDesign\.homeStyle\)/u);
   assert.match(workspace, /normalizeHomeMenus\(publishedDesign\.homeMenus\)/u);
@@ -141,7 +144,8 @@ test('the notice body is a rich editor on a small schema, stored as Markdown wit
   assert.match(workspace, /noticeDraft\.body\.length > NOTICE_BODY_MAX/u);
   // Ledger rows and the phone read the same Markdown the attendees do.
   assert.match(workspace, /summary=\{richSummary\(item\.draft\.body\)\}/u);
-  assert.match(preview, /<RichText source=\{item\.body\} imageSrc=\{imageSrc\} \/>/u);
+  assert.match(read('../../../../event/[slug]/GuideNoticeList.tsx'), /<RichText source=\{notice\.body\} imageSrc=\{imageSrc\} \/>/u);
+  assert.match(preview, /imageSrc=\{imageSrc\}/u);
 });
 
 test("content tabs follow the tab keyboard pattern: arrows wrap, Home and End jump", () => {

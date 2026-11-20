@@ -6,8 +6,10 @@ import DeviceFrame from "../../../../console-ui/DeviceFrame";
 import AttendeeIcon from "../../../../../event/[slug]/AttendeeIcons";
 import EventBanner from "../../../../../event/[slug]/EventBanner";
 import EventFacts from "../../../../../event/[slug]/EventFacts";
+import AttendeeSurface from "../../../../../event/[slug]/ui/AttendeeSurface";
 import { attendeeGroundStyle, DEFAULT_ATTENDEE_THEME, type AttendeeTheme } from "../../../../../event/[slug]/event-theme";
 import registerStyles from "../../../../../event/[slug]/register/register.module.css";
+import { attendeeLook } from "../../../../../../lib/attendee-look";
 import type { PublicEventContext } from "../../../../../../lib/public-event-context";
 import styles from "./fields.module.css";
 
@@ -66,6 +68,8 @@ export default function FieldsPhonePreview({ eventName, publishedFields, draftFi
 
   const { theme, context, verificationRequired, approvalRequired, consentText, consentVersion } = sheet;
   const ground = attendeeGroundStyle(theme);
+  // The look the real application page wears: a1 white, or a2 the event ground, with the 강조색 as the accent.
+  const look = attendeeLook(theme.homeStyle, theme.accent);
   const chrome = theme.homeStyle.backgroundColor;
   const showFields = !(isPublished && (publishedVersion === 0 || !publishedFields));
 
@@ -80,7 +84,8 @@ export default function FieldsPhonePreview({ eventName, publishedFields, draftFi
         <ProductButton type="button" variant="ghost" aria-pressed={!isPublished} onClick={() => setMode("draft")}>게시할 초안</ProductButton>
       </nav>
       <DeviceFrame variant="phone" viewportHeight={700} maxDisplayWidth={340} chromeColor={chrome} contentRef={screenRef} scrollLabel="참가 신청 화면 미리보기 (스크롤)">
-      <fieldset className={styles.phone} style={ground} aria-hidden="true" inert disabled>
+      <AttendeeSurface color={look.color} mode={look.mode} ground={look.ground} className={styles.phoneSurface} style={ground}>
+      <fieldset className={styles.phone} aria-hidden="true" inert disabled>
         <legend className="sr-only">참가 신청 양식 미리보기</legend>
         <header className={styles.phoneBar}>
           <span className={styles.phoneWordmark}>EVENTOUCH</span>
@@ -177,6 +182,7 @@ export default function FieldsPhonePreview({ eventName, publishedFields, draftFi
           </div>
         </div>
       </fieldset>
+      </AttendeeSurface>
       </DeviceFrame>
       <p className={styles.previewNote}>
         {isPublished

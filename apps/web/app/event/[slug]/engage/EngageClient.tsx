@@ -17,7 +17,7 @@ import AttendeeFieldError from "../ui/AttendeeFieldError";
 import { AttendeeList } from "../ui/AttendeeListRow";
 import AttendeeListRow from "../ui/AttendeeListRow";
 import BottomAction from "../ui/BottomAction";
-import { attendeeLook } from "../attendee-look";
+import { attendeeLook } from "../../../../lib/attendee-look";
 import { readAttendeeTheme, type AttendeeTheme } from "../event-theme";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
 import { readGuestReceipts, writeGuestReceipts, type GuestReceiptPointer } from "../../../../lib/receipt-recovery";

@@ -26,6 +26,9 @@ test('operator form preview uses the attendee field order and real disabled cont
       if (id.endsWith('/AttendeeIcons')) return { default: () => null };
       if (id.endsWith('/EventBanner')) return { default: (props) => React.createElement('div', { className: props.className, 'data-banner': '' }, props.title, props.kicker) };
       if (id.endsWith('/EventFacts')) return { default: () => null };
+      // Reopened 2026-11-20: the phone wears the attendee surface and look (a1/a2), as the real application page does.
+      if (id.endsWith('/AttendeeSurface')) return { default: (props) => React.createElement('div', { 'data-attendee-mode': props.mode, className: props.className }, props.children) };
+      if (id.endsWith('/attendee-look')) return { attendeeLook: () => ({ mode: 'a1', color: '#EA552E', ground: null }) };
       if (id.endsWith('/event-theme')) return { attendeeGroundStyle: () => ({}), DEFAULT_ATTENDEE_THEME: { homeStyle: { backgroundColor: '#B9DEF0' } } };
       if (id.endsWith('/ProductInput')) return { default: (props) => React.createElement('input', props) };
       if (id.endsWith('/ProductSelect')) return { default: (props) => React.createElement('select', props) };

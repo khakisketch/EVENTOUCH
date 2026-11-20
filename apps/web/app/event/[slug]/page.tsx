@@ -2,18 +2,22 @@ import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { eventStageLabel } from "../../event-stage";
-import { normalizeHomeStyle, parseHomePhotos, readableInk } from "../../../lib/attendee-home";
+import { parseHomePhotos, readableInk } from "../../../lib/attendee-home";
 import { homeSurfaceStyle } from "../../../lib/home-surface";
+import { text } from "../../../lib/json-guards";
 import { publicEventDate } from "../../../lib/public-event-date";
 import { loadVerificationMode } from "../../../lib/verification-mode";
 import { publicRecoveryContact } from "../../../lib/public-recovery-contact";
 import ProductLink from "../../ui/ProductLink";
-import RichText from "../../ui/RichText";
 import HomeHero from "./home/HomeHero";
 import AttendeeSurface from "./ui/AttendeeSurface";
 import AttendeeSectionHeader from "./ui/AttendeeSectionHeader";
+import GuideSection from "./GuideSection";
+import GuideNoticeList from "./GuideNoticeList";
+import GuideVenueCard from "./GuideVenueCard";
 import AttendeeStateMessage from "./ui/AttendeeStateMessage";
-import { attendeeLook } from "./attendee-look";
+import { attendeeLook } from "../../../lib/attendee-look";
+import { readAttendeeTheme } from "./event-theme";
 import homeStyles from "./home/home.module.css";
 import L from "./home/home-layouts.module.css";
 import GuideIcon, { type GuideIconType } from "./GuideIcon";
@@ -40,38 +44,21 @@ type PublicWorkspace = {
   program?: unknown;
   venue?: { name?: unknown; address?: unknown; directions?: unknown; contact?: unknown; description?: unknown; map?: unknown } | null;
   registrationOpen?: unknown;
+  // The look (banner, ground, accent) is read by readAttendeeTheme; only the page's own switches stay here.
   pageExperience?: { published?: {
     intro?: unknown;
-    accent?: unknown;
     showAnnouncements?: unknown;
     showSchedule?: unknown;
     showVenue?: unknown;
     showPrograms?: unknown;
-    keyvisual?: { fileId?: unknown; data?: unknown } | null;
-    defaultHomeBanner?: unknown;
-    homeStyle?: unknown;
   } } | null;
   photos?: unknown;
   boothMap?: { published?: unknown } | null;
   booths?: unknown;
 };
 
-function keyvisualSource(slug: string, value: unknown): string | null {
-  if (!value || typeof value !== "object") return null;
-  const image = value as Record<string, unknown>;
-  const data = typeof image.data === "string" ? image.data : "";
-  if (/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(data)) return data;
-  const fileId = typeof image.fileId === "string" ? image.fileId : "";
-  if (!/^[A-Za-z0-9_-]{1,160}$/.test(fileId)) return null;
-  return `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`;
-}
-
 function apiBase(): string {
   return process.env.EVENTOUCH_API_URL ?? "http://127.0.0.1:8776";
-}
-
-function text(value: unknown): string {
-  return typeof value === "string" ? value : "";
 }
 
 async function loadEvent(slug: string): Promise<{
@@ -131,16 +118,14 @@ export default async function EventPage({
   // The guide wears the design the agency chose for the attendee home: the same
   // banner, ground color, tone and composition. A photo-first home with no
   // approved photos reads as the tile home, so the guide does too.
-  const homeStyle = normalizeHomeStyle(published.homeStyle);
-  const defaultHomeBanner = published.defaultHomeBanner === "neutral" ? "neutral" : "legacy";
+  const { homeStyle, keyvisual, defaultHomeBanner, accent = null } = readAttendeeTheme(slug, workspace);
   const photos = Array.isArray(event.features) && event.features.includes("photo")
     ? parseHomePhotos(workspace.photos, (fileId) => `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`)
     : [];
   const layout = homeStyle.layout === "instagram" && !photos.length ? "tile" : homeStyle.layout;
   const rootStyle = { "--lay-ink": readableInk(homeStyle.backgroundColor) } as CSSProperties;
   // a1 (white ground, the 강조색 as the accent) unless the agency picked a ground color.
-  const look = attendeeLook(homeStyle, typeof published.accent === "string" ? published.accent : null);
-  const keyvisual = keyvisualSource(slug, published.keyvisual);
+  const look = attendeeLook(homeStyle, accent);
   const registrationOpen = workspace.registrationOpen === true;
   // The public signup writer only runs on READY/LIVE (participants writer
   // rule publicSignupEvent): an ENDED event with the intake flag still on
@@ -340,40 +325,21 @@ export default async function EventPage({
 
         <div className={styles.sections}>
           {showAnnouncements && notices.length ? (
-            <section className={styles.section} id="public-notices" aria-label="공지">
-              <AttendeeSectionHeader className={`${L.sectionHead} ${styles.sectionHead}`} size="sm" title="공지" />
-              <div className={styles.card}>
-                <ul className={styles.noticeList}>
-                  {/* Pinned notices lead; the sort is stable, so each group keeps its own order. */}
-                  {[...notices].sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true)).map((notice) => (
-                    <li key={notice.id} data-pinned={notice.pinned || undefined}>
-                      <span className={styles.noticeIcon} aria-hidden="true"><GuideIcon type="notice" /></span>
-                      <div className={styles.noticeBody}>
-                        <h3>
-                          {notice.pinned ? <span className={styles.pin}>고정</span> : null}
-                          {notice.title}
-                        </h3>
-                        {notice.body ? <RichText source={notice.body} imageSrc={(fileId) => `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`} /> : null}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </section>
+            <GuideSection id="public-notices" title="공지">
+              <GuideNoticeList notices={notices} imageSrc={photoUrl} />
+            </GuideSection>
           ) : null}
 
           {showPrograms && program.length ? (
-            <section className={styles.section} id="public-program" aria-label="프로그램">
-              <AttendeeSectionHeader className={`${L.sectionHead} ${styles.sectionHead}`} size="sm" title="프로그램" />
+            <GuideSection id="public-program" title="프로그램">
               <div className={styles.card}>
                 <PublicProgramSchedule program={program} eventDate={showSchedule ? event.date : ""} />
               </div>
-            </section>
+            </GuideSection>
           ) : null}
 
           {boothMap ? (
-            <section className={styles.section} id="public-booth-map" aria-label="부스 지도">
-              <AttendeeSectionHeader className={`${L.sectionHead} ${styles.sectionHead}`} size="sm" title="부스 지도" />
+            <GuideSection id="public-booth-map" title="부스 지도">
               <div className={styles.card}>
                 <div className={styles.mapWrap}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -389,48 +355,28 @@ export default async function EventPage({
                   })}
                 </div>
               </div>
-            </section>
+            </GuideSection>
           ) : null}
 
           {showVenue && hasVenue ? (
-            <section className={styles.section} id="public-venue" aria-label="오시는 길">
-              <AttendeeSectionHeader className={`${L.sectionHead} ${styles.sectionHead}`} size="sm" title="오시는 길" />
-              <div className={styles.card}>
-                {venueName || venueAddress ? (
-                  <div className={styles.venueHead}>
-                    <span className={styles.venueBubble} aria-hidden="true"><GuideIcon type="venue" /></span>
-                    <div className={styles.venueBody}>
-                      {venueName ? <p className={styles.venueName}>{venueName}</p> : null}
-                      {venueAddress ? <div className={styles.addressRow}><AddressCopyButton address={venueAddress} /></div> : null}
-                      {venueAddress ? (
-                        <a className={styles.mapLink} href={`https://map.naver.com/p/search/${encodeURIComponent(venueAddress)}`} target="_blank" rel="noopener noreferrer">
-                          지도에서 보기 <span aria-hidden="true">↗</span><span className="sr-only"> (새 탭)</span>
-                        </a>
-                      ) : null}
-                    </div>
-                  </div>
+            <GuideSection id="public-venue" title="오시는 길">
+              <GuideVenueCard
+                name={venueName}
+                address={venueAddress ? (
+                  <>
+                    <div className={styles.addressRow}><AddressCopyButton address={venueAddress} /></div>
+                    <a className={styles.mapLink} href={`https://map.naver.com/p/search/${encodeURIComponent(venueAddress)}`} target="_blank" rel="noopener noreferrer">
+                      지도에서 보기 <span aria-hidden="true">↗</span><span className="sr-only"> (새 탭)</span>
+                    </a>
+                  </>
                 ) : null}
-                {venueDirections || venueDescription || venueContact ? (
-                  <dl className="event-facts">
-                    {venueDirections ? (
-                      <div className="event-fact"><dt>오시는 길</dt><dd className={styles.venueText}>{venueDirections}</dd></div>
-                    ) : null}
-                    {venueDescription ? (
-                      <div className="event-fact"><dt>행사장 안내</dt><dd className={styles.venueText}>{venueDescription}</dd></div>
-                    ) : null}
-                    {venueContact ? (
-                      <div className="event-fact"><dt>문의</dt><dd>{venueContact}</dd></div>
-                    ) : null}
-                  </dl>
-                ) : null}
-                {venueMap ? <figure className={styles.venueMap}>
-                  {/* A normal image/link preserves zoom and the browser's download controls. */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={venueMap.src} alt={venueMap.alt} />
-                  <figcaption><Link className="button button-secondary" href={venueMap.src} target="_blank" rel="noopener noreferrer">안내도 크게 보기 (새 탭)</Link></figcaption>
-                </figure> : null}
-              </div>
-            </section>
+                directions={venueDirections}
+                description={venueDescription}
+                contact={venueContact}
+                // A normal image/link preserves zoom and the browser's download controls.
+                map={venueMap ? { ...venueMap, caption: <Link className="button button-secondary" href={venueMap.src} target="_blank" rel="noopener noreferrer">안내도 크게 보기 (새 탭)</Link> } : null}
+              />
+            </GuideSection>
           ) : null}
         </div>
 

@@ -9,7 +9,7 @@ import { normalizeHomeMenus, type HomeMenus, type HomeProgram } from "../../../.
 import HomeHero from "./HomeHero";
 import AttendeeSurface from "../ui/AttendeeSurface";
 import AttendeeSectionHeader from "../ui/AttendeeSectionHeader";
-import { attendeeLook } from "../attendee-look";
+import { attendeeLook } from "../../../../lib/attendee-look";
 import styles from "./home.module.css";
 import L from "./home-layouts.module.css";
 
