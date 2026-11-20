@@ -16,6 +16,16 @@ const PATHS = {
   mail: "M3 6h18v12H3V6Zm0 1 9 7 9-7",
   setup: "M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1M7.7 16.3l-2.1 2.1M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z",
   play: "M8 5l11 7-11 7V5Z",
+  arrow: "M4 12h15m-6-6 6 6-6 6",
+  ticket: "M4 8.5A1.5 1.5 0 0 1 5.5 7h13A1.5 1.5 0 0 1 20 8.5V10a2 2 0 0 0 0 4v1.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 15.5V14a2 2 0 0 0 0-4Z",
+  code: "M8 8l-4 4 4 4m8-8 4 4-4 4m-2.5-10-3 12",
+  search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Zm5-2 5 5",
+  history: "M4 12a8 8 0 1 0 2.4-5.7L4 8.5M4 4v4.5h4.5M12 8v4.5l3 2",
+  down: "M6 9l6 6 6-6",
+  back: "M15 5l-7 7 7 7",
+  more: "M5 12h.01M12 12h.01M19 12h.01",
+  file: "M7 3h7l4 4v14H7V3Zm6 0v5h5M10 13h5M10 17h5",
+  download: "M12 4v11m-4-4 4 4 4-4M5 20h14",
 } as const;
 
 export type LandingIconName = keyof typeof PATHS;

@@ -5,8 +5,8 @@ import { LandingIcon, type LandingIconName } from "./LandingIcons";
 import styles from "./landing-sections.module.css";
 
 const ROWS: ReadonlyArray<{ moment: string; icon: LandingIconName; old: string; now: string }> = [
-  { moment: "행사 전 명단", icon: "users", old: "흩어진 파일, 누가 왔는지 나중에 정리", now: "승인·입장 상태가 한 명단에 실시간 반영" },
-  { moment: "입구 체크인", icon: "qr", old: "종이 명단을 눈으로 대조", now: "QR·검색 체크인, 중복 입장 방지" },
+  { moment: "행사 전 명단", icon: "users", old: "흩어진 파일, 누가 왔는지 나중에 정리", now: "승인·입장 상태가 한 명단에 모여 보임" },
+  { moment: "입구 체크인", icon: "qr", old: "종이 명단을 눈으로 대조", now: "QR·검색 체크인, 이미 입장한 티켓은 바로 안내" },
   { moment: "문자 안내", icon: "mail", old: "문자 보내고 전달 확인 불가", now: "예약·발송 결과·미확인 복구까지 기록" },
   { moment: "행사 후 집계", icon: "chart", old: "행사 후 수기 집계", now: "입장률·결과 보고서가 생성 시점에 고정" },
 ];

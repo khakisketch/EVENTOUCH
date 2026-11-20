@@ -105,6 +105,13 @@ export default function LandingFlow({ scenes }: { scenes: readonly FlowScene[] }
       >
         <div key={scenes[index].id} className={styles.flowScene}>{scenes[index].stage}</div>
       </div>
+      {/* One-column layouts: the tabs shrink to a row, so the moment's text sits here. */}
+      <p className={styles.flowCaption}>
+        <em>{scenes[index].phase}</em>
+        <strong>{scenes[index].title}</strong>
+        <span>{scenes[index].body}</span>
+        <small>{scenes[index].screens}</small>
+      </p>
     </div>
   );
 }
