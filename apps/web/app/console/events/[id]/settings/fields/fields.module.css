@@ -8,7 +8,7 @@
 .row { position: relative; }
 .rowSelected { background: var(--surface-muted); box-shadow: inset 3px 0 0 var(--ink); }
 /* The name is the button; its ::after stretches the tap target over the row. */
-.rowOpen { padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-weight: var(--fw-strong); text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.rowOpen { display: inline-flex; align-items: center; min-width: var(--control-min-size); min-height: var(--control-min-size); padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-weight: var(--fw-strong); text-align: left; cursor: pointer; overflow-wrap: anywhere; }
 .rowOpen::after { position: absolute; inset: 0; content: ""; }
 .rowOpen:hover:not(:disabled)::after { background: var(--surface-muted); opacity: 0.6; }
 .rowOpen:focus-visible { outline: none; }

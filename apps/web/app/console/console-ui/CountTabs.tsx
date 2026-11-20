@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import styles from "./count-tabs.module.css";
 
 export type CountTabItem = {
@@ -35,6 +35,15 @@ type CountTabsProps = {
 export default function CountTabs({ items, value, onChange, ariaLabel, dots, aside, className }: CountTabsProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const first = useRef(true);
+  const [locked, setLocked] = useState(false);
+
+  // A phone-width row scrolls inside its own box, and a scroll box with nothing focusable in it cannot be scrolled by
+  // keyboard. While every tab is disabled (a parent fieldset locks the screen during a refresh) the row wraps instead
+  // of scrolling. Reopened 2026-11-20: axe `scrollable-region-focusable` (serious) failed on the team screen in that
+  // state. Checked after every render because the lock comes from outside this component.
+  useEffect(() => {
+    setLocked(!trackRef.current?.querySelector("button:not(:disabled)"));
+  });
 
   // Phones scroll the row inside its own box: keep the chosen tab in view
   // without moving the page itself.
@@ -51,7 +60,7 @@ export default function CountTabs({ items, value, onChange, ariaLabel, dots, asi
 
   return (
     <div className={`${styles.row}${className ? ` ${className}` : ""}`} data-count-tabs>
-      <div className={styles.track} ref={trackRef} role="group" aria-label={ariaLabel}>
+      <div className={styles.track} ref={trackRef} role="group" aria-label={ariaLabel} data-locked={locked ? "" : undefined}>
         {items.map((item) => (
           <button
             key={item.key}

@@ -104,6 +104,13 @@
 }
 
 .rowOpen {
+  /* The row's hit area is this button's ::after, but a target-size check
+     measures the button itself: keep the name button a full touch target.
+     Reopened 2026-11-20: it measured 21px tall (text height) in the audit. */
+  display: inline-flex;
+  align-items: center;
+  min-width: var(--control-min-size);
+  min-height: var(--control-min-size);
   padding: 0;
   border: 0;
   background: none;
