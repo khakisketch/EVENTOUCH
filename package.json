@@ -106,6 +106,7 @@
     "web:content-recovery:audit": "node scripts/web-content-recovery-audit.cjs",
     "web:report-recovery:audit": "node scripts/web-report-recovery-audit.cjs",
     "web:report-export-scope:audit": "node scripts/web-report-export-scope-audit.cjs",
+    "web:event-switcher:audit": "node scripts/web-event-switcher-audit.cjs",
     "web:report-data-availability:audit": "node scripts/web-report-data-availability-audit.cjs",
     "web:report-live-availability:audit": "node scripts/web-report-live-availability-audit.cjs",
     "web:report-cancellation-review:audit": "node scripts/web-report-cancellation-review-audit.cjs",
