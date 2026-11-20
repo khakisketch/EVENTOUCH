@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep, openSettingsBasics } = require('./ui-journey-helpers.cjs');
+const { messageStep, openSettingsBasics, settleLayout } = require('./ui-journey-helpers.cjs');
 
 
 // Event-close paired journey: one operator closes out a LIVE event end to
@@ -356,6 +356,8 @@ async function main() {
     };
 
     async function axeBlocking(page2) {
+      // Reopened 2026-11-20: 개수 탭의 선택 표시는 .15초 색 전환이라 클릭 직후 axe가 전환 중간 색(대비 2.97)을 잰다. 안정된 화면에서 검사한다.
+      await settleLayout(page2);
       await page2.evaluate(axeSource);
       const violations = await page2.evaluate(async () => {
         const result = await window.axe.run(document, {
