@@ -10,15 +10,32 @@ const LAYOUTS = [
   { id: "instagram", label: "인스타형", hint: "승인된 현장 사진을 피드로" },
 ] as const;
 
+const GROUNDS = [
+  { id: "a1", label: "흰색" },
+  { id: "a2", label: "행사 색" },
+] as const;
+
 const COLORS = [
   { id: "orange", label: "주황", value: "#E76D26" },
-  { id: "teal", label: "청록", value: "#0E8587" },
+  { id: "teal", label: "청록", value: "#0B7A7C" },
   { id: "indigo", label: "남색", value: "#3F55C2" },
   { id: "plum", label: "자주", value: "#8A3A87" },
   { id: "forest", label: "초록", value: "#2F7050" },
 ] as const;
 
 type LayoutId = (typeof LAYOUTS)[number]["id"];
+type GroundId = (typeof GROUNDS)[number]["id"];
+
+// The product picks the ink that reads on an event colour by contrast; this
+// drawn sample does the same so every colour above stays legible.
+const SAMPLE_INK = "#19191C";
+const luminance = (hex: string) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contrast = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+const readableOn = (hex: string) => (contrast(luminance(SAMPLE_INK), luminance(hex)) >= contrast(1, luminance(hex)) ? SAMPLE_INK : "#FFFFFF");
 
 const SHORTCUTS: ReadonlyArray<{ label: string; icon: LandingIconName }> = [
   { label: "공지사항", icon: "notice" },
@@ -37,8 +54,10 @@ const SHORTCUTS: ReadonlyArray<{ label: string; icon: LandingIconName }> = [
 export default function LandingPageDemo() {
   const [layout, setLayout] = useState<LayoutId>("poster");
   const [colorId, setColorId] = useState<(typeof COLORS)[number]["id"]>("orange");
+  const [ground, setGround] = useState<GroundId>("a1");
   const color = COLORS.find((item) => item.id === colorId) ?? COLORS[0];
   const current = LAYOUTS.find((item) => item.id === layout) ?? LAYOUTS[0];
+  const ink = readableOn(color.value);
 
   return (
     <div className={styles.demo}>
@@ -57,6 +76,23 @@ export default function LandingPageDemo() {
               >
                 <strong>{item.label}</strong>
                 <span>{item.hint}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className={styles.demoGroup}>
+          <p id="demo-ground-label">화면 바탕</p>
+          <div className={styles.demoGrounds} role="radiogroup" aria-labelledby="demo-ground-label">
+            {GROUNDS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="radio"
+                aria-checked={ground === item.id}
+                className={styles.demoGround}
+                onClick={() => setGround(item.id)}
+              >
+                {item.label}
               </button>
             ))}
           </div>
@@ -81,11 +117,12 @@ export default function LandingPageDemo() {
         <ul className={styles.demoFacts}>
           <li>참가자는 링크 하나로 신청, 티켓, 참여까지 이어집니다.</li>
           <li>고른 구성은 참가자 홈과 행사 안내에 함께 적용됩니다.</li>
+          <li>행사 색 위의 글자색은 읽기 쉬운 대비로 자동 조정됩니다.</li>
         </ul>
       </div>
 
       <figure className={styles.demoStage}>
-        <div className={styles.demoPhone} style={{ "--demo": color.value } as CSSProperties} aria-label={`${current.label} 참가자 화면 구성 예시`} role="img">
+        <div className={styles.demoPhone} data-ground={ground} style={{ "--demo": color.value, "--demo-on": ink, "--demo-shade": ink === SAMPLE_INK ? "var(--paper)" : "var(--stage)" } as CSSProperties} aria-label={`${current.label} 참가자 화면 구성 예시`} role="img">
           <div className={styles.demoBanner}>
             <span>12월 12일 · 코엑스</span>
             <strong>파트너<br />컨퍼런스</strong>

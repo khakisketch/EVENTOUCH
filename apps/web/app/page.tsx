@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import styles from "./landing.module.css";
@@ -31,19 +31,19 @@ const HERO_TABS: readonly HeroTab[] = [
   {
     id: "console",
     label: "운영 현황",
-    caption: "운영 현황 · 파트너 컨퍼런스 데모",
+    caption: "운영 현황 · 입장 상황과 신청 상태",
     note: "화면 구성 예시 · 합성 데이터",
   },
   {
     id: "ticket",
     label: "모바일 티켓",
     caption: "참가자 모바일 티켓",
-    note: "EVENTOUCH 데모 행사 · 샘플 QR",
+    note: "화면 구성 예시 · 합성 데이터",
   },
   {
     id: "report",
     label: "결과 보고서",
-    caption: "결과 보고서 · 등록·입장 집계",
+    caption: "결과 보고서 · 보고서 목록과 입장률",
     note: "화면 구성 예시 · 합성 데이터",
   },
 ];
@@ -57,8 +57,8 @@ const FLOW_SCENES: readonly FlowScene[] = [
     id: "before",
     phase: "행사 전",
     title: "모집 · 승인 · 안내",
-    body: "신청 명단과 참가 상태를 살피고, 안내할 대상을 정합니다.",
-    screens: "쓰는 화면 · 참가자 명단, 메시지",
+    body: "신청 명단과 참가 상태를 살피고, 안내할 대상을 정합니다. 참가자 페이지와 참여 이벤트도 이때 준비합니다.",
+    screens: "쓰는 화면 · 참가자 명단, 메시지, 참가자 페이지",
     stage: (
       <div className={sec.stageDuo}>
         <div className={sec.window}>
@@ -73,8 +73,8 @@ const FLOW_SCENES: readonly FlowScene[] = [
     id: "onsite",
     phase: "행사 현장",
     title: "체크인 · 참여",
-    body: "배정된 스태프가 QR 또는 참가자 검색으로 입장을 처리합니다.",
-    screens: "쓰는 화면 · 스태프 체크인, 부스 인증",
+    body: "배정된 스태프가 QR 또는 참가자 검색으로 입장을 처리하고, 운영자는 현장 모드에서 입장 상황을 한 화면으로 봅니다.",
+    screens: "쓰는 화면 · 입장·스태프, 현장 모드",
     stage: (
       <div className={sec.stagePair}>
         <div className={sec.phoneCrop}><ProductPreview variant="ticket" /></div>
@@ -86,8 +86,8 @@ const FLOW_SCENES: readonly FlowScene[] = [
     id: "after",
     phase: "행사 후",
     title: "결과 · 보고서",
-    body: "참가·입장·현장 기록을 모아 결과를 확인하고 보고서를 관리합니다.",
-    screens: "쓰는 화면 · 결과 분석, 보고서",
+    body: "참가·입장·현장 기록을 모아 결과를 확인하고 보고서로 남깁니다.",
+    screens: "쓰는 화면 · 결과 보고서",
     stage: (
       <div className={sec.stageSolo}>
         <div className={sec.window}>
@@ -100,8 +100,8 @@ const FLOW_SCENES: readonly FlowScene[] = [
 ];
 
 const AUDIENCE = [
-  { icon: "seminar", title: "컨퍼런스·세미나", text: "100명 이상 참가자의 사전 등록부터 현장 입장까지 한 흐름으로 운영합니다." },
-  { icon: "door", title: "입장 통제·사전 승인 행사", text: "QR·명단 검색 체크인으로 입구 병목을 줄이고 중복 입장을 막습니다." },
+  { icon: "seminar", title: "컨퍼런스·세미나", text: "사전 등록부터 현장 입장까지 한 흐름으로 운영합니다." },
+  { icon: "door", title: "입장 통제·사전 승인 행사", text: "QR·명단 검색으로 입장을 기록하고, 이미 입장한 티켓은 현장에서 바로 알려 줍니다." },
   { icon: "repeat", title: "반복 교육·설명회", text: "같은 틀을 복사해 매번 운영하고, 결과는 행사마다 따로 보관합니다." },
 ] as const;
 
@@ -118,11 +118,14 @@ export default function Home() {
   const [copyStatus, setCopyStatus] = useState<{ message: string; tone: "success" | "error" } | null>(null);
   const [heroTab, setHeroTab] = useState<HeroTab["id"]>("console");
   const [heroPaused, setHeroPaused] = useState(false);
+  // Once the reader picks a screen, the hero stops turning for good.
+  const [heroChosen, setHeroChosen] = useState(false);
+  const heroTabButtons = useRef<Array<HTMLButtonElement | null>>([]);
   const activeSection = useActiveSection(NAV_SECTIONS);
   const activeHero = HERO_TABS.find((tab) => tab.id === heroTab) ?? HERO_TABS[0];
 
   useEffect(() => {
-    if (heroPaused) return;
+    if (heroPaused || heroChosen) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const id = window.setInterval(() => {
       if (document.hidden) return;
@@ -132,7 +135,25 @@ export default function Home() {
       });
     }, 5000);
     return () => window.clearInterval(id);
-  }, [heroPaused]);
+  }, [heroPaused, heroChosen]);
+
+  function chooseHero(index: number, focus = false) {
+    setHeroChosen(true);
+    setHeroTab(HERO_TABS[index].id);
+    if (focus) heroTabButtons.current[index]?.focus();
+  }
+
+  function onHeroKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const index = HERO_TABS.findIndex((tab) => tab.id === heroTab);
+    let next = -1;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") next = (index + 1) % HERO_TABS.length;
+    else if (event.key === "ArrowLeft" || event.key === "ArrowUp") next = (index - 1 + HERO_TABS.length) % HERO_TABS.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = HERO_TABS.length - 1;
+    if (next < 0) return;
+    event.preventDefault();
+    chooseHero(next, true);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -214,7 +235,7 @@ export default function Home() {
                   <path d="M4 10h11M10 4l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </a>
-              <a className={styles.secondaryAction} href="#product-screens">화면 구성 살펴보기 ↓</a>
+              <a className={styles.secondaryAction} href="#journey">화면 구성 살펴보기 ↓</a>
             </div>
             <p className={styles.heroNote}>
               행사 종류·일정·규모를 적을 수 있게 준비합니다.
@@ -228,31 +249,41 @@ export default function Home() {
             onFocus={() => setHeroPaused(true)}
             onBlur={() => setHeroPaused(false)}
           >
-            <div className={styles.heroTabs} role="tablist" aria-label="핵심 화면 미리보기">
-              {HERO_TABS.map((tab) => (
+            <div className={styles.heroTabs} role="tablist" aria-label="핵심 화면 미리보기" onKeyDown={onHeroKeyDown}>
+              {HERO_TABS.map((tab, index) => (
                 <button
                   key={tab.id}
+                  ref={(node) => { heroTabButtons.current[index] = node; }}
                   type="button"
                   role="tab"
+                  id={`hero-tab-${tab.id}`}
                   aria-selected={tab.id === heroTab}
-                  onClick={() => setHeroTab(tab.id)}
+                  aria-controls="hero-panel"
+                  tabIndex={tab.id === heroTab ? 0 : -1}
+                  onClick={() => chooseHero(index)}
                 >
                   {tab.label}
                 </button>
               ))}
             </div>
-            <section className={styles.consoleEvidence} role="tabpanel" aria-label={activeHero.caption}>
-              <div className={styles.windowBar} aria-hidden="true">
-                <i />
-                <i />
-                <i />
-                <span>{activeHero.caption}</span>
-              </div>
-              <ProductPreview variant={activeHero.id} />
-              <p className={styles.consoleCaption}>
-                <strong>{activeHero.caption}</strong>
-                <span>{activeHero.note}</span>
-              </p>
+            <section className={styles.consoleEvidence} role="tabpanel" id="hero-panel" aria-labelledby={`hero-tab-${heroTab}`}>
+              {/* A new tab mounts new nodes: nothing that was on screen is stretched or moved. */}
+              <Fragment key={activeHero.id}>
+                <div className={styles.windowBar} aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                  <span>{activeHero.label}</span>
+                </div>
+                {/* One fixed stage for every tab: the page below never moves when the tab changes. */}
+                <div className={styles.heroStage} data-kind={activeHero.id === "ticket" ? "phone" : "window"}>
+                  <ProductPreview variant={activeHero.id} />
+                </div>
+                <p className={styles.consoleCaption}>
+                  <strong>{activeHero.caption}</strong>
+                  <span>{activeHero.note}</span>
+                </p>
+              </Fragment>
             </section>
           </div>
 
@@ -267,7 +298,7 @@ export default function Home() {
           <Reveal className={sec.heading}>
             <p className={sec.eyebrow}>운영 흐름</p>
             <h2 id="flow-title">한 행사의 세 시점이 이어집니다.</h2>
-            <p>행사 전 준비, 현장 진행, 행사 후 정리. 필요한 화면과 역할은 달라도 업무의 맥락은 이어집니다. 운영자는 콘솔에서, 참가자와 스태프는 행사 링크의 모바일 웹에서 일합니다.</p>
+            <p>행사 전 준비, 현장 진행, 행사 후 정리. 필요한 화면과 역할은 달라도 업무의 맥락은 이어집니다. 운영자는 콘솔에서, 스태프는 모바일 웹 현장 화면에서, 참가자는 행사 링크에서 일합니다.</p>
           </Reveal>
           <Reveal delay={120}>
             <LandingFlow scenes={FLOW_SCENES} />
@@ -329,11 +360,11 @@ export default function Home() {
               <ul className={sec.checks}>
                 <li><LandingIcon name="check" size={18} />등록·입장 집계가 행사 중에도 계속 쌓입니다.</li>
                 <li><LandingIcon name="check" size={18} />보고서는 생성 시점의 기록을 고정해 보관합니다.</li>
-                <li><LandingIcon name="check" size={18} />결과 화면에서 바로 확인하고 내보낼 수 있습니다.</li>
+                <li><LandingIcon name="check" size={18} />결과 보고서에서 바로 확인하고, PPTX 파일이나 인쇄·PDF로 내보냅니다.</li>
               </ul>
             </Reveal>
             <Reveal className={sec.reportCard} delay={140}>
-              <p className={sec.reportKicker}>결과 보고서 · 입장 집계</p>
+              <p className={sec.reportKicker}>결과 분석 · 입장 집계</p>
               <div className={sec.reportNumbers}>
                 <div><span>등록</span><strong><CountUp to={269} suffix="명" /></strong></div>
                 <div><span>누적 입장</span><strong><CountUp to={221} suffix="명" /></strong></div>
@@ -352,8 +383,8 @@ export default function Home() {
         <section className={sec.section} aria-labelledby="steps-title">
           <Reveal className={sec.heading}>
             <p className={sec.eyebrow}>도입 절차</p>
-            <h2 id="steps-title">도입은 세 단계로 끝납니다.</h2>
-            <p>첫 행사까지 평균 일주일. 운영 대행사가 직접 세팅을 돕습니다.</p>
+            <h2 id="steps-title">도입은 세 단계로 진행합니다.</h2>
+            <p>행사 종류와 일정을 먼저 듣고, 행사 세팅은 함께 구성합니다.</p>
           </Reveal>
           <ol className={sec.steps}>
             {STEPS.map((item, i) => (
