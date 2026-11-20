@@ -120,6 +120,11 @@ export default function Home() {
   const [heroChosen, setHeroChosen] = useState(false);
   const heroTabButtons = useRef<Array<HTMLButtonElement | null>>([]);
   const activeHero = HERO_TABS.find((tab) => tab.id === heroTab) ?? HERO_TABS[0];
+  // The address is filled in after mount so the edge email filter never sees
+  // a bare address in server HTML (it rewrites visible addresses and breaks
+  // hydration). Copying uses the same constant from JS, which it ignores.
+  const [emailShown, setEmailShown] = useState(false);
+  useEffect(() => { setEmailShown(true); }, []);
 
   useEffect(() => {
     if (heroPaused || heroChosen) return;
@@ -417,7 +422,7 @@ export default function Home() {
             <h2 id="contact-title">다음 행사의 운영 흐름을 함께 살펴보세요.</h2>
             <p>행사 종류와 일정, 예상 규모를 알려주시면 도입 상담으로 이어집니다.</p>
             <div className={styles.contactDetails}>
-              <span>{CONTACT_EMAIL}</span>
+              <span>{emailShown ? CONTACT_EMAIL : ""}</span>
               <button type="button" onClick={() => void copyContactEmail()}>
                 이메일 주소 복사
               </button>
