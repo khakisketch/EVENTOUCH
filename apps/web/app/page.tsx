@@ -10,7 +10,7 @@ import LandingFlow, { type FlowScene } from "./LandingFlow";
 import LandingPageDemo from "./LandingPageDemo";
 import LandingCompare from "./LandingCompare";
 import { LandingIcon } from "./LandingIcons";
-import { CountUp, Reveal, useActiveSection } from "./LandingMotion";
+import { CountUp, Reveal } from "./LandingMotion";
 
 // Service entry: signed-in operators return to their work surface, everyone
 // else sees the public landing. Attendees enter through their event link.
@@ -49,8 +49,6 @@ const HERO_TABS: readonly HeroTab[] = [
 ];
 const INQUIRY_HREF =
   `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(INQUIRY_SUBJECT)}&body=${encodeURIComponent(INQUIRY_BODY)}`;
-
-const NAV_SECTIONS = ["journey", "attendee-page", "report", "faq"] as const;
 
 const FLOW_SCENES: readonly FlowScene[] = [
   {
@@ -121,7 +119,6 @@ export default function Home() {
   // Once the reader picks a screen, the hero stops turning for good.
   const [heroChosen, setHeroChosen] = useState(false);
   const heroTabButtons = useRef<Array<HTMLButtonElement | null>>([]);
-  const activeSection = useActiveSection(NAV_SECTIONS);
   const activeHero = HERO_TABS.find((tab) => tab.id === heroTab) ?? HERO_TABS[0];
 
   useEffect(() => {
@@ -207,13 +204,7 @@ export default function Home() {
           <span className={styles.brandName}>EVENTOUCH</span>
           <span className={styles.brandDescription}>행사 운영 워크스페이스</span>
         </Link>
-        <nav className={styles.siteNav} aria-label="페이지 메뉴">
-          <a href="#journey" aria-current={activeSection === "journey" ? "location" : undefined}>운영 흐름</a>
-          <a href="#attendee-page" aria-current={activeSection === "attendee-page" ? "location" : undefined}>참가자 페이지</a>
-          <a href="#report" aria-current={activeSection === "report" ? "location" : undefined}>결과 보고</a>
-          <a href="#faq" aria-current={activeSection === "faq" ? "location" : undefined}>확인 사항</a>
-        </nav>
-        <Link className={styles.loginLink} href="/login">운영자·스태프 로그인</Link>
+        <Link className={styles.loginLink} href="/login">로그인</Link>
         <a className={styles.headerCta} href={INQUIRY_HREF}>도입 문의</a>
       </header>
 

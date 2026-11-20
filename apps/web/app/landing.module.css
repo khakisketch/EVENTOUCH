@@ -15,7 +15,7 @@
   outline-offset: 3px;
 }
 
-/* Sticky entry bar: brand, in-page menu, and sign-in stay reachable. */
+/* Sticky entry bar: brand, sign-in, and inquiry stay reachable. No in-page menu. */
 .header {
   position: sticky;
   top: 0;
@@ -52,37 +52,15 @@
   letter-spacing: 0.04em;
 }
 
-.siteNav {
-  display: flex;
-  align-items: center;
-  gap: clamp(var(--s4), 3vw, var(--s6));
-}
-
-.siteNav a {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  color: var(--muted);
-  font-size: var(--small);
-  font-weight: var(--fw-strong);
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.siteNav a:hover {
-  color: var(--ink);
-  text-decoration: underline;
-  text-underline-offset: 4px;
-}
-
 .loginLink {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
   justify-content: center;
   padding-inline: var(--s4);
-  border: 1px solid var(--line-strong);
+  border: 0;
   border-radius: var(--r-ctl);
+  background: var(--surface-muted);
   color: var(--ink);
   font-size: var(--small);
   font-weight: var(--fw-strong);
@@ -92,8 +70,7 @@
 }
 
 .loginLink:hover {
-  border-color: var(--ink);
-  background: var(--surface-muted);
+  background: var(--line);
 }
 
 /* Hero: the job is to answer what / for whom / next action in one glance. */
@@ -622,17 +599,6 @@
     font-size: var(--h3);
   }
 
-  .siteNav {
-    order: 3;
-    flex-basis: 100%;
-    gap: var(--s4);
-    overflow-x: auto;
-  }
-
-  .siteNav a {
-    font-size: var(--small);
-  }
-
   .loginLink {
     padding-inline: var(--s3);
   }
@@ -773,7 +739,6 @@
     position: static;
   }
 
-  .siteNav,
   .heroActions,
   .heroTabs,
   .contactDetails button,
@@ -799,10 +764,8 @@
 .brand { color: var(--paper); }
 .brandName::first-letter { color: var(--brand); }
 .brandDescription { color: color-mix(in srgb, var(--paper) 72%, transparent); }
-.siteNav a { color: color-mix(in srgb, var(--paper) 72%, transparent); }
-.siteNav a:hover { color: var(--paper); }
-.loginLink { border-color: color-mix(in srgb, var(--paper) 28%, transparent); color: var(--paper); }
-.loginLink:hover { border-color: var(--paper); background: color-mix(in srgb, var(--paper) 12%, transparent); }
+.loginLink { border: 0; background: var(--surface-muted); color: var(--ink); }
+.loginLink:hover { border-color: transparent; background: var(--line); color: var(--ink); }
 .header a:focus-visible,
 .header button:focus-visible,
 .hero a:focus-visible,
@@ -820,10 +783,8 @@
 .factStrip li + li { border-left-color: color-mix(in srgb, var(--paper) 14%, transparent); }
 .factStrip a { color: color-mix(in srgb, var(--paper) 88%, transparent); }
 .factStrip a:hover { color: var(--paper); text-decoration-color: color-mix(in srgb, var(--paper) 40%, transparent); }
-/* The menu follows the reader: the section on screen is marked. On a phone the
-   header scrolls away (a fixed inquiry button already stays at the bottom), so
-   it does not cover a fifth of every screen. */
-.siteNav a[aria-current="location"] { color: var(--paper); box-shadow: inset 0 -2px 0 var(--brand); }
+/* On a phone the header scrolls away (a fixed inquiry button already stays at
+   the bottom), so it does not cover a fifth of every screen. */
 @media (max-width: 768px) {
   .header { position: static; }
   .headerCta { display: none; }
