@@ -433,7 +433,7 @@
   margin-top: var(--s4);
 }
 
-.contactDetails > a {
+.contactDetails > span {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
@@ -443,13 +443,6 @@
   background: transparent;
   color: var(--paper);
   font-weight: var(--fw-strong);
-  text-decoration: none;
-}
-
-.contactDetails > a:hover {
-  border-color: var(--paper);
-  background: color-mix(in srgb, var(--paper) 12%, transparent);
-  color: var(--paper);
 }
 
 .contactDetails button {

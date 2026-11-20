@@ -417,7 +417,7 @@ export default function Home() {
             <h2 id="contact-title">다음 행사의 운영 흐름을 함께 살펴보세요.</h2>
             <p>행사 종류와 일정, 예상 규모를 알려주시면 도입 상담으로 이어집니다.</p>
             <div className={styles.contactDetails}>
-              <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+              <span>{CONTACT_EMAIL}</span>
               <button type="button" onClick={() => void copyContactEmail()}>
                 이메일 주소 복사
               </button>
@@ -437,7 +437,7 @@ export default function Home() {
 
       <footer className={styles.footer}>
         <span>EVENTOUCH · 행사 운영 워크스페이스</span>
-        <span><Link href="/login">운영자·스태프 로그인</Link> · 이용약관·개인정보처리방침 준비 중</span>
+        <span><Link href="/login">로그인</Link> · 이용약관·개인정보처리방침 준비 중</span>
       </footer>
 
       <nav className={styles.mobileCta} aria-label="모바일 도입 문의">
