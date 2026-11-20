@@ -255,7 +255,18 @@ type SectionStatus = {
   kind: "success" | "error";
   message: string;
   at: string;
+  /** Monotonic: `at` has minute resolution, so it cannot tell which of two same-minute results came last. */
+  order: number;
 };
+
+// Reopened 2026-11-20: the footer shows the most recent section result. Comparing only the minute-resolution clock
+// let an earlier 운영 기능 저장 outrank a 기본 정보 저장 made seconds later (its drawer closes, so the footer is the only
+// place that confirms it). Every status takes the next order number instead.
+let sectionStatusOrder = 0;
+function stampNow(): Pick<SectionStatus, "at" | "order"> {
+  sectionStatusOrder += 1;
+  return { at: formatClockNow(), order: sectionStatusOrder };
+}
 
 const SETTINGS_SECTION_LABEL: Record<SettingsSectionId, string> = {
   basics: "기본 정보",
@@ -900,10 +911,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       setBasicsOpen(false);
       setSlugConfirm(false);
       setFailure(null);
-      sectionStatusSetter(attempt.section)({ kind: "success", message, at: formatClockNow() });
+      sectionStatusSetter(attempt.section)({ kind: "success", message, ...stampNow() });
     } else {
       setNotice(message);
-      sectionStatusSetter(attempt.section)({ kind: "success", message, at: formatClockNow() });
+      sectionStatusSetter(attempt.section)({ kind: "success", message, ...stampNow() });
     }
     // The loader keeps unrelated dirty sections; bootstrap is authoritative
     // for workspace fields the write response does not include.
@@ -1007,7 +1018,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             setFailure({ message });
           } else {
             setFailure({ message, field: unsupportedServer ? "serverUnsupported" : typeof data?.field === "string" ? data.field : undefined });
-            sectionStatusSetter(attempt.section)({ kind: "error", message, at: formatClockNow() });
+            sectionStatusSetter(attempt.section)({ kind: "error", message, ...stampNow() });
             // 한 장에 모든 구역이 보이므로, 실패한 입력으로 직접 포커스를
             // 옮긴다. 기본 정보는 드로어가 편집면이라 먼저 연다.
             if (unsupportedServer) {
@@ -1160,7 +1171,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     if (useLatest) setConsentText(latest.consentText);
     intakeConflictRef.current = null;
     setIntakeConflict(null);
-    setIntakeStatus({ kind: "success", message: "선택한 안내를 확인했습니다. 게시하려면 아래 버튼을 직접 눌러 주세요.", at: formatClockNow() });
+    setIntakeStatus({ kind: "success", message: "선택한 안내를 확인했습니다. 게시하려면 아래 버튼을 직접 눌러 주세요.", ...stampNow() });
     window.requestAnimationFrame(() => document.getElementById("set-consent")?.focus());
   }
 
@@ -1212,7 +1223,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     if (useLatest) setBasics(latest);
     basicsConflictRef.current = null;
     setBasicsConflict(null);
-    setBasicsStatus({ kind: "success", message: "선택한 내용을 확인했습니다. 저장하려면 아래 버튼을 직접 눌러 주세요.", at: formatClockNow() });
+    setBasicsStatus({ kind: "success", message: "선택한 내용을 확인했습니다. 저장하려면 아래 버튼을 직접 눌러 주세요.", ...stampNow() });
     window.requestAnimationFrame(() => document.getElementById("set-name")?.focus());
   }
 
@@ -1256,7 +1267,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     setFeatures(chosen);
     featuresConflictRef.current = null;
     setFeaturesConflict(null);
-    setFeaturesStatus({ kind: "success", message: "선택한 기능을 확인했습니다. 저장하려면 아래 버튼을 직접 눌러 주세요.", at: formatClockNow() });
+    setFeaturesStatus({ kind: "success", message: "선택한 기능을 확인했습니다. 저장하려면 아래 버튼을 직접 눌러 주세요.", ...stampNow() });
     window.requestAnimationFrame(() => document.getElementById("settings-features-legend")?.focus());
   }
 
@@ -1432,7 +1443,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   const latestSectionStatus = [basicsStatus, intakeStatus, featuresStatus].reduce<SectionStatus | null>(
     (latest, status) => {
       if (!status) return latest;
-      if (!latest || status.at >= latest.at) return status;
+      if (!latest || status.order >= latest.order) return status;
       return latest;
     },
     null
