@@ -41,9 +41,12 @@ test('history row actions keep the full 44px touch target', () => {
   // The narrowest row action (상세, two syllables) measured 41.98px wide in
   // isolated Chromium at 320px. Height alone is not the floor: the campaign
   // action buttons carry an explicit minimum width as well.
-  const actionsAt = css.indexOf('.campaignActions :global(.product-action)');
+  // Reopened 2026-11-20 (shared gaps): both floors come from the one shared `.product-action` rule (product-ui.css), so the
+  // per-screen 44px declarations were removed; only the type size and padding stay local.
+  const productUi = fs.readFileSync(path.join(__dirname, '../apps/web/app/product-ui.css'), 'utf8');
+  assert.match(productUi, /\.product-action \{[^}]*min-block-size: var\(--control-min-size\);[^}]*min-inline-size: var\(--control-min-size\)/su, 'width and height floors hold the shortest label');
+  const actionsAt = css.indexOf('.campaignActions :is([data-product-action], [data-action-variant])');
   assert.ok(actionsAt !== -1, 'expected the campaign action button rule');
   const actionsWindow = css.slice(actionsAt, css.indexOf('}', actionsAt) + 1);
-  assert.match(actionsWindow, /min-width:\s*44px/u, 'width floor holds the shortest label');
-  assert.match(actionsWindow, /min-height:\s*44px/u, 'height floor stays');
+  assert.doesNotMatch(actionsWindow, /min-(?:width|height):\s*(?:[0-3]\d|4[0-3])px/u, 'no local rule lowers the shared 44px floor');
 });

@@ -5,7 +5,7 @@
 // are unchanged.
 // Reopened 2026-11-20 (디자인 시스템 적용): the page gains a left table of contents (SettingsToc,
 // 변경됨 pill per section), the two panels stack as full-width hairline section cards (heading="rule"),
-// each save row is a sticky bar (styles.saveBar), the dirty tag is a StatusPill, and the stage dot is ink.
+// each save row is a sticky bar (ConsoleFormActions sticky), the dirty tag is a StatusPill, and the stage dot is ink.
 // Everything else below (event card, drawer, anchors, behaviour) is unchanged.
 // Approved 행사 설정 composition (2026-11-15, option A5): one workbench page
 // (event card with identity plus stage on top, intake and features panels
@@ -128,8 +128,9 @@ test('Reopened 2026-11-20: left contents list, hairline section cards and a stic
   for (const flag of ['basicsDirty', 'intakeDirty', 'featuresDirty']) assert.ok(workspace.includes(`dirty: Boolean(${flag})`), `${flag} reaches the list`);
   assert.match(workspace, /title="참가 접수" heading="rule" surface="panel"/u);
   assert.match(workspace, /title="운영 기능" heading="rule" surface="panel"/u);
-  assert.equal((workspace.match(/className=\{styles\.saveBar\}/g) || []).length, 2, 'intake and features keep their save row in view');
-  assert.match(css, /\.saveBar \{[^}]*position: sticky;[^}]*bottom: 0/su);
+  // Reopened 2026-11-20 (shared gaps): the sticky save row is ConsoleFormActions' own `sticky` option, not a local .saveBar.
+  assert.equal((workspace.match(/<ConsoleFormActions sticky>/g) || []).length, 2, 'intake and features keep their save row in view');
+  assert.doesNotMatch(css, /\.saveBar/u, 'no local save bar');
   assert.match(css, /\.layout \{[^}]*grid-template-columns: 188px/su);
   assert.match(css, /\.workPanels \{[^}]*grid-template-columns: minmax\(0, 1fr\)/su, 'panels stack beside the list');
   assert.match(workspace, /<StatusPill tone="wait" size="sm" dot>저장 안 됨<\/StatusPill>/u);

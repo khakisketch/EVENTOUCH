@@ -162,3 +162,20 @@ test("cue states follow the clock; a title ties a participation event to its cue
   assert.equal(currentDisplayLabel({ type: "idle", moduleId: "", noticeId: "", drawId: "" }, options), "유휴 화면");
   assert.equal(currentDisplayLabel({ type: "poll", moduleId: "p1", noticeId: "", drawId: "" }, options), "투표 · 투표");
 });
+
+// Reopened 2026-11-20 (shared gaps): the stage's status pill is the shared StatusPill's on-dark tones, not a local LivePill,
+// and the room's CSS no longer needs !important or a global .product-action override.
+test("the stage status pill is the shared StatusPill with on-dark tones", () => {
+  const panes = read("LivePanes.tsx");
+  const css = read("live.module.css");
+  assert.ok(!fs.existsSync(path.join(DIR, "LivePill.tsx")), "the local LivePill is gone");
+  assert.doesNotMatch(panes, /LivePill/u);
+  assert.match(panes, /import StatusPill, \{ type StatusPillTone \} from "\.\.\/\.\.\/\.\.\/console-ui\/StatusPill"/u);
+  assert.match(panes, /module\.status === "OPEN" \? "on-dark-ok" : module\.status === "DRAFT" \? "on-dark-wait" : "on-dark"/u);
+  assert.equal((panes.match(/<StatusPill tone=\{statusTone\((?:module|selected)\)\} size="sm" dot>/gu) || []).length, 3, "all three status labels use it");
+  assert.doesNotMatch(css, /\.pill\b|\.pillDot/u, "no local pill styles");
+  assert.match(css, /\[data-status-pill\^="on-dark"\]/u, "a picked chip lifts the pill from the room's own CSS");
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.doesNotMatch(bare, /!important/u, "margins use a zero-specificity reset instead");
+  assert.doesNotMatch(bare, /:global\(\.product-action\)/u);
+});

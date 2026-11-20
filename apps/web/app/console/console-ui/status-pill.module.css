@@ -34,6 +34,19 @@
 .pill[data-status-pill="live"] { background: var(--surface-accent-soft); box-shadow: none; color: var(--brand-text); }
 .pill[data-status-pill="ink"] { background: var(--ink); box-shadow: none; color: var(--surface-work); }
 
+/* Dark faces (the live room, staff column, dark hero cards): the light status
+   line colours at a 16% wash, a quiet outline for the neutral one. Pair
+   contrast is checked in tests/web-console-ds-components.test.cjs. */
+.pill[data-status-pill="on-dark"] { background: transparent; box-shadow: inset 0 0 0 1px var(--stage-line); color: var(--side-muted); }
+.pill[data-status-pill="on-dark-ok"] { background: color-mix(in srgb, var(--on-dark-ok) 16%, transparent); box-shadow: none; color: var(--on-dark-ok); }
+.pill[data-status-pill="on-dark-wait"] { background: color-mix(in srgb, var(--on-dark-wait) 16%, transparent); box-shadow: none; color: var(--on-dark-wait); }
+.pill[data-status-pill="on-dark-danger"] { background: color-mix(in srgb, var(--on-dark-danger) 16%, transparent); box-shadow: none; color: var(--on-dark-danger); }
+
+/* List placement: the pill column of a row. */
+.pill[data-align="start"] { justify-self: start; }
+.pill[data-align="center"] { justify-self: center; }
+.pill[data-align="end"] { justify-self: end; }
+
 .dot {
   display: inline-block;
   flex: 0 0 auto;

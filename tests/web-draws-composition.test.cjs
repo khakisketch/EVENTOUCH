@@ -57,8 +57,11 @@ test('phone widths keep rows on one line and targets at 44px', () => {
   assert.match(css, /\.pickRow\s*\{[^}]*min-height:\s*(?:6[89]|[7-9]\d|1\d\d)px/su);
   assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.pickRow \{ min-height: 96px;/u);
   assert.match(css, /\.pickSpacer \{ display: block; \}/u);
-  assert.match(css, /\.actFoot :global\(\.product-action\)\s*\{\s*min-height:\s*44px/u);
-  assert.match(css, /\.stepper :global\(\.product-action\)\s*\{[^}]*min-height:\s*56px/su);
+  // Reopened 2026-11-20 (shared gaps): the 44px action floor is the one shared `.product-action` rule (product-ui.css);
+  // per-screen `min-height: 44px` repeats were no-ops and are gone.
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'apps', 'web', 'app', 'product-ui.css'), 'utf8'), /\.product-action \{[^}]*min-block-size: var\(--control-min-size\)/su, 'every action keeps a 44px target');
+  assert.doesNotMatch(css, /\.actFoot :global\(\.product-action\)/u, 'no local repeat of the 44px floor');
+  assert.match(css, /\.stepper :is\(\[data-product-action\], \[data-action-variant\]\)\s*\{[^}]*min-height:\s*56px/su);
 });
 
 test("the phone preview's event line inherits its white ink instead of the global muted <small> gray", () => {

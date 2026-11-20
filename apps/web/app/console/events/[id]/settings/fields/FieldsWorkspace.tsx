@@ -14,7 +14,7 @@ import ConsoleChoiceGroup from "../../../../console-ui/ConsoleChoiceGroup";
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon } from "../../../../console-ui/ConsoleIcons";
 import FieldsPhonePreview, { type PreviewSheet } from "./FieldsPhonePreview";
 import ConsoleStatePanel from "../../../../console-ui/ConsoleStatePanel";
-import ListRow from "../../../../console-ui/ListRow";
+import ListRow, { ListRowOpen } from "../../../../console-ui/ListRow";
 import StatusPill from "../../../../console-ui/StatusPill";
 import ProductLink from "../../../../../ui/ProductLink";
 import { useConsoleDraftGuard } from "../../../../console-draft-guard";
@@ -288,8 +288,8 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
             </nav>
           </header>
           <ul className={styles.list}>
-            {state.fields.map((field, index) => <ListRow as="li" className={`${styles.row} ${draft?.existing && draft.id === field.id ? styles.rowSelected : ""}`} key={field.id}
-              title={<button type="button" className={styles.rowOpen} aria-label={`${field.label} 수정`} disabled={!writable || writeLocked || Boolean(draft) || !Object.hasOwn(TYPE_LABELS, field.type)} onClick={() => start(toDraft(field))}>{field.label || "이름 없는 항목"}</button>}
+            {state.fields.map((field, index) => <ListRow as="li" cover className={draft?.existing && draft.id === field.id ? styles.rowSelected : undefined} key={field.id}
+              title={<ListRowOpen aria-label={`${field.label} 수정`} disabled={!writable || writeLocked || Boolean(draft) || !Object.hasOwn(TYPE_LABELS, field.type)} onClick={() => start(toDraft(field))}>{field.label || "이름 없는 항목"}</ListRowOpen>}
               meta={<>{TYPE_LABELS[field.type] || "지원하지 않는 형식"}{["name", "phone"].includes(field.id) ? " · 고정 항목" : ""}{field.type === "select" ? ` · 선택지 ${field.options.length}개` : ""}</>}
               trailing={<>
                 <StatusPill tone={field.required ? "ink" : "neutral"} size="sm">{field.required ? "필수" : "선택"}</StatusPill>

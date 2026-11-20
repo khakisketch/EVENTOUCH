@@ -45,7 +45,7 @@ export default function DrawEventRow({ event, eventId, featureOn, closeHref }: {
           </span>
           <LifecycleMeter segments={lifecycleSegments(facts)} />
           <span className={styles.moduleCount}>{event.status !== "DRAFT" || event.count > 0 ? <><b>{event.count}</b>{event.unit}</> : null}</span>
-          <StatusPill tone={eventPillTone(pill.tone)} dot={pill.tone === "live"} className={styles.rowPill}>{pill.label}</StatusPill>
+          <StatusPill tone={eventPillTone(pill.tone)} dot={pill.tone === "live"} align="end">{pill.label}</StatusPill>
         </summary>
         <div className={styles.moduleBody}>
           <EventStepper steps={lifecycleSteps(facts)} rewardsHref={rewardsHref} rewardCount={event.rewardCount} />

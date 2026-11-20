@@ -2331,7 +2331,7 @@ function ModuleCard(props: {
           </span>
           <LifecycleMeter segments={lifecycleSegments(facts)} />
           <span className={styles.moduleCount}>{summary.count !== null && module.status !== "DRAFT" ? <><b>{summary.count}</b>{summary.unit}</> : null}</span>
-          <StatusPill tone={eventPillTone(pill.tone)} dot={pill.tone === "live"} className={styles.rowPill}>{pill.label}</StatusPill>
+          <StatusPill tone={eventPillTone(pill.tone)} dot={pill.tone === "live"} align="end">{pill.label}</StatusPill>
         </summary>
         <div className={styles.moduleBody}>
           <EventStepper steps={lifecycleSteps(facts)} rewardsHref={props.rewardsHref} rewardCount={props.rewardCount} />

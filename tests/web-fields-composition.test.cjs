@@ -15,7 +15,9 @@ const preview = fs.readFileSync(path.join(dir, 'FieldsPhonePreview.tsx'), 'utf8'
 const css = fs.readFileSync(path.join(dir, 'fields.module.css'), 'utf8');
 
 test('a row is one tap target with two quiet move icons, not four buttons', () => {
-  assert.match(work, /className=\{styles\.rowOpen\} aria-label=\{`\$\{field\.label\} 수정`\}/u, 'the row opens its own editor');
+  // Reopened 2026-11-20 (shared gaps): the name button is the shared ListRowOpen of a `cover` ListRow, not a local .rowOpen.
+  assert.match(work, /<ListRowOpen aria-label=\{`\$\{field\.label\} 수정`\}/u, 'the row opens its own editor');
+  assert.match(work, /<ListRow as="li" cover /u, 'the title button covers the row');
   assert.match(work, /aria-label=\{`\$\{field\.label\} 위로 이동`\}/u);
   assert.match(work, /aria-label=\{`\$\{field\.label\} 아래로 이동`\}/u);
   assert.doesNotMatch(work, /aria-label=\{`\$\{field\.label\} 제외`\}/u, 'exclusion no longer repeats on every row');

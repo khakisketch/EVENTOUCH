@@ -26,10 +26,12 @@ test("approved clients design stays locked", () => {
   assert.match(css, /\.clientOpen::after\s*\{[^}]*inset:\s*0/su, "the whole row opens the drawer");
 
   // Row order: logo or initial, name, contact, file state, arrow. Reopened 2026-11-20:
-  // the initial is the shared ConsoleAvatar and the logo keeps a local white tile.
-  const order = ["styles.clientLogo", "styles.clientName", "styles.clientContact", "styles.clientFiles", "styles.clientArrow"].map((t) => row.indexOf(t));
+  // the initial AND the logo tile are the shared ConsoleAvatar (its `src` slot draws the white hairline tile).
+  const order = ["<ConsoleAvatar", "styles.clientName", "styles.clientContact", "styles.clientFiles", "styles.clientArrow"].map((t) => row.indexOf(t));
   assert.ok(order.every((p) => p >= 0) && order.every((p, i) => i === 0 || order[i - 1] < p));
-  assert.match(row, /<ConsoleAvatar name=\{client\.name\} size="lg" \/>/u, "no hand-rolled initial avatar");
+  assert.match(row, /<ConsoleAvatar\s+name=\{client\.name\}\s+size="lg"\s+src=\{client\.logoFileId \?/u, "the client's logo is the shared avatar's src slot");
+  assert.doesNotMatch(row, /<img|styles\.clientLogo/u, "no hand-rolled logo tile");
+  assert.doesNotMatch(css, /\.clientLogo/u, "the logo tile lives in console-ui now");
 
   // File state is a StatusPill (dot plus the word); color is never the only signal.
   assert.match(row, /<StatusPill tone=\{client\.logoFileId \? "ok" : "neutral"\} size="sm" dot>/u);

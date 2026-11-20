@@ -160,7 +160,6 @@
   background: var(--paper);
   font-variant-numeric: tabular-nums;
 }
-.jobItem :global(.product-action) { min-height: var(--control-min-size); }
 .jobCopy { display: grid; gap: var(--s1); min-width: 0; }
 .jobFile, .jobMeta, .orphanWarning { margin: 0; overflow-wrap: anywhere; }
 .jobFile { font-weight: var(--fw-strong); }
@@ -177,7 +176,6 @@
 }
 
 .moreRow { margin: var(--s3) 0 0; text-align: center; }
-.moreRow :global(.product-action) { min-height: var(--control-min-size); }
 
 /* ---- coverage: one flat band. Count, one bar segment per section, amber where a section is empty ---- */
 .coverage {
@@ -230,7 +228,6 @@
 .galleryHead { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding-bottom: var(--s2); border-bottom: 1px solid var(--line); }
 .galleryHead h2 { margin: 0; font-size: var(--text-xl); font-weight: var(--fw-heavy); letter-spacing: var(--ls-heading); }
 .galleryHead h2 small { margin-left: var(--s2); color: var(--muted); font-size: var(--text-sm); font-weight: var(--fw-strong); }
-.galleryHead :global(.product-action) { min-height: var(--control-min-size); }
 .galleryHead a[data-native-control="download"] {
   padding-inline: var(--s4);
   border-radius: var(--r-pill);
@@ -285,7 +282,6 @@
 .viewer { display: grid; gap: var(--s3); }
 .viewerImage { display: block; width: 100%; max-height: 56svh; object-fit: contain; border-radius: var(--r-card); background: var(--stage); }
 .viewerNav { display: flex; justify-content: space-between; }
-.viewerNav :global(.product-action) { min-height: var(--control-min-size); }
 .viewerInfo { display: grid; gap: 2px; padding: var(--s3) var(--s4); border-radius: var(--r-ctl); background: var(--surface-sunken); }
 .viewerInfo b { font-weight: var(--fw-strong); overflow-wrap: anywhere; }
 .viewerInfo small { color: var(--muted); }
@@ -309,7 +305,7 @@
 .photoControls label { font-size: var(--text-sm); font-weight: var(--fw-strong); }
 .moveRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s2); min-width: 0; }
 .moveRow select { width: 100%; min-width: 0; min-height: var(--control-min-size); }
-.moveRow :global(.product-action) { min-height: var(--control-min-size); white-space: nowrap; }
+.moveRow :is([data-product-action], [data-action-variant]) { white-space: nowrap; }
 
 @media (max-width: 768px) {
   .sectionTiles { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s2); }
@@ -324,11 +320,11 @@
 
 @media (max-width: 420px) {
   .jobItem { grid-template-columns: minmax(0, 1fr); }
-  .jobItem :global(.product-action) { width: 100%; }
+  .jobItem :is([data-product-action], [data-action-variant]) { width: 100%; }
   .moveRow { grid-template-columns: minmax(0, 1fr); }
-  .moveRow :global(.product-action) { width: 100%; }
+  .moveRow :is([data-product-action], [data-action-variant]) { width: 100%; }
   .previewActions { align-items: stretch; }
-  .previewActions :global(.product-action) { width: 100%; }
+  .previewActions :is([data-product-action], [data-action-variant]) { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

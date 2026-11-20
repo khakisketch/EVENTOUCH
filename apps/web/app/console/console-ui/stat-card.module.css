@@ -43,6 +43,8 @@
   font-variant-numeric: tabular-nums;
 }
 
+.card[data-stat-size="hero"] .value { font-size: var(--text-stage); }
+
 .card[data-stat-card="wait"] .value { color: var(--warning); }
 .card[data-stat-card="ok"] .value { color: var(--success); }
 

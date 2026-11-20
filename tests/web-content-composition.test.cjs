@@ -22,7 +22,8 @@ const css = read('content.module.css');
 const previewCss = read('content-preview.module.css');
 
 test('content screen is ink tabs over flat ledgers with one orange add action', () => {
-  assert.match(workspace, /role="tablist" aria-label="콘텐츠 종류"/u);
+  // Reopened 2026-11-20 (shared gaps): the tabs are the shared CountTabs in tablist mode (roles and keys live in the component).
+  assert.match(workspace, /<CountTabs\s+mode="tablist"\s+ariaLabel="콘텐츠 종류"\s+idPrefix="content-tab-"\s+controls="content-panel"/u);
   assert.match(workspace, /role="tabpanel"/u);
   assert.match(workspace, /\{ id: "program", label: "일정"/u, 'the schedule tab no longer collides with 참여 콘텐츠 프로그램');
   assert.doesNotMatch(workspace, /프로그램 일정<\/|label: "프로그램 일정"/u);
@@ -35,7 +36,10 @@ test('content screen is ink tabs over flat ledgers with one orange add action', 
   assert.match(workspace, /<ConsoleEmptyState title="등록된 공지가 없습니다\."/u);
   assert.match(workspace, /<LedgerNote/u, 'the ledger says how many items the attendee phone shows');
   assert.doesNotMatch(workspace, /styles\.badge\b/u, 'no state chips');
-  assert.match(css, /\.tab\[aria-selected="true"\]\s*\{[^}]*background:\s*var\(--ink\)/su);
+  // Reopened 2026-11-20 (shared gaps): the ink-filled chosen tab is the shared CountTabs' look, not a local .tab rule.
+  const countTabsCss = fs.readFileSync(path.join(__dirname, '../apps/web/app/console/console-ui/count-tabs.module.css'), 'utf8');
+  assert.match(countTabsCss, /\.tab\[data-selected="true"\][^{]*\{[^}]*background:\s*var\(--ink\)/su);
+  assert.doesNotMatch(css, /\.tab\b/u, 'no local tab styles');
   assert.doesNotMatch(css, /font-weight:\s*(?:6[0-9]{2}|7[0-9]{2})\b/u, 'weights are the three tokens only');
   // One orange action at a time: the header add action hides while an editor
   // is open, and the editor's primary moves between 저장 and 게시 검토.
@@ -144,9 +148,14 @@ test('the notice body is a rich editor on a small schema, stored as Markdown wit
   assert.match(preview, /<RichText source=\{item\.body\} imageSrc=\{imageSrc\} \/>/u);
 });
 
+// Reopened 2026-11-20 (shared gaps): the keyboard model moved into CountTabs (tablist mode); tests/web-console-ds-components.test.cjs runs it.
 test("content tabs follow the tab keyboard pattern: arrows wrap, Home and End jump", () => {
-  assert.match(workspace, /event\.key === "Home" \? tabs\[0\] : event\.key === "End" \? tabs\[tabs\.length - 1\]/u);
-  assert.match(workspace, /event\.key === "ArrowRight" \? tabs\[\(index \+ 1\) % tabs\.length\]/u);
+  const tabs = fs.readFileSync(path.join(__dirname, '../apps/web/app/console/console-ui/CountTabs.tsx'), 'utf8');
+  assert.match(tabs, /key === "Home" \? enabled\[0\]/u);
+  assert.match(tabs, /key === "End" \? enabled\[enabled\.length - 1\]/u);
+  assert.match(tabs, /key === "ArrowRight" \? enabled\[\(at \+ 1\) % enabled\.length\]/u);
+  assert.match(tabs, /key === "ArrowLeft" \? enabled\[\(at \+ enabled\.length - 1\) % enabled\.length\]/u);
+  assert.match(workspace, /onChange=\{\(key\) => selectTab\(key as ContentTab\)\}/u, 'a click or an arrow selects through the same function');
 });
 
 // Reopened 2026-11-20 (owner: previews should be device simulators)

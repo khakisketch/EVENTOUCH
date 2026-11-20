@@ -11,6 +11,7 @@ import ConsoleFeedback from "../../../console-ui/ConsoleFeedback";
 import ConsoleRefreshButton from "../../../console-ui/ConsoleRefreshButton";
 import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
+import CountTabs from "../../../console-ui/CountTabs";
 import StatCard from "../../../console-ui/StatCard";
 import StatusPill from "../../../console-ui/StatusPill";
 import { InfoIcon } from "../../../console-ui/ConsoleIcons";
@@ -357,8 +358,9 @@ function PeriodView({
           <div className={styles.summary}>
             <StatCard
               className={styles.hero}
+              size="hero"
               label="기간 고유 입장"
-              value={<span className={styles.heroNum} data-metric="unique">{periodUnique}</span>}
+              value={<span data-metric="unique">{periodUnique}</span>}
               unit="명"
               detail={(
                 <span className={styles.heroDetail}>
@@ -410,23 +412,17 @@ function PeriodView({
           </ConsoleSection>
 
           <ConsoleSection headingId="period-detail-title" title="세부 보기" heading="rule">
-            <div className={styles.subTabs} role="tablist" aria-label="세부 보기 선택">
-              {DETAIL_TABS.map((tab) => (
-                <button key={tab.key} type="button" role="tab" id={`period-tab-${tab.key}`} className={styles.subTab}
-                  aria-selected={detailTab === tab.key} aria-controls={`period-panel-${tab.key}`} tabIndex={detailTab === tab.key ? 0 : -1}
-                  onClick={() => setDetailTab(tab.key)}
-                  onKeyDown={(event) => {
-                    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
-                    event.preventDefault();
-                    const at = DETAIL_TABS.findIndex((item) => item.key === detailTab);
-                    const next = DETAIL_TABS[(at + (event.key === "ArrowRight" ? 1 : DETAIL_TABS.length - 1)) % DETAIL_TABS.length];
-                    setDetailTab(next.key);
-                    document.getElementById(`period-tab-${next.key}`)?.focus();
-                  }}>
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+            <CountTabs
+              mode="tablist"
+              ariaLabel="세부 보기 선택"
+              idPrefix="period-tab-"
+              controls={(key) => `period-panel-${key}`}
+              fit="fill"
+              value={detailTab}
+              onChange={(key) => setDetailTab(key as DetailTab)}
+              items={DETAIL_TABS}
+              className={styles.subTabs}
+            />
             <div className={styles.subPanel} role="tabpanel" id={`period-panel-${detailTab}`} aria-labelledby={`period-tab-${detailTab}`}>
               {detailTab === "hours" ? (
                 <>

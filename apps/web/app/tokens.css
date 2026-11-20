@@ -156,6 +156,38 @@
   --surface-sunken: var(--surface-muted);
   --surface-accent-soft: var(--brand-tint);
 
+  /* ---- Shared-gap additions (2026-11-20). Additive only: nothing above changed. ----
+     --text-stage       hero number: the one figure a screen is about (StatCard
+                        hero). Between --text-num 34 and the display sizes.
+     Dark-surface scale translucent paper on --ink / --stage faces (live room,
+                        staff column, dark hero cards). Fills 8 12 16 24, text 72 88.
+     --on-dark-ok|wait|danger  status colours that read on a dark face (the
+                        light status line colours; StatusPill on-dark tones). */
+  --text-stage: 48px;
+  --on-dark-8: color-mix(in srgb, var(--paper) 8%, transparent);
+  --on-dark-12: color-mix(in srgb, var(--paper) 12%, transparent);
+  --on-dark-16: color-mix(in srgb, var(--paper) 16%, transparent);
+  --on-dark-24: color-mix(in srgb, var(--paper) 24%, transparent);
+  --on-dark-72: color-mix(in srgb, var(--paper) 72%, transparent);
+  --on-dark-88: color-mix(in srgb, var(--paper) 88%, transparent);
+  --on-dark-ok: var(--success-line);
+  --on-dark-wait: var(--warning-line);
+  --on-dark-danger: var(--danger-line);
+  /* One primary-action colour rule (DESIGN.md "Action role rules"): deep orange
+     with white text, 4.9:1 (AA); hover and pressed go one step deeper, 6.4:1.
+     ProductButton and ProductLink (Astryx --color-accent / --color-on-accent
+     point at the same pair), the account and login forms, and the remaining
+     legacy .button-primary all read these three. The lighter --brand fill with
+     --on-brand text is for badges and marks, never for a primary button. */
+  --action-primary: var(--brand-hover);
+  --action-primary-ink: var(--on-brand-hover);
+  --action-primary-pressed: var(--brand-pressed);
+  /* The same rule on a dark face (landing hero, staff column): the bright
+     --brand fill with --on-brand ink (text 4.9:1, fill against --stage 5.3:1).
+     The deep orange would sit at only 3.8:1 against --stage there. */
+  --action-primary-on-dark: var(--brand);
+  --action-primary-on-dark-ink: var(--on-brand);
+
   --phone-screen-bg: var(--paper);
   --phone-stage-bg: var(--ground);
   --attendee-accent: var(--brand);

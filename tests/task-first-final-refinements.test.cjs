@@ -231,7 +231,7 @@ test("photos upload stacks full-width on phones; import file aligns left", () =>
   const narrow = photos.slice(photos.indexOf("@media (max-width: 420px)"));
   assert.match(mobile, /\.previewGrid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill/su, "previews wrap to the phone width");
   assert.match(narrow, /\.jobItem\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/su, "upload rows keep full width");
-  assert.match(narrow, /\.previewActions :global\(\.product-action\)\s*\{[^}]*width:\s*100%/su, "upload action goes full-width");
+  assert.match(narrow, /\.previewActions :is\(\[data-product-action\], \[data-action-variant\]\)\s*\{[^}]*width:\s*100%/su, "upload action goes full-width");
   const wizard = read("console/events/[id]/participants/import/ImportWizard.tsx");
   assert.match(wizard, /<label data-import-dropzone/u, "the drop area is one label around the real file input");
   assert.match(wizard, /styles\.filePicker/u, "the picker owns its focusable presentation");

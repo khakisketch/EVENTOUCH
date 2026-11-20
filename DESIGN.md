@@ -206,6 +206,8 @@ The owner's recurring complaint is a screen full of identical white bordered but
 | Status | chip with color plus shape | Stage, readiness, counts with context | Not a button |
 | Row data | ledger row | Lists of records | Not card-wrapped lists |
 
+**Primary colour is one rule** (2026-11-20): a main action is the deep orange `--action-primary` (`--brand-hover`, #C7441C) with white `--action-primary-ink` text (4.92:1, AA); its hover and pressed state is `--action-primary-pressed` (`--brand-pressed`, 6.39:1). `ProductButton`, `ProductLink` and the Astryx theme (`--color-accent`, `--color-on-accent`) already resolve to that pair (a primary `ProductButton` gets its hover from `product-ui.css`, because Astryx's own 5% dark overlay is too faint to read as a state), and login, password reset, account email, invite, the global `.button-primary` and the runtime-recovery action read the same tokens. The lighter `--brand` fill with `--on-brand` ink is not a primary-button colour; it is only for badges and marks, and for the same primary on a **dark face** (the landing hero and the staff column), where `--action-primary-on-dark` / `--action-primary-on-dark-ink` keep the bright fill that the deep orange (3.8:1 on `--stage`) cannot. `auth-entry.module.css` sizes the account submits but never repaints a primary one (it only keeps the white hairline look of a secondary submit).
+
 Every `ProductButton` states its role with `variant`; the `button-*` legacy classes are not a role. When a screen has more than a few secondary buttons, ask which are really utilities and move them to `ghost`. `tests/web-button-roles.test.cjs` holds the per-file secondary ceiling.
 
 ## 운영 현황 확정 구성
@@ -239,6 +241,7 @@ Reopened 2026-11-20 (owner: 기간 분석이 다른 화면과 다르게 조잡�
 - One column on phones, no horizontal overflow at 320/390, reduced motion respected. All colors are tokens.
 
 Reopened 2026-11-20 (디자인 시스템 적용, C1): the screen keeps its definitions, copy and table contract. Composition: one big number only (기간 고유 입장 as the shared `StatCard`) with its comparison or 입장률 (`StatusPill` live, the one orange accent); 신청 and 일별 입장 합 became side figures beside it (`data-metric` kept); the daily chart is a flat `ConsoleSection heading="rule"`; 시간대별 입장 · 소속별 신청 · 일별 기록 are secondary tabs (`role="tablist"`, the table sits in the last tab). Empty charts use `ConsoleEmptyState`. The dark hero card and boxed chart cards are gone; weights are 400/600/800 and sizes/radii are tokens.
+- Reopened 2026-11-20 (공용 부품 보강): 세부 보기 탭은 지역 구현이 아니라 `CountTabs mode="tablist"`(`fit="fill"`, id `period-tab-*`, `aria-controls` `period-panel-*`)이고, 큰 숫자는 값 span을 키우던 방식 대신 `StatCard size="hero"`(`--text-stage`)다. `data-metric="unique"`와 탭 이름은 그대로다.
 
 ## 참가자 명단 확정 구성
 
@@ -311,6 +314,7 @@ Reopened 2026-11-20 (참여 이벤트 통합; the menu "추첨·투표" merged i
 - The draws screen is no longer a rail menu: the rail lights 참여 이벤트 here, and every stage draw, 순위 투표, 룰렛 and 럭키번호 is also a row of the one event list. This screen stays at `/draws` as the stage where a draw-type event is run (실행, 무대 터치, 결과 공개, winners, settings).
 - The header carries a ghost back link "참여 이벤트" beside 추첨 프로그램 만들기. The heading, `pageId="draws"`, `#draws-vote` / `#draws-roulette` / `#draws-lucky` / `#draw-program-<id>` selection and every confirmation, blocker line and permission lock are unchanged; the event list links into them.
 - Reopened 2026-11-20 (디자인 시스템 적용): 무대 상태는 `StatusPill`, 빈 상태는 `ConsoleEmptyState`, 당첨자는 "당첨자 n/m명" 알약이 달린 순번 카드로 실행 영역 바로 뒤에 둔다. 모바일(≤768px)은 사실→실행 버튼→당첨자→청중 화면 미리보기 순으로 읽고(미리보기 `order: 3`), 데스크톱은 좌측 미리보기·우측 실행의 확정 구성을 유지한다. 선택 카드는 모바일에서 "아이콘+개수/이름/막대"로 쌓는다. 설정(투표·룰렛·럭키·프로그램)은 계속 접힘이나 대화창이다. CSS는 `--text-*`·`--fw-*`(400/600/800)·`--r-*` 토큰만 쓰고, 청중 화면 시뮬레이터(전광판 1280×720, 폰 390px) 안의 실제 기기 px만 남긴다.
+- Reopened 2026-11-20 (공용 부품 보강): `:global(.product-action) { min-height: 44px }` 반복은 공용 `.product-action`(product-ui.css의 44px 바닥)과 같아 지웠다. 56px 스테퍼처럼 값이 다른 것만 `:is([data-product-action], [data-action-variant])`로 남았다. 참여 이벤트·경품·현장 사진·신청 항목·메시지·참가자 페이지 화면도 같은 정리를 했다.
 
 ## 참여 콘텐츠 확정 구성
 
@@ -356,6 +360,7 @@ Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behav
 Reopened 2026-11-20 (owner: 미리보기를 모바일 껍데기 시뮬레이션으로):
 - The phone is the shared `DeviceFrame` (390px layout scaled to its host; the scrolling screen stays a labelled region). 공지·일정·장소 screens now start with the real `HomeHero` banner and show white cards under quiet section labels like the real event guide; a real phone's full view is still the bare screen with no frame.
 - Reopened 2026-11-20 (디자인 시스템 적용): 공지·일정 행은 공용 `ListRow`+`StatusPill`(게시 중=ok, 수정본 있음=wait, 비공개=neutral), 빈 상태는 `ConsoleEmptyState`. 탭은 `CountTabs`와 같은 모양을 `role="tab"` 시맨틱으로 유지한다. 목록 위에 "참가자 폰에는 게시 중 N개만 보입니다" 안내를, 편집기 머리에 상태·저장 전 변경 알약과 폰 미리보기 윤곽선 안내를 둬 편집과 미리보기를 한 흐름으로 묶었다. 폰 미리보기·디자인 연동 구조(C안)는 그대로다. CSS는 글자 크기·모서리·굵기를 토큰으로 정리해 수치 0.
+- Reopened 2026-11-20 (공용 부품 보강): 공지 · 일정 · 장소 안내 탭은 `CountTabs mode="tablist"`(`idPrefix="content-tab-"`, `controls="content-panel"`)다. 지역 탭 CSS와 키보드 처리는 없어졌고 방향키·Home·End는 부품이 맡는다. 장소 탭의 상태 알약은 `StatusPill align="start"`다.
 
 ## 참가자 페이지 확정 구성
 
@@ -387,6 +392,7 @@ Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behav
 - The event card's head carries a soft brand tint and a larger name; the stage block is a connected five-step stepper (finished steps green with a check, the current step an ink circle with a 현재 chip, the next step an outlined circle with a 다음 chip). Orange stays on the primary actions only.
 - Each 운영 기능 tile shows a switch (ink track when on). The real checkbox stays inside the tile, transparent over it, so keyboard and screen readers are unchanged.
 - Reopened 2026-11-20 (디자인 시스템 적용): 구조(탭 없음, 기본 정보 드로어, 참가비·진행 형태 없음)는 그대로 두고, 왼쪽에 설정 목차(`SettingsToc`: 번호·현재 상태 한 줄·"변경됨" 알약, 폰은 가로 칩 줄)를 붙였다. 행사 카드·참가 접수·운영 기능은 목차 오른쪽 한 열의 흰 카드+헤어라인(`heading="rule"`)으로 쌓고, 참가 접수는 상태 띠 아래에서 신청서 미리보기와 동의 안내를 나란히 둔다. 게시·저장 줄은 카드 아래에 붙는 sticky 바라 스크롤해도 같은 자리다. 저장 안 됨 표시는 `StatusPill`, 진행 단계 점은 주황이 아니라 잉크다. 운영 기능 타일은 데스크톱 3열.
+- Reopened 2026-11-20 (공용 부품 보강): 접수 양식·운영 기능의 고정 저장 줄은 지역 `.saveBar`가 아니라 `ConsoleFormActions sticky`다. 목차(`SettingsToc`)는 지역 구현 그대로다.
 
 ## 메시지 확정 구성
 
@@ -448,6 +454,7 @@ The owner approved this composition on 2026-11-20 (proposal C, `design-review/on
 - Refresh: visibility-aware polling (10s, `ifVersion` shortcut), the console freshness subscription, and a failed read keeps the last good screen with an inline retry. Targets are 48px, status changes are announced (`aria-live`), motion respects reduced-motion.
 
 Reopened 2026-11-20 (디자인 시스템 적용, C1): the dark stage and three-pane layout stay. The middle pane now leads with 무대 이벤트 and the selected event's control panel, where the one primary (열기 or 마감) is the biggest control (88px, 800 weight), and the venue-screen preview, output picker and 추첨 프로그램 follow. The right pane starts with 다음에 할 일 and is sticky on wide rooms. Event status is `LivePill` (a local dark-stage `StatusPill`: same shape and type tokens, stage line colours; OPEN green, DRAFT amber, CLOSED quiet). Weights are 400/600/800, sizes `--text-*`, radii `--r-*`. Needed in the shared kit: a `StatusPill` tone for dark surfaces.
+- Reopened 2026-11-20 (공용 부품 보강): 상태 알약은 지역 `LivePill`이 아니라 공용 `StatusPill`의 어두운 면 톤(`on-dark-ok`·`on-dark-wait`·`on-dark`)이다. 고른 칩(밝은 바탕) 위에서만 알약이 방 바탕색 위로 올라가는 규칙은 `live.module.css`에 남아 있다. `.room`의 여백 초기화는 명시도 0(`:where`)이라 `!important` 세 곳이 없어졌고, 48px 대상은 `[data-action-variant]`로 고른다.
 
 ## 행사 목록 확정 구성
 
@@ -508,6 +515,7 @@ Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behav
 - A row is still flat with hairlines and no controls, but the initial sits in a 48px tinted tile (five soft tones picked from the name) and each file state is a pill: green-tinted with a green dot when registered, a hollow dot on a soft pill when not. The word and the screen-reader state are unchanged.
 - Reopened 2026-11-20 (owner: 카드 띠도 개수 탭으로): 카드 띠 → 개수 탭. The three read-only cards are count tabs (전체 · 로고 등록 · 사업자등록증 등록) that now also filter the loaded list locally together with the search. Shared component `console-ui/CountTabs` (segmented control, pill count badges, ink fill when chosen, amber badge only for waiting work, scrolls inside its own box on phones). Big-number cards and rings stay only on 운영 현황, 현장 모드, 결과 보고서 and 기간 분석.
 - Reopened 2026-11-20 (디자인 시스템 적용): the initial is the shared `ConsoleAvatar` (lg; a client's own logo keeps a white hairline tile), file states are `StatusPill` (green with a dot when registered, grey when not; the words stay), the result count moves to the end of the count-tabs row, and "no clients" and "nothing matches" are `ConsoleEmptyState` (the second with 필터 초기화). The drawer file rows show the same state pill beside 로고 / 사업자등록증 and drop the repeated "등록 안 됨 ·" prefix. Rows are still flat, hold one name button and open the same drawer.
+- Reopened 2026-11-20 (공용 부품 보강): 고객사 자체 로고도 `ConsoleAvatar`(`size="lg" src`)가 흰 헤어라인 타일로 그린다. 행의 지역 로고 타일(`.clientLogo`)은 없어졌다.
 
 ## 팀·권한 확정 구성
 
@@ -607,6 +615,7 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/console/events/
 Reopened 2026-11-20 (owner: 미리보기를 모바일 껍데기 시뮬레이션으로, 실제 신청서를 따를 것):
 - The preview is the real registration sheet inside the shared `DeviceFrame` phone: the published event banner (`EventBanner`), when and where (`EventFacts`), then numbered sections 참가자 정보, 연락처 인증 (only when the event asks for a phone check) and 정보 수집 동의 (only when a consent notice exists), on the event's ground color. The field being edited scrolls into view and stays outlined. Still decorative (`aria-hidden`, `inert`), still no second orange.
 - Reopened 2026-11-20 (디자인 시스템 적용): 항목 행은 `ListRow`(이름 버튼의 `::after`가 행 전체를 누르는 대상으로 유지), 필수/선택과 게시 상태는 `StatusPill`(필수=잉크, 선택=중립, 게시 안 된 변경=앰버, 같음=초록), 섹션 제목은 `heading="rule"`. 폰 미리보기·편집 패널·쓰기 계약은 그대로.
+- Reopened 2026-11-20 (공용 부품 보강): 항목 행은 `ListRow cover`+`ListRowOpen`이다(이름 버튼의 `::after`가 행 전체를 덮고, 순서 버튼은 그 위에 남는다). 지역 `.rowOpen`·`z-index` 처리는 없어졌다.
 
 ## 참여하기 확정 구성
 
@@ -654,6 +663,7 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/staff/StaffHub.
 - Empty and failed states are an icon tile, the unchanged sentence ("배정된 업무가 없습니다. 운영자에게 문의하세요."), and one outlined "다시 불러오기". Organization line, the changed-organization notice (the rows and card stand down) and the single-assignment shortcut are unchanged.
 - The login keeps its markup and copy: a dark band with the wordmark (orange E, from `::first-letter`) and the promise line over a white sheet with 56px fields; the error line and the submit sit at the bottom of the sheet, the error directly above the submit. On wide screens the band and sheet are one framed card. The submit is docked at the bottom of the sheet, not fixed to the screen. Everything after sign-in (staff to 내 업무, operators to the console), the session notice, first-operator setup and the reset help are unchanged.
 - Reopened 2026-11-20 (디자인 시스템 적용; `tests/web-staff-entry-composition.test.cjs` asserts it): the live card's chip and each row's state are the shared `StatusPill` ("지금 진행 중", "진행 중", "준비 중") instead of a colour-only dot, the failed and empty tiles carry an icon in the state's tone (warn for waiting on an assignment, danger for a failed load), and loading is a quiet ring with its words, not a white card. Sizes, weights and corners are tokens.
+- Reopened 2026-11-20 (주 버튼 색 통일): 로그인의 제출은 진한 주황+흰 글자였고 비밀번호 재설정·계정·초대의 제출은 `auth-entry.module.css`가 `--brand`+`--on-brand`로 다시 칠하고 있었다. 이제 모두 ProductButton의 주 버튼 색 하나(`--action-primary` 진한 주황+흰 글자, 눌림 `--action-primary-pressed`)이고 그 파일은 주 제출의 크기·모서리만 정하고 색은 칠하지 않는다(보조 제출의 흰 바탕+헤어라인만 유지). 어두운 면(스태프 열·랜딩 히어로)의 주 버튼만 `--action-primary-on-dark`다.
 
 ## 계정·첫 화면 확정 구성
 
@@ -690,6 +700,14 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/console/CreateE
   - `ConsoleEmptyState`(empty·filtered·error-soft), `StatCard`/`StatRow`, `StatusPill`(ok·wait·info·danger·neutral·live·ink), `ConsoleAvatar`, `ListRow`(행 전체가 하나의 링크·버튼), `CountTabs`(탭), `ConsoleSection`(`heading="rule"`로 제목 아래 헤어라인)
 - 재발 방지: `tests/web-design-tokens-guard.test.cjs`가 콘솔·행사 CSS의 px 글자 크기·숫자 반경·hex를 센다. 파일별 개수는 `tests/fixtures/design-token-baseline.json` 이하로만 허용하고, 새 파일과 위 새 부품 CSS는 0이어야 한다. 화면을 토큰으로 옮겨 숫자가 줄면 `node tests/web-design-tokens-guard.test.cjs --update`로 기준선을 낮춘다.
 - 부품 계약: `tests/web-console-ds-components.test.cjs`.
+- Reopened 2026-11-20 (공용 부품 보강): 화면마다 지역 우회로 만들던 기능을 부품의 **선택 prop**으로 올렸다. 기본 출력은 그대로이고, 지역 `LivePill`·탭·로고 타일·`.saveBar`는 없어졌다.
+  - 토큰(추가만): `--text-stage` 48px(StatCard 히어로의 큰 숫자), 어두운 면 투명도 스케일 `--on-dark-8|12|16|24`(채움)와 `--on-dark-72|88`(글자), 어두운 면 위 상태색 `--on-dark-ok|wait|danger`, 주 행동 색 `--action-primary`·`-ink`·`-pressed`(+`-on-dark`·`-on-dark-ink`).
+  - `StatusPill`: `id`·`title`·`role`·`aria-*`·`data-*`를 `<span>`으로 전달(`data-status-pill`·`data-size`는 부품 몫), 어두운 면 톤 `on-dark`(조용한 윤곽)·`on-dark-ok`·`on-dark-wait`·`on-dark-danger`(현장 모드의 무대), 목록 칸 정렬 `align="start|center|end"`.
+  - `ListRow`: `id`·`data-*`·`aria-*`는 행 요소로, `titleProps`(id·tabIndex)와 `titleAs="h3|h4"`는 제목 요소로(버튼 행은 `<button>` 안에 제목을 둘 수 없어 span 유지). 상호작용은 네 가지 중 하나: ① `href`/`onClick`(본체가 링크·버튼) ② **`cover` + `<ListRowOpen>`**(제목의 한 버튼이 `::after`로 행 전체를 덮고, `center`·`trailing`·`action`의 컨트롤은 그 위에 남는다. 신청 항목 편집이 쓴다) ③ `action`(링크·버튼 행 옆의 별도 컨트롤, 스위치 등. 본체 바깥 형제 요소) ④ `as="summary"`(`<details>`의 요약 줄, 열리면 화살표가 돈다). 그 밖에 `center`(글과 trailing 사이의 막대·미터), `trailingWidth="free"`(trailing 50% 폭 제한 해제), `variant="timeline"`+`time`+`railTone`(시간 열과 레일 점).
+  - `ConsoleEmptyState`: `tone="amber"`(사람을 기다리는 빈칸), `size="sm"`(카드·촘촘한 목록 안). `titleAs` 기본은 `p`이고, 제목이 개요에 들어가야 하면 섹션 h2 아래에서 `h3`.
+  - `CountTabs`: `mode="tablist"`(`role="tablist"`/`tab`, `aria-selected`, 로빙 tabindex, ←→(순환)·Home·End, `idPrefix`·`controls`로 탭 id와 `aria-controls`, `count` 없는 탭은 배지 없음), `fit="wrap|fill"`(768px 이하에서 줄바꿈 또는 균등 분할, 기본은 상자 안 스크롤), `toggle`(선택한 탭과 **함께** 좁히는 `aria-pressed` 알약 하나, 행사 목록의 "승인 대기만"이 쓸 수 있다. 필터 모드 전용).
+  - `StatCard`: `size="hero"`(`--text-stage`, 화면에 하나). `ConsoleAvatar`: `src`(로고 이미지, 흰 헤어라인 타일·`contain`). `ConsoleFormActions`: `sticky`(긴 폼 아래에 붙는 저장 줄, 위쪽 헤어라인·흰 면).
+  - 쓰지 않은 것: `ConsoleSectionNav`의 세로 목차 모드는 만들지 않았다(설정의 `SettingsToc`가 지역 구현으로 남음). 행사 목록의 승인 대기 토글과 참여 이벤트·고객사·팀 행은 배치가 확정안과 테스트에 묶여 있어 부품 API만 준비하고 화면은 옮기지 않았다.
 
 ## 참가자 디자인 시스템 기초 (2026-11-20)
 

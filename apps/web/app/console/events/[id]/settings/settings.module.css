@@ -760,15 +760,6 @@
   }
 }
 
-.saveBar {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  padding: var(--s3) 0;
-  border-top: 1px solid var(--line);
-  background: var(--surface-work);
-}
-
 .featureGrid {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }

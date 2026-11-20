@@ -11,7 +11,7 @@ import { participationTypeLabel } from "../../../../../lib/participation-work";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
 import DeviceFrame from "../../../console-ui/DeviceFrame";
 import { ArrowRightIcon, ExternalLinkIcon } from "../../../console-ui/ConsoleIcons";
-import LivePill, { type LivePillTone } from "./LivePill";
+import StatusPill, { type StatusPillTone } from "../../../console-ui/StatusPill";
 import { titlesMatch, type LiveCue } from "./live-schedule";
 import type { LiveDrawProgram, LiveModel, LiveModule, LiveReward } from "./live-model";
 import styles from "./live.module.css";
@@ -34,8 +34,8 @@ function statusLabel(module: LiveModule): string {
 }
 
 // OPEN reads green, DRAFT is work waiting for the operator (amber), CLOSED is done (quiet).
-function statusTone(module: LiveModule): LivePillTone {
-  return module.status === "OPEN" ? "live" : module.status === "DRAFT" ? "wait" : "neutral";
+function statusTone(module: LiveModule): StatusPillTone {
+  return module.status === "OPEN" ? "on-dark-ok" : module.status === "DRAFT" ? "on-dark-wait" : "on-dark";
 }
 
 function timeRange(cue: LiveCue): string {
@@ -101,7 +101,7 @@ export function LiveCuesPane({ model, eventId, cues, cueDate, now, selectedId, o
         <li key={module.id}>
           <button type="button" className={styles.cueEvent} data-status={module.status} aria-pressed={module.id === selectedId} onClick={() => onSelect(module.id)}>
             <span className={styles.chipTitle}>{module.title}</span>
-            <span className={styles.chipMeta}>{participationTypeLabel(module.type)} <LivePill tone={statusTone(module)} dot>{statusLabel(module)}</LivePill></span>
+            <span className={styles.chipMeta}>{participationTypeLabel(module.type)} <StatusPill tone={statusTone(module)} size="sm" dot>{statusLabel(module)}</StatusPill></span>
           </button>
         </li>
       ))}
@@ -219,7 +219,7 @@ export function LiveStagePane(props: {
             <li key={module.id}>
               <button type="button" className={styles.pickItem} data-status={module.status} aria-pressed={module.id === selected?.id} onClick={() => props.onSelect(module.id)}>
                 <span className={styles.chipTitle}>{module.title}</span>
-                <span className={styles.chipMeta}>{participationTypeLabel(module.type)} <LivePill tone={statusTone(module)} dot>{statusLabel(module)}</LivePill></span>
+                <span className={styles.chipMeta}>{participationTypeLabel(module.type)} <StatusPill tone={statusTone(module)} size="sm" dot>{statusLabel(module)}</StatusPill></span>
               </button>
             </li>
           ))}
@@ -237,7 +237,7 @@ export function LiveStagePane(props: {
             <div>
               <h3 className={styles.eventTitle}>{selected.title}</h3>
               <p className={styles.eventMeta}>
-                {participationTypeLabel(selected.type)} <LivePill tone={statusTone(selected)} dot>{statusLabel(selected)}</LivePill>
+                {participationTypeLabel(selected.type)} <StatusPill tone={statusTone(selected)} size="sm" dot>{statusLabel(selected)}</StatusPill>
                 {selectedPicked ? " · 행사장 화면에 나가는 중" : ""}
                 {` · 받은 ${model.received[selected.id] ?? 0}${receivedUnit(selected.type)}`}
               </p>

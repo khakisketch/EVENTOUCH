@@ -45,7 +45,8 @@ test('reopened 2026-11-20: count tabs replace the status cards, the review queue
   assert.doesNotMatch(workspace, /styles\.statStrip|styles\.statCard|콘텐츠 현황/u, 'the four big status cards are gone');
   assert.doesNotMatch(css, /\.statStrip|\.statCard/u);
   const countTabs = fs.readFileSync(path.join(__dirname, '..', 'apps/web/app/console/console-ui/CountTabs.tsx'), 'utf8');
-  assert.match(countTabs, /aria-pressed=\{value === item\.key\}/u);
+  // Reopened 2026-11-20 (shared gaps): the pressed state is `aria-pressed` in the (default) filter mode.
+  assert.match(countTabs, /: \{ "aria-pressed": selected \}/u);
   assert.match(countTabs, /item\.count/u, 'every tab carries its count badge');
   assert.match(workspace, /styles\.groupCount/u);
   assert.match(css, /\.reviewLine\s*\{[^}]*min-height:\s*48px/su, 'the review doorway is a slim row, not a card');
@@ -124,7 +125,10 @@ test('type tiles use tokens, a stroke family and an accessible text label elsewh
 
 test('targets stay 44px and phone rows keep one line each', () => {
   assert.match(css, /\.moduleSummary\s*\{[^}]*min-height:\s*72px/su);
-  assert.match(css, /\.drawerItem :global\(\.product-action\)\s*\{\s*min-height:\s*44px/u);
+  // Reopened 2026-11-20 (shared gaps): the 44px action floor is the one shared `.product-action` rule (product-ui.css);
+  // per-screen `min-height: 44px` repeats were no-ops and are gone.
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'apps', 'web', 'app', 'product-ui.css'), 'utf8'), /\.product-action \{[^}]*min-block-size: var\(--control-min-size\)/su, 'every action keeps a 44px target');
+  assert.doesNotMatch(css, /\.drawerItem :global\(\.product-action\)/u, 'no local repeat of the 44px floor');
   assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.moduleSummary > :nth-child\(4\)\s*\{\s*display:\s*none/u, 'the count column folds away on phones; the pill and the meter keep their own rows');
   assert.match(css, /\.templateTile\.templateTile\s*\{[^}]*min-height:\s*72px/su, 'template tiles are large touch targets');
 });
