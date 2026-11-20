@@ -9,6 +9,7 @@ const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const axeSource = require('axe-core').source;
+const { settleLayout } = require('./ui-journey-helpers.cjs');
 
 const before = process.argv.includes('--before');
 let phase = 'setup';
@@ -96,7 +97,9 @@ async function main() {
     assert.equal(await desktopRow('검증 대기').count(), 1);
     assert.equal(await desktopRow('검증 취소').count(), 1);
     assert.equal(await desktopRow('검증 퇴장 후 취소').count(), 0);
-    await page.getByRole('button', { name: /필터 결과 전체 .*명 선택/ }).click();
+    // Reopened 2026-11-20: 넓은 폭에서 '필터 결과 전체 N명 선택' 버튼은 이미 선택이 있고 필터 결과가 더 있을 때만 나타난다. 처음 선택은 표 머리의
+    // '이 페이지 전체 선택'으로 한다. 이 필터 결과(2명)는 한 페이지에 모두 담기므로 페이지 전체 선택이 곧 필터 결과 전체 선택이다.
+    await page.getByRole('checkbox', { name: '이 페이지 전체 선택', exact: true }).check();
     const selection = await page.locator('#roster-selection-count').innerText();
     assert.match(selection, /선택/);
     await page.screenshot({ path: path.join(out, 'advanced-selected-1280.png'), fullPage: true });
@@ -117,9 +120,13 @@ async function main() {
     assert.match(await mobileRow('검증 퇴장 후 재승인').innerText(), /퇴장/);
     assert.match(await mobileRow('검증 퇴장 후 대기').innerText(), /퇴장/);
     assert.match(await mobileRow('검증 대기').innerText(), before ? /미입장/ : /입장 기록 없음/);
-    const preset = page.locator('select').filter({ has: page.locator('option[value="not-entered"]') });
-    assert.match(await preset.locator('option[value="not-entered"]').innerText(), before ? /^미입장/ : /^확정자 중 미입장/);
-    await preset.selectOption('not-entered');
+    // Reopened 2026-11-20: 좁은 폭의 빠른 상태 보기도 select가 아니라 개수 탭(스크롤 되는 한 줄, 선택=누름 상태 버튼)이다.
+    // 접근 가능한 이름은 데스크톱과 같은 '확정자 중 미입장 · N명'이고, 보이는 글자는 '확정자 중 미입장'이다. 같은 의도를 탭으로 확인한다:
+    // 보이는 이름이 확정자 기준을 말하고, 선택하면 미입장 확정자만 남고, 키보드 초점을 받으며, 320px에서 선택된 탭 글자가 잘리지 않는다.
+    const preset = page.getByRole('button', { name: before ? /^미입장 ·/ : /^확정자 중 미입장 ·/ });
+    assert.match(await preset.locator('[class*="label"]').innerText(), before ? /^미입장/ : /^확정자 중 미입장/);
+    await preset.click();
+    assert.equal(await preset.getAttribute('aria-pressed'), 'true');
     assert.equal(await mobileRow('검증 대기').count(), 0);
     await page.screenshot({ path: path.join(out, 'quick-390.png'), fullPage: true });
     await preset.focus();
@@ -128,15 +135,17 @@ async function main() {
     await page.evaluate(axeSource);
     assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => v.id)), []);
     await page.setViewportSize({ width: 320, height: 720 });
+    await settleLayout(page);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
     if (!before) {
-      const labelFits = await preset.evaluate((element) => {
-        const style = getComputedStyle(element);
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-        const label = element.selectedOptions[0].textContent.trim();
-        return ctx.measureText(label).width + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + 20 <= element.clientWidth;
+      // 선택이 바뀌면 탭 줄이 선택된 탭을 보이는 자리로 옮기므로, 320px에서 다시 선택해 그 동작까지 확인한다.
+      await page.getByRole('button', { name: /^전체 ·/ }).click();
+      await preset.click();
+      await settleLayout(page);
+      const labelFits = await preset.evaluate((tab) => {
+        const track = tab.closest('[role="group"]').getBoundingClientRect();
+        const box = tab.getBoundingClientRect();
+        return box.left >= track.left - 1 && box.right <= track.right + 1;
       });
       assert.equal(labelFits, true, 'selected preset label stays fully visible at 320px');
     }

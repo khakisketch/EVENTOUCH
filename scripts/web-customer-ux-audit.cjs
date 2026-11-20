@@ -11,6 +11,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { messageStep, openSettingsBasics } = require('./ui-journey-helpers.cjs');
 const axe = require('axe-core').source;
 const OUT = process.env.EVENTOUCH_CAPTURE_ROOT
   ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'customer-ux')
@@ -78,31 +79,58 @@ async function main() {
       await page.goto(`${base}/participants`);
       const firstRow = width > 768 ? page.getByRole('table', { name: /참가자 목록/ }).locator('tbody tr').first() : page.locator('li[class*="participantRow"]').first();
       await firstRow.waitFor();
-      check(`participants@${width}: masked contact visible before approval`, await firstRow.locator('small[class*="mobileContact"], td[class*="rosterContact"]').evaluateAll(elements => elements.some(el => el.getClientRects().length > 0 && /010-\*{4}-\d{4}/.test(el.textContent))));
+      // Reopened 2026-11-20: 좁은 폭의 명단 행은 이름·소속·상태·승인만 두고 연락처 열을 숨긴다(참가자 명단 확정 시안). 연락처는 참가자 상세 시트에서
+      // 같은 마스킹 형식으로 보이므로, 넓은 폭은 행의 연락처 열, 좁은 폭은 상세 시트에서 '승인 전에 마스킹된 연락처가 보인다'를 확인한다.
+      if (width > 768) {
+        check(`participants@${width}: masked contact visible before approval`, await firstRow.locator('td[class*="rosterContact"]').evaluateAll(elements => elements.some(el => el.getClientRects().length > 0 && /010-\*{4}-\d{4}/.test(el.textContent))));
+      } else {
+        await firstRow.getByRole('button', { name: /참가자 상세/ }).click();
+        const detail = page.getByRole('dialog');
+        await detail.waitFor();
+        check(`participants@${width}: masked contact visible before approval`, /010-\*{4}-\d{4}/.test(await detail.innerText()));
+        await page.keyboard.press('Escape');
+        await detail.waitFor({ state: 'hidden' });
+      }
       check(`participants@${width}: approval and details remain available together`, await firstRow.getByRole('button', { name: '승인', exact: true }).isVisible() && await firstRow.getByRole('button', { name: /참가자 상세/ }).isVisible());
       await capture('participants', width);
 
       await page.goto(`${base}/messages`);
       await page.locator('#message-compose-open').click();
-      await page.locator('#campaign-title').waitFor();
-      check(`messages@${width}: delivery limit visible without opening help`, await page.getByText('발송 연결 · 미연동 · 실제 전달 안 됨', { exact: true }).isVisible());
+      // Reopened 2026-11-20: 메시지 작성은 3단계(수신자 → 내용 → 검토·발송)이며 단계 밖의 영역은 숨겨진다. 이전의 '수신자·본문·검토가
+      // 한 화면에 함께 있다'는 전제 대신 각 단계를 실제로 거쳐 검토 단계에서 같은 의도(검토 줄이 위의 내용을 덮지 않음)를 확인한다.
       const recipientDetails = page.locator('#campaign-recipients details');
       if (!await recipientDetails.evaluate(el => el.open)) await recipientDetails.locator('summary').click();
+      await recipientDetails.locator('ul input[type="checkbox"]').first().check();
+      await messageStep(page, 2);
+      await page.locator('#campaign-title').fill('검수 안내');
+      await page.locator('#campaign-body').fill('행사 안내를 확인해 주세요.');
+      check(`messages@${width}: delivery limit visible without opening help`, await page.getByText('발송 연결 · 미연동 · 실제 전달 안 됨', { exact: true }).isVisible());
+      await messageStep(page, 3);
       const geometry = await page.locator('#campaign-submit').evaluate(el => {
         const bar = el.closest('[class*="reviewBar"]');
-        const recipients = document.getElementById('campaign-recipients');
-        const draft = document.querySelector('[class*="composeDraft"]');
-        return { position: getComputedStyle(bar).position, reviewTop: bar.getBoundingClientRect().top, recipientsBottom: recipients.getBoundingClientRect().bottom, draftBottom: draft.getBoundingClientRect().bottom };
+        const above = [];
+        for (let node = bar; node && !node.matches('[class*="reviewCard"]'); node = node.parentElement) {
+          for (let sibling = node.previousElementSibling; sibling; sibling = sibling.previousElementSibling) {
+            const box = sibling.getBoundingClientRect();
+            if (box.height > 0) above.push(box.bottom);
+          }
+        }
+        return { position: getComputedStyle(bar).position, reviewTop: bar.getBoundingClientRect().top, aboveBottom: Math.max(0, ...above), aboveCount: above.length };
       });
-      check(`messages@${width}: review never covers recipients or draft`, geometry.position === 'static' && geometry.reviewTop >= Math.max(geometry.recipientsBottom, geometry.draftBottom), geometry);
+      check(`messages@${width}: review never covers the content above it`, geometry.position === 'static' && geometry.aboveCount > 0 && geometry.reviewTop >= geometry.aboveBottom, geometry);
       await capture('messages', width);
 
       await page.goto(`${base}/reports`);
       await page.locator('#reports-list').waitFor();
+      // Reopened 2026-11-20: 결과 보고서 최종안은 보고서 이름 탭을 고르면 그 문서(표지·집계 기준)가 바로 한 화면에 열린다.
+      // 이전의 '내용 보기' 버튼으로 따로 여는 단계는 없으므로, 먼저 보고서를 골라 같은 사실(고정 시각·상세 열림)을 확인한다.
+      await page.getByRole('tab', { name: /고객 검수용 결과 보고서/ }).click();
+      await page.locator('#report-detail').waitFor();
       const localTimestamp = await page.evaluate(value => new Intl.DateTimeFormat('ko-KR', {
         year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
       }).format(new Date(value)), frozenReport.report.snapshot.capturedAt);
-      check(`reports@${width}: frozen timestamp uses browser timezone`, await page.getByText(`버전 1 · 집계 기준 ${localTimestamp}`, { exact: true }).isVisible());
+      // Reopened 2026-11-20: 결과 보고서 최종안은 '버전 1 · 집계 기준 …' 한 줄 대신 문서 표지에 '집계 기준 …'을 따로 둔다(버전은 보고서 이름 옆이 아니라 내보내기·마감 안내에 있음).
+      check(`reports@${width}: frozen timestamp uses browser timezone`, await page.getByText(`집계 기준 ${localTimestamp}`, { exact: true }).first().isVisible());
       check(`reports@${width}: saved deliverables precede live analysis`, await page.locator('#reports-list').evaluate(el => !!(el.compareDocumentPosition(document.getElementById('reports-analysis')) & Node.DOCUMENT_POSITION_FOLLOWING)));
       const breakdown = page.locator('details').filter({ has: page.getByText('그룹·부스·프로그램별 상세 집계', { exact: true }) });
       check(`reports@${width}: long breakdown initially folded`, !await breakdown.evaluate(el => el.open));
@@ -110,8 +138,6 @@ async function main() {
       await breakdown.locator('summary').focus();
       await page.keyboard.press('Enter');
       check(`reports@${width}: all detail remains keyboard-accessible`, await breakdown.getByRole('heading', { name: '등록 그룹', exact: true }).isVisible());
-      await page.getByRole('button', { name: '내용 보기', exact: true }).click();
-      await page.locator('#report-detail').waitFor();
       check(`reports@${width}: frozen detail opens`, await page.locator('[data-layout]').first().isVisible());
     }
 
@@ -130,18 +156,24 @@ async function main() {
     await page.getByRole('button', { name: '수정', exact: true }).click();
     await page.locator('#set-name').fill('납품 전 검수 행사');
     await page.getByRole('button', { name: '기본 정보 저장', exact: true }).click();
-    await page.getByText('기본 정보를 저장했습니다.', { exact: true }).first().waitFor();
+    // Reopened 2026-11-20: 저장 결과는 드로어가 닫힌 뒤 설정 하단의 '최근 결과' 줄에 '메시지 · HH:MM'으로 남는다(시각이 붙어 정확히 일치하지 않음).
+    await page.getByText('기본 정보를 저장했습니다.', { exact: false }).first().waitFor();
     await page.reload();
+    // Reopened 2026-11-20: 기본 정보 입력칸은 드로어 안에 있으므로 다시 열어 저장된 값을 읽는다.
+    await openSettingsBasics(page);
     check('settings: save persists after reload', await page.locator('#set-name').inputValue() === '납품 전 검수 행사');
 
     // Simulated delivery only; explicit review must precede the real command.
     await page.goto(`${base}/messages`);
     await page.locator('#message-compose-open').click();
-    await page.locator('#campaign-title').fill('검수 안내');
-    await page.locator('#campaign-body').fill('행사 안내를 확인해 주세요.');
+    // Reopened 2026-11-20: 수신자 → 내용 → 검토·발송 3단계를 차례로 거친다(각 단계 밖의 영역은 숨겨짐).
     const recipients = page.locator('#campaign-recipients details');
     if (!await recipients.evaluate(el => el.open)) await recipients.locator('summary').click();
     await recipients.locator('ul input[type="checkbox"]').first().check();
+    await messageStep(page, 2);
+    await page.locator('#campaign-title').fill('검수 안내');
+    await page.locator('#campaign-body').fill('행사 안내를 확인해 주세요.');
+    await messageStep(page, 3);
     await page.getByLabel('모의 발송으로 기록', { exact: false }).check();
     const beforeMessages = (await bootstrap()).workspaces[f.eventId].messages.length;
     await page.locator('#campaign-submit').click();
@@ -157,7 +189,9 @@ async function main() {
       await f.harness.database.query("UPDATE events SET payload=jsonb_set(payload,'{stage}',to_jsonb($1::text)) WHERE id=$2", [stage, f.eventId]);
       await page.goto(base);
       await page.locator('#event-metrics-heading').waitFor();
-      check(`overview ${stage}: monitor reflects actual stage`, await page.locator('[data-live]').getAttribute('data-live') === String(stage === 'LIVE'));
+      // Reopened 2026-11-20: 운영 현황 캔버스는 data-live 대신 data-stage(prep·live·done)로 단계를 나타낸다. 같은 실제 단계 반영을 DRAFT·READY=prep, LIVE=live, ENDED·ARCHIVED=done으로 확인한다.
+      const expectedStage = ['DRAFT', 'READY'].includes(stage) ? 'prep' : stage === 'LIVE' ? 'live' : 'done';
+      check(`overview ${stage}: monitor reflects actual stage`, await page.locator('[data-stage]').first().getAttribute('data-stage') === expectedStage);
       if (stage === 'DRAFT' || stage === 'ENDED') await capture(`overview-${stage.toLowerCase()}`, 320);
     }
     check('runtime page errors', errors.length === 0, errors);

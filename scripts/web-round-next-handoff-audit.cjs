@@ -12,6 +12,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { messageStep } = require('./ui-journey-helpers.cjs');
 
 const root = process.env.CAPTURE_DIR || defaultCaptureDir(`round-next/after-${runStamp()}`);
 const baseline = process.env.ROUND_NEXT_BASELINE === '1';
@@ -123,7 +124,9 @@ async function main() {
         pass(`lifecycle-options-${width}`, options);
       }
       const commandsBefore = fixture.gateway.commands.length;
-      await row.getByRole('link', { name: /입장·스태프 · 스태프 배정으로 이동/ }).click();
+      // Reopened 2026-11-20: 팀 화면의 행에는 버튼이 없고 배정 선택과 '입장·스태프 · 스태프 배정으로 이동' 링크가 구성원 드로어에 있다
+      // (같은 줄 위에서 드로어를 연 채로 누른다). 행(row)에 묶이지 않고 열린 구성원 패널에서 같은 링크를 누른다.
+      await page.getByRole('link', { name: /입장·스태프 · 스태프 배정으로 이동/ }).click();
       if (baseline) {
         assert.equal(await page.getByRole('dialog').count(), 0);
         pass(`baseline-account-handoff-missing-${width}`, { commands: fixture.gateway.commands.length - commandsBefore });
@@ -203,8 +206,11 @@ async function main() {
       await page.setViewportSize({ width: 1280, height: 900 });
       const before = fixture.gateway.commands.filter(c => ['message.create', 'message.create-reviewed'].includes(c.command)).length;
       await handoff.click();
-      await page.locator('#recipient-status-filter').waitFor();
+      // Reopened 2026-11-20: 메시지 작성은 3단계(수신자 → 내용 → 검토·발송)이고, 명단에서 인계받으면 수신자가 이미 정해졌으므로
+      // 2단계(내용)에서 시작한다. 인계된 수신자·필터는 1단계(수신자)로 돌아가 같은 방식으로 확인한다.
       await page.getByText('명단에서 2명을 인계받았습니다', { exact: false }).waitFor();
+      await messageStep(page, 1);
+      await page.locator('#recipient-status-filter').waitFor();
       assert.equal(await page.locator('#recipient-status-filter').inputValue(), 'APPROVED');
       // State-aware toggle: the handoff/desktop may already leave the list
       // open, so only open it when closed — an unconditional click would
