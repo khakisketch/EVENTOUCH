@@ -127,6 +127,8 @@ async function main() {
     await recovery.getByRole('button', { name: '최신 목록 다시 확인' }).waitFor();
     assert.equal(attempts.length, countBeforeStatus, 'status lookup never repeats a command');
     assert.equal(await row(3).getByRole('button', { name: '수령 처리' }).isDisabled(), true);
+    // Reopened 2026-11-20: 경고 문구는 '최신 목록 다시 확인' 버튼과 같은 렌더에 그려지지만 부하가 있으면 isVisible()이 그 한 프레임 앞서 거짓이 된다(5개 병렬 실행에서 간헐 실패 재현). 보일 때까지 기다린 뒤 보인다는 단언을 유지한다.
+    await page.getByRole('alert').filter({ hasText: '최신 경품 목록을 불러오지 못했습니다' }).waitFor();
     assert.equal(await page.getByRole('alert').filter({ hasText: '최신 경품 목록을 불러오지 못했습니다' }).isVisible(), true);
     await recovery.getByRole('button', { name: '최신 목록 다시 확인' }).click();
     await recovery.waitFor({ state: 'hidden' });

@@ -31,7 +31,8 @@ async function main() {
     await current.goto(`${f.baseUrl}/console/events/${f.eventId}/participants`);
     await current.getByRole('checkbox', { name: '감사 참가자 1 선택' }).check();
     await current.getByPlaceholder('이름·소속·연락처 검색').fill('통합 확정');
-    const handoff = current.getByRole('link', { name: '메시지 작성', exact: true });
+    // Reopened 2026-11-20: 필터 밖 선택이 있으면 버튼·링크의 보이는 꼬리말('· 현재 필터 N명', '· 전체 N명')이 접근 가능한 이름에 들어간다(WCAG 2.5.3). 같은 동작을 꼬리말을 허용하는 이름으로 찾는다.
+    const handoff = current.getByRole('link', { name: /^메시지 작성(?: · .+)?$/ });
     assert.match(await handoff.innerText(), /전체 1명/);
     assert.equal(await handoff.getAttribute('aria-describedby'), 'roster-message-scope');
     assert.match(await current.locator('#roster-message-scope').innerText(), /필터 밖 1명/);

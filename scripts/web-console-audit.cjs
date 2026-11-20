@@ -2117,7 +2117,8 @@ async function main() {
         if (!/필터 밖 \d+명/.test(scopeSummary) || !scopeSummary.includes('승인·그룹은 현재 필터만, 메시지는 전체 선택')) {
           throw new Error(`hidden selection or task scope missing: ${scopeSummary}`);
         }
-        await page.getByRole('button', { name: '그룹 변경', exact: true }).click();
+        // Reopened 2026-11-20: 필터 밖 선택이 있으면 버튼·링크의 보이는 꼬리말('· 현재 필터 N명', '· 전체 N명')이 접근 가능한 이름에 들어간다(WCAG 2.5.3). 같은 동작을 꼬리말을 허용하는 이름으로 찾는다.
+        await page.getByRole('button', { name: /^그룹 변경(?: · .+)?$/ }).click();
         await page.getByText(/화면 밖에서 선택한 \d+명은 이번 지정에 포함되지 않습니다/).first().waitFor({ timeout: 10000 });
         await saveShot(page, 'operator/group-scope.png');
         await page.getByRole('button', { name: '취소', exact: true }).first().click();
