@@ -755,6 +755,7 @@ export default function CreateEventDialog({
       busy={submitting || clientSaving || checkingResult}
       initialFocusRef={nameRef}
       stickyChrome
+      wide={!isClientCreate}
       footer={
         isClientCreate ? (
           <div className={styles.createFooter}>
@@ -770,6 +771,7 @@ export default function CreateEventDialog({
           </div>
         ) : (
           <div className={styles.createFooter}>
+          <p className={styles.createSay}>{isCopyView ? "복제하면 새 행사가 생깁니다." : "저장하면 기획 상태의 행사가 생깁니다."}</p>
           <ConsoleFormActions>
             <ProductButton type="button" className="button button-secondary" onClick={close} disabled={submitting || checkingResult}>
               취소
@@ -856,6 +858,7 @@ export default function CreateEventDialog({
         <ValidatedForm id={eventFormId} onSubmit={onSubmit} className={`${ui.formStack} ${styles.createForm}`}>
           {otherClientReceipt || otherEventReceipt ? <p role="alert">이전 생성·저장 요청을 먼저 확인하세요. 창을 닫으면 상단에서 서버 처리 여부를 확인할 수 있습니다.</p> : null}
           {pendingClientRef.current ? <p role="alert">고객사 등록 결과를 먼저 확인하세요. 추가 설정에서 고객사 등록 화면으로 돌아갈 수 있습니다.</p> : null}
+          <div className={styles.createMain}>
           {eventUncertain ? <p role="status">결과를 확인할 때까지 원래 입력 내용을 유지합니다.</p> : null}
           {canOfferCopy ? (
             <fieldset className={styles.modeGroup} disabled={submitting || clientSaving || eventUncertain || checkingResult}>
@@ -1109,6 +1112,19 @@ export default function CreateEventDialog({
             </div>
           </details>
           {failure && !failure.field ? <p role="alert">{failure.message}</p> : null}
+          </div>
+          <aside className={styles.createSummary} aria-label="만들어질 행사">
+            <h4 className={styles.createSummaryHead}>만들어질 행사</h4>
+            <div className={styles.createSummaryCard}>
+              <b>{name.trim() || "이름을 입력하세요"}</b>
+              <span>{date ? displayDate(date) : "날짜를 고르세요"}{timeSummary ? ` · ${timeSummary}` : ""}</span>
+            </div>
+            <dl className={styles.createSummaryList}>
+              <dt>정원</dt><dd>{capacity ? `${capacity}명` : "정하지 않음"}</dd>
+              <dt>고객사</dt><dd>{allClients.find((client) => client.id === clientId)?.name ?? "선택하지 않음"}</dd>
+              <dt>시작 상태</dt><dd>{isCopyView ? "원본 설정 복제" : "기획"}</dd>
+            </dl>
+          </aside>
         </ValidatedForm>
       )}
     </ConsoleDialog>

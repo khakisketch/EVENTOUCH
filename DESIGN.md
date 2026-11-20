@@ -685,6 +685,12 @@ The owner approved this composition on 2026-11-16 (`apps/web/app/console/CreateE
 - Chips are native radios that only set values the form already holds (date, start/end, capacity); the payload and the write path (receipts, retry, duplicate, customer registration) are unchanged. Selected chips are ink, so the one orange action stays "행사 만들기".
 - Guidance never blocks the write: a same-name event, a past date, a duplicate that keeps the source date, and an end that is not after the start (the server's own rule) show as a one-line notice. With no customers the select is replaced by a one-line explanation and the register action.
 
+Reopened 2026-11-20 (owner chose proposal C1 in `design-review/create-event-improve.html`): on wide screens (900px and up) the form sits beside a read-only "만들어질 행사" summary (name, date and time, 정원, 고객사, 시작 상태 기획), and the footer says what saving creates. Phones keep the single column with no summary. A3's controls, rules and write path are unchanged. `tests/web-create-event-composition.test.cjs` and `tests/web-event-switcher-composition.test.cjs` guard the layout.
+
+## 현장 전환 "다른 행사" (2026-11-20)
+
+Reopened 2026-11-20 (owner chose proposal A in `design-review/event-switcher-options.html`): the event name row of event pages has a "다른 행사" control (`apps/web/app/console/console-ui/EventSwitcher.tsx`). It loads the directory only when opened, lists events with stage and date, marks the current one, and links to the same menu page of the chosen event. Phones show it as a bottom sheet. The overview body and its locked composition are not changed.
+
 ## 디자인 시스템 기초 (2026-11-20)
 
 콘솔 방향은 "하이브리드 C1": 흰 작업면, 헤어라인, 굵기 3종, 반경 3종, 숫자는 숫자가 일인 곳에만 크게, 주황은 그 화면의 하나뿐인 주 행동에만 쓴다. 설정·보고서처럼 구역이 여러 개인 화면만 C2식 흰 카드 묶음을 빌린다. 이 단계는 추가만 하며 기존 화면의 모습은 바꾸지 않는다.
