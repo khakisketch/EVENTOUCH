@@ -164,7 +164,9 @@ test('attendee-home-distinguishes-404-ticket-and-transient', () => {
   assert.match(shell, /다시 시도/);
   // Ticket read path: a 404 verdict stops replaying the bearer (like the
   // ticket screen); a transient failure keeps it for the retry.
-  assert.match(shell, /removeItem\(STORAGE_PREFIX \+ slug\)/);
+  // Reopened 2026-11-20: the clear goes through the shared tab-ticket storage.
+  assert.match(shell, /markTicketRejected\(slug\);\s*ticketRef\.current = "";\s*clearStoredTicket\(slug\);/);
+  assert.match(read('lib/attendee-ticket-storage.ts'), /removeItem\(TICKET_STORAGE_PREFIX \+ slug\)/);
   assert.match(shell, /ticketRes\.status === 404/);
   // Recovery links stay scoped: invalid tickets point at recovery (unless
   // the event blocks it), missing events point home.

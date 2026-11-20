@@ -138,10 +138,12 @@ test('web-engage-reads-the-public-projection-and-reuses-the-ticket-key', () => {
   assert.match(client, /published/);
   assert.match(client, /DRAFT/);
   // The tab-kept ticket key is the one TicketView owns; no new keys.
-  assert.match(client, /eventouch\.ticket\./);
-  assert.match(client, /sessionStorage/);
-  assert.doesNotMatch(client, /localStorage/);
-  assert.equal((client.match(/sessionStorage/g) ?? []).length, 3);
+  // Reopened 2026-11-20: the key and its sessionStorage calls live in lib/attendee-ticket-storage, shared with home and ticket.
+  assert.match(client, /from "\.\.\/\.\.\/\.\.\/\.\.\/lib\/attendee-ticket-storage"/);
+  assert.match(read('lib/attendee-ticket-storage.ts'), /"eventouch\.ticket\."/);
+  assert.doesNotMatch(client, /window\.(?:local|session)Storage/);
+  assert.doesNotMatch(read('lib/attendee-ticket-storage.ts'), /localStorage/);
+  assert.equal((read('lib/attendee-ticket-storage.ts').match(/window\.sessionStorage/g) ?? []).length, 3);
   const page = read('app/event/[slug]/engage/page.tsx');
   assert.match(page, /EngageClient/);
 });

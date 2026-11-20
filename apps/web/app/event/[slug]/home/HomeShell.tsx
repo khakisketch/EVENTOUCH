@@ -11,13 +11,14 @@ import TicketView from "../ticket/TicketView";
 import { fetchWithDeadline } from "../../../../lib/request-deadline";
 import styles from "./home.module.css";
 import AttendeeHomeLanding, { HOME_MENUS, type HomeMenuKey } from "./AttendeeHomeLanding";
-import { normalizeHomeStyle, parseHomePhotos, type HomePhoto, type HomeStyle } from "../../../../lib/attendee-home";
+import { parseHomePhotos, type HomePhoto, type HomeStyle } from "../../../../lib/attendee-home";
 import { homeSurfaceStyle } from "../../../../lib/home-surface";
 import AttendeeSurface from "../ui/AttendeeSurface";
 import AttendeeStateMessage from "../ui/AttendeeStateMessage";
 import BottomAction from "../ui/BottomAction";
 import AttendeeIcon from "../ui/AttendeeIcon";
 import { attendeeLook } from "../attendee-look";
+import { readAttendeeTheme } from "../event-theme";
 import { normalizeHomeMenus, type HomeMenus, type HomeProgram } from "../../../../lib/attendee-home-menus";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
 import { useUnsavedNavigationGuard } from "../../../../lib/use-unsaved-navigation-guard";
@@ -25,6 +26,9 @@ import { readGuestReceipts, writeGuestReceipts, type GuestReceiptPointer } from 
 import { boothCanAttempt, boothOperatingStatus, formatBoothScheduleTime, isBoothContextChanged } from "../../../../lib/booth-availability";
 import { captureServerClock, readServerClock, type ServerClock } from "../../../../lib/server-clock";
 import { allowSessionForTab, clearSessionForTab, clearTicketRejected, getAllowedTicketForTab, isTicketRejected, markTicketRejected, REJECTED_TICKET_BEARER, ticketStorageAvailable } from "../../../../lib/attendee-ticket-identity";
+import { clearStoredTicket, readStoredTicket, storeTicket } from "../../../../lib/attendee-ticket-storage";
+import { randomCommandId } from "../../../../lib/command-id";
+import { asRecord, text } from "../../../../lib/json-guards";
 
 // The scanner (and its decoder) loads only when the attendee opens it: the
 // home shell never pays for jsQR until the first booth scan.
@@ -190,36 +194,6 @@ type LoadState =
 
 type Tab = HomeMenuKey;
 
-const STORAGE_PREFIX = "eventouch.ticket.";
-
-function readStoredTicket(slug: string): string {
-  try {
-    return window.sessionStorage.getItem(STORAGE_PREFIX + slug) || "";
-  } catch {
-    return "";
-  }
-}
-
-function storeTicket(slug: string, ticket: string): boolean {
-  try {
-    window.sessionStorage.setItem(STORAGE_PREFIX + slug, ticket);
-    return true;
-  } catch {
-    // Private mode: the in-memory bearer still works for this load.
-    return false;
-  }
-}
-
-function text(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
 function guestCommandName(command: string): string {
   if (command === "lucky.assign") return "럭키번호 발급";
   if (command === "roulette.spin") return "룰렛 추첨";
@@ -256,20 +230,6 @@ function recoveredCommandMessage(pending: PendingGuestCommand, data: Record<stri
     return `${booth} 인증을 기록했습니다.`;
   }
   return "요청 처리를 확인했습니다.";
-}
-
-function randomCommandId(): string {
-  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  return `web-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
-}
-
-function publicKeyvisualSource(slug: string, value: unknown): string | null {
-  const image = asRecord(value);
-  const data = text(image?.data);
-  if (/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(data)) return data;
-  const fileId = text(image?.fileId);
-  if (!/^[A-Za-z0-9_-]{1,160}$/.test(fileId)) return null;
-  return `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`;
 }
 
 function PendingGuestCommandRecovery({
@@ -569,7 +529,7 @@ export default function HomeShell({ slug }: { slug: string }) {
               notices?: unknown;
               modules?: unknown;
               photos?: unknown;
-              pageExperience?: { published?: { keyvisual?: unknown; accent?: unknown; defaultHomeBanner?: unknown; homeStyle?: unknown; homeMenus?: unknown; showAnnouncements?: unknown } } | null;
+              pageExperience?: { published?: { homeMenus?: unknown; showAnnouncements?: unknown } } | null;
           } | null;
         } | null;
         const eventName = text(publicData?.event?.name);
@@ -600,10 +560,9 @@ export default function HomeShell({ slug }: { slug: string }) {
           ...(!enabled.has("poll") ? ["vote" as const] : []),
           ...(!enabled.has("stamp") ? ["stamp" as const] : []),
         ];
-        const keyvisual = publicKeyvisualSource(slug, publishedPage?.keyvisual);
-        const defaultHomeBanner = publishedPage?.defaultHomeBanner === "neutral" ? "neutral" : "legacy";
-        const homeStyle = normalizeHomeStyle(publishedPage?.homeStyle);
-        const accent = typeof publishedPage?.accent === "string" && /^#[0-9a-f]{6}$/i.test(publishedPage.accent) ? publishedPage.accent : null;
+        // The published look is parsed in one place (event-theme), the same one the
+        // ticket, application and engage screens read.
+        const { keyvisual, defaultHomeBanner, homeStyle, accent = null } = readAttendeeTheme(slug, publicData.workspace);
         const homeMenus = normalizeHomeMenus(publishedPage?.homeMenus);
         // The photo-first home lists approved participant photos only, and only
         // while the 사진 feature is on. The public projection also carries an
@@ -690,11 +649,7 @@ export default function HomeShell({ slug }: { slug: string }) {
             if (ticketRes.status === 404) {
               markTicketRejected(slug);
               ticketRef.current = "";
-              try {
-                window.sessionStorage.removeItem(STORAGE_PREFIX + slug);
-              } catch {
-                // Private mode: nothing persisted to clear.
-              }
+              clearStoredTicket(slug);
             }
             failLoad(
               invalid ? "ticket-invalid" : "transient",
@@ -2160,9 +2115,7 @@ function VoteTab({
 
   if (!teams.length) {
     return (
-      <section className={styles.emptyState}>
-        <AttendeeStateMessage kind="empty" icon="vote" title="투표 대상 팀이 아직 등록되지 않았습니다." />
-      </section>
+      <AttendeeStateMessage kind="empty" icon="vote" title="투표 대상 팀이 아직 등록되지 않았습니다." />
     );
   }
 

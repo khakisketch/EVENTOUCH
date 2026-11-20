@@ -18,6 +18,7 @@ import { DEFAULT_ATTENDEE_THEME, type AttendeeTheme } from "../event-theme";
 import { readPublicEventContext } from "../../../../lib/public-event-context";
 import type { PublicEventContext as EventContext } from "../../../../lib/public-event-context";
 import { allowSessionForTab, clearSessionForTab, clearTicketRejected, getAllowedTicketForTab, isTicketRejected, markTicketRejected, REJECTED_TICKET_BEARER, ticketStorageAvailable } from "../../../../lib/attendee-ticket-identity";
+import { clearStoredTicket, readStoredTicket, storeTicket } from "../../../../lib/attendee-ticket-storage";
 
 type TicketState =
   | { kind: "loading" }
@@ -67,7 +68,6 @@ function entryLabel(state: {
   return "상태 확인 필요";
 }
 
-const STORAGE_PREFIX = "eventouch.ticket.";
 const TICKET_READ_TIMEOUT_MS = 8000;
 
 type TicketResponse = {
@@ -157,31 +157,6 @@ function unusableCopy(state: { status: string; paymentStatus?: string; ticket: s
       return { text: "결제 상태를 확인할 수 없습니다. 상태를 다시 확인하고, 계속되면 행사 운영자에게 문의하세요.", showRegister: false };
     default:
       return { text: "신청 상태를 확인할 수 없습니다. 상태를 다시 확인하고, 계속되면 행사 운영자에게 문의하세요.", showRegister: false };
-  }
-}
-
-function readStoredTicket(slug: string): string {
-  try {
-    return window.sessionStorage.getItem(STORAGE_PREFIX + slug) || "";
-  } catch {
-    return "";
-  }
-}
-
-function storeTicket(slug: string, ticket: string): boolean {
-  try {
-    window.sessionStorage.setItem(STORAGE_PREFIX + slug, ticket);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function clearStoredTicket(slug: string): void {
-  try {
-    window.sessionStorage.removeItem(STORAGE_PREFIX + slug);
-  } catch {
-    // Nothing to clear.
   }
 }
 

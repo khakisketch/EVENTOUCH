@@ -13,6 +13,7 @@ import EventBanner from "../EventBanner";
 import AttendeeIcon, { type AttendeeIconName } from "../AttendeeIcons";
 import AttendeeSurface from "../ui/AttendeeSurface";
 import AttendeeStateMessage from "../ui/AttendeeStateMessage";
+import AttendeeFieldError from "../ui/AttendeeFieldError";
 import { AttendeeList } from "../ui/AttendeeListRow";
 import AttendeeListRow from "../ui/AttendeeListRow";
 import BottomAction from "../ui/BottomAction";
@@ -23,6 +24,9 @@ import { readGuestReceipts, writeGuestReceipts, type GuestReceiptPointer } from 
 import { confirmsGuestCommand, confirmsGuestPhotoUpload } from "../../../../lib/guest-command-result";
 import { useUnsavedNavigationGuard } from "../../../../lib/use-unsaved-navigation-guard";
 import { allowSessionForTab, clearSessionForTab, clearTicketRejected, getAllowedTicketForTab, isTicketRejected, markTicketRejected, REJECTED_TICKET_BEARER, ticketStorageAvailable } from "../../../../lib/attendee-ticket-identity";
+import { clearStoredTicket, readStoredTicket, storeTicket } from "../../../../lib/attendee-ticket-storage";
+import { randomCommandId } from "../../../../lib/command-id";
+import { asRecord, text } from "../../../../lib/json-guards";
 
 // Attendee engagement screen. Reads the public projection (published
 // programs only; the server filters drafts, disabled features, and other
@@ -133,49 +137,6 @@ type PendingPhoto = {
 
 function isRetryableStatus(status: number): boolean {
   return status === 408 || status === 425 || status === 429 || status >= 500;
-}
-
-const STORAGE_PREFIX = "eventouch.ticket.";
-
-function readStoredTicket(slug: string): string {
-  try {
-    return window.sessionStorage.getItem(STORAGE_PREFIX + slug) || "";
-  } catch {
-    return "";
-  }
-}
-
-function storeTicket(slug: string, ticket: string): boolean {
-  try {
-    window.sessionStorage.setItem(STORAGE_PREFIX + slug, ticket);
-    return true;
-  } catch {
-    // Storage unavailable (private mode): the in-memory bearer still works.
-    return false;
-  }
-}
-
-function clearStoredTicket(slug: string): void {
-  try {
-    window.sessionStorage.removeItem(STORAGE_PREFIX + slug);
-  } catch {
-    // Nothing to clear.
-  }
-}
-
-function text(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function randomCommandId(): string {
-  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  return `web-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
 }
 
 function parseModule(value: unknown, responses: Array<{ moduleId: string }>): PublicModule | null {
@@ -1558,7 +1519,7 @@ function QuestionEdit({ question, busy, pending, error, onSubmit, onDirtyChange 
             setValue(event.target.value);
             setDirty(event.target.value !== (baseline.pendingEdit?.text ?? baseline.editRejection?.text ?? baseline.text));
           }} />
-        {error ? <p className={styles.fieldError} id={`${inputId}-error`} role="alert">{error}</p> : null}
+        {error ? <AttendeeFieldError id={`${inputId}-error`}>{error}</AttendeeFieldError> : null}
         <ProductButton type="submit" className="button button-secondary" disabled={!value.trim() || busy || pending || (dirty && stale)}>
           {question.approved ? "수정안 제출" : "질문 저장"}
         </ProductButton>
@@ -1656,9 +1617,9 @@ function ModuleSection(props: {
                 </label>
               ))}
             </fieldset>
-            {props.formMessage("answer") ? <p className={styles.fieldError} role="alert">{props.formMessage("answer")}</p> : null}
+            {props.formMessage("answer") ? <AttendeeFieldError>{props.formMessage("answer")}</AttendeeFieldError> : null}
             {props.pollChoice && !module.options.includes(props.pollChoice) ? <p className={styles.help} role="status">이전에 고른 ‘{props.pollChoice}’ 선택지가 없습니다. 최신 선택지에서 다시 골라 주세요.</p> : null}
-            {props.generalMessage ? <p className={styles.fieldError} role="alert">{props.generalMessage}</p> : null}
+            {props.generalMessage ? <AttendeeFieldError>{props.generalMessage}</AttendeeFieldError> : null}
             <ProductButton type="submit" className="button button-primary" disabled={!props.pollChoice || !module.options.includes(props.pollChoice) || !props.canSubmit || busy || props.hasPending}>
               {props.submitting === props.formKey ? "제출 중…" : "투표하기"}
             </ProductButton>
@@ -1690,9 +1651,9 @@ function ModuleSection(props: {
                   aria-describedby={props.formMessage("answer") ? `quiz-${module.id}-error` : undefined}
                   onChange={(event) => props.setQuizAnswer(event.target.value)}
                 />
-                {props.formMessage("answer") ? <p className={styles.fieldError} id={`quiz-${module.id}-error`} role="alert">{props.formMessage("answer")}</p> : null}
+                {props.formMessage("answer") ? <AttendeeFieldError id={`quiz-${module.id}-error`}>{props.formMessage("answer")}</AttendeeFieldError> : null}
               </div>
-              {props.generalMessage ? <p className={styles.fieldError} role="alert">{props.generalMessage}</p> : null}
+              {props.generalMessage ? <AttendeeFieldError>{props.generalMessage}</AttendeeFieldError> : null}
               <ProductButton type="submit" className="button button-primary" disabled={!props.quizAnswer.trim() || !props.canSubmit || busy || props.hasPending}>
                 {props.submitting === props.formKey ? "제출 중…" : "답안 제출"}
               </ProductButton>
@@ -1751,8 +1712,8 @@ function ModuleSection(props: {
                 onChange={(event) => props.setSurveyComment(event.target.value)}
               />
             </div>
-            {props.formMessage("ratings") ? <p className={styles.fieldError} role="alert">{props.formMessage("ratings")}</p> : null}
-            {props.generalMessage ? <p className={styles.fieldError} role="alert">{props.generalMessage}</p> : null}
+            {props.formMessage("ratings") ? <AttendeeFieldError>{props.formMessage("ratings")}</AttendeeFieldError> : null}
+            {props.generalMessage ? <AttendeeFieldError>{props.generalMessage}</AttendeeFieldError> : null}
             <ProductButton type="submit" className="button button-primary" disabled={!props.canSubmit || busy || props.hasPending}>
               {props.submitting === props.formKey ? "제출 중…" : "만족도 제출"}
             </ProductButton>
@@ -1781,9 +1742,9 @@ function ModuleSection(props: {
                 aria-describedby={props.formMessage("text") ? `question-${module.id}-error` : undefined}
                 onChange={(event) => props.setQuestionText(event.target.value)}
               />
-              {props.formMessage("text") ? <p className={styles.fieldError} id={`question-${module.id}-error`} role="alert">{props.formMessage("text")}</p> : null}
+              {props.formMessage("text") ? <AttendeeFieldError id={`question-${module.id}-error`}>{props.formMessage("text")}</AttendeeFieldError> : null}
             </div>
-            {props.generalMessage ? <p className={styles.fieldError} role="alert">{props.generalMessage}</p> : null}
+            {props.generalMessage ? <AttendeeFieldError>{props.generalMessage}</AttendeeFieldError> : null}
             <ProductButton type="submit" className="button button-primary" disabled={!props.questionText.trim() || !props.canSubmit || busy || props.hasPending}>
               {props.submitting === props.formKey ? "제출 중…" : "질문 등록"}
             </ProductButton>
@@ -1818,7 +1779,7 @@ function ModuleSection(props: {
                     ) : null}
                   </p>
                   {question.approved && props.canInteractWithQuestions && question.likedByMe === null ? <p className={styles.help}>좋아요 상태를 확인할 수 없습니다. 화면을 다시 불러오거나 행사 운영자에게 문의하세요.</p> : null}
-                  {props.likeError(question.id) ? <p className={styles.fieldError} role="alert">{props.likeError(question.id)}</p> : null}
+                  {props.likeError(question.id) ? <AttendeeFieldError>{props.likeError(question.id)}</AttendeeFieldError> : null}
                   {props.likeConflict(question.id) ? <div className={styles.help}>
                     <p id={`like-conflict-${question.id}`} tabIndex={-1} role="status">질문 또는 좋아요 상태가 바뀌었습니다. 위 질문은 확인 전 내용입니다. 최신 내용을 먼저 확인하세요.</p>
                     {props.likeConflict(question.id)?.error ? <p role="alert">{props.likeConflict(question.id)?.error}</p> : null}
@@ -1853,7 +1814,7 @@ function ModuleSection(props: {
               <label htmlFor={`photo-file-${module.id}`}>사진 선택 · 600KB 이하</label>
               <input id={`photo-file-${module.id}`} name={`photo-file-${module.id}`} type="file" accept="image/png,image/jpeg,image/webp" disabled={!props.canSubmit || busy || props.hasPending}
                 onChange={(event) => props.setPhotoSelected(Boolean(event.currentTarget.files?.length))} />
-              {props.formMessage("image") ? <p className={styles.fieldError} role="alert">{props.formMessage("image")}</p> : null}
+              {props.formMessage("image") ? <AttendeeFieldError>{props.formMessage("image")}</AttendeeFieldError> : null}
             </div>
             <div>
               <label htmlFor={`photo-caption-${module.id}`}>사진 설명</label>
@@ -1866,9 +1827,9 @@ function ModuleSection(props: {
                 aria-describedby={props.formMessage("caption") ? `photo-caption-${module.id}-error` : undefined}
                 onChange={(event) => props.setCaption(event.target.value)}
               />
-              {props.formMessage("caption") ? <p className={styles.fieldError} id={`photo-caption-${module.id}-error`} role="alert">{props.formMessage("caption")}</p> : null}
+              {props.formMessage("caption") ? <AttendeeFieldError id={`photo-caption-${module.id}-error`}>{props.formMessage("caption")}</AttendeeFieldError> : null}
             </div>
-            {props.generalMessage ? <p className={styles.fieldError} role="alert">{props.generalMessage}</p> : null}
+            {props.generalMessage ? <AttendeeFieldError>{props.generalMessage}</AttendeeFieldError> : null}
             <ProductButton type="submit" className="button button-primary" disabled={!props.canSubmit || busy || props.hasPending}>
               {props.submitting === props.formKey ? "제출 중…" : "사진 공유"}
             </ProductButton>
@@ -1919,9 +1880,9 @@ function ModuleSection(props: {
                 aria-describedby={props.formMessage("body") ? `post-${module.id}-error` : undefined}
                 onChange={(event) => props.setPostBody(event.target.value)}
               />
-              {props.formMessage("body") ? <p className={styles.fieldError} id={`post-${module.id}-error`} role="alert">{props.formMessage("body")}</p> : null}
+              {props.formMessage("body") ? <AttendeeFieldError id={`post-${module.id}-error`}>{props.formMessage("body")}</AttendeeFieldError> : null}
             </div>
-            {props.generalMessage ? <p className={styles.fieldError} role="alert">{props.generalMessage}</p> : null}
+            {props.generalMessage ? <AttendeeFieldError>{props.generalMessage}</AttendeeFieldError> : null}
             <ProductButton type="submit" className="button button-primary" disabled={!props.postBody.trim() || !props.canSubmit || busy || props.hasPending}>
               {props.submitting === props.formKey ? "제출 중…" : "게시글 등록"}
             </ProductButton>

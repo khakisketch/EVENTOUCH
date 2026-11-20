@@ -393,18 +393,9 @@
   text-align: left;
 }
 
+/* The card itself is AttendeeStateMessage; this only places it. */
 .ticketRecheckError {
   margin: var(--s2) 0 0;
-  padding: var(--s3) var(--s4);
-  border: 1px solid var(--danger-line);
-  border-radius: var(--radius-medium);
-  background: var(--danger-soft);
-  color: var(--danger);
-  font-size: var(--small);
-  font-weight: 600;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
-  word-break: keep-all;
 }
 
 .ticketQrWrapper .ticketRecheckError {
@@ -448,8 +439,7 @@
 
 .ticketSuccess,
 .ticketInstruction,
-.ticketRecovery,
-.ticketRecheckError {
+.ticketRecovery {
   word-break: keep-all;
   overflow-wrap: break-word;
 }

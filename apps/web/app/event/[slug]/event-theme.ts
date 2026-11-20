@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { DEFAULT_HOME_STYLE, normalizeHomeStyle, type HomeStyle } from "../../../lib/attendee-home";
 import { homeSurfaceStyle } from "../../../lib/home-surface";
+import { asRecord, text } from "../../../lib/json-guards";
 
 // The look an agency published for an event (ground color, banner fill or
 // picture). The phone screens that follow registration (the application sheet,
@@ -22,14 +23,16 @@ export const DEFAULT_ATTENDEE_THEME: AttendeeTheme = {
 };
 
 function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return asRecord(value) ?? {};
 }
 
+// The one place a published banner picture is turned into a URL the browser may
+// load: an inline data image or a file of this event. Anything else is no picture.
 function keyvisualSource(slug: string, value: unknown): string | null {
   const image = record(value);
-  const data = typeof image.data === "string" ? image.data : "";
+  const data = text(image.data);
   if (/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(data)) return data;
-  const fileId = typeof image.fileId === "string" ? image.fileId : "";
+  const fileId = text(image.fileId);
   if (!/^[A-Za-z0-9_-]{1,160}$/.test(fileId)) return null;
   return `/api/public/events/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileId)}`;
 }

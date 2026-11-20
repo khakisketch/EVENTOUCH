@@ -54,8 +54,11 @@ test('the ticket page sits on the event ground and wears its published banner', 
   assert.match(ticketPage, /<AttendeeSurface as="main"/u);
   assert.match(ticketCss, /\.tear i\s*\{[^}]*var\(--ev-ground, var\(--home-background-color\)/su, 'the stub notches are cut in the ground color');
   assert.match(eventTheme, /normalizeHomeStyle/u);
-  assert.match(bannerSource, /bannerFillCss\(homeStyle\)/u);
-  assert.match(bannerSource, /\/attendee-home-banner\.png/u);
+  // Reopened 2026-11-20: the fill, picture and tone rules are lib/banner-appearance, shared with the home hero.
+  const appearance = fs.readFileSync(path.join(__dirname, '../apps/web/lib/banner-appearance.ts'), 'utf8');
+  assert.match(bannerSource, /useBannerAppearance\(homeStyle, keyvisual, defaultHomeBanner\)/u);
+  assert.match(appearance, /bannerFillCss\(homeStyle\)/u);
+  assert.match(appearance, /\/attendee-home-banner\.png/u);
   assert.match(bannerCss, /data-fill="image"\]::after/u, 'a picture gets a scrim under its text');
   assert.match(ticketCss, /@media print[\s\S]*\.ticketCard\.pass/u, 'a printed ticket stays the QR and the name on white');
 });

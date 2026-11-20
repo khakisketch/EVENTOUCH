@@ -1,3 +1,5 @@
+import { readStoredTicket } from './attendee-ticket-storage';
+
 // A rejected ticket must not silently become another attendee's shared
 // browser session after a reload or navigation. This marker contains no
 // ticket, participant information, or other credential.
@@ -27,11 +29,7 @@ export function isTicketRejected(slug: string): boolean {
 export function hasTicketInThisTab(slug: string): boolean {
   if (!slug || isTicketRejected(slug)) return false;
   if (getAllowedTicketForTab(slug)) return true;
-  try {
-    return Boolean(window.sessionStorage.getItem('eventouch.ticket.' + slug)) && ticketStorageAvailable(slug);
-  } catch {
-    return false;
-  }
+  return Boolean(readStoredTicket(slug)) && ticketStorageAvailable(slug);
 }
 
 export function clearTicketRejected(slug: string): void {

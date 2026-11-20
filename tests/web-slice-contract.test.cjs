@@ -831,7 +831,9 @@ test('web-retry-keeps-one-command-id-per-attempt-on-signup-and-scan', () => {
   assert.match(register, /disabled=\{submitting \|\| retryPending \|\| signupSuperseded\}/);
   assert.match(register, /retryPending \|\| !rejected/);
   assert.match(register, /addEventListener\("beforeunload", warnBeforeLeaving\)/);
-  assert.match(register, /crypto\.getRandomValues/);
+  // Reopened 2026-11-20: the unpredictable request id (a signup id can recover its ticket) is lib/command-id, shared by every attendee write.
+  assert.match(register, /from "\.\.\/\.\.\/\.\.\/\.\.\/lib\/command-id"/);
+  assert.match(read('lib/command-id.ts'), /crypto\.getRandomValues/);
   const staff = read('app/staff/StaffEventWork.tsx');
   assert.match(staff, /pendingScanIdRef\.current/);
   // A pending scan belongs to one ticket + assignment, never the next person

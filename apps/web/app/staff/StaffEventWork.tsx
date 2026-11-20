@@ -41,6 +41,7 @@ import { forgetOperatorReceipt } from "../../lib/operator-receipts";
 import OperatorReceiptRecovery from "../ui/OperatorReceiptRecovery";
 import { boothCanAttempt, boothOperatingStatus, boothScheduleTime, isBoothContextChanged } from "../../lib/booth-availability";
 import { readServerClock, type ServerClock } from "../../lib/server-clock";
+import { randomCommandId } from "../../lib/command-id";
 import prizeStyles from "./staff-event-work.module.css";
 import cameraStyles from "../camera-scan.module.css";
 import ConsoleDialog from "../console/console-ui/ConsoleDialog";
@@ -215,11 +216,6 @@ type ScanResult =
   | { kind: "idle" }
   | { kind: "ok"; participantId: string; name: string; action: string; reentry: boolean; booth?: string; place: ScanPlace; checkId?: string; correctionChanged?: true; recordStatus?: ScanRecordStatus }
   | { kind: "failed"; message: string; uncertain: boolean; place: ScanPlace; requestTicket: string; requestTarget?: string; deskRefreshRequired?: boolean; sourceRefreshRequired?: boolean; manualRefreshRequired?: boolean; boothLimitReached?: boolean; alreadyIn?: boolean; alreadyName?: string; alreadyAt?: string; attendanceReviewRequired?: boolean; eligibilityReviewRequired?: boolean };
-
-function randomCommandId(): string {
-  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  return `web-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
-}
 
 function parseRewardList(value: unknown): DeskReward[] | null {
   if (!Array.isArray(value)) return null;

@@ -128,8 +128,11 @@ test('the landing renders one of three compositions with the same entries; the f
   // The banner is shared with the event guide so both read the same published design.
   const heroSource = read('app/event/[slug]/home/HomeHero.tsx');
   assert.match(landing, /<HomeHero\b/u);
-  assert.match(heroSource, /const fill = bannerFillCss\(homeStyle\);/u);
-  assert.match(heroSource, /const tone = fill \? bannerFillTone\(homeStyle\) : neutralBanner \? "light" : homeStyle\.textTone;/u, 'a color banner reads its own tone');
+  // Reopened 2026-11-20: the fill, picture and tone rules are lib/banner-appearance, shared with the ticket / application banner.
+  const appearance = read('lib/banner-appearance.ts');
+  assert.match(heroSource, /useBannerAppearance\(homeStyle, keyvisual, defaultHomeBanner\)/u);
+  assert.match(appearance, /const fill = bannerFillCss\(homeStyle\);/u);
+  assert.match(appearance, /const tone = fill \? bannerFillTone\(homeStyle\) : neutral \? "light" : homeStyle\.textTone;/u, 'a color banner reads its own tone');
   // instagram: a feed of approved participant photos under a slim banner.
   assert.match(landing, /const layout = homeStyle\.layout === "instagram" && !photos\.length && !preview \? "tile" : homeStyle\.layout;/u, 'a public page with no approved photo reads as the tile home; the console preview keeps the layout');
   assert.match(landing, /const feed = layout === "instagram" \? \(/u);

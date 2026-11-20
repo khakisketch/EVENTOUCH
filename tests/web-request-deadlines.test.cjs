@@ -176,7 +176,9 @@ function engageReadWorld(fetch) {
     questionTexts: { module: 'keep my unsent draft' },
   });
   stateSetters(world.sandbox, ['state', 'questionTexts']);
-  world.functions(ENGAGE, ['text', 'asRecord', 'parseModule']);
+  // Reopened 2026-11-20: text/asRecord are the shared lib/json-guards, not engage-private copies.
+  Object.assign(world.sandbox, world.load('lib/json-guards.ts'));
+  world.functions(ENGAGE, ['parseModule']);
   return world;
 }
 const publicEvent = { event: { id: 'event-original', name: 'Synthetic Event' } };
@@ -332,7 +334,9 @@ for (const stage of ['headers', 'body', 'rejection-body']) test(`engage command 
   Object.assign(s, world.load('lib/guest-command-result.ts'));
   Object.assign(s, { slug: 'synthetic', liveSlugRef: { current: 'synthetic' }, ticketRef: { current: 'bearer-original' }, inFlightRef: { current: null }, requestEpochRef: { current: {} }, commandIdsRef: { current: {} }, pendingCommandsRef: { current: {} }, pendingPhotosRef: { current: {} }, state: { kind: 'ready', eventName: 'Synthetic', participantId: 'participant', participantName: 'Synthetic' }, rememberReceipt() {}, forgetReceipt() {}, pendingRevision: 0, reloadTick: 0, pollChoices: { module: 'original draft' }, quizAnswers: {}, questionTexts: { other: 'untouched draft' }, draftContentBaselinesRef: { current: { poll: { version: 1 } } } });
   stateSetters(s, ['submitting', 'formError', 'notice', 'pendingRevision', 'reloadTick', 'pollChoices', 'quizAnswers', 'questionTexts', 'draftContentBaselines']);
-  world.functions(ENGAGE, ['submitGuestForm', 'postGuestCommand', 'beginRequest', 'isCurrentRequest', 'finishRequest', 'commandIdFor', 'randomCommandId', 'isRetryableStatus', 'hasPendingRecord', 'clearSubmittedDraft', 'clearResponseBaseline']);
+  // Reopened 2026-11-20: the request id is the shared lib/command-id.
+  Object.assign(s, world.load('lib/command-id.ts'));
+  world.functions(ENGAGE, ['submitGuestForm', 'postGuestCommand', 'beginRequest', 'isCurrentRequest', 'finishRequest', 'commandIdFor', 'isRetryableStatus', 'hasPendingRecord', 'clearSubmittedDraft', 'clearResponseBaseline']);
   const body = deferred();
   if (stage !== 'headers') s.fetch = async (url, init) => { world.calls.push({ url, init }); return deferredResponse(body, undefined, stage === 'rejection-body' ? 403 : 200); };
   const first = s.submitGuestForm('event-original', 'poll', 'response.submit', { moduleId: 'module', answer: s.pollChoices.module }, 'success');
@@ -360,7 +364,9 @@ for (const stage of ['headers', 'body', 'rejection-body']) test(`home command ${
   const world = mutationWorld(); const s = world.sandbox;
   Object.assign(s, { slug: 'synthetic', ticketRef: { current: 'bearer-original' }, commandIdsRef: { current: {} }, currentCommandIdsRef: { current: {} }, pendingCommandsRef: { current: {} }, state: { kind: 'ready', eventId: 'event-original', ticketToken: 'bearer-original', teams: [] }, activeWrites: 0, completedCommands: {}, rememberReceipt() {}, forgetReceipt() {}, isCurrentRequestContext: () => true, recoveredCommandMessage: () => 'confirmed', refresh() {} });
   stateSetters(s, ['activeWrites', 'completedCommands', 'pendingCommands', 'recoveringCommandKey', 'state']);
-  world.functions(HOME, ['postGuestCommand', 'sendGuestCommand', 'retryPendingCommand', 'updatePendingCommand', 'commandIdFor', 'randomCommandId', 'asRecord', 'text']);
+  // Reopened 2026-11-20: the request id and the JSON guards are shared lib modules.
+  Object.assign(s, world.load('lib/command-id.ts'), world.load('lib/json-guards.ts'));
+  world.functions(HOME, ['postGuestCommand', 'sendGuestCommand', 'retryPendingCommand', 'updatePendingCommand', 'commandIdFor']);
   const body = deferred();
   if (stage !== 'headers') s.fetch = async (url, init) => { world.calls.push({ url, init }); return deferredResponse(body, undefined, stage === 'rejection-body' ? 403 : 200); };
   let failure;

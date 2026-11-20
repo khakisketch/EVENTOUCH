@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
-import { bannerFillCss, bannerFillTone, type HomeStyle } from "../../../../lib/attendee-home";
+import type { HomeStyle } from "../../../../lib/attendee-home";
+import { useBannerAppearance } from "../use-banner-appearance";
 import styles from "./home.module.css";
 import L from "./home-layouts.module.css";
 
@@ -29,15 +29,9 @@ export default function HomeHero({
   preview?: boolean;
   label: string;
 }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const fill = bannerFillCss(homeStyle);
-  const imageMode = fill === null;
-  const neutralBanner = imageMode && (imageFailed || (!keyvisual && defaultHomeBanner === "neutral"));
-  const imageSource = imageMode && !imageFailed ? keyvisual || (defaultHomeBanner === "neutral" ? null : "/attendee-home-banner.png") : null;
+  const { fill, imageMode, neutral: neutralBanner, source: imageSource, tone, imageFailed, onImageError } = useBannerAppearance(homeStyle, keyvisual, defaultHomeBanner);
   const title = homeStyle.heroTitle?.trim() || eventName;
   const textHidden = imageMode && homeStyle.heroLayout === "image-only" && !neutralBanner;
-  // A color banner reads its own tone; a picture follows the chosen tone.
-  const tone = fill ? bannerFillTone(homeStyle) : neutralBanner ? "light" : homeStyle.textTone;
   const heroClass = [
     L.hero,
     tone === "dark" ? L.toneDark : L.toneLight,
@@ -47,8 +41,6 @@ export default function HomeHero({
     imageMode && homeStyle.overlay !== "none" ? L[`overlay${capitalize(homeStyle.overlay)}${capitalize(tone)}`] : "",
     homeStyle.imageFocus === "top" ? L.focusTop : homeStyle.imageFocus === "bottom" ? L.focusBottom : "",
   ].filter(Boolean).join(" ");
-
-  useEffect(() => setImageFailed(false), [keyvisual]);
 
   // The console builder embeds this banner inside its own preview section
   // (under the preview h2): there it renders an h3 with identical styling so
@@ -61,7 +53,7 @@ export default function HomeHero({
     <section className={heroClass} style={style} aria-label={label} data-neutral={neutralBanner || undefined}>
       {imageSource ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img className={L.artwork} src={imageSource} alt="" onError={() => setImageFailed(true)} />
+        <img className={L.artwork} src={imageSource} alt="" onError={onImageError} />
       ) : imageMode && imageFailed ? (
         <div className={styles.bannerImageFailure} role="status">배너 이미지를 불러오지 못했습니다.</div>
       ) : null}

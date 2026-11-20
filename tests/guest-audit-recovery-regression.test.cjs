@@ -114,8 +114,8 @@ function engageWorld(settlement) {
   const declarations = [];
   let effect;
   function visit(node) {
-    if (ts.isFunctionDeclaration(node) && ['text', 'asRecord', 'parseModule', 'storeTicket', 'readStoredTicket', 'clearStoredTicket'].includes(node.name?.text)) declarations.push(node.getText(parsed));
-    if (ts.isVariableStatement(node) && node.declarationList.declarations.some(d => d.name.getText(parsed) === 'STORAGE_PREFIX')) declarations.push(node.getText(parsed));
+    // Reopened 2026-11-20: text/asRecord and the ticket storage helpers are shared lib modules (loaded below), not engage-private copies.
+    if (ts.isFunctionDeclaration(node) && ['parseModule'].includes(node.name?.text)) declarations.push(node.getText(parsed));
     if (ts.isCallExpression(node) && node.expression.getText(parsed) === 'useEffect' && node.arguments[0]?.getText(parsed).includes('async function load')) effect = node.arguments[0].getText(parsed);
     ts.forEachChild(node, visit);
   }
@@ -124,6 +124,8 @@ function engageWorld(settlement) {
   const exports = {};
   sandbox.exports = exports;
   vm.runInContext(compile(source('lib/request-deadline.ts')), sandbox);
+  vm.runInContext(compile(source('lib/json-guards.ts')), sandbox);
+  vm.runInContext(compile(source('lib/attendee-ticket-storage.ts')), sandbox);
   Object.assign(sandbox, exports);
   vm.runInContext(compile(`${declarations.join('\n')}\nglobalThis.startEffect = ${effect};`), sandbox);
   return { sandbox, storage, writes, old, oldSignal: () => oldSignal, timers, ticketData };

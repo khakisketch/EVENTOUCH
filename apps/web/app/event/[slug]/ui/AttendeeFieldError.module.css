@@ -1,0 +1,7 @@
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--small);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}

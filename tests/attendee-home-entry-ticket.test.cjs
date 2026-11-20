@@ -62,7 +62,10 @@ test("an attendee without a ticket is told how to get one", () => {
 test("the ticket bearer still lives in tab memory only", () => {
   // The token is read from tab memory and kept in the shell's state; it is
   // never written to persistent storage.
-  assert.match(shell, /window\.sessionStorage\.getItem\(STORAGE_PREFIX \+ slug\)/u);
+  // Reopened 2026-11-20: the tab bearer is read through lib/attendee-ticket-storage (one key for home, ticket and engage).
+  assert.match(shell, /import \{ clearStoredTicket, readStoredTicket, storeTicket \} from "\.\.\/\.\.\/\.\.\/\.\.\/lib\/attendee-ticket-storage"/u);
+  assert.match(read("apps/web/lib/attendee-ticket-storage.ts"), /window\.sessionStorage\.getItem\(TICKET_STORAGE_PREFIX \+ slug\)/u);
+  assert.doesNotMatch(shell, /window\.sessionStorage/u);
   // A rejected link and an explicit session selection must take precedence
   // over the old tab bearer; the normal path retains the same order.
   assert.match(shell, /const ticket = rejected \? REJECTED_TICKET_BEARER : explicitSession \? "" : fromLink \|\| getAllowedTicketForTab\(slug\) \|\| ticketRef\.current \|\| \(storageUsable \? readStoredTicket\(slug\) : ""\)/u);

@@ -1,5 +1,6 @@
 import { publicRecoveryContact } from "../../../../lib/public-recovery-contact";
 import { readPublicEventContext } from "../../../../lib/public-event-context";
+import { asRecord } from "../../../../lib/json-guards";
 import type { PublicEventContext } from "../../../../lib/public-event-context";
 import { readAttendeeTheme } from "../event-theme";
 import type { AttendeeTheme } from "../event-theme";
@@ -34,10 +35,6 @@ export const BUILT_IN_FIELDS: PublishedField[] = [
   { id: "phone", label: "연락처", type: "text", required: true, options: [] },
   { id: "company", label: "소속", type: "text", required: false, options: [] },
 ];
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
-}
 
 function asField(value: unknown): PublishedField | null {
   const field = asRecord(value);

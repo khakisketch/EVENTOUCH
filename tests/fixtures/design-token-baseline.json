@@ -266,6 +266,11 @@
       "radius": 0,
       "hex": 0
     },
+    "event/[slug]/ui/AttendeeFieldError.module.css": {
+      "fontSizePx": 0,
+      "radius": 0,
+      "hex": 0
+    },
     "event/[slug]/ui/AttendeeListRow.module.css": {
       "fontSizePx": 0,
       "radius": 0,

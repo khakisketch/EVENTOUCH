@@ -11,6 +11,7 @@ import { parseRegisterData } from "./register-data";
 import type { PublishedField } from "./register-data";
 import styles from "./register.module.css";
 import { useUnsavedNavigationGuard } from "../../../../lib/use-unsaved-navigation-guard";
+import { randomCommandId } from "../../../../lib/command-id";
 import { postAttendeeRequest } from "../attendee-request";
 import AttendeeIcon from "../AttendeeIcons";
 import AttendeeStep from "../ui/AttendeeStep";
@@ -36,14 +37,6 @@ type Props = {
 };
 
 type Failure = { message: string; field?: string };
-
-function randomCommandId(): string {
-  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  // The request id can recover the issued ticket, so it must remain
-  // unpredictable even on browsers without randomUUID.
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  return `web-${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
-}
 
 export default function RegisterForm(initial: Props) {
   const { slug, recoveryBlocked } = initial;
