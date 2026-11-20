@@ -48,9 +48,12 @@ async function main() {
     });
 
     await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/settings`);
-    await page.getByRole('tab', { name: /^참가 접수/ }).click();
+    // Reopened 2026-11-20: 행사 설정이 탭 없는 작업판이 되어 '참가 접수' 탭 클릭이 필요 없다. 같은 화면의 참가 접수 구역에서 바로 입력한다.
+    await page.locator('#set-consent').waitFor({ state: 'visible' });
+    // Reopened 2026-11-20: 접수가 열려 있고 작성 중인 변경이 있으면 게시 버튼은 '변경 게시', 그 밖에는 '양식 게시·접수 열기'로 불린다.
+    const publishButton = () => page.getByRole('button', { name: /^(양식 게시·접수 열기|변경 게시)$/ });
     await page.locator('#set-consent').fill('합성 게시 A');
-    await page.getByRole('button', { name: '양식 게시·접수 열기' }).click();
+    await publishButton().click();
     await page.getByText('양식을 게시하고 접수를 열었습니다.', { exact: true }).first().waitFor();
     let current = await workspace();
     assert.equal(current.consentText, '합성 게시 A');
@@ -60,7 +63,7 @@ async function main() {
     async function checkCommittedRequest(nextMode, text) {
       await page.locator('#set-consent').fill(text);
       mode = nextMode;
-      await page.getByRole('button', { name: '양식 게시·접수 열기' }).click();
+      await publishButton().click();
       await panel.waitFor();
       const beforeCheck = sentCount;
       await panel.getByRole('button', { name: '서버 처리 확인' }).click();

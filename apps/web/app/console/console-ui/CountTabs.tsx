@@ -24,7 +24,7 @@
  * TOGETHER with the chosen tab (행사 목록의 "승인 대기만": stage tab AND
  * waiting approvals). It is its own `aria-pressed` button, filter mode only.
  */
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import styles from "./count-tabs.module.css";
 
 export type CountTabItem = {
@@ -98,6 +98,15 @@ export default function CountTabs({
   const trackRef = useRef<HTMLDivElement>(null);
   const first = useRef(true);
   const tablist = mode === "tablist";
+  const [locked, setLocked] = useState(false);
+
+  // A phone-width row scrolls inside its own box, and a scroll box with nothing focusable in it cannot be scrolled by
+  // keyboard. While every tab is disabled (a parent fieldset locks the screen during a refresh) the row wraps instead
+  // of scrolling. Reopened 2026-11-20: axe `scrollable-region-focusable` (serious) failed on the team screen in that
+  // state. Checked after every render because the lock comes from outside this component.
+  useEffect(() => {
+    setLocked(!trackRef.current?.querySelector("button:not(:disabled)"));
+  });
 
   // Phones scroll the row inside its own box: keep the chosen tab in view
   // without moving the page itself.
@@ -129,6 +138,7 @@ export default function CountTabs({
       <div
         className={styles.track}
         ref={trackRef}
+        data-locked={locked ? "" : undefined}
         role={tablist ? "tablist" : "group"}
         aria-label={ariaLabel}
         onKeyDown={tablist ? onKeyDown : undefined}

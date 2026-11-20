@@ -1,7 +1,7 @@
 'use strict';
 // Synthetic 5001-person fixture; each request uses the actual command path.
 const assert=require('node:assert/strict');
-const { selectDrawStage } = require('./ui-journey-helpers.cjs');
+const { selectDrawStage, settleLayout } = require('./ui-journey-helpers.cjs');
 const crypto=require('node:crypto');
 const fs=require('node:fs');
 const path=require('node:path');
@@ -43,7 +43,7 @@ async function main(){
   assert.equal(await page.getByLabel('최대 번호').inputValue(),'6000');
   await page.screenshot({path:path.join(out,'range-conflict-1280.png'),fullPage:true});
   await page.evaluate(axeSource);
-  for(const width of [320,390,1280]){await page.setViewportSize({width,height:900});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));assert.deepEqual(await page.evaluate(async()=>(await window.axe.run()).violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>v.id)),[]);if(width===390)await page.screenshot({path:path.join(out,'range-conflict-390.png'),fullPage:true});}
+  for(const width of [320,390,1280]){await page.setViewportSize({width,height:900});await settleLayout(page);/* Reopened 2026-11-20: 미리보기 기기 배율이 갱신된 뒤 측정 */assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));assert.deepEqual(await page.evaluate(async()=>(await window.axe.run()).violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>v.id)),[]);if(width===390)await page.screenshot({path:path.join(out,'range-conflict-390.png'),fullPage:true});}
   await page.locator('summary').filter({hasText:'럭키번호 범위 설정'}).focus();await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.activeElement?.id),'lucky-min');
   // A separately edited range remains a draft when the saved range changes.
   await reset();await open();await page.getByLabel('최대 번호').fill('5500');
@@ -71,7 +71,7 @@ async function main(){
   await page.getByText('5001명의 번호 배정을 확인했습니다. 기존 번호는 유지됩니다.').waitFor();
   assert.deepEqual(requests.map(x=>x.size),[5000,1,1]);assert.equal(requests[1].id,requests[2].id);assert.equal((await read()).luckyNumbers.length,5001);
   await page.unroute('**/commands',loss);await page.screenshot({path:path.join(out,'completed-1280.png'),fullPage:true});
-  await page.evaluate(axeSource);for(const width of [320,390,1280]){await page.setViewportSize({width,height:900});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));assert.deepEqual(await page.evaluate(async()=>(await window.axe.run()).violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>v.id)),[]);if(width===390)await page.screenshot({path:path.join(out,'completed-390.png'),fullPage:true});}
+  await page.evaluate(axeSource);for(const width of [320,390,1280]){await page.setViewportSize({width,height:900});await settleLayout(page);/* Reopened 2026-11-20: 미리보기 기기 배율이 갱신된 뒤 측정 */assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));assert.deepEqual(await page.evaluate(async()=>(await window.axe.run()).violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>v.id)),[]);if(width===390)await page.screenshot({path:path.join(out,'completed-390.png'),fullPage:true});}
   // Stop after a committed first batch, while its response is still in flight.
   await reset();await open();requests=[];let release,started;const held=new Promise(resolve=>{release=resolve}),startedPromise=new Promise(resolve=>{started=resolve});
   const hold=async r=>{const body=r.request().postDataJSON();if(body?.command!=='lucky.preassign-range-reviewed')return r.continue();requests.push(body.commandId);const response=await r.fetch();started();await held;return r.fulfill({response});};

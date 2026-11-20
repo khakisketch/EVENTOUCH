@@ -25,6 +25,7 @@ const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = requ
 const path = require('node:path');
 const { startAuditFixture, resolveAuditDatabaseUrl } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { settleLayout } = require('./ui-journey-helpers.cjs');
 
 const BASELINE_BUILD_ID = 'q91_6FU24tTszHkkmPzIy';
 const UI_TIMEOUT = 20000;
@@ -124,12 +125,9 @@ async function main() {
       await page.locator('#evidence-photo-archive').waitFor({ timeout: UI_TIMEOUT });
       const pickSection = async () => {
         if (section === 'SPACE') return;
-        if (width < 768) {
-          // Narrow layout hides the category buttons and shows the select.
-          await page.locator('#evidence-photo-section').selectOption(section);
-        } else {
-          await page.getByRole('button', { name: new RegExp(`${sectionLabel}.*장`) }).first().click();
-        }
+        // Reopened 2026-11-20: 증빙함의 구간 선택은 모든 폭에서 구간 타일 버튼이다(좁은 폭의 select #evidence-photo-section은 사라짐).
+        // 빈 구간의 타일은 개수 대신 '비어 있음' 알약을 가지므로 이름 끝의 '장'을 요구하지 않고 구간 이름으로 찾는다.
+        await page.getByRole('button', { name: new RegExp(`^${sectionLabel}`) }).first().click();
         await page.waitForTimeout(400);
       };
       await pickSection();
@@ -140,7 +138,9 @@ async function main() {
       // Read the page's own computed token colors; the synthetic canvases may
       // only use these (no new hex anywhere in this audit).
       const tokens = await page.evaluate(() => {
-        const icon = document.querySelector('[class*=uploadIcon]');
+        // Reopened 2026-11-20: 빈 구간에는 더 이상 uploadIcon 상자가 없다. 같은 쪽의 '사진 올리기' 기본 버튼이
+        // 화면 토큰의 바탕색(brand)과 글자색(on-brand) 쌍을 그대로 가지므로 그 쌍을 읽는다(새 hex 없이 토큰만 사용).
+        const icon = [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === '사진 올리기');
         const guidance = document.getElementById('evidence-photo-file-guidance');
         const cap = (el) => {
           const cs = getComputedStyle(el);
@@ -204,6 +204,12 @@ async function main() {
       await page.getByRole('heading', { name: /업로드 전 미리보기 2장/ }).waitFor({ timeout: UI_TIMEOUT });
       const previewImgs = page.locator('img[class*=previewImage]');
       assert.equal(await previewImgs.count(), 2, `photos/${width}: two pre-upload previews`);
+      // Reopened 2026-11-20: 미리보기 이미지는 선택 직후 비동기로 디코드되므로 제목이 보이는 순간에는 아직 complete가 아닐 수 있다.
+      // 로드 완료를 기다린 뒤 아래의 complete·naturalSize·object-fit 단언을 그대로 적용한다.
+      await page.waitForFunction(() => {
+        const imgs = [...document.querySelectorAll('img[class*=previewImage]')];
+        return imgs.length === 2 && imgs.every((img) => img.complete && img.naturalWidth > 0);
+      }, null, { timeout: UI_TIMEOUT });
       const previewFit = await previewImgs.evaluateAll((imgs) => imgs.map((img) => ({
         complete: img.complete,
         naturalWidth: img.naturalWidth,
@@ -259,7 +265,13 @@ async function main() {
       await page.goto(`${f.baseUrl}/console/events/${f.eventId}/photos`, { waitUntil: 'networkidle' });
       await page.locator('#evidence-photo-archive').waitFor({ timeout: UI_TIMEOUT });
       await pickSection();
-      const gallery = page.locator('li[id^="evidence-photo-"] img[class*=thumbnail]');
+      // Reopened 2026-11-20: 현장 사진 증빙함은 구글 포토식 정렬 행이다. 각 칸이 사진 자신의 비율(EXIF 회전 반영 뒤 naturalWidth/Height)을
+      // 따라 잘림·여백 없이 맞춰지므로 칸은 li가 아니라 div[class*=galleryCell]이고, 사진은 object-fit: cover로 칸을 꽉 채운다.
+      // '상자 안에 모든 픽셀이 보인다 / 비율이 유지된다'는 의도는 같은 칸 비율 = 사진 비율(잘림 0)로 검증한다.
+      const gallery = page.locator('div[class*=galleryCell] img');
+      await gallery.first().waitFor({ timeout: UI_TIMEOUT });
+      await page.waitForFunction(() => [...document.querySelectorAll('div[class*=galleryCell] img')].every((img) => img.complete && img.naturalWidth > 0), null, { timeout: UI_TIMEOUT });
+      await settleLayout(page);
       assert.equal(await gallery.count(), 2, `photos/${width}: gallery renders both saved photos`);
       const thumbs = await gallery.evaluateAll((imgs) => imgs.map((img) => {
         const rect = img.getBoundingClientRect();
@@ -278,17 +290,17 @@ async function main() {
       for (const [i, t] of thumbs.entries()) {
         assert.equal(t.complete, true, `photos/${width}: gallery img ${i} complete`);
         assert.ok(t.naturalWidth > 0 && t.naturalHeight > 0, `photos/${width}: gallery img ${i} natural dims`);
-        assert.equal(t.objectFit, 'contain', `photos/${width}: gallery img ${i} object-fit is contain`);
-        // Contain math: content scales by min(boxW/natW, boxH/natH), so it
-        // always fits inside the box and touches at least one edge.
-        const scale = Math.min(t.boxWidth / t.naturalWidth, t.boxHeight / t.naturalHeight);
+        assert.ok(['contain', 'cover'].includes(t.objectFit), `photos/${width}: gallery img ${i} object-fit is contain or cover (${t.objectFit})`);
+        // The cell takes the photo's own ratio, so neither fit crops or letterboxes: the box ratio equals the natural ratio and
+        // the shown part covers the whole box with every pixel of the photo inside it.
+        const aspectDrift = Math.abs((t.boxWidth / t.boxHeight) / (t.naturalWidth / t.naturalHeight) - 1);
+        assert.ok(aspectDrift < 0.02, `photos/${width}: gallery img ${i} aspect preserved (drift ${aspectDrift.toFixed(3)})`);
+        const scale = t.objectFit === 'cover' ? Math.max(t.boxWidth / t.naturalWidth, t.boxHeight / t.naturalHeight) : Math.min(t.boxWidth / t.naturalWidth, t.boxHeight / t.naturalHeight);
         const fittedW = t.naturalWidth * scale;
         const fittedH = t.naturalHeight * scale;
-        assert.ok(fittedW <= t.boxWidth + 1 && fittedH <= t.boxHeight + 1, `photos/${width}: gallery img ${i} content bounded ${fittedW.toFixed(1)}x${fittedH.toFixed(1)} in ${t.boxWidth.toFixed(1)}x${t.boxHeight.toFixed(1)}`);
-        const touchesEdge = Math.abs(fittedW - t.boxWidth) <= 1.5 || Math.abs(fittedH - t.boxHeight) <= 1.5;
-        assert.ok(touchesEdge, `photos/${width}: gallery img ${i} fills one box axis (no letterbox shrink bug)`);
-        const aspectDrift = Math.abs((fittedW / fittedH) / (t.naturalWidth / t.naturalHeight) - 1);
-        assert.ok(aspectDrift < 0.01, `photos/${width}: gallery img ${i} aspect preserved`);
+        const cropped = Math.max(0, 1 - (t.boxWidth * t.boxHeight) / (fittedW * fittedH));
+        const letterboxed = Math.max(0, 1 - (fittedW * fittedH) / (t.boxWidth * t.boxHeight));
+        assert.ok(cropped < 0.03 && letterboxed < 0.03, `photos/${width}: gallery img ${i} neither crops (${cropped.toFixed(3)}) nor letterboxes (${letterboxed.toFixed(3)})`);
         seenAspects.add(t.naturalWidth < t.naturalHeight ? 'portrait' : 'landscape');
       }
       assert.deepEqual([...seenAspects].sort(), ['landscape', 'portrait'], `photos/${width}: both orientations rendered`);
@@ -323,7 +335,9 @@ async function main() {
       const importInput = page.locator('section input[type="file"]').first();
 
       // Guidance copy is present before any file is chosen.
-      assert.equal(await page.getByText('가져오기는 선택적인 도구입니다.', { exact: false }).count() >= 1, true, `import/${width}: optional-tool guidance present`);
+      // Reopened 2026-11-20: 명단 가져오기 단순안 확정(드롭 → 결과 확인)으로 '가져오기는 선택적인 도구입니다.' 안내 문장이 없어졌다.
+      // 같은 자리의 안내(어떤 파일을 어디에 놓는지)가 파일 선택 전에 보이는지로 확인한다.
+      assert.equal(await page.getByText('엑셀이나 CSV 파일을 여기에 끌어 놓으세요', { exact: true }).count() >= 1, true, `import/${width}: drop-area guidance present`);
       assert.equal(await page.getByText(/CSV·TXT·(?:XLS·)?XLSX · 최대 1MB, 1,000행/, { exact: false }).count() >= 1, true, `import/${width}: format limits guidance present`);
       judge(`import/${width} guidance`, { optionalTool: true, limitsNote: true });
 

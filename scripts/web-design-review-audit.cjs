@@ -58,7 +58,8 @@ async function main() {
     const screens = [
       ['events', '/console', '#console-event-directory'],
       ['team', '/console/team', '#team-members'],
-      ['content', `/console/events/${f.eventId}/content`, '#content-notices'],
+      // Reopened 2026-11-20: 공지·안내가 탭 화면(#content-panel)으로 바뀌어 구역 id #content-notices가 없다. 공지 탭 패널이 그려지면 준비된 것으로 본다.
+      ['content', `/console/events/${f.eventId}/content`, '#content-panel'],
       ['reports', `/console/events/${f.eventId}/reports`, '#reports-list'],
     ];
     for (const width of [1280, 390]) {
@@ -76,21 +77,25 @@ async function main() {
         if (!before) assert.ok(targets.every(t => t.width >= 44 && t.height >= 44), `${name}/${width}: target below 44px ${JSON.stringify(targets.filter(t => t.width < 44 || t.height < 44))}`);
         checks.push({ name, width, overflow: false, targets });
         if (!before && name === 'content') {
-          const row = page.locator('li').filter({ has: page.getByRole('heading', { name: '동문 입장 안내', exact: true }) }).last();
-          const remove = row.getByRole('button', { name: '삭제', exact: true });
-          const edit = row.getByRole('button', { name: '편집', exact: true });
-          assert.notEqual(await remove.evaluate(el => getComputedStyle(el).color), await edit.evaluate(el => getComputedStyle(el).color));
+          // Reopened 2026-11-20: 공지 행은 눌러서 편집기를 여는 한 줄(LedgerRow)로 바뀌었고, 삭제는 편집기 안의 '삭제'(파괴 버튼)로 옮겨졌다.
+          // 같은 의도를 새 구성에서 확인한다: 삭제는 다른 작업 버튼과 색이 구분되고, 키보드 Enter로 확인이 열리며, 확인은 편집기 폭을 거의 다 쓰는 자기 줄을 차지하고, 취소하면 편집 내용이 남는다.
+          await page.locator('li').filter({ hasText: '동문 입장 안내' }).first().getByRole('button').first().click();
+          const editor = page.locator('#content-panel form');
+          await editor.waitFor();
+          const remove = editor.getByRole('button', { name: '삭제', exact: true });
+          const review = editor.getByRole('button', { name: '게시 검토', exact: true });
+          assert.notEqual(await remove.evaluate(el => getComputedStyle(el).color), await review.evaluate(el => getComputedStyle(el).color));
           await remove.focus();
           await page.keyboard.press('Enter');
-          const confirm = row.getByRole('group', { name: '실행 확인' });
+          const confirm = editor.getByRole('group', { name: '실행 확인' });
           await confirm.waitFor();
-          const rowBounds = await row.boundingBox();
+          const editorBounds = await editor.boundingBox();
           const confirmBounds = await confirm.boundingBox();
-          assert.ok(rowBounds && confirmBounds && confirmBounds.width > rowBounds.width * 0.8,
+          assert.ok(editorBounds && confirmBounds && confirmBounds.width > editorBounds.width * 0.8,
             `${width}: confirmation must occupy its own full-width row`);
           await page.screenshot({ path: path.join(out, `content-confirm-${width}.png`), fullPage: true });
           await confirm.getByRole('button', { name: '취소', exact: true }).click();
-          await page.getByRole('heading', { name: '동문 입장 안내', exact: true }).waitFor();
+          await page.getByRole('heading', { name: '공지 편집: 동문 입장 안내', exact: true }).waitFor();
           checks.push({ name: 'delete-confirm-cancel', width, preserved: true, keyboard: 'Enter' });
         }
         if (!before && name === 'team') {

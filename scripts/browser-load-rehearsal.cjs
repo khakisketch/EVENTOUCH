@@ -76,7 +76,8 @@ async function main() {
       worker.page = await context.newPage();
       await worker.page.goto(`${f.baseUrl}/staff/events/${f.eventId}`);
       await confirmInitialStaffDesk(worker.page);
-      await worker.page.locator('#staff-ticket').waitFor();
+      // Reopened 2026-11-20: 스태프 현장 화면 C4에서 티켓 코드 입력칸은 '코드 입력' 시트 안에 있다. 화면 준비 신호는 그 시트를 여는 버튼이다(typeTicket이 시트를 연다).
+      await worker.page.getByRole('button', { name: '코드 입력', exact: true }).waitFor();
     }
     const warm = await browser.newContext({ viewport: { width: 390, height: 844 } });
     contexts.push(warm);

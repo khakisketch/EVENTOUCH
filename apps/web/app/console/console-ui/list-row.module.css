@@ -128,6 +128,12 @@
 .row[data-list-row="cover"] .action { position: relative; z-index: 1; }
 
 .titleOpen {
+  /* The name button keeps the 44px target size even though the ::after widens the tap area over the row
+     (Reopened 2026-11-20: axe target-size on the field and team lists measured the bare name at 21px). */
+  display: inline-flex;
+  align-items: center;
+  min-width: var(--control-min-size);
+  min-height: var(--control-min-size);
   padding: 0;
   border: 0;
   background: transparent;

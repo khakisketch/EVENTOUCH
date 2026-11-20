@@ -1,7 +1,7 @@
 'use strict';
 // Synthetic 900-person roster, real isolated API and PostgreSQL, no sends.
 const assert = require('node:assert/strict');
-const { selectDrawStage } = require('./ui-journey-helpers.cjs');
+const { selectDrawStage, settleLayout } = require('./ui-journey-helpers.cjs');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -45,7 +45,7 @@ async function main() {
     assert.equal(await page.getByRole('button',{name:'번호 배정 완료',exact:true}).isDisabled(),true);
     await page.screenshot({path:path.join(out,'completed-1280.png'),fullPage:true});
     await page.evaluate(axeSource);
-    for(const width of [320,390,1280]) {await page.setViewportSize({width,height:900});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));assert.deepEqual(await page.evaluate(async()=>(await window.axe.run()).violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>v.id)),[]);if(width===390)await page.screenshot({path:path.join(out,'completed-390.png'),fullPage:true});}
+    for(const width of [320,390,1280]) {await page.setViewportSize({width,height:900});await settleLayout(page);/* Reopened 2026-11-20: 미리보기 기기 배율이 갱신된 뒤 측정 */assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));assert.deepEqual(await page.evaluate(async()=>(await window.axe.run()).violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>v.id)),[]);if(width===390)await page.screenshot({path:path.join(out,'completed-390.png'),fullPage:true});}
     saved.participants.push(makePerson(901));await write(saved);await open();
     await page.getByRole('checkbox',{name:/승인 참가자 전체 901명 선택/}).check();
     await page.getByText('전체 배정에 번호가 1개 부족합니다. 범위를 먼저 넓히세요.').waitFor();

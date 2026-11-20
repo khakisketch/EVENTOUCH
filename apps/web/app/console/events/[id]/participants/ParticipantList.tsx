@@ -2172,6 +2172,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       <span id="roster-select-all-help" className="sr-only">검색·필터에 맞는 전체를 선택합니다. 기존 선택은 유지됩니다.{visiblePeople.length > pagePeople.length ? " 다른 페이지의 결과도 포함됩니다." : ""}</span>
       </div>
       </div>
+      {/* Reopened 2026-11-20: the scope suffix on 그룹 변경·메시지 작성·신청 취소 ("· 현재 필터 N명") is visible text, so it stays in
+          the accessible name (WCAG 2.5.3 Label in Name; axe label-content-name-mismatch flagged it while it was aria-hidden). */}
       <div className={styles.selectionWorkbench} aria-label="선택한 참가자 작업">
 {            anySelected && canAssignGroup ? (
               <>
@@ -2239,7 +2241,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                     setGroupDialogOpen(true);
                   }}
                 >
-                  그룹 변경 <span aria-hidden="true">{hiddenSelectedCount ? `· 현재 필터 ${effectiveSelection.length}명` : ""}</span>
+                  그룹 변경 <span>{hiddenSelectedCount ? `· 현재 필터 ${effectiveSelection.length}명` : ""}</span>
                 </ProductButton>
                 <p className="sr-only" id="roster-group-scope">현재 필터에서 선택한 {effectiveSelection.length}명 대상</p>
                 {handoffOverLimit ? (
@@ -2261,7 +2263,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                       aria-describedby="roster-message-scope"
                       title="대상이 너무 많습니다. 필터로 대상을 좁혀 주세요"
                     >
-                      메시지 작성 <span aria-hidden="true">{hiddenSelectedCount ? `· 전체 ${handoffIds.length}명` : ""}</span>
+                      메시지 작성 <span>{hiddenSelectedCount ? `· 전체 ${handoffIds.length}명` : ""}</span>
                     </ProductButton>
                   </>
                 ) : (
@@ -2271,7 +2273,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                     aria-describedby="roster-message-scope"
                     href={closeHref(handoffHref)}
                   >
-                    <MessageIcon /> 메시지 작성 <span aria-hidden="true">{hiddenSelectedCount ? `· 전체 ${handoffIds.length}명` : ""}</span>
+                    <MessageIcon /> 메시지 작성 <span>{hiddenSelectedCount ? `· 전체 ${handoffIds.length}명` : ""}</span>
                   </ProductLink>
                 )}
                 <p className="sr-only" id="roster-message-scope">필터 밖을 포함한 선택 {handoffIds.length}명 대상{hiddenSelectedCount ? ` · 필터 밖 ${hiddenSelectedCount}명` : ""}</p>
@@ -2280,7 +2282,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                     onClick={(event) => {
                       closeSelectionMenu(event.currentTarget);
                       setBulkCancelTargets(cancelCandidates.map(({ id, name, status, inside, company, phone }) => ({ id, name, status, inside, company, phone: maskPhone(phone) })));
-                    }}>신청 취소 <span aria-hidden="true">{hiddenSelectedCount ? `· 현재 필터 ${cancelCandidates.length}명` : ""}</span></ProductButton>
+                    }}>신청 취소 <span>{hiddenSelectedCount ? `· 현재 필터 ${cancelCandidates.length}명` : ""}</span></ProductButton>
                   <p className={cancelCandidates.length > 1000 ? styles.selectionActionHint : "sr-only"} id="roster-cancel-scope">{cancelCandidates.length > 1000 ? "한 번에 1,000명까지 취소할 수 있습니다. 필터로 대상을 나눠 주세요." : `현재 필터에서 선택한 미취소 참가자 ${cancelCandidates.length}명 대상`}</p>
                 </> : null}
                 <ProductButton type="button" className={`button button-quiet ${styles.selectionButton}`} onClick={() => {

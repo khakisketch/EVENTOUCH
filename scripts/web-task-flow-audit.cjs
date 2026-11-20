@@ -61,6 +61,10 @@ async function main() {
     page.on('pageerror', e => errors.push(e.message));
     page.on('response', r => { if (r.status() >= 400 && r.url().startsWith(f.baseUrl) && r.url().includes('/api/')) errors.push(`${r.status()} ${r.url()}`); });
     const base = `/console/events/${f.eventId}`;
+    // Reopened 2026-11-20: 공지·안내는 탭 화면이라 구역 id #content-notices 대신 탭 패널 #content-panel을 기다린다. 공지 행은 눌러서 여는
+    // 한 줄(LedgerRow)이고 전광판 출력·게시 내리기·게시 검토는 열린 편집기(#content-panel form) 안에 있다.
+    const openNotice = title => page.locator('li').filter({ hasText: title }).first().getByRole('button').first().click();
+    const noticeEditor = () => page.locator('#content-panel form');
     const go = async (suffix, marker) => { await page.goto(f.baseUrl + base + suffix); await page.locator(marker).waitFor(); };
     const shot = async (name, fullPage = false) => { await page.screenshot({ path: path.join(out, `${name}.png`), fullPage }); };
     const rowFor = title => page.locator('li').filter({ has: page.getByRole('heading', { name: title, exact: true }) }).last();
@@ -89,7 +93,7 @@ async function main() {
     // Fresh before/after full renders at both required widths, before writes.
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
-      for (const [suffix, marker, name] of [['/content', '#content-notices', 'content'], ['/operations', '#ops-desks', 'operations'], ['/messages', '#history-heading', 'messages']]) {
+      for (const [suffix, marker, name] of [['/content', '#content-panel', 'content'], ['/operations', '#ops-desks', 'operations'], ['/messages', '#history-heading', 'messages']]) {
         await go(suffix, marker);
         await shot(`${name}-${width}`, true);
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${name} overflow`);
@@ -102,7 +106,7 @@ async function main() {
       }
     }
     await page.setViewportSize({ width: 390, height: 844 });
-    await go('/content', '#content-notices');
+    await go('/content', '#content-panel');
     await measure('notice-to-display', async act => {
       if (before) {
         await act(() => page.locator(`a[href="${base}/operations"]:visible`).first().click());
@@ -111,11 +115,10 @@ async function main() {
         await act(() => page.locator('#ops-display-pick').selectOption(`notice|${notice.id}`));
         await act(() => page.getByRole('button', { name: '출력 적용', exact: true }).click());
       } else {
-        const row = rowFor('동문 입장 안내');
-        await act(() => row.getByRole('button', { name: '전광판 출력', exact: true }).click());
+        await act(() => openNotice('동문 입장 안내'));
+        await act(() => noticeEditor().getByRole('button', { name: '전광판 출력', exact: true }).click());
         await shot('notice-output-confirm-390');
-        await act(() => row.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '전광판 출력', exact: true }).click());
-        await row.getByText('전광판 출력으로 선택됨', { exact: true }).waitFor();
+        await act(() => noticeEditor().getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '전광판 출력', exact: true }).click());
         await shot('notice-output-result-390');
       }
       await page.getByText('전광판 출력을 바꿨습니다.', { exact: true }).waitFor();
@@ -128,7 +131,7 @@ async function main() {
           await act(() => page.getByRole('link', { name: '스태프 배정', exact: true }).click());
           await act(() => page.getByRole('button', { name: '스태프 배정', exact: true }).click());
         } else {
-          if (kind === 'BOOTH') await act(() => page.getByRole('tab', { name: '부스', exact: true }).click());
+          // Reopened 2026-11-20: 부스는 탭이 아니라 같은 화면의 구역이라 '부스' 탭 누르기가 필요 없다(담당이 없는 곳의 '배정' 버튼이 바로 보인다).
           await act(() => page.getByRole('button', { name: `${title}에 스태프 배정`, exact: true }).click());
           assert.equal(await page.locator('#assign-type').inputValue(), kind);
           assert.equal(await page.locator('#assign-target').inputValue(), target.id);
@@ -219,7 +222,8 @@ async function main() {
       const attempts = [];
       await page.route('**/api/events/*/commands', async route => {
         const data = route.request().postDataJSON();
-        if (!['message.create', 'message.create-reviewed'].includes(data.command)) return route.continue();
+        // Reopened 2026-11-20: 문자 인코딩 검토를 거친 발송은 message.create-charset-reviewed 명령으로 나간다(다른 메시지 감사의 명령 목록과 같게).
+        if (!['message.create', 'message.create-reviewed', 'message.create-charset-reviewed'].includes(data.command)) return route.continue();
         attempts.push(data.commandId);
         if (lostId) return route.continue();
         const response = await route.fetch();
@@ -251,19 +255,22 @@ async function main() {
       await page.unroute('**/api/events/*/commands');
       // A notice can keep an old display reference after unpublishing. It is
       // not evidence of output; stale/off status must be stated accurately.
-      await go('/content', '#content-notices');
-      await rowFor(notice.title).getByRole('button', { name: '전광판 출력', exact: true }).click();
-      await rowFor(notice.title).getByRole('button', { name: '게시 내리기', exact: true }).click();
+      await go('/content', '#content-panel');
+      await openNotice(notice.title);
+      await noticeEditor().getByRole('button', { name: '전광판 출력', exact: true }).click();
+      await noticeEditor().getByRole('button', { name: '게시 내리기', exact: true }).click();
       await page.getByRole('dialog', { name: '공지 게시 내리기', exact: true }).getByRole('button', { name: '게시 내리기', exact: true }).click();
       await page.getByRole('dialog').waitFor({ state: 'hidden' });
       await page.getByText('전광판 선택됨 · 비공개로 출력되지 않음', { exact: true }).waitFor();
-      assert.equal(await rowFor(notice.title).getByRole('button', { name: '전광판 출력', exact: true }).count(), 0);
+      // 편집기가 열린 채이므로 같은 편집기(#content-panel form)에서 확인한다(행이 아니라 편집기가 버튼을 가짐).
+      assert.equal(await noticeEditor().count(), 1, 'the notice editor stays open after unpublishing');
+      assert.equal(await noticeEditor().getByRole('button', { name: '전광판 출력', exact: true }).count(), 0);
       await shot('notice-unpublished-status-390');
-      await rowFor(notice.title).getByRole('button', { name: '게시 검토', exact: true }).click();
+      await noticeEditor().getByRole('button', { name: '게시 검토', exact: true }).click();
       await page.getByRole('dialog', { name: '공지 게시 검토', exact: true }).getByRole('button', { name: '게시하기', exact: true }).click();
       await page.getByRole('dialog').waitFor({ state: 'hidden' });
-      await rowFor(notice.title).getByText('게시 중', { exact: true }).waitFor();
-      assert.equal(await rowFor(notice.title).getByRole('group', { name: '실행 확인' }).count(), 0, 'refresh invalidates an old output intention');
+      await page.locator('#content-panel').getByText('게시 중', { exact: true }).first().waitFor();
+      assert.equal(await noticeEditor().getByRole('group', { name: '실행 확인' }).count(), 0, 'refresh invalidates an old output intention');
       results.push({ key: 'recovery-safety', overwriteCancelPreserved: true, keyboardEnterConfirmed: true, noAutoWrite: true, unsentConfirmationReplaceable: true, attemptedResponseLossBlocked: true, receiptReused: true, unpublishedStatusAccurate: true });
     }
     assert.deepEqual(errors, []);

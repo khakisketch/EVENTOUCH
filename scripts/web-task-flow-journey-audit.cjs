@@ -348,7 +348,9 @@ async function main() {
         .workspaces[createdEventId].publishedVersion;
       await act(() => page.locator('#set-consent').fill(CONSENT_TEXT));
       await act(() => page.getByRole('button', { name: '양식 게시·접수 열기', exact: true }).click());
-      await page.getByText('접수 중', { exact: false }).first().waitFor({ timeout: 15000 });
+      // Reopened 2026-11-20: 설정 화면 왼쪽 목차에도 같은 '접수 중' 힌트가 있어(좁은 폭에서는 숨김) 첫 일치가 보이지 않는 요소일 수 있다.
+      // 접수 상태는 참가 접수 구역 안의 표시로 확인한다.
+      await page.locator('#panel-settings-intake').getByText('접수 중', { exact: false }).first().waitFor({ timeout: 15000 });
       const workspace = (await readBootstrap(helpers, harness.baseUrl, ownerCookie)).workspaces[createdEventId];
       assert.equal(workspace.registrationOpen, true);
       assert.ok(Number(workspace.publishedVersion) > Number(publishedBefore || 0),
@@ -369,7 +371,7 @@ async function main() {
       await act(() => page.getByRole('button', { name: '접수 닫기', exact: true }).click());
       // The confirmation is an inline "실행 확인" group, not a dialog.
       await act(() => page.getByRole('group', { name: '실행 확인', exact: true }).getByRole('button', { name: '접수 닫기', exact: true }).click());
-      await page.getByText('접수 닫힘', { exact: false }).first().waitFor({ timeout: 15000 });
+      await page.locator('#panel-settings-intake').getByText('접수 닫힘', { exact: false }).first().waitFor({ timeout: 15000 });
       const workspace = (await readBootstrap(helpers, harness.baseUrl, ownerCookie)).workspaces[createdEventId];
       assert.equal(workspace.registrationOpen, false);
       task.state = `workspace: registrationOpen=${workspace.registrationOpen} publishedVersion=${workspace.publishedVersion}`;
@@ -498,7 +500,11 @@ async function main() {
       await act(() => row.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '처리한다', exact: true }).click());
       await submitted;
       await page.getByText('경품 처리를 확인하고 최신 목록을 불러왔습니다.', { exact: true }).first().waitFor({ timeout: 15000 });
-      await row.getByText('수령 완료', { exact: false }).first().waitFor({ timeout: 15000 });
+      // Reopened 2026-11-20: 경품 지급 화면은 지급 대기를 먼저 두고 완료·취소를 접힌 묶음(details)으로 옮긴다. 처리한 경품은 그 묶음으로 이동하므로
+      // 접힌 채로는 '수령 완료'가 보이지 않는다. 완료 묶음을 펼쳐 같은 행의 수령 완료 표시를 확인한다(접힘 자체도 확인).
+      const doneFold = page.locator('details[data-reward-group="done"]');
+      if (!await doneFold.evaluate((el) => el.open)) await doneFold.locator('summary').click();
+      await doneFold.locator('li').filter({ hasText: REWARD_NAME }).first().getByText('수령 완료', { exact: false }).first().waitFor({ timeout: 15000 });
       const state = await readBootstrap(helpers, harness.baseUrl, ownerCookie);
       const done = (state.workspaces[fixture.eventId].rewards || [])
         .find((row2) => row2 && String(row2.id) === String(journeyReward.id));

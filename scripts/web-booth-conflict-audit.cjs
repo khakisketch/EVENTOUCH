@@ -6,6 +6,7 @@ const path = require('node:path');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { openLocationEditor } = require('./ui-journey-helpers.cjs');
 
 async function main() {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private capture root');
@@ -51,8 +52,8 @@ async function main() {
     for (const page of [a, b]) {
       page.setDefaultTimeout(12000);
       await page.goto(`${f.baseUrl}/console/events/${f.eventId}/operations`, { waitUntil: 'networkidle' });
-      await page.getByRole('tab', { name: '부스', exact: true }).click();
-      await page.locator('li').filter({ hasText: '합성 공동 부스' }).getByRole('button', { name: '편집', exact: true }).click();
+      // Reopened 2026-11-20: 부스 탭과 행의 '편집' 버튼이 사라지고 행 → 상세 시트 → '부스 편집'으로 열린다.
+      await openLocationEditor(page, '부스', '합성 공동 부스');
       await page.getByRole('dialog', { name: '부스 편집' }).waitFor();
     }
     const dialogA = a.getByRole('dialog', { name: '부스 편집' });
@@ -122,11 +123,10 @@ async function main() {
     assert.equal(saved.startsAt, '2026-12-01T09:00:00'); assert.equal(saved.endsAt, '');
     // Exercise the other recovery choice too: retaining A's draft does not
     // write until A explicitly saves the reviewed full set of values.
-    await a.locator('li').filter({ hasText: '합성 A 검토 후 저장' }).getByRole('button', { name: '편집', exact: true }).click();
+    await openLocationEditor(a, '부스', '합성 A 검토 후 저장');
     await dialogA.locator('#booth-name').fill('합성 A 이어 쓰는 초안');
     await b.reload({ waitUntil: 'networkidle' });
-    await b.getByRole('tab', { name: '부스', exact: true }).click();
-    await b.locator('li').filter({ hasText: '합성 A 검토 후 저장' }).getByRole('button', { name: '편집', exact: true }).click();
+    await openLocationEditor(b, '부스', '합성 A 검토 후 저장');
     await dialogB.locator('#booth-zone').fill('B 구역');
     await dialogB.getByRole('button', { name: '부스 저장', exact: true }).click();
     await dialogB.waitFor({ state: 'detached' });

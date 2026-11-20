@@ -245,7 +245,8 @@ async function main() {
       delete body.state.workspaces[fixture.eventId].payments;
       await route.fulfill({ response, json: body });
     }, { times: 1 });
-    await page.getByRole('button', { name: '신청 취소', exact: true }).click();
+    // Reopened 2026-11-20: 필터 밖 선택이 있으면 버튼·링크의 보이는 꼬리말('· 현재 필터 N명', '· 전체 N명')이 접근 가능한 이름에 들어간다(WCAG 2.5.3). 같은 동작을 꼬리말을 허용하는 이름으로 찾는다.
+    await page.getByRole('button', { name: /^신청 취소(?: · .+)?$/ }).click();
     const cancel = page.getByRole('dialog', { name: '선택한 신청 취소' });
     await cancel.getByText('최신 참가자와 결제 내역을 확인하지 못했습니다.', { exact: false }).waitFor();
     assert.equal(await cancel.getByRole('button', { name: '신청 취소', exact: true }).isDisabled(), true);

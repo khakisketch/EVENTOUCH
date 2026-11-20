@@ -1,7 +1,7 @@
 'use strict';
 // Two real operator sessions, isolated synthetic data and the normal API.
 const assert = require('node:assert/strict');
-const { selectDrawStage } = require('./ui-journey-helpers.cjs');
+const { selectDrawStage, settleLayout } = require('./ui-journey-helpers.cjs');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -71,7 +71,7 @@ async function main() {
     assert.match(await conflict.innerText(),/마감/);assert.match(await conflict.innerText(),/운영 중/);assert.match(await conflict.innerText(),/합성 경품 · 5개/);assert.match(await conflict.innerText(),/합성 경품 · 4개/);
     await a.screenshot({path:path.join(out,'comparison-1280.png'),fullPage:true});
     await a.evaluate(axeSource);
-    for(const width of [320,390,1280]){await a.setViewportSize({width,height:900});assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));assert.deepEqual(await a.evaluate(async()=>(await window.axe.run()).violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>v.id)),[]);if(width===390)await a.screenshot({path:path.join(out,'comparison-390.png'),fullPage:true});}
+    for(const width of [320,390,1280]){await a.setViewportSize({width,height:900});await settleLayout(a);/* Reopened 2026-11-20: 미리보기 기기 배율이 갱신된 뒤 측정 */assert.ok(await a.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));assert.deepEqual(await a.evaluate(async()=>(await window.axe.run()).violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>v.id)),[]);if(width===390)await a.screenshot({path:path.join(out,'comparison-390.png'),fullPage:true});}
     await conflict.getByRole('button',{name:'내 작성 내용으로 계속'}).click();
     assert.equal((await read()).rouletteConfig.status,'CLOSED');
     await a.getByRole('button',{name:'룰렛 설정 저장',exact:true}).click();

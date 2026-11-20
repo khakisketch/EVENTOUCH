@@ -10,6 +10,8 @@
   overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
 }
 .track::-webkit-scrollbar { display: none; }
+/* No tab can take focus: wrap instead of scrolling so no unreachable scroll box is left behind. */
+.track[data-locked] { flex-wrap: wrap; overflow: visible; border-radius: var(--r-card); }
 .tab, .toggle {
   position: relative; /* keeps the sr-only name inside the scrolling track */
   display: inline-flex; flex: 0 0 auto; align-items: center; gap: var(--s2);

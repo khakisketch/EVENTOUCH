@@ -66,7 +66,12 @@ test("each saving tab keeps its own success/failure line with a clock time", () 
   assert.match(source, /role="status"/u);
   assert.match(source, /formatClockNow/u);
   // Both outcomes land in place, not only in the page-top banner.
-  assert.match(source, /sectionStatusSetter\(attempt\.section\)\(\{ kind: "success", message, at: formatClockNow\(\) \}\)/u);
+  assert.match(source, /sectionStatusSetter\(attempt\.section\)\(\{ kind: "success", message, \.\.\.stampNow\(\) \}\)/u);
+  // The footer shows the most recent result. `at` has minute resolution, so recency is decided by a monotonic order
+  // number: a 기본 정보 저장 made seconds after a 운영 기능 저장 must replace it, not lose a same-minute tie.
+  assert.match(source, /function stampNow\(\)[\s\S]*?sectionStatusOrder \+= 1;[\s\S]*?return \{ at: formatClockNow\(\), order: sectionStatusOrder \};/u);
+  assert.match(source, /status\.order >= latest\.order/u);
+  assert.doesNotMatch(source, /status\.at >= latest\.at/u);
   assert.match(source, /kind: "error", message/u);
   // The page-top feedback strip is retained (no silent removal). Every
   // section is visible on the single page, so the banner no longer hides

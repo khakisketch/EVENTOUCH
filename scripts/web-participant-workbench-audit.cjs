@@ -91,12 +91,14 @@ async function main() {
         // vertical overlap (shared span), not equal tops. A caption
         // stranded on another flex line shares no vertical span and fails.
         if (width > 768) {
-          const scopeRow = await page.locator('[class*="scopeGroup"]').evaluate(el => {
-            const caption = el.querySelector('[class*="scopeLabel"]').getBoundingClientRect();
-            const button = el.querySelector('button').getBoundingClientRect();
-            return { overlap: Math.min(caption.bottom, button.bottom) - Math.max(caption.top, button.top) };
+          // Reopened 2026-11-20: 명단 재설계로 넓은 폭의 메타 줄에는 '범위 캡션 + 선택 버튼' 묶음(scopeGroup)이 없다(전체 선택은 표 머리와 선택 작업 줄로 옮겨짐).
+          // 같은 의도('줄의 글자가 컨트롤과 따로 떨어져 다른 줄에 남지 않는다')를 메타 줄의 개수 문구와 새로고침 버튼으로 확인한다.
+          const metaRow = await page.locator('.participant-count').evaluate(el => {
+            const count = el.getBoundingClientRect();
+            const refresh = el.parentElement.querySelector('button').getBoundingClientRect();
+            return { overlap: Math.min(count.bottom, refresh.bottom) - Math.max(count.top, refresh.top) };
           });
-          check(`roster@${width}: scope caption stays on its button's line`, scopeRow.overlap >= 8, scopeRow);
+          check(`roster@${width}: count caption stays on its refresh button's line`, metaRow.overlap >= 8, metaRow);
         } else {
           const scope = await page.getByText('여러 명 선택', { exact: true }).isVisible()
             ? page.getByText('여러 명 선택', { exact: true })
@@ -120,7 +122,8 @@ async function main() {
     await page.locator('#roster-filter-reset').click();
     check('reset retains selection', (await page.locator('#roster-selection-count').innerText()).includes('선택 2명'));
     await page.locator('#roster-search').fill(pending[1].name);
-        await page.getByRole('button', { name: '그룹 변경', exact: true }).click();
+    // Reopened 2026-11-20: 필터 밖 선택이 있으면 버튼의 보이는 글자 '그룹 변경 · 현재 필터 N명'이 그대로 접근 가능한 이름이다(레이블이 이름에 포함, WCAG 2.5.3).
+    await page.getByRole('button', { name: /^그룹 변경/ }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('그룹', { exact: true }).selectOption('VIP');
     await dialog.getByRole('button', { name: '지정', exact: true }).click();
