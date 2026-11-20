@@ -8,6 +8,7 @@ const axeSource = require('axe-core').source;
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { startAuditFixture } = require('./audit-fixture.cjs');
+const { settleLayout } = require('./ui-journey-helpers.cjs');
 const before = process.argv.includes('--before');
 let phase = 'setup';
 async function main() {
@@ -91,10 +92,10 @@ async function main() {
     assert.equal(confirmPosts, 1);
     await page.waitForFunction(() => [...document.querySelectorAll('button')].some((button) => button.textContent.trim() === '인증번호 다시 확인' && !button.disabled));
     await page.mouse.move(0, 0);
-    await page.waitForFunction(() => {
-      const button = [...document.querySelectorAll('button')].find((item) => item.textContent.trim() === '인증번호 다시 확인');
-      return button && getComputedStyle(button).backgroundColor === 'rgb(255, 255, 255)';
-    });
+    // Reopened 2026-11-20: 참가자 화면의 하단 고정 버튼은 기본(a2) 모드에서 보조 버튼이 흰 바탕이 아니라 윤곽선(투명)이다.
+    // 호버가 풀리는 색 전환이 끝나기를 '흰색'으로 기다리던 조건은 영원히 참이 되지 않으므로, 전환 완료를 기다린 뒤
+    // 아래의 '연결된 티켓 확인과 다시 확인이 시각적으로 구분된다'는 단언을 그대로 적용한다.
+    await settleLayout(page);
     const primaryColor = await page.getByRole('button', { name: '연결된 티켓 확인' }).evaluate((element) => getComputedStyle(element).backgroundColor);
     const retryColor = await page.getByRole('button', { name: '인증번호 다시 확인' }).evaluate((element) => getComputedStyle(element).backgroundColor);
     assert.notEqual(primaryColor, retryColor, 'checking the linked ticket remains visually distinct from reposting the code');
