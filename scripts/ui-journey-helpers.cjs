@@ -43,6 +43,12 @@ async function openSettingsBasics(page, timeout = 15000) {
   }
   await page.locator('#set-name').waitFor({ state: 'visible', timeout });
 }
+// Reopened 2026-11-20: 기본 정보 드로어는 뒤쪽 화면을 막는 모달이다. 작성 중인 값은 닫아도 남고('저장 안 됨'), 같은 드로어를 다시 열어 저장한다.
+// 뒤쪽 구역(참가 접수·운영 기능)을 조작하려면 먼저 닫아야 한다.
+async function closeSettingsBasics(page, timeout = 15000) {
+  await page.getByRole('dialog', { name: '기본 정보', exact: true }).getByRole('button', { name: '닫기', exact: true }).click();
+  await page.locator('#set-name').waitFor({ state: 'hidden', timeout });
+}
 async function chooseRadio(root, id, value) {
   const choices = await root.locator(`#${id} input[type="radio"]`).all();
   for (const choice of choices) {
@@ -109,4 +115,11 @@ async function settleLayout(page) {
   await page.evaluate(() => Promise.allSettled(document.getAnimations().map((animation) => animation.finished)));
 }
 
-module.exports = { settleLayout, openStudioPanel, selectDrawStage, openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, waitForDialogExitFocus };
+// Reopened 2026-11-20: 입장·스태프의 데스크·부스 행은 상세 시트를 여는 버튼 하나만 가진다(행 안의 '편집' 버튼과 '부스' 탭이 사라짐).
+// 편집은 상세 시트의 '<종류> 편집'에서 연다. kind는 '데스크' 또는 '부스'.
+async function openLocationEditor(page, kind, hasText) {
+  await page.locator('li').filter({ hasText }).locator('button[class*="locationOpen"]').first().click();
+  await page.getByRole('button', { name: `${kind} 편집`, exact: true }).click();
+}
+
+module.exports = { closeSettingsBasics, openLocationEditor, settleLayout, openStudioPanel, selectDrawStage, openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, waitForDialogExitFocus };

@@ -9,6 +9,7 @@ const path = require('node:path');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
+const { openSettingsBasics, closeSettingsBasics } = require('./ui-journey-helpers.cjs');
 const axeSource = require('axe-core').source;
 
 (async () => {
@@ -34,6 +35,8 @@ const axeSource = require('axe-core').source;
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'ko-KR' });
     await context.addCookies([{ ...cookieForContext(fixture, 'manager'), url: fixture.baseUrl }]);
     const page = await context.newPage();
+    // Reopened 2026-11-20: 접수가 열려 있고 작성 중인 변경이 있으면 게시 버튼은 '변경 게시', 그 밖에는 '양식 게시·접수 열기'로 불린다.
+    const publishButton = () => page.getByRole('button', { name: /^(양식 게시·접수 열기|변경 게시)$/ });
     const posts = [];
     page.on('request', (req) => {
       if (req.url().endsWith('/commands') && req.method() === 'POST') posts.push(req.postDataJSON());
@@ -80,8 +83,11 @@ const axeSource = require('axe-core').source;
       }
     }
     await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/settings`);
-    await page.getByRole('button', { name: '수정', exact: true }).click();
+    // Reopened 2026-11-20: 기본 정보는 뒤쪽 화면을 막는 드로어에서 편집한다. 작성 중인 이름은 드로어를 닫아도 남으므로(저장 안 됨)
+    // 닫은 뒤 참가 접수 구역의 안내문을 쓰고, 기본 정보를 저장하거나 충돌을 확인할 때 같은 드로어를 다시 연다.
+    await openSettingsBasics(page);
     await page.locator('#set-name').fill('합성 운영자 A의 이름');
+    await closeSettingsBasics(page);
     await page.locator('#set-consent').fill('합성 운영자 A의 안내');
 
     phase = 'intake conflict and read recovery';
@@ -90,12 +96,12 @@ const axeSource = require('axe-core').source;
     assert.equal(published.status, 200);
     const [intakeResponse] = await Promise.all([
       page.waitForResponse((r) => r.url().endsWith('/commands') && r.request().postDataJSON()?.command === 'form.publish'),
-      page.getByRole('button', { name: '양식 게시·접수 열기' }).click(),
+      publishButton().click(),
     ]);
     assert.equal(intakeResponse.status(), 409);
     await page.getByRole('heading', { name: '다른 작업에서 참가 접수 설정이 변경됐습니다' }).waitFor();
     assert.equal(await page.locator('#set-consent').inputValue(), '합성 운영자 A의 안내');
-    assert.equal(await page.getByRole('button', { name: '양식 게시·접수 열기' }).isDisabled(), true);
+    assert.equal(await publishButton().isDisabled(), true);
     tamper = 'failure';
     await page.getByRole('button', { name: '최신 설정 확인', exact: true }).click();
     await page.getByText('최신 설정을 불러오지 못했습니다.', { exact: false }).waitFor();
@@ -133,6 +139,7 @@ const axeSource = require('axe-core').source;
     await page.getByLabel('퀴즈', { exact: true }).check();
     await page.getByRole('button', { name: '운영 기능 저장' }).click();
     await page.getByText('운영 기능 설정을 저장했습니다.', { exact: false }).first().waitFor();
+    await openSettingsBasics(page);
     assert.equal(await page.locator('#set-name').inputValue(), '합성 운영자 A의 이름');
     const [basicResponse] = await Promise.all([
       page.waitForResponse((r) => r.url().endsWith('/commands') && r.request().postDataJSON()?.command === 'event.basics.save'),
@@ -150,7 +157,8 @@ const axeSource = require('axe-core').source;
     await page.getByRole('button', { name: '최신 설정 확인', exact: true }).click();
     await page.getByText('최신 기본 정보').waitFor();
     const basicTable = page.getByRole('table', { name: '최신 정보와 내가 작성 중인 기본 정보 비교' });
-    assert.equal(await basicTable.locator('tbody tr').count(), 12, 'all basic fields remain reviewable');
+    // Reopened 2026-11-20: 행사 설정 A5 확정(2026-11-15)으로 참가비·진행 형태 입력이 사라져 비교 항목이 12개에서 10개가 됐다. 화면에 있는 모든 기본 정보 항목을 비교한다는 의도는 그대로다.
+    assert.equal(await basicTable.locator('tbody tr').count(), 10, 'all basic fields remain reviewable');
     const capacityRow = basicTable.getByRole('row', { name: /정원 다름/ });
     assert.deepEqual(await capacityRow.locator('td').allTextContents(), ['350', '200'], 'each changed value stays beside its corresponding field');
     assert.equal(await basicTable.getByRole('rowheader', { name: '날짜' }).getByText('다름').count(), 0, 'unchanged fields are not marked different');
@@ -169,15 +177,15 @@ const axeSource = require('axe-core').source;
     assert.equal((await event()).capacity, 350);
     assert.equal((await workspace()).verificationRequired, true);
     assert.equal(await page.locator('#set-consent').inputValue(), '합성 운영자 A의 안내');
-    await page.getByRole('button', { name: '양식 게시·접수 열기' }).click();
+    await publishButton().click();
     await page.getByText('양식을 게시하고 접수를 열었습니다.', { exact: false }).first().waitFor();
     assert.equal((await workspace()).consentText, '합성 운영자 A의 안내');
 
     phase = 'unconfirmed receipt versus definite conflict';
-    await page.getByRole('button', { name: '양식 게시·접수 열기' }).waitFor({ state: 'visible' });
+    await publishButton().waitFor({ state: 'visible' });
     await page.locator('#set-consent').fill('합성 미확정 A');
     commandFault = 'abort';
-    await page.getByRole('button', { name: '양식 게시·접수 열기' }).click();
+    await publishButton().click();
     const recovery = page.getByRole('region', { name: '행사 설정 처리 확인 필요' });
     await recovery.waitFor();
     let pendingGuard = '';
@@ -203,7 +211,7 @@ const axeSource = require('axe-core').source;
     await page.getByText('합성 미확정 B', { exact: true }).waitFor();
     await page.getByRole('button', { name: '내 작성 내용으로 계속' }).click();
     commandFault = 'commit-loss';
-    await page.getByRole('button', { name: '양식 게시·접수 열기' }).click();
+    await publishButton().click();
     await recovery.waitFor();
     const committed = await workspace();
     assert.equal(committed.consentText, '합성 미확정 A');
@@ -216,6 +224,8 @@ const axeSource = require('axe-core').source;
     phase = 'clean consent still requires review of changed fields';
     const fresh = await context.newPage();
     await fresh.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/settings`);
+    // Reopened 2026-11-20: 다른 운영자의 신청 항목 변경은 이 화면이 기준 버전을 읽은 뒤에 일어나야 한다. goto는 load에서 돌아와 설정 구역이 그려지기 전일 수 있으므로 구역이 보일 때까지 기다린다.
+    await fresh.locator('#set-consent').waitFor({ state: 'visible' });
     const fieldBefore = await workspace();
     assert.equal((await command('field.save', { id: 'synthetic-new', label: '합성 새 항목', type: 'select', required: true,
       options: ['선택 하나', '선택 둘'], expectedFormVersion: fieldBefore.formVersion })).status, 200);

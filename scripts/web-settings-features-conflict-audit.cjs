@@ -8,6 +8,7 @@ const axeSource = require('axe-core').source;
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
+const { openSettingsBasics, closeSettingsBasics } = require('./ui-journey-helpers.cjs');
 
 (async () => {
   const output = prepareCaptureDir(process.env.EVENTOUCH_CAPTURE_ROOT);
@@ -62,13 +63,17 @@ const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
       return route.continue();
     });
     await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/settings`);
-    await page.getByRole('button', { name: '수정', exact: true }).click();
+    // Reopened 2026-11-20: 기본 정보는 뒤쪽 화면을 막는 드로어에서 편집한다. 작성 중인 이름은 드로어를 닫아도 남으므로(저장 안 됨)
+    // 닫은 뒤 운영 기능 구역의 초안을 만들고, 기본 정보를 저장할 때 같은 드로어를 다시 연다.
+    await openSettingsBasics(page);
     await page.locator('#set-name').fill('합성 다른 구역 초안');
+    await closeSettingsBasics(page);
     await page.getByLabel('퀴즈', { exact: true }).check();
     await page.screenshot({ path: path.join(output, 'features-before-conflict.png'), fullPage: true });
 
     phase = 'other operator and unrelated reload';
     assert.equal((await command('event.features', { features: ['draw', 'poll', 'screen', 'venue', 'reward', 'payment'] })).status, 200);
+    await openSettingsBasics(page);
     await page.getByRole('button', { name: '기본 정보 저장' }).click();
     await page.getByText('기본 정보를 저장했습니다.', { exact: false }).first().waitFor();
     assert.equal(await page.getByLabel('퀴즈', { exact: true }).isChecked(), true);
