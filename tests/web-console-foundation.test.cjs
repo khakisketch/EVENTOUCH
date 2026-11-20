@@ -93,7 +93,9 @@ test('navigation exposes rail order, root ids and existing routes', () => {
   ]) assert.ok(nav.includes(pages), `work group keeps ${pages}`);
   // Reopened 2026-11-20 (현장·참여 재구성): preparation, then the day-of mode, then results;
   // 추첨·투표 and 기간 분석 resolve but have no rail item of their own.
-  assert.ok(nav.includes('RAIL_HIDDEN_PAGE_IDS: readonly ConsolePageId[] = ["draws", "analysis"]'));
+  // Reopened 2026-11-21 (참가자 화면 허브, C안): 공지·안내 and 참여 이벤트 join the 참가자 화면 rail item as tabs;
+  // their routes, titles and the hub page ids above are unchanged.
+  assert.ok(nav.includes('RAIL_HIDDEN_PAGE_IDS: readonly ConsolePageId[] = ["draws", "analysis", "content", "programs"]'));
   const hubOrder = ['"today"', '"prepare"', '"onsite"', '"results"'].map((id) => nav.indexOf(`{ id: ${id}`));
   assert.ok(hubOrder.every((position) => position >= 0));
   assert.deepEqual(hubOrder, [...hubOrder].sort((a, b) => a - b));

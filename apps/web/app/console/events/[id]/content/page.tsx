@@ -1,3 +1,4 @@
+import AttendeeScreenHub from "../AttendeeScreenHub";
 import ContentWorkspace from "./ContentWorkspace";
 
 export default async function ConsoleContentPage({
@@ -8,6 +9,7 @@ export default async function ConsoleContentPage({
   const { id } = await params;
   return (
     <section className="console-page content-page">
+      <AttendeeScreenHub eventId={id} active="content" />
       <ContentWorkspace eventId={id} />
     </section>
   );

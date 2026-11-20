@@ -135,7 +135,8 @@ test('web-console-shell-groups-content-before-field-programs-and-settings', () =
   // literal duplicate routes: badges, permissions and feature gates stay in
   // the shell while the registry owns destinations.
   assert.match(shell, /EVENT_HUBS\.map\(\(hub\)/);
-  assert.match(shell, /CONSOLE_PAGES\[pageId\]\.label/);
+  // Reopened 2026-11-21 (참가자 화면 허브): the rail label comes from railLabel(), which returns the page label except for the merged 참가자 화면 item.
+  assert.match(shell, /railLabel\(pageId\)/);
   assert.match(shell, /consolePageHref\(pageId, eventId/);
   assert.match(shell, /nav-badge/);
   assert.match(shell, /showOperatorNavBadges/);

@@ -254,7 +254,8 @@ test('web-attendee-home-command-contracts', () => {
   // The rail renders registry destinations, not literal duplicate routes.
   const shellNav = read('app/console/ConsoleShell.tsx');
   assert.match(shellNav, /EVENT_HUBS\.map\(\(hub\)/);
-  assert.match(shellNav, /CONSOLE_PAGES\[pageId\]\.label/);
+  // Reopened 2026-11-21 (참가자 화면 허브): see railLabel().
+  assert.match(shellNav, /railLabel\(pageId\)/);
   assert.match(shellNav, /consolePageHref\(pageId, eventId/);
   const navigation = read('app/console/console-navigation.ts');
   assert.match(navigation, /draws: \{ label: "추첨·투표"/);
@@ -1139,7 +1140,8 @@ test('web-settings-uses-the-preparation-command-set', () => {
   // not literal duplicate routes.
   const shell = read('app/console/ConsoleShell.tsx');
   assert.match(shell, /EVENT_HUBS\.map\(\(hub\)/);
-  assert.match(shell, /CONSOLE_PAGES\[pageId\]\.label/);
+  // Reopened 2026-11-21 (참가자 화면 허브): the rail label comes from railLabel(), which returns the page label except for the merged 참가자 화면 item.
+  assert.match(shell, /railLabel\(pageId\)/);
   assert.match(shell, /consolePageHref\(pageId, eventId/);
   const navigation = read('app/console/console-navigation.ts');
   for (const route of ['participants', 'messages', 'operations', 'settings', 'reports']) {

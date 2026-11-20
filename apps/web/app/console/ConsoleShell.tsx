@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 import Link from "../ui/ProductLink";
 import { usePathname, useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../auth-redirect";
-import { CONSOLE_PAGES, EVENT_HUBS, RAIL_HIDDEN_PAGE_IDS, consoleHubForPage, consolePageHref, eventMenuShortcuts, matchesEventMenu, railPageFor, resolveConsolePage, type ConsolePageId } from "./console-navigation";
+import { CONSOLE_PAGES, EVENT_HUBS, RAIL_HIDDEN_PAGE_IDS, consoleHubForPage, consolePageHref, eventMenuShortcuts, matchesEventMenu, railLabel, railPageFor, resolveConsolePage, type ConsolePageId } from "./console-navigation";
 import { BarsIcon } from "./console-ui/ConsoleIcons";
 import EventMenuSearch from "./console-ui/EventMenuSearch";
 import { useConsoleLeaveConfirmation } from "./console-draft-guard";
@@ -851,7 +851,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const matchingHubs = EVENT_HUBS.map((hub) => ({
     hub,
     pages: hub.pageIds.filter((id) => !RAIL_HIDDEN_PAGE_IDS.includes(id) && isPageVisible(id) && matchesEventMenu(id, hub.label, eventMenuQuery)),
-    shortcuts: hub.pageIds.flatMap((id) => isPageVisible(id) ? eventMenuShortcuts(id, eventId ?? undefined, eventMenuQuery) : []),
+    shortcuts: hub.pageIds.flatMap((id) => isPageVisible(id) ? eventMenuShortcuts(id, eventId ?? undefined, eventMenuQuery, eventFeatures) : []),
   })).filter(({ pages, shortcuts }) => pages.length + shortcuts.length > 0);
   const menuResultCount = matchingHubs.reduce((count, { pages, shortcuts }) => count + pages.length + shortcuts.length, 0);
 
@@ -890,7 +890,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
             if (!href) return null;
             return <Link key={pageId} className={`console-nav-item console-workspace-link${railPageId === pageId ? " active" : ""}`}
               href={href} aria-current={railPageId === pageId ? "page" : undefined}>
-              <span>{CONSOLE_PAGES[pageId].label}</span>{renderPageBadges(pageId)}
+              <span>{railLabel(pageId)}</span>{renderPageBadges(pageId)}
             </Link>;
           })}
         </div>
@@ -936,7 +936,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
                         href={pageLink}
                         aria-current={active ? "page" : undefined}
                       >
-                        <span>{CONSOLE_PAGES[pageId].label}</span>
+                        <span>{railLabel(pageId)}</span>
                         {renderPageBadges(pageId)}
                       </Link>
                     );

@@ -102,11 +102,27 @@ export const EVENT_HUBS: readonly ConsoleHub[] = [
  * lives inside 참여 이벤트 (the same list and life cycle), and 기간 분석 opens
  * from the report page. Deep links, titles and the active group keep working.
  */
-export const RAIL_HIDDEN_PAGE_IDS: readonly ConsolePageId[] = ["draws", "analysis"];
+export const RAIL_HIDDEN_PAGE_IDS: readonly ConsolePageId[] = ["draws", "analysis", "content", "programs"];
+
+/**
+ * Reopened 2026-11-21 (참가자 화면 허브, C안): 참가자 페이지, 공지·안내, 참여 이벤트
+ * share one rail item named 참가자 화면. The three routes, titles and page
+ * metadata above are unchanged; the hub (AttendeeScreenHub) joins them with a
+ * tab row inside the pages.
+ */
+export const ATTENDEE_SCREEN_PAGE_IDS: readonly ConsolePageId[] = ["attendeePage", "content", "programs"];
+
+const RAIL_LABELS: Partial<Record<ConsolePageId, string>> = { attendeePage: "참가자 화면" };
+
+/** Rail/menu label; differs from the page label only for the merged 참가자 화면 item. */
+export function railLabel(pageId: ConsolePageId): string {
+  return RAIL_LABELS[pageId] ?? CONSOLE_PAGES[pageId].label;
+}
 
 /** The rail item a hidden page lights up, so the operator still sees where they are. */
 export function railPageFor(pageId: ConsolePageId): ConsolePageId {
-  if (pageId === "draws") return "programs";
+  if (pageId === "content" || pageId === "programs") return "attendeePage";
+  if (pageId === "draws") return "attendeePage";
   if (pageId === "analysis") return "reports";
   return pageId;
 }
@@ -124,7 +140,7 @@ const EVENT_MENU_TERMS: Partial<Record<ConsolePageId, string>> = {
   rewards: "경품 수령 지급",
   photos: "증빙 보관함 사진 ZIP",
   content: "공지사항 일정 시간표 장소 오시는 길",
-  attendeePage: "안내 QR 안내판 배너 디자인 인쇄",
+  attendeePage: "안내 QR 안내판 배너 디자인 인쇄 참가자 화면 참가자 페이지",
   settings: "신청 접수 양식 진행 단계 정원",
   reports: "결과 보고서 PDF 인쇄 마감",
   analysis: "통계 기간별 일별 신청 입장",
@@ -146,14 +162,31 @@ const SETTINGS_MENU_SHORTCUTS = [
   { label: "신청 항목", terms: "신청 항목 편집 필수 항목 등록 질문 필드", target: "/fields" },
 ];
 
-/** Search can lead to a section of a visible page without adding more rail items. */
-export function eventMenuShortcuts(pageId: ConsolePageId, eventId: string | undefined, query: string) {
-  if (pageId !== "settings" || !query.trim()) return [];
+/**
+ * Search can lead to a section of a visible page without adding more rail items.
+ * Reopened 2026-11-21: 공지·안내 and 참여 이벤트 no longer have rail items, so a
+ * search that matches them leads straight to their tab of 참가자 화면.
+ */
+export function eventMenuShortcuts(pageId: ConsolePageId, eventId: string | undefined, query: string, features: readonly string[] = []) {
+  if (!query.trim()) return [];
+  if (pageId === "attendeePage") {
+    const hasParticipation = features.some((feature) => PARTICIPATION_FEATURE_IDS.includes(feature));
+    return (["content", "programs"] as const)
+      .filter((id) => id !== "programs" || hasParticipation)
+      .filter((id) => matchesMenuWords(`${CONSOLE_PAGES[id].label} ${EVENT_MENU_TERMS[id] ?? ""}`, query))
+      .flatMap((id) => {
+        const href = consolePageHref(id, eventId);
+        return href ? [{ label: CONSOLE_PAGES[id].label, href }] : [];
+      });
+  }
+  if (pageId !== "settings") return [];
   const href = consolePageHref(pageId, eventId);
   if (!href) return [];
   return SETTINGS_MENU_SHORTCUTS.filter(({ label, terms }) => matchesMenuWords(`${label} ${terms}`, query))
     .map(({ label, target }) => ({ label, href: `${href}${target}` }));
 }
+
+const PARTICIPATION_FEATURE_IDS: readonly string[] = ["poll", "quiz", "qa", "draw", "survey", "stamp", "photo", "board"];
 
 /** Finds the hub that owns a page. Organization pages return undefined. */
 export function consoleHubForPage(pageId: ConsolePageId): ConsoleHub | undefined {
