@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>현장 전환 위치 시안</title>
+<style>
+  :root { --ink:#1E2026; --muted:#61656C; --line:#E5E5E7; --soft:#F5F6F7; --brand:#C8441F; --brand-text:#8E351F; --ok:#2F6B4F; --warn:#81520E; --side:#101114; --side-ink:#D6D8DD; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#fff; color:var(--ink); font-family:'Pretendard Variable', Pretendard, 'Noto Sans KR', system-ui, sans-serif; font-size:14px; line-height:1.45; }
+  .sheet { max-width:1320px; margin:0 auto; padding:24px 24px 72px; }
+  h1 { font-size:22px; margin:0 0 4px; } .lead { margin:0 0 28px; color:var(--muted); max-width:104ch; }
+  .opt { margin-bottom:56px; } .opt h2 { font-size:17px; margin:0 0 2px; } .why { margin:0 0 14px; color:var(--muted); font-size:13px; max-width:104ch; }
+  .tag { display:inline-block; font-size:12px; font-weight:700; padding:5px 12px; border-radius:999px; background:#EDEFF1; color:var(--muted); margin-bottom:8px; } .tag.rec { background:#FBEDE6; color:#9A3412; }
+  .cap { font-size:12px; color:var(--muted); margin:0 0 6px; font-weight:600; }
+  .row { display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; }
+  /* console frame */
+  .frame { width:1280px; max-width:100%; height:560px; border:1px solid var(--line); border-radius:14px; overflow:hidden; display:grid; grid-template-columns:200px 1fr; background:#fff; position:relative; }
+  .frame.m { width:390px; height:720px; border-radius:28px; grid-template-columns:1fr; }
+  .rail { background:var(--side); color:var(--side-ink); padding:18px 14px; font-size:13px; }
+  .rail .lg { font-weight:800; color:#fff; margin-bottom:18px; letter-spacing:-.01em; }
+  .rail h4 { margin:14px 6px 6px; font-size:11px; color:#8A8E97; font-weight:700; letter-spacing:.04em; }
+  .rail a { display:block; padding:7px 8px; border-radius:8px; color:var(--side-ink); }
+  .rail a.on { background:#25272E; color:#fff; font-weight:700; }
+  .main { display:flex; flex-direction:column; min-width:0; }
+  .top { padding:14px 28px 0; font-size:12px; color:var(--muted); }
+  .head { padding:10px 28px 14px; border-bottom:1px solid var(--line); }
+  .ttl { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .ttl h3 { margin:0; font-size:22px; letter-spacing:-.02em; }
+  .stage { font-size:12px; font-weight:700; padding:4px 10px; border-radius:999px; background:#FDF1E9; color:var(--brand-text); }
+  .stage.live { background:#E5F2EB; color:var(--ok); } .stage.done { background:#EDEFF1; color:var(--muted); }
+  .meta { color:var(--muted); font-size:13px; margin-top:4px; }
+  .sw { margin-left:auto; min-height:40px; padding:0 14px; border-radius:10px; border:1px solid #C9CBD0; display:inline-flex; align-items:center; gap:8px; font-weight:700; background:#fff; }
+  .sw .ch { color:var(--muted); font-size:12px; }
+  .body { padding:22px 28px; color:#9AA0A8; flex:1; }
+  .body .ph { height:14px; border-radius:6px; background:#EEF0F2; margin:0 0 12px; } .body .ph.w60 { width:60%; } .body .ph.w35 { width:35%; }
+  .cards { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:16px; }
+  .cards i { display:block; height:76px; border-radius:12px; background:#F3F4F6; }
+  /* option A: dropdown */
+  .pop { position:absolute; top:118px; left:calc(200px + 28px); width:380px; background:#fff; border-radius:16px; box-shadow:0 18px 42px rgba(16,17,20,.22), 0 0 0 1px var(--line); padding:8px; z-index:2; }
+  .pop .hd { font-size:12px; color:var(--muted); font-weight:700; padding:8px 10px 6px; }
+  .ev { display:grid; grid-template-columns:1fr auto; gap:2px 10px; padding:10px; border-radius:10px; }
+  .ev.on { background:#F5F6F7; }
+  .ev b { font-size:14px; } .ev .sub { grid-column:1; font-size:12px; color:var(--muted); }
+  .ev .ck { grid-row:1 / span 2; grid-column:2; align-self:center; color:var(--ink); font-weight:800; }
+  .pop .all { display:flex; justify-content:space-between; padding:12px 10px 8px; border-top:1px solid var(--line); margin-top:6px; font-weight:700; color:var(--brand-text); font-size:13px; }
+  /* option B: strip */
+  .strip { display:flex; align-items:center; gap:8px; padding:10px 28px; background:var(--soft); border-bottom:1px solid var(--line); overflow:hidden; }
+  .strip .lbl { font-size:12px; font-weight:700; color:var(--muted); margin-right:6px; white-space:nowrap; }
+  .pill { min-height:36px; padding:0 14px; border-radius:999px; background:#fff; box-shadow:inset 0 0 0 1px #D3D6DB; display:inline-flex; align-items:center; gap:8px; font-weight:650; white-space:nowrap; font-size:13px; }
+  .pill .d { width:8px; height:8px; border-radius:50%; background:var(--brand); } .pill .d.live { background:var(--ok); } .pill .d.done { background:#9AA0A8; }
+  .pill.on { background:var(--ink); color:#fff; box-shadow:none; } .pill.on .d { background:#fff; }
+  .strip .all { margin-left:auto; color:var(--brand-text); font-weight:700; font-size:13px; white-space:nowrap; }
+  /* mobile sheet */
+  .sheetm { position:absolute; left:0; right:0; bottom:0; background:#fff; border-radius:22px 22px 0 0; box-shadow:0 -12px 30px rgba(16,17,20,.18); padding:10px 14px 14px; }
+  .sheetm .grab { width:44px; height:5px; border-radius:3px; background:#D3D6DB; margin:0 auto 10px; }
+  .sheetm .ev { padding:12px; }
+  .scrim { position:absolute; inset:0; background:rgba(16,17,20,.36); }
+  .mtop { padding:18px 18px 14px; border-bottom:1px solid var(--line); }
+  .mtop .r { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .mtop h3 { margin:0; font-size:20px; letter-spacing:-.02em; }
+  .mtop .sw { margin-left:0; min-height:40px; } .mbody { padding:18px; color:#9AA0A8; }
+  .mbody .ph { height:14px; border-radius:6px; background:#EEF0F2; margin:0 0 12px; } .mbody .ph.w60 { width:60%; }
+  .note { max-width:104ch; color:var(--muted); font-size:13px; margin-top:12px; }
+  .rec-box { margin-top:10px; background:#FBF3EF; border-radius:12px; padding:12px 14px; font-size:13px; max-width:104ch; }
+</style></head><body><div class="sheet">
+<h1>현장 전환 위치 시안</h1>
+<p class="lead">지금은 현장을 바꾸려면 행사 목록으로 돌아가야 합니다. 두 가지 위치를 비교했습니다. 같은 "행사 바꾸기"라도 화면 구조를 얼마나 건드리는지가 다릅니다. 운영 현황 본문은 두 안 모두 그대로 두고(확정 구성 보호), 머리 영역만 바꿉니다.</p>
+
+<section class="opt">
+  <span class="tag rec">추천 · 최소 변경</span>
+  <h2>A. 제목 옆 "다른 행사" 전환기</h2>
+  <p class="why">현재 행사 이름 옆의 작은 버튼을 누르면 행사 목록이 아래로 열립니다. 본문 구조와 메뉴를 바꾸지 않아서 다른 화면과 어긋날 일이 없습니다. 고를 행사가 많을 때는 목록 맨 위에 검색을 붙이면 됩니다.</p>
+  <div class="row">
+    <div>
+      <p class="cap">데스크톱 · 목록 열린 상태</p>
+      <div class="frame">
+        <aside class="rail"><div class="lg">EVENTOUCH</div>
+          <h4>운영</h4><a>행사</a><a class="on">운영 현황</a><a>참가자 명단</a>
+          <h4>행사 준비</h4><a>참여 이벤트</a><a>메시지</a><a>설정</a>
+          <h4>당일</h4><a>현장 모드</a><a>입장·스태프</a>
+        </aside>
+        <div class="main">
+          <div class="top">행사 › 운영 현황</div>
+          <div class="head">
+            <div class="ttl"><h3>준비 중 시연 포럼</h3><span class="stage">운영 준비</span>
+              <span class="sw">다른 행사 <span class="ch">▾</span></span></div>
+            <div class="meta">2027.02.20 · 합성 컨벤션홀</div>
+          </div>
+          <div class="body"><div class="ph w60"></div><div class="ph w35"></div><div class="cards"><i></i><i></i><i></i></div></div>
+        </div>
+        <div class="pop">
+          <div class="hd">행사 바꾸기</div>
+          <div class="ev on"><b>준비 중 시연 포럼</b><span class="sub">운영 준비 · 2027.02.20</span><span class="ck">✓</span></div>
+          <div class="ev"><b>감사 검증 행사</b><span class="sub">행사 중 · 2027.01.16 · 합성 컨벤션홀</span></div>
+          <div class="ev"><b>2026 지난 포럼</b><span class="sub">행사 끝 · 2026.10.08</span></div>
+          <div class="all"><span>전체 행사 목록</span><span>→</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="row" style="margin-top:22px">
+    <div>
+      <p class="cap">모바일 390 · 전환 시트</p>
+      <div class="frame m">
+        <div class="mtop">
+          <div class="r"><h3>준비 중 시연 포럼</h3><span class="stage">운영 준비</span></div>
+          <div class="r" style="margin-top:8px"><span class="sw">다른 행사 <span class="ch">▾</span></span></div>
+        </div>
+        <div class="mbody"><div class="ph w60"></div><div class="ph"></div><div class="ph w60"></div></div>
+        <div class="scrim"></div>
+        <div class="sheetm">
+          <div class="grab"></div>
+          <div class="ev on"><b>준비 중 시연 포럼</b><span class="sub">운영 준비 · 2027.02.20</span><span class="ck">✓</span></div>
+          <div class="ev"><b>감사 검증 행사</b><span class="sub">행사 중 · 2027.01.16</span></div>
+          <div class="ev"><b>2026 지난 포럼</b><span class="sub">행사 끝 · 2026.10.08</span></div>
+          <div class="all"><span>전체 행사 목록</span><span>→</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="rec-box"><b>추천 이유:</b> 행사 목록 화면을 다시 열지 않고 현장을 바꿉니다. 메뉴·본문·확정된 운영 현황 구성은 그대로입니다. 바꾸는 행사 이름 자체는 항상 보이므로 "지금 어느 현장인지" 실수가 줄어듭니다.</p>
+</section>
+
+<section class="opt">
+  <span class="tag">대안 · 상단 줄</span>
+  <h2>B. 상단 띠에 최근 행사 칩 나열</h2>
+  <p class="why">화면 맨 위에 얇은 띠를 두고 최근 행사를 칩으로 보여 줍니다. 현장이 여럿이라 자주 바꾼다면 편하지만, 모든 화면 위에 같은 띠가 항상 남아 화면이 한 줄 무거워지고, 행사 목록과 역할이 겹칩니다.</p>
+  <div class="row">
+    <div>
+      <p class="cap">데스크톱</p>
+      <div class="frame" style="height:520px">
+        <aside class="rail"><div class="lg">EVENTOUCH</div>
+          <h4>운영</h4><a>행사</a><a class="on">운영 현황</a><a>참가자 명단</a>
+          <h4>행사 준비</h4><a>참여 이벤트</a><a>메시지</a><a>설정</a>
+          <h4>당일</h4><a>현장 모드</a><a>입장·스태프</a>
+        </aside>
+        <div class="main">
+          <div class="strip"><span class="lbl">현장</span>
+            <span class="pill on"><i class="d"></i>준비 중 시연 포럼</span>
+            <span class="pill"><i class="d live"></i>감사 검증 행사</span>
+            <span class="pill"><i class="d done"></i>2026 지난 포럼</span>
+            <span class="all">전체 행사 →</span></div>
+          <div class="head" style="padding-top:18px">
+            <div class="ttl"><h3>준비 중 시연 포럼</h3><span class="stage">운영 준비</span></div>
+            <div class="meta">2027.02.20 · 합성 컨벤션홀</div>
+          </div>
+          <div class="body"><div class="ph w60"></div><div class="ph w35"></div><div class="cards"><i></i><i></i><i></i></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="note">B는 현장이 3개 이상이고 하루에 여러 번 바꾸는 운영팀에 맞습니다. 다만 띠가 모든 화면에 상시 고정되므로, 필요하면 A 위에 나중에 덧붙이는 식으로 여는 것이 낫습니다.</p>
+</section>
+
+<section class="opt">
+  <h2>이번 결정에서 바뀌지 않는 것</h2>
+  <p class="why">운영 현황 본문(잉크 진행 바, 범례, 명단 링크, 라이브 주 버튼, 입퇴장 타임라인)은 두 안 모두 손대지 않습니다. 확정 기록(eventouch-overview-locked)을 따릅니다. 행사 목록(행사 화면)의 역할도 그대로이며, 전환기는 빠른 이동용입니다.</p>
+</section>
+</div></body></html>
