@@ -67,7 +67,9 @@ test("program list filters client-side with a count and a zero-result reset", ()
   assert.match(programs, /key: "OPEN", label: "진행 중"[^}]*\}[\s\S]*key: "DRAFT", label: "준비 중"[\s\S]*key: "CLOSED", label: "종료"/u);
   // Reopened 2026-11-20 (디자인 시스템 적용): the local StatusTabs is the shared CountTabs.
   assert.match(programs, /<CountTabs\s+ariaLabel="진행 상태별 보기"/u);
-  assert.match(read("console/console-ui/CountTabs.tsx"), /role="group" aria-label=\{ariaLabel\}/u);
+  // Reopened 2026-11-20 (shared gaps): the filter mode is still the aria-pressed group; the same component also has a tablist mode.
+  assert.match(read("console/console-ui/CountTabs.tsx"), /role=\{tablist \? "tablist" : "group"\}\s+aria-label=\{ariaLabel\}/u);
+  assert.match(read("console/console-ui/CountTabs.tsx"), /: \{ "aria-pressed": selected \}/u);
   assert.match(programs, /totalEvents > 8 \|\| hasProgramFilter/u);
   // "전체 N개 중 M개" count with a status role.
   assert.match(programs, /검색·필터 결과 \{visibleModules\.length \+ visibleDrawEvents\.length\}개 · 전체 \{totalEvents\}개/u);

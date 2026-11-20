@@ -515,6 +515,16 @@
   justify-content: space-between;
 }
 
+/* Sticky save row: stays in view under a long form, on the white work surface. */
+.formActionsSticky {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: var(--s3) 0;
+  border-top: 1px solid var(--line);
+  background: var(--surface-work);
+}
+
 .formActionsNote {
   min-width: 0;
   margin-right: auto;

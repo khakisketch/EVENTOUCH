@@ -53,7 +53,7 @@ test('settings exposes its zones on one workbench page', () => {
   // The attendee-page supporting block is content, never a zone of its own.
   assert.doesNotMatch(PAGES.settings, /label: "참가자 페이지"/u);
   assert.doesNotMatch(PAGES.content, /<ConsoleSectionNav/u);
-  assert.match(PAGES.content, /role="tablist" aria-label="콘텐츠 종류"/u);
+  assert.match(PAGES.content, /<CountTabs\s+mode="tablist"\s+ariaLabel="콘텐츠 종류"/u);
   for (const id of ['notice', 'program', 'venue']) {
     assert.match(PAGES.content, new RegExp(`\\{ id: "${id}", label:`), `content tabs reach ${id}`);
   }

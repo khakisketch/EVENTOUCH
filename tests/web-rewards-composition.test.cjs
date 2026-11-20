@@ -46,7 +46,10 @@ test('state is shape + colour, tokens only, 44px targets, one line per row on ph
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,8}\b/u);
   // State is the StatusPill word plus the avatar tone (ok / wait / neutral), never colour alone.
   assert.match(rewards, /const avatarTone: ConsoleAvatarTone = reward\.status === "RECEIVED" \? "ok"/u);
-  assert.match(css, /\.rowFoot :global\(\.product-action\)\s*\{[^}]*min-height:\s*var\(--control-min-size\)/su, '44px targets');
+  // Reopened 2026-11-20 (shared gaps): the 44px action floor is the one shared `.product-action` rule (product-ui.css);
+  // per-screen `min-height: 44px` repeats were no-ops and are gone.
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'apps', 'web', 'app', 'product-ui.css'), 'utf8'), /\.product-action \{[^}]*min-block-size: var\(--control-min-size\)/su, 'every action keeps a 44px target');
+  assert.doesNotMatch(css, /\.rowFoot :global\(\.product-action\)/u, '44px targets come from the shared floor');
   assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.rowActions\s*\{[^}]*padding/u, 'on phones the action drops under the row');
   assert.doesNotMatch(css, /font-weight:\s*[1-9]\d\d\b/u, 'weights are tokens');
 });

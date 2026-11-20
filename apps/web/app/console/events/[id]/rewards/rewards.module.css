@@ -40,7 +40,6 @@
 .searchGlyph { position: absolute; inset-block: 0; left: var(--s3); z-index: 1; display: inline-flex; align-items: center; color: var(--muted); pointer-events: none; }
 .searchGlyph svg { width: var(--s4); height: var(--s4); }
 .resultCount { margin: 0; color: var(--muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
-.resultCount :global(.product-action) { min-height: var(--control-min-size); }
 
 /* Groups: hairline under the title row (ConsoleSection heading="rule"); the count sits at the right. */
 .group { margin-top: var(--s5); }
@@ -94,7 +93,6 @@
 }
 .rowBody p { margin: 0; }
 .rowFoot { display: flex; gap: var(--s4); }
-.rowFoot :global(.product-action) { min-height: var(--control-min-size); }
 
 @media (max-width: 768px) {
   .row { grid-template-columns: minmax(0, 1fr); }

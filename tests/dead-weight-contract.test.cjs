@@ -80,7 +80,10 @@ test('draws-drops-foreign-module-copies-programs-drops-dead-selector', () => {
   assert.match(programsView, /styles\.photoArchiveTools/u, 'ProgramsWorkspace still renders photoArchiveTools');
   const programs = read('apps/web/app/console/events/[id]/programs/programs.module.css');
   assert.doesNotMatch(programs, /\.actions\s+\.button/u, 'programs .actions selector stays removed');
-  assert.match(programs, /\.moduleFoot\s+:global\(\.product-action\)/u, 'programs keeps a 44px target on the expanded row actions');
+  // Reopened 2026-11-20 (shared gaps): the per-screen `:global(.product-action) { min-height: 44px }` repeats were no-ops (the shared
+  // .product-action already has a 44px floor in product-ui.css), so the programs rules are gone and the floor lives in one place.
+  assert.doesNotMatch(programs, /:global\(\.product-action\)/u, 'programs no longer re-declares the shared 44px action floor');
+  assert.match(read('apps/web/app/product-ui.css'), /\.product-action \{[^}]*min-block-size: var\(--control-min-size\);[^}]*min-inline-size: var\(--control-min-size\)/su, 'every action keeps a 44px target from one shared rule');
 });
 
 test('home-drops-unused-hint-title-console-drops-unused-primary', () => {

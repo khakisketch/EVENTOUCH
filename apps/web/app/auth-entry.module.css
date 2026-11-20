@@ -121,12 +121,13 @@
   gap: var(--s4);
 }
 
+/* Shape only. The colour is the one primary-action rule (--action-primary in
+   tokens.css, applied by ProductButton), so login, reset, account and invite
+   submits all look the same. 2026-11-20: the --brand + --on-brand override that
+   made these differ from the login button is gone. */
 .entry:global(.site-page):global(.auth-page) :global(.auth-form) :global(button[type="submit"]) {
   min-height: var(--s7);
-  border: 1px solid var(--brand);
   border-radius: var(--r-ctl);
-  background: var(--brand);
-  color: var(--on-brand);
   font-weight: var(--fw-strong);
 }
 
@@ -197,37 +198,16 @@
 .entry:global(.site-page):global(.auth-page) :global(.registration-form) :global(button[type="submit"]) {
   width: 100%;
   min-height: var(--s7);
-  border: 1px solid var(--brand);
   border-radius: var(--r-ctl);
-  background: var(--brand);
-  color: var(--on-brand);
   font-weight: var(--fw-strong);
-}
-
-/*
- * Hover keeps the DESIGN.md primary voice: the base rules above outrank the
- * global `@media (hover: hover)` submit rule by specificity, so the same
- * scope restores brand-hover/on-brand-hover here with strictly higher
- * specificity (later + :hover). Disabled opacity/cursor, focus rings, and
- * every other button are untouched.
- */
-@media (hover: hover) {
-  .entry:global(.site-page):global(.auth-page) :global(.auth-form) :global(button[type="submit"]):hover {
-    border-color: var(--brand-hover);
-    background: var(--brand-hover);
-    color: var(--on-brand-hover);
-  }
-
-  .entry:global(.site-page):global(.auth-page) :global(.registration-form) :global(button[type="submit"]):hover {
-    border-color: var(--brand-hover);
-    background: var(--brand-hover);
-    color: var(--on-brand-hover);
-  }
 }
 
 /* In uncertain account flows, checking the outcome is primary; repeating
    the submitted action remains available as secondary. ProductButton drops
-   the legacy button-secondary class, so the rule reads its variant attribute. */
+   the legacy button-secondary class, so the rule reads its variant attribute.
+   Reopened 2026-11-20 (shared gaps): this stays even though primary submits are
+   no longer repainted here, because Astryx's own secondary is a translucent grey
+   and DESIGN.md's secondary is white with a hairline border. */
 .entry:global(.site-page):global(.auth-page) :global(.registration-form) :global(button[data-product-variant="secondary"][type="submit"]),
 .entry:global(.site-page):global(.auth-page) :global(.auth-form) :global(button[data-product-variant="secondary"][type="submit"]) {
   border-color: var(--line-strong);

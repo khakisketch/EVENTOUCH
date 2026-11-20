@@ -2017,8 +2017,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               }}>기존 안내 되돌리기</ProductButton> : null}
             </> : null}
           </div>
-          <div className={styles.saveBar}>
-          <ConsoleFormActions>
+          <ConsoleFormActions sticky>
             {/* 게시 버튼은 항상 둔다. 신청 항목은 별도 페이지에서 바뀌어
                 동의 문구가 그대로어도 게시할 일이 있다(버전이 바뀌면 게시
                 검토에서 충돌로 알려준다). 바뀐 게 있으면 "변경 게시"라고
@@ -2048,7 +2047,6 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               </span>
             ) : null}
           </ConsoleFormActions>
-          </div>
           {sectionStatusLine(intakeStatus, "intake")}
         </div>
         </div>
@@ -2120,8 +2118,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             </div>
           ))}
         </fieldset>
-        <div className={styles.saveBar}>
-        <ConsoleFormActions>
+        <ConsoleFormActions sticky>
           {featuresDirty ? (
             <span role="status" className={styles.unsavedTag}>
               <StatusPill tone="wait" size="sm" dot>저장 안 된 변경</StatusPill>
@@ -2147,7 +2144,6 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             {busy ? "저장 중입니다" : "운영 기능 저장"}
           </ProductButton>
         </ConsoleFormActions>
-        </div>
         {sectionStatusLine(featuresStatus, "features")}
       </ConsoleSection>
       </section>

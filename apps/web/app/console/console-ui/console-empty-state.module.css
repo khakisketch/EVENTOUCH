@@ -26,6 +26,25 @@
   color: var(--ink);
 }
 
+/* Amber: work waiting on a person. Beats the kind's border and wash. */
+.empty[data-tone="amber"] {
+  border-style: solid;
+  border-color: var(--warning-line);
+  background: var(--warning-soft);
+  color: var(--ink);
+}
+
+.empty[data-tone="amber"] .title { color: var(--warning); }
+.empty[data-tone="amber"] .icon { color: var(--warning); box-shadow: inset 0 0 0 1px var(--warning-line); }
+
+.empty[data-size="sm"] {
+  gap: var(--s1);
+  padding: var(--s4) var(--s3);
+}
+
+.empty[data-size="sm"] .title { font-size: var(--text-sm); }
+.empty[data-size="sm"] .description { font-size: var(--text-xs); }
+
 .icon {
   display: inline-grid;
   place-items: center;

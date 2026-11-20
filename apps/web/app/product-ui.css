@@ -48,6 +48,14 @@
     background: transparent;
     color: var(--color-text-accent);
   }
+  /* One primary rule (tokens.css --action-primary*): the button rests on the deep orange and goes one
+     step deeper on hover, with the same white text, as ProductLink primary already does. Astryx's own
+     hover is a 5% dark overlay, too faint to read as a state on the orange. */
+  .product-action[data-product-variant="primary"]:hover:not([aria-disabled="true"]) {
+    background-color: var(--action-primary-pressed);
+    background-image: none;
+    color: var(--action-primary-ink);
+  }
   .product-link.product-action:hover { background: var(--surface-muted); color: var(--ink); }
   .product-link[data-action-variant="primary"]:hover { background: var(--brand-pressed); border-color: var(--brand-pressed); color: var(--paper); }
   .product-link[data-action-variant="destructive"]:hover { background: var(--danger); color: var(--paper); }

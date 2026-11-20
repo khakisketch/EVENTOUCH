@@ -50,7 +50,8 @@ const render = (Component, props, ...children) => renderToStaticMarkup(React.cre
 const readUi = (name) => fs.readFileSync(path.join(UI, name), 'utf8');
 const strip = (css) => css.replace(/\/\*[\s\S]*?\*\//g, '');
 
-const CSS_FILES = ['console-empty-state', 'status-pill', 'console-avatar', 'stat-card', 'list-row'];
+// Reopened 2026-11-20 (shared gaps): count-tabs joins the token-only list (its weights and radii are tokens now).
+const CSS_FILES = ['console-empty-state', 'status-pill', 'console-avatar', 'stat-card', 'list-row', 'count-tabs'];
 
 test('foundation tokens exist in tokens.css with the documented values', () => {
   const tokens = fs.readFileSync(path.join(webRoot, 'app', 'tokens.css'), 'utf8');
@@ -264,6 +265,219 @@ test('ConsoleSection heading="rule" is opt-in and leaves the default output unch
 test('CountTabs keeps its current contract (no output change from the foundation)', () => {
   const source = readUi('CountTabs.tsx');
   assert.match(source, /tone\?: "wait" \| "default"/);
-  assert.match(source, /aria-pressed=\{value === item\.key\}/);
+  // Reopened 2026-11-20 (shared gaps): the pressed state is still `aria-pressed` in the default filter mode.
+  assert.match(source, /: \{ "aria-pressed": selected \}/);
   assert.doesNotMatch(source, /size\?:/);
+});
+
+// ---------------------------------------------------------------------------
+// Reopened 2026-11-20 (shared gaps): optional additions to the foundation. Every
+// addition is opt-in; the default output asserted above is unchanged.
+// ---------------------------------------------------------------------------
+
+const hexToRgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+const lumOf = ([r, g, b]) => {
+  const [lr, lg, lb] = [r, g, b].map((v) => v / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb;
+};
+const contrast = (a, b) => { const [hi, lo] = [lumOf(a), lumOf(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+const tokenHex = (tokens, name) => hexToRgb(new RegExp(`${name}:\\s*(#[0-9A-Fa-f]{6})`).exec(tokens)[1]);
+
+test('shared-gap tokens are added without changing existing ones', () => {
+  const tokens = fs.readFileSync(path.join(webRoot, 'app', 'tokens.css'), 'utf8');
+  assert.match(tokens, /--text-stage:\s*48px;/, 'hero number step (equal to the old per-screen --display override)');
+  for (const step of ['8', '12', '16', '24', '72', '88']) {
+    assert.match(tokens, new RegExp(`--on-dark-${step}:\\s*color-mix\\(in srgb, var\\(--paper\\) ${step}%, transparent\\);`), `--on-dark-${step}`);
+  }
+  for (const role of ['ok', 'wait', 'danger']) assert.match(tokens, new RegExp(`--on-dark-${role}:\\s*var\\(--(success|warning|danger)-line\\);`), `--on-dark-${role}`);
+  // Nothing from the foundation moved.
+  assert.match(tokens, /--text-num:\s*34px;/);
+  assert.match(tokens, /--brand-hover:\s*#C7441C;/);
+});
+
+test('on-dark status colours keep 4.5:1 against the stage face, washed and plain', () => {
+  const tokens = fs.readFileSync(path.join(webRoot, 'app', 'tokens.css'), 'utf8');
+  const stage = tokenHex(tokens, '--stage');
+  const mix = (fg, bg, share) => fg.map((v, i) => Math.round(v * share + bg[i] * (1 - share)));
+  for (const [token, line] of [['--on-dark-ok', '--success-line'], ['--on-dark-wait', '--warning-line'], ['--on-dark-danger', '--danger-line']]) {
+    const color = tokenHex(tokens, line);
+    assert.ok(contrast(color, stage) >= 4.5, `${token} on stage = ${contrast(color, stage).toFixed(2)}`);
+    assert.ok(contrast(color, mix(color, stage, 0.16)) >= 4.5, `${token} on its 16% wash = ${contrast(color, mix(color, stage, 0.16)).toFixed(2)}`);
+  }
+  assert.ok(contrast(tokenHex(tokens, '--side-muted'), stage) >= 4.5, 'the quiet on-dark pill text');
+});
+
+test('StatusPill passes DOM attributes through and keeps its own markers', () => {
+  const Pill = component('StatusPill');
+  const html = render(Pill, { tone: 'ok', id: 'p1', title: '확인됨', role: 'status', 'aria-live': 'polite', 'data-reward-pill': 'x', 'data-status-pill': 'spoofed', 'data-size': 'spoofed' }, '완료');
+  assert.match(html, /id="p1"/);
+  assert.match(html, /title="확인됨"/);
+  assert.match(html, /role="status"/);
+  assert.match(html, /aria-live="polite"/);
+  assert.match(html, /data-reward-pill="x"/);
+  assert.match(html, /data-status-pill="ok"/, 'the tone marker cannot be spoofed');
+  assert.match(html, /data-size="md"/, 'the size marker cannot be spoofed');
+  assert.doesNotMatch(html, /spoofed/);
+  assert.match(render(Pill, { className: 'extra' }, 'x'), /class="pill extra"/);
+});
+
+test('StatusPill on-dark tones and list alignment are opt-in', () => {
+  const Pill = component('StatusPill');
+  for (const tone of ['on-dark', 'on-dark-ok', 'on-dark-wait', 'on-dark-danger']) {
+    assert.match(render(Pill, { tone, size: 'sm', dot: true }, '라벨'), new RegExp(`data-status-pill="${tone}" data-size="sm"`));
+  }
+  assert.doesNotMatch(render(Pill, {}, 'x'), /data-align/, 'no alignment attribute by default');
+  for (const align of ['start', 'center', 'end']) assert.match(render(Pill, { align }, 'x'), new RegExp(`data-align="${align}"`));
+  const css = strip(readUi('status-pill.module.css'));
+  assert.match(css, /data-status-pill="on-dark"\][^}]*background:\s*transparent[^}]*var\(--stage-line\)[^}]*color:\s*var\(--side-muted\)/s, 'quiet outline on the stage');
+  for (const role of ['ok', 'wait', 'danger']) {
+    assert.match(css, new RegExp(`data-status-pill="on-dark-${role}"\\][^}]*color:\\s*var\\(--on-dark-${role}\\)`, 's'), `on-dark-${role} text`);
+    assert.match(css, new RegExp(`data-status-pill="on-dark-${role}"\\][^}]*color-mix\\(in srgb, var\\(--on-dark-${role}\\) 16%`, 's'), `on-dark-${role} wash`);
+  }
+  for (const align of ['start', 'center', 'end']) assert.match(css, new RegExp(`data-align="${align}"\\]\\s*\\{\\s*justify-self:\\s*${align}`), `${align} places the pill in its cell`);
+});
+
+test('ListRow forwards id, data and aria attributes and a heading title', () => {
+  const ListRow = component('ListRow');
+  const row = render(ListRow, { title: '행사', as: 'li', id: 'row-1', 'data-reward-row': '', 'aria-label': '경품 행', titleAs: 'h3', titleProps: { id: 'row-1-title', tabIndex: -1 } });
+  assert.match(row, /^<li id="row-1" data-reward-row="" aria-label="경품 행" class="row" data-list-row="static"/);
+  assert.match(row, /<h3 id="row-1-title" tabindex="-1" class="title">행사<\/h3>/);
+  const link = render(ListRow, { title: '프로그램', href: '/x', titleAs: 'h3' });
+  assert.match(link, /<a class="body" href="\/x"><span class="main"><h3 class="title">프로그램<\/h3>/, 'a link row may hold a heading');
+  const button = render(ListRow, { title: '버튼 행', onClick: () => {}, titleAs: 'h3' });
+  assert.match(button, /<span class="title">버튼 행<\/span>/, 'a heading may not live in a <button>: the button row keeps a span');
+  assert.doesNotMatch(button, /<h3/);
+  assert.match(render(ListRow, { title: 'x' }), /<span class="title">x<\/span>/, 'default title is still a span');
+});
+
+test('ListRow center, wide trailing, separate action and timeline slots', () => {
+  const ListRow = component('ListRow');
+  const row = render(ListRow, {
+    title: '추첨', center: React.createElement('i', null, 'bar'), trailing: React.createElement('b', null, '12'), trailingWidth: 'free',
+    action: React.createElement('input', { type: 'checkbox', 'aria-label': '켜기' }), href: '/draw',
+  });
+  assert.match(row, /data-has-action="true"/);
+  assert.match(row, /<span class="center"><i>bar<\/i><\/span><span class="trailing" data-width="free"><b>12<\/b><\/span>/, 'center sits before trailing; free lifts the cap');
+  assert.match(row, /<\/a><span class="action"><input type="checkbox" aria-label="켜기"\/><\/span>/, 'the control is a sibling of the link, never inside it');
+  assert.equal((row.match(/<a /g) || []).length, 1);
+  assert.doesNotMatch(render(ListRow, { title: 'x', trailing: 'y' }), /data-width|data-has-action|class="center"/, 'defaults add nothing');
+
+  const timeline = render(ListRow, { title: '김민수 입장', as: 'li', variant: 'timeline', time: React.createElement('time', { dateTime: '2026-11-20T09:00' }, '09:00'), railTone: 'ok' });
+  assert.match(timeline, /data-list-row-variant="timeline"/);
+  assert.match(timeline, /<span class="time"><time date[tT]ime="2026-11-20T09:00">09:00<\/time><\/span><span class="rail" data-rail="ok" aria-hidden="true"><\/span>/);
+  assert.doesNotMatch(render(ListRow, { title: 'x' }), /class="time"|class="rail"/);
+});
+
+test('ListRow cover row: the title holds one button, other slots stay clickable above it', () => {
+  const ListRow = component('ListRow');
+  const { ListRowOpen } = load(path.join(UI, 'ListRow.tsx'));
+  const row = render(ListRow, {
+    as: 'li', cover: true, title: React.createElement(ListRowOpen, { 'aria-label': '이름 수정' }, '이름'),
+    trailing: React.createElement('button', { type: 'button' }, '위로'),
+  });
+  assert.match(row, /data-list-row="cover"/);
+  assert.match(row, /<button type="button" class="titleOpen" aria-label="이름 수정">이름<\/button>/);
+  assert.equal((row.match(/<button /g) || []).length, 2, 'the cover button plus the trailing control, no nesting');
+  const css = strip(readUi('list-row.module.css'));
+  assert.match(css, /\.titleOpen::after\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0/s);
+  assert.match(css, /data-list-row="cover"\] \.trailing[^{]*\{[^}]*z-index:\s*1/s, 'trailing controls sit above the cover');
+  assert.match(css, /\.titleOpen:focus-visible::after\s*\{[^}]*outline:\s*3px solid var\(--focus\)/s);
+});
+
+test('ListRow summary mode is the <summary> of a <details>', () => {
+  const ListRow = component('ListRow');
+  const html = render(ListRow, { as: 'summary', title: '룰렛', titleAs: 'h3', chevron: true, trailing: '진행 중', id: 'sum-1' });
+  assert.match(html, /^<summary id="sum-1" class="row body summary" data-list-row="interactive" data-density="comfortable">/);
+  assert.match(html, /<h3 class="title">룰렛<\/h3>/);
+  assert.match(html, /<span class="chevron" aria-hidden="true"><svg/);
+  assert.doesNotMatch(html, /<a |<button|<div class="body"/, 'the summary is the one element');
+  const css = strip(readUi('list-row.module.css'));
+  assert.match(css, /details\[open\] > \.summary \.chevron\s*\{[^}]*rotate\(90deg\)/s);
+  assert.match(css, /\.summary::-webkit-details-marker\s*\{\s*display:\s*none/s);
+});
+
+test('ConsoleEmptyState amber tone, small size and the documented title element', () => {
+  const Empty = component('ConsoleEmptyState');
+  const amber = render(Empty, { tone: 'amber', size: 'sm', title: '배정된 스태프가 없습니다', titleAs: 'h3' });
+  assert.match(amber, /data-console-empty="empty" data-tone="amber" data-size="sm"/);
+  assert.match(amber, /<h3 class="title">/);
+  const plain = render(Empty, { title: 'x' });
+  assert.doesNotMatch(plain, /data-tone|data-size/, 'defaults add nothing');
+  assert.match(plain, /<p class="title">x<\/p>/, 'the default title element stays p');
+  assert.match(readUi('ConsoleEmptyState.tsx'), /titleAs defaults to `p`[\s\S]*`titleAs="h3"`/, 'titleAs is documented');
+  const css = strip(readUi('console-empty-state.module.css'));
+  assert.match(css, /data-tone="amber"\][^}]*border-color:\s*var\(--warning-line\)[^}]*background:\s*var\(--warning-soft\)/s);
+  assert.match(css, /data-tone="amber"\] \.title\s*\{[^}]*color:\s*var\(--warning\)/s);
+});
+
+test('CountTabs tablist mode: roles, ids, roving tabindex and the keyboard model', () => {
+  const CountTabs = component('CountTabs');
+  const { nextCountTabKey } = load(path.join(UI, 'CountTabs.tsx'));
+  const items = [{ key: 'notice', label: '공지', count: 3 }, { key: 'program', label: '일정' }, { key: 'venue', label: '장소 안내' }];
+  const html = render(CountTabs, { mode: 'tablist', ariaLabel: '콘텐츠 종류', idPrefix: 'content-tab-', controls: 'content-panel', value: 'program', onChange: () => {}, items });
+  assert.match(html, /role="tablist" aria-label="콘텐츠 종류"/);
+  assert.doesNotMatch(html, /role="group"|aria-pressed/);
+  assert.match(html, /role="tab" id="content-tab-program" aria-selected="true" aria-controls="content-panel" tabindex="0"/);
+  assert.match(html, /role="tab" id="content-tab-notice" aria-selected="false" aria-controls="content-panel" tabindex="-1"/);
+  assert.equal((html.match(/<em /g) || []).length, 1, 'a tab without count has no badge');
+  const perTab = render(CountTabs, { mode: 'tablist', ariaLabel: 'x', controls: (key) => `panel-${key}`, value: null, onChange: () => {}, items });
+  assert.match(perTab, /aria-controls="panel-notice"/);
+  assert.match(perTab, /data-tab="notice"[^>]*tabindex="0"/, 'with no selection the first tab is the tab stop');
+
+  assert.equal(nextCountTabKey(items, 'notice', 'ArrowRight'), 'program');
+  assert.equal(nextCountTabKey(items, 'venue', 'ArrowRight'), 'notice', 'wraps forward');
+  assert.equal(nextCountTabKey(items, 'notice', 'ArrowLeft'), 'venue', 'wraps back');
+  assert.equal(nextCountTabKey(items, 'program', 'Home'), 'notice');
+  assert.equal(nextCountTabKey(items, 'program', 'End'), 'venue');
+  assert.equal(nextCountTabKey(items, 'program', 'Enter'), null);
+  assert.equal(nextCountTabKey(items.map((item) => (item.key === 'program' ? { ...item, disabled: true } : item)), 'notice', 'ArrowRight'), 'venue', 'disabled tabs are skipped');
+});
+
+test('CountTabs filter mode is unchanged and adds fit and a narrowing toggle', () => {
+  const CountTabs = component('CountTabs');
+  const items = [{ key: 'all', label: '전체', count: 12 }, { key: 'live', label: '진행 중', count: 1 }];
+  const html = render(CountTabs, { ariaLabel: '진행 단계', value: 'all', onChange: () => {}, items });
+  assert.match(html, /role="group" aria-label="진행 단계"/);
+  assert.match(html, /aria-pressed="true"/);
+  assert.doesNotMatch(html, /role="tab"|tabindex|data-fit|class="toggle"/);
+  assert.match(render(CountTabs, { ariaLabel: 'x', value: 'all', onChange: () => {}, items, fit: 'wrap' }), /data-fit="wrap"/);
+  assert.match(render(CountTabs, { ariaLabel: 'x', value: 'all', onChange: () => {}, items, fit: 'fill' }), /data-fit="fill"/);
+
+  const toggled = render(CountTabs, {
+    ariaLabel: 'x', value: 'all', onChange: () => {}, items,
+    toggle: { key: 'pending', label: '승인 대기만', count: 3, pressed: true, tone: 'wait', ariaLabel: '승인 대기 있는 행사만 보기 (3건)', onChange: () => {} },
+  });
+  assert.match(toggled, /class="toggle" data-toggle="pending" data-selected="true" data-tone="wait" aria-pressed="true" aria-label="승인 대기 있는 행사만 보기 \(3건\)"/);
+  const css = strip(readUi('count-tabs.module.css'));
+  assert.match(css, /data-fit="wrap"\] \.track\s*\{[^}]*flex-wrap:\s*wrap/s);
+  assert.match(css, /data-fit="fill"\] \.tab\s*\{[^}]*flex:\s*1 1 0/s);
+  assert.match(css, /\.tab\[data-selected="true"\]/, 'the chosen tab is styled from data-selected for both behaviours');
+});
+
+test('StatCard hero size and ConsoleAvatar logo are opt-in', () => {
+  const StatCard = component('StatCard');
+  const Avatar = component('ConsoleAvatar');
+  const hero = render(StatCard, { label: '기간 고유 입장', value: 128, unit: '명', size: 'hero' });
+  assert.match(hero, /data-stat-card="default" data-stat-size="hero"/);
+  assert.doesNotMatch(render(StatCard, { label: 'a', value: 1 }), /data-stat-size/);
+  const statCss = strip(readUi('stat-card.module.css'));
+  assert.match(statCss, /data-stat-size="hero"\] \.value\s*\{[^}]*font-size:\s*var\(--text-stage\)/s);
+
+  const logo = render(Avatar, { name: '한울', size: 'lg', src: '/api/clients/c1/files/f1' });
+  assert.match(logo, /data-logo="true"/);
+  assert.match(logo, /<img class="logo" src="\/api\/clients\/c1\/files\/f1" alt=""\/>/);
+  assert.match(logo, /aria-hidden="true"/, 'still decorative unless labelled');
+  assert.doesNotMatch(logo, />한<\/span>/, 'the logo replaces the initial');
+  assert.doesNotMatch(render(Avatar, { name: '한울' }), /data-logo|<img/);
+  const avatarCss = strip(readUi('console-avatar.module.css'));
+  assert.match(avatarCss, /data-logo="true"\][^}]*border-radius:\s*var\(--r-ctl\)[^}]*background:\s*var\(--surface-work\)/s);
+  assert.match(avatarCss, /\.logo\s*\{[^}]*object-fit:\s*contain/s);
+});
+
+test('ConsoleFormActions sticky is opt-in layout only', () => {
+  const Actions = component('ConsoleFormActions');
+  assert.doesNotMatch(render(Actions, {}, 'x'), /formActionsSticky/);
+  assert.match(render(Actions, { sticky: true }, 'x'), /class="formActions formActionsSticky"/);
+  const css = strip(readUi('console-ui.module.css'));
+  assert.match(css, /\.formActionsSticky\s*\{[^}]*position:\s*sticky;[^}]*bottom:\s*0[^}]*border-top:\s*1px solid var\(--line\)[^}]*background:\s*var\(--surface-work\)/s);
 });

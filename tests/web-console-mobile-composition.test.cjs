@@ -167,7 +167,7 @@ test('shared section nav wraps to fully reachable rows on mobile', () => {
   // aria-label alone via aria-hidden, so nothing is announced twice.
   const content = read('app/console/events/[id]/content/ContentWorkspace.tsx');
   assert.doesNotMatch(content, /ConsoleSectionNav|navIndexLabel/u, 'content authoring left the jump nav for ink tabs beside an always-on phone');
-  assert.match(content, /role="tablist" aria-label="콘텐츠 종류"/u);
+  assert.match(content, /<CountTabs\s+mode="tablist"\s+ariaLabel="콘텐츠 종류"/u);
   const reports = read('app/console/events/[id]/reports/ReportsWorkspace.tsx');
   assert.match(reports, /navIndexLabel[^>]*aria-hidden="true">보고서 작업/u);
   assert.match(reports, /label="결과 보고서 구역"/u);

@@ -21,6 +21,7 @@ import {
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import ConsoleEmptyState from "../../../console-ui/ConsoleEmptyState";
 import ListRow from "../../../console-ui/ListRow";
+import CountTabs from "../../../console-ui/CountTabs";
 import StatusPill, { type StatusPillTone } from "../../../console-ui/StatusPill";
 import uiStyles from "../../../console-ui/console-ui.module.css";
 import styles from "./content.module.css";
@@ -1654,31 +1655,15 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
           <div className={styles.layout}>
             <div className={styles.work}>
               <div className={styles.tabBar}>
-                <div className={styles.tabs} role="tablist" aria-label="콘텐츠 종류">
-                  {tabs.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      role="tab"
-                      id={`content-tab-${item.id}`}
-                      className={styles.tab}
-                      aria-selected={activeTab === item.id}
-                      aria-controls="content-panel"
-                      tabIndex={activeTab === item.id ? 0 : -1}
-                      onClick={() => selectTab(item.id)}
-                      onKeyDown={(event) => {
-                        const index = tabs.findIndex((entry) => entry.id === item.id);
-                        const next = event.key === "ArrowRight" ? tabs[(index + 1) % tabs.length] : event.key === "ArrowLeft" ? tabs[(index + tabs.length - 1) % tabs.length] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[tabs.length - 1] : null;
-                        if (!next) return;
-                        event.preventDefault();
-                        selectTab(next.id);
-                        document.getElementById(`content-tab-${next.id}`)?.focus();
-                      }}
-                    >
-                      {item.label}{item.count !== undefined ? <span className={styles.tabCount}>{item.count}</span> : null}
-                    </button>
-                  ))}
-                </div>
+                <CountTabs
+                  mode="tablist"
+                  ariaLabel="콘텐츠 종류"
+                  idPrefix="content-tab-"
+                  controls="content-panel"
+                  value={activeTab}
+                  onChange={(key) => selectTab(key as ContentTab)}
+                  items={tabs.map((item) => ({ key: item.id, label: item.label, count: item.count }))}
+                />
                 <ProductButton className={styles.phoneToggle} type="button" variant="secondary" onClick={() => setPreviewStageOpen(true)}>폰으로 보기</ProductButton>
               </div>
               <div id="content-panel" role="tabpanel" aria-labelledby={`content-tab-${activeTab}`} className={styles.panel}>
@@ -2018,7 +2003,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
                 ) : null}
                 {activeTab === "venue" ? (
                   <div className={styles.venuePanel}>
-                    {venueDirty || venueFile ? <StatusPill tone="info">저장 전 변경</StatusPill> : hasChanges(venueChanges(state.venue)) ? <StatusPill tone="wait" dot>수정본 있음</StatusPill> : null}
+                    {venueDirty || venueFile ? <StatusPill tone="info" align="start">저장 전 변경</StatusPill> : hasChanges(venueChanges(state.venue)) ? <StatusPill tone="wait" dot align="start">수정본 있음</StatusPill> : null}
                     <p className={styles.help}>{venueDirty || venueFile ? "작성 중입니다. 초안을 저장하면 게시 검토를 진행할 수 있습니다." : hasChanges(venueChanges(state.venue)) ? "저장한 초안이 있습니다. 게시 전까지 기존 장소 안내가 유지됩니다." : "게시된 장소 안내와 저장한 초안이 같습니다."}</p>
                     {!venueFeatureOn ? (
                       <p className={styles.featureOff} role="note">

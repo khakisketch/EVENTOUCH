@@ -142,8 +142,10 @@ test('analysis screen is native SVG with the same values in table and summary', 
   assert.match(css, /\.preset\s*\{[^}]*min-height: 44px/s, 'period buttons keep touch targets');
   // Reopened 2026-11-20 (디자인 시스템 적용): the hero is the shared StatCard (기간 고유 입장); 신청·일별 입장 합 are side figures.
   assert.match(css, /\.hero\s*\{/, 'the entry card is the hero of the summary row');
-  assert.match(workspace, /<StatCard\s+className=\{styles\.hero\}\s+label="기간 고유 입장"/, 'the hero is a StatCard');
-  assert.match(workspace, /role="tablist" aria-label="세부 보기 선택"/, '시간대·소속·일별 기록 are secondary tabs');
+  // Reopened 2026-11-20 (shared gaps): the hero number is StatCard size="hero" and the secondary tabs are CountTabs in tablist mode.
+  assert.match(workspace, /<StatCard\s+className=\{styles\.hero\}\s+size="hero"\s+label="기간 고유 입장"/, 'the hero is a StatCard');
+  assert.doesNotMatch(css, /\.heroNum|\.subTab\b/, 'no local hero number or tab styles');
+  assert.match(workspace, /<CountTabs\s+mode="tablist"\s+ariaLabel="세부 보기 선택"/, '시간대·소속·일별 기록 are secondary tabs');
   assert.match(css, /\.tableWrap\s*\{[^}]*overflow: auto/s, 'wide tables scroll in place');
 });
 

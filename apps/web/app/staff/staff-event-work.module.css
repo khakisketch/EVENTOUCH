@@ -6,17 +6,18 @@
    layers of the old file are merged into one cascade.
 
    Stage variables: the column sits on --ink and reads on that ink, so every
-   "paper on ink" tint is named once here. They are local on purpose: the
-   shared tokens have no dark-surface scale yet (공용 부품에 어두운 면 필요). */
+   "paper on ink" tint is named once here. The common steps (72/88% text,
+   12% wash) are the shared dark-surface scale in tokens.css (--on-dark-*);
+   the rest stay local. */
 .eventWorkPage,
 .hubPage {
   --fld-fg: var(--paper);
   /* Secondary text on ink: 72% paper is about 9:1, 88% is about 13:1. */
-  --fld-soft: color-mix(in srgb, var(--paper) 72%, transparent);
-  --fld-strong: color-mix(in srgb, var(--paper) 88%, transparent);
+  --fld-soft: var(--on-dark-72);
+  --fld-strong: var(--on-dark-88);
   --fld-edge: color-mix(in srgb, var(--paper) 22%, transparent);
   --fld-hair: color-mix(in srgb, var(--paper) 14%, transparent);
-  --fld-wash: color-mix(in srgb, var(--paper) 12%, transparent);
+  --fld-wash: var(--on-dark-12);
   --fld-lift: color-mix(in srgb, var(--paper) 8%, var(--ink));
   /* Bottom sheet corner: the one shape the column is recognised by. The
      shared radii stop at --r-card (16), too tight for a full-width sheet. */
@@ -1171,8 +1172,8 @@
   min-height: 56px;
   margin-top: var(--s3);
   border-radius: var(--r-card);
-  background: var(--brand);
-  color: var(--on-brand);
+  background: var(--action-primary-on-dark);
+  color: var(--action-primary-on-dark-ink);
   font-size: var(--text-lg);
   font-weight: var(--fw-heavy);
   text-decoration: none;

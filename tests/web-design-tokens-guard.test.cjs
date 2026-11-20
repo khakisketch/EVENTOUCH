@@ -34,6 +34,7 @@ const FOUNDATION_FILES = [
   'console/console-ui/console-avatar.module.css',
   'console/console-ui/stat-card.module.css',
   'console/console-ui/list-row.module.css',
+  'console/console-ui/count-tabs.module.css',
 ];
 const ALLOWED_WEIGHTS = new Set(['400', '600', '800', 'var(--fw-regular)', 'var(--fw-strong)', 'var(--fw-heavy)']);
 

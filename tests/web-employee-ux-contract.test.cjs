@@ -61,7 +61,9 @@ test('public-event-error-recovery-never-renders-raw-framework-errors', () => {
 
 test('primary-hover-uses-the-existing-high-contrast-foreground-token', () => {
   const source = read('globals.css');
-  assert.match(source, /\.button-primary:hover,[\s\S]*?background: var\(--brand-hover\);\s*color: var\(--on-brand-hover\);/);
+  // Reopened 2026-11-20 (shared gaps): the one primary rule is --action-primary (deep orange, white text); hover/pressed is one step deeper
+  // with the same white text (--brand-pressed on white is 6.39:1).
+  assert.match(source, /\.button-primary:hover,[\s\S]*?background: var\(--action-primary-pressed\);\s*color: var\(--action-primary-ink\);/);
 });
 
 test('anonymous-landing-header-links-keep-touch-size-on-small-and-tablet-screens', () => {

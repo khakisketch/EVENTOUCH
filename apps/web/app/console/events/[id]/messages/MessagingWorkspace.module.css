@@ -838,7 +838,7 @@
    keep Korean phrases whole so 모의/실제 wording never splits mid-syllable. */
 .reviewSummary, .draftSummary li, .historyIdentity h3 { word-break: keep-all; }
 .historyActionCell { max-width: 224px; }
-.campaignActions :global(.product-action) { min-width: 44px; min-height: 44px; font-size: var(--small); padding-inline: var(--s2); }
+.campaignActions :is([data-product-action], [data-action-variant]) { font-size: var(--small); padding-inline: var(--s2); }
 .historyDetailRow > td { padding: 0; background: var(--surface-muted); }
 .mobileCellLabel { display: none; }
 .composeSection { scroll-margin-top: 120px; }
@@ -852,7 +852,7 @@
 @media (max-width: 768px) {
   .historySection > div:first-child { display: flex; flex-direction: column; align-items: stretch; gap: var(--s2); }
   .historyTools { flex-wrap: nowrap; justify-content: flex-end; }
-  .historyTools > :global(.product-action):not(:global(.console-icon-button)) { flex: 0 1 auto; white-space: normal; word-break: keep-all; }
+  .historyTools > :is([data-product-action], [data-action-variant]):not(:global(.console-icon-button)) { flex: 0 1 auto; white-space: normal; word-break: keep-all; }
   .historyFilters { padding: var(--s2) 0; }
   .historyFilters label { flex-basis: 120px; }
   .historyFilters > span { flex-basis: 100%; font-size: var(--label); }
@@ -1203,7 +1203,7 @@
 .composeGrid[data-step="1"] .recipientTopBar { display: none; }
 .composeGrid[data-step="2"] .composeDraft { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 300px); gap: var(--s6); align-items: start; }
 .stepActions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: var(--s2) var(--s3); padding-top: var(--s3); }
-.stepActions > :global(.product-action) { flex: 0 0 auto; white-space: nowrap; }
+.stepActions > :is([data-product-action], [data-action-variant]) { flex: 0 0 auto; white-space: nowrap; }
 .stepActions > .help { flex: 1 1 240px; margin: 0; }
 .guideAction { justify-content: flex-start; margin-top: var(--s1); padding-inline: var(--s2); color: var(--ink); }
 .inkLink { color: var(--ink); }

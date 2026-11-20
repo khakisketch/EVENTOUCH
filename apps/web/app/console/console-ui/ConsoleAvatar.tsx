@@ -4,6 +4,15 @@
  * four hand-rolled avatars (participant roster, team, feed, clients).
  * Hook-free. Decorative by default (the name is shown next to it); pass
  * `label` to expose it as an image with a name.
+ *
+ * Shared-gap addition (2026-11-20, optional; the default output is unchanged):
+ * `src` shows the entity's own logo instead of the initial. A logo sits in a
+ * white tile with a hairline (rounded square, `contain` fit: logos are rarely
+ * square), so it reads as the client's mark and not as a person. Without a
+ * `src` the initial avatar stands in; a failed image is not special-cased, so
+ * pass `src` only for a logo that exists. Same sizes, same decorative/labelled
+ * rules (the image itself carries `alt=""`; the name belongs beside it or in
+ * `label`).
  */
 import styles from "./console-avatar.module.css";
 
@@ -16,6 +25,8 @@ type ConsoleAvatarProps = {
   size?: "sm" | "md" | "lg";
   /** Accessible name when the avatar stands alone. Omit when the name is printed beside it. */
   label?: string;
+  /** The entity's own logo URL; replaces the initial and draws a white hairline tile. */
+  src?: string;
   className?: string;
 };
 
@@ -31,17 +42,21 @@ export function firstGrapheme(name: string): string {
   return (Array.from(text)[0] ?? "?").toUpperCase();
 }
 
-export default function ConsoleAvatar({ name, tone = "neutral", size = "md", label, className }: ConsoleAvatarProps) {
+export default function ConsoleAvatar({ name, tone = "neutral", size = "md", label, src, className }: ConsoleAvatarProps) {
   return (
     <span
       className={[styles.avatar, className].filter(Boolean).join(" ")}
       data-console-avatar={tone}
       data-size={size}
+      data-logo={src ? "true" : undefined}
       role={label ? "img" : undefined}
       aria-label={label || undefined}
       aria-hidden={label ? undefined : "true"}
     >
-      {firstGrapheme(name)}
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className={styles.logo} src={src} alt="" />
+      ) : firstGrapheme(name)}
     </span>
   );
 }

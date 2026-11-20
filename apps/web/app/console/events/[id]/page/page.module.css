@@ -106,7 +106,7 @@
 .saveButtons { min-width: 0; }
 
 @media (max-width: 768px) {
-  .saveButtons :global(.product-action) {
+  .saveButtons :is([data-product-action], [data-action-variant]) {
     flex: 1 1 0;
     min-width: 0;
   }
@@ -352,7 +352,7 @@ details[open] > .advancedSummary::before { content: "−"; }
 .menuRow { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; }
 .menuRow label { min-width: 0; flex-wrap: wrap; overflow-wrap: anywhere; }
 .menuMove { display: flex; gap: var(--s1); flex: none; }
-.menuMove :global(.product-action) { min-width: 44px; min-height: 44px; padding: 0; }
+.menuMove :is([data-product-action], [data-action-variant]) { padding: 0; }
 .menuNote { color: var(--muted); font-size: var(--text-sm); }
 
 @media (max-width: 680px) {

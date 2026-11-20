@@ -54,24 +54,6 @@
   outline-offset: -3px;
 }
 
-/* A client's own logo sits in a white tile with a hairline; without one the
-   shared ConsoleAvatar initial stands in. */
-.clientLogo {
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  overflow: hidden;
-  border-radius: var(--r-ctl);
-  background: var(--paper);
-  box-shadow: inset 0 0 0 1px var(--line);
-}
-.clientLogo img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
 .clientName {
   margin: 0;
   min-width: 0;

@@ -55,16 +55,17 @@
 .stage:global(.login-page) :global(.auth-form) { flex: 1; gap: var(--s4); align-content: start; grid-template-rows: none; display: flex; flex-direction: column; }
 .stage:global(.login-page) :global(.auth-form) input { min-height: 56px; border-radius: var(--r-ctl); font-size: var(--body); }
 .stage:global(.login-page) :global(.auth-form) :global(button[type="submit"]),
-.stage:global(.login-page) :global(.auth-form) :global(.product-action[type="submit"]) {
+.stage:global(.login-page) :global(.auth-form) :is([data-product-action][type="submit"]) {
   min-height: 56px;
   margin-top: auto;
   border-radius: var(--r-ctl);
   font-size: var(--body);
+  font-weight: var(--fw-strong);
 }
 .stage:global(.login-page) :global(.auth-form) > p[role="alert"] { margin: 0; padding: var(--s3); border-radius: var(--r-ctl); background: var(--danger-soft); color: var(--danger); font-weight: var(--fw-strong); }
 .stage:global(.login-page) :global(.auth-form) > p[role="alert"]:has(+ :global(button)) { margin-top: auto; }
 .stage:global(.login-page) :global(.auth-form) > p[role="alert"] + :global(button),
-.stage:global(.login-page) :global(.auth-form) > p[role="alert"] + :global(.product-action) { margin-top: 0; }
+.stage:global(.login-page) :global(.auth-form) > p[role="alert"] + [data-product-action] { margin-top: 0; }
 .stage:global(.login-page) :global(.auth-form) :global(.auth-help) { margin: 0; text-align: center; }
 
 /* Wider screens: the band and sheet are one framed card. */

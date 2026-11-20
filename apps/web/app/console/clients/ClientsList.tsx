@@ -639,17 +639,11 @@ export default function ClientsList() {
           <ul className={styles.clientList} aria-label="고객사 목록">
             {visibleClients.map((client) => (
               <li className={styles.clientRow} key={client.id}>
-                {client.logoFileId ? (
-                  <span className={styles.clientLogo} aria-hidden="true">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={`/api/clients/${encodeURIComponent(client.id)}/files/${encodeURIComponent(client.logoFileId)}`}
-                      alt=""
-                    />
-                  </span>
-                ) : (
-                  <ConsoleAvatar name={client.name} size="lg" />
-                )}
+                <ConsoleAvatar
+                  name={client.name}
+                  size="lg"
+                  src={client.logoFileId ? `/api/clients/${encodeURIComponent(client.id)}/files/${encodeURIComponent(client.logoFileId)}` : undefined}
+                />
                 <h3 className={styles.clientName}>
                   {/* The name button's ::after covers the row, so the whole row is
                       one entry into the detail drawer without nesting controls. */}

@@ -34,7 +34,8 @@ test('the hub is the field screen\'s dark column with the live event as one card
   assert.match(css, /\.hubPage\s*\{[^}]*background:\s*var\(--ink\)/su);
   assert.match(hub, /staffHubGroups\(state\.scopes\)/u);
   assert.match(hub, /className=\{workStyles\.hubGo\}/u, 'the live card holds the one orange action');
-  assert.match(css, /\.hubGo\s*\{[^}]*background:\s*var\(--brand\)/su);
+  // Reopened 2026-11-20 (shared gaps): the same primary rule on a dark face, as a token (the bright --brand fill with --on-brand ink).
+  assert.match(css, /\.hubGo\s*\{[^}]*background:\s*var\(--action-primary-on-dark\)/su);
   assert.match(css, /\.hubPage :global\(\.staff-workspace\)\s*\{[^}]*background:\s*transparent/su, 'the shared white workspace must not cover the ink');
   assert.match(page, /<h1>내 업무<\/h1>/u, 'the page heading stays for assistive technology');
 });

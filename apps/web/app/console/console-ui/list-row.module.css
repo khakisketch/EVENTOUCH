@@ -55,6 +55,7 @@
 
 .title {
   min-width: 0;
+  margin: 0;
   font-size: var(--text-md);
   font-weight: var(--fw-strong);
   line-height: var(--lh-tight);
@@ -70,6 +71,13 @@
   overflow-wrap: anywhere;
 }
 
+.center {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  min-width: 0;
+}
+
 .trailing {
   display: inline-flex;
   flex: 0 0 auto;
@@ -80,6 +88,8 @@
   font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
+
+.trailing[data-width="free"] { max-width: none; }
 
 .chevron {
   display: inline-flex;
@@ -92,6 +102,105 @@
   height: var(--s4);
 }
 
+/* A separate control beside the row target (switch, menu): outside the link or button. */
+.row[data-has-action="true"] {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding-inline-end: var(--s3);
+}
+
+.row[data-has-action="true"] > .body { flex: 1 1 0; width: auto; }
+
+.action {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* cover: the title's one button stretches its hit area over the whole row;
+   controls in the other slots stay above it. */
+.row[data-list-row="cover"] { position: relative; }
+.row[data-list-row="cover"]:has(.titleOpen:not(:disabled)):hover { background: var(--surface-sunken); }
+.row[data-list-row="cover"] .center,
+.row[data-list-row="cover"] .trailing,
+.row[data-list-row="cover"] .action { position: relative; z-index: 1; }
+
+.titleOpen {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.titleOpen::after { position: absolute; inset: 0; content: ""; }
+.titleOpen:focus-visible { outline: none; }
+.titleOpen:focus-visible::after { outline: 3px solid var(--focus); outline-offset: -3px; }
+.titleOpen:disabled { color: var(--muted); cursor: default; }
+
+/* summary: the row is the <summary> of a <details>; one element is both the row and its body. */
+.summary { cursor: pointer; list-style: none; border-bottom: 0; transition: background-color var(--exit); }
+.summary[data-density="comfortable"] { min-height: 60px; padding-block: var(--s3); }
+.summary:hover { background: var(--surface-sunken); }
+.summary:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.summary::-webkit-details-marker { display: none; }
+details[open] > .summary .chevron { transform: rotate(90deg); }
+
+/* timeline: a time column, then a rail dot joined to the next row by a line. */
+.row[data-list-row-variant="timeline"] { border-bottom: 0; }
+
+.time {
+  flex: 0 0 auto;
+  min-width: var(--s8);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.rail {
+  position: relative;
+  flex: 0 0 auto;
+  align-self: stretch;
+  width: var(--s3);
+}
+
+.rail::before {
+  position: absolute;
+  inset-block: calc(var(--s3) * -1);
+  left: 50%;
+  width: 1px;
+  background: var(--line);
+  content: "";
+}
+
+.row:first-child .rail::before { top: 50%; }
+.row:last-child .rail::before { bottom: 50%; }
+
+.rail::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--s2);
+  height: var(--s2);
+  border-radius: var(--r-pill);
+  background: var(--surface-work);
+  box-shadow: inset 0 0 0 2px var(--ink);
+  content: "";
+  transform: translate(-50%, -50%);
+}
+
+.rail[data-rail="ok"]::after { background: var(--success); box-shadow: none; }
+.rail[data-rail="wait"]::after { background: var(--warning); box-shadow: none; }
+.rail[data-rail="info"]::after { background: var(--info); box-shadow: none; }
+
 @media (prefers-reduced-motion: reduce) {
-  .row[data-list-row="interactive"] .body { transition: none; }
+  .row[data-list-row="interactive"] .body,
+  .summary { transition: none; }
 }
