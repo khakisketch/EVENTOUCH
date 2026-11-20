@@ -9,11 +9,23 @@ import { themes, defaultThemeSlug } from "../astryx-themes";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./globals.css";
 import "./product-ui.css";
+import { configuredPublicBase } from "../lib/public-origin";
 
-export const metadata: Metadata = {
-  title: "EVENTOUCH",
-  description: "행사 운영 워크스페이스",
-};
+const TITLE = "EVENTOUCH";
+const DESCRIPTION = "행사 운영 워크스페이스";
+
+// Read at request time (not module load) so the container's EVENTOUCH_PUBLIC_URL
+// decides absolute og:image URLs. Unset: no metadataBase and no absolute share URL.
+export async function generateMetadata(): Promise<Metadata> {
+  const base = configuredPublicBase();
+  return {
+    metadataBase: base ? new URL(base) : undefined,
+    title: TITLE,
+    description: DESCRIPTION,
+    openGraph: { title: TITLE, description: DESCRIPTION, siteName: TITLE, locale: "ko_KR", type: "website" },
+    twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION },
+  };
+}
 
 export default async function RootLayout({
   children,

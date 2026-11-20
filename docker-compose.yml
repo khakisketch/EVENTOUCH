@@ -91,6 +91,8 @@ services:
       PORT: 8777
       EVENTOUCH_API_URL: http://eventouch:8776
       EVENTOUCH_BUILD_REVISION: ${EVENTOUCH_BUILD_REVISION:-unknown}
+      # Public origin for absolute share-card (og:image) URLs. Same value the API uses.
+      EVENTOUCH_PUBLIC_URL: ${EVENTOUCH_PUBLIC_URL:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-0}
       # Optional HTTPS ingress peers that may forward client addresses to Next.
       EVENTOUCH_WEB_TRUSTED_PROXIES: ${EVENTOUCH_WEB_TRUSTED_PROXIES:-}
