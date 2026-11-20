@@ -32,7 +32,10 @@ test('a secondary submit in an uncertain flow reads the button variant, not a cl
   assert.doesNotMatch(entry, /button\.button-secondary/u, 'the legacy class never reaches the DOM, so a rule on it never matches');
   assert.match(entry, /a:not\(\.button, \[data-action-variant\]\)/u, 'an action-styled link (ProductLink) keeps its own rank beside the boxed text links');
   assert.doesNotMatch(entry, /a:not\(\.button\)/u);
-  assert.match(entry, /button\[data-product-variant="secondary"\]\[type="submit"\]\) \{[^}]*background:\s*var\(--paper\)/su, 'the retry stays secondary beside the one orange check');
+  // Reopened 2026-11-20 (shared gaps): the entry frame no longer repaints PRIMARY submits (one primary-action colour rule), but the
+  // secondary submit keeps DESIGN.md's white bordered look (Astryx's own secondary is a translucent grey).
+  assert.match(entry, /button\[data-product-variant="secondary"\]\[type="submit"\]\) \{[^}]*background:\s*var\(--paper\)/su, 'the retry stays secondary beside the one primary check');
+  assert.doesNotMatch(entry, /button\[type="submit"\]\)[^{]*\{[^}]*(?:background|color):\s*var\(--(?:brand|on-brand)/su, 'no --brand repaint of submits');
 });
 
 test('only an error that leads into a submit is docked with it', () => {

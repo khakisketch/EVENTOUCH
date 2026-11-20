@@ -269,15 +269,15 @@ select[aria-invalid="true"] {
 .button-primary {
   /* Switch both colors immediately; interpolating them can reduce contrast. */
   transition: transform 160ms ease-out;
-  border-color: var(--brand);
-  background: var(--brand);
-  color: var(--on-brand);
+  border-color: var(--action-primary);
+  background: var(--action-primary);
+  color: var(--action-primary-ink);
 }
 
 .button-primary:hover {
-  border-color: var(--brand-hover);
-  background: var(--brand-hover);
-  color: var(--on-brand-hover);
+  border-color: var(--action-primary-pressed);
+  background: var(--action-primary-pressed);
+  color: var(--action-primary-ink);
 }
 
 .button-secondary {
@@ -577,15 +577,15 @@ a.pill:hover {
 }
 
 .action-chip.primary {
-  background: var(--brand);
-  color: var(--on-brand);
-  border-color: var(--brand);
+  background: var(--action-primary);
+  color: var(--action-primary-ink);
+  border-color: var(--action-primary);
 }
 
 .action-chip.primary:hover {
-  background: var(--brand-hover);
-  border-color: var(--brand-hover);
-  color: var(--on-brand-hover);
+  background: var(--action-primary-pressed);
+  border-color: var(--action-primary-pressed);
+  color: var(--action-primary-ink);
 }
 
 .action-chip.secondary:hover { background: var(--surface-muted); }
@@ -1059,10 +1059,10 @@ a.pill:hover {
   width: 100%;
   min-height: var(--s7);
   scroll-margin-block-end: var(--s4);
-  border: 1px solid var(--brand);
+  border: 1px solid var(--action-primary);
   border-radius: var(--radius);
-  background: var(--brand);
-  color: var(--on-brand);
+  background: var(--action-primary);
+  color: var(--action-primary-ink);
   font-weight: 750;
 }
 
@@ -2775,10 +2775,10 @@ a.pill:hover {
 
 .auth-form button[type="submit"]:not([data-product-action]) {
   min-height: var(--s8);
-  border: 1px solid var(--brand);
+  border: 1px solid var(--action-primary);
   border-radius: var(--radius);
-  background: var(--brand);
-  color: var(--on-brand);
+  background: var(--action-primary);
+  color: var(--action-primary-ink);
   font-weight: 750;
 }
 
@@ -2875,9 +2875,9 @@ a.pill:hover {
   .button-primary:hover,
   .registration-form button[type="submit"]:not([data-product-action]):hover,
   .auth-form button[type="submit"]:not([data-product-action]):hover {
-    border-color: var(--brand-hover);
-    background: var(--brand-hover);
-    color: var(--on-brand-hover);
+    border-color: var(--action-primary-pressed);
+    background: var(--action-primary-pressed);
+    color: var(--action-primary-ink);
   }
 
   .button-secondary:hover {

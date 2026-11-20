@@ -167,10 +167,15 @@ async function runAccountRecoveryAudit() {
       const button = document.querySelector('.auth-form button[type="submit"]');
       if (!button) return false;
       const computed = getComputedStyle(button);
-      return computed.backgroundColor !== base.background && computed.color !== base.color;
+      return computed.backgroundColor !== base.background;
     }, resting);
     const hovered = await recoverSubmit.evaluate((element) => ({ background: getComputedStyle(element).backgroundColor, color: getComputedStyle(element).color }));
-    check('recover submit retains a distinct desktop hover state', resting.background !== hovered.background && resting.color !== hovered.color);
+    // Reopened 2026-11-20 (one primary-action colour rule): every primary rests on --action-primary with white text and
+    // deepens to --action-primary-pressed on hover, so the fill changes and the white text stays AA (>= 4.5:1).
+    const rgbOf = (value) => (value.match(/\d+(?:\.\d+)?/g) || []).slice(0, 3).map(Number);
+    const lumOf = (rgb) => { const [r, g, b] = rgb.map((v) => v / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+    const ratio = (a, b) => { const [hi, lo] = [lumOf(rgbOf(a)), lumOf(rgbOf(b))].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+    check('recover submit retains a distinct desktop hover state', resting.background !== hovered.background && ratio(hovered.background, hovered.color) >= 4.5 && ratio(resting.background, resting.color) >= 4.5);
     // Keyboard order: email field tabs straight into the submit button.
     await page.getByLabel('계정 이메일').click();
     await page.keyboard.press('Tab');
