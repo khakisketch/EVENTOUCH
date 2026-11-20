@@ -8,6 +8,7 @@ const axeSource = require('axe-core').source;
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { openLocationEditor } = require('./ui-journey-helpers.cjs');
 const before = process.argv.includes('--before');
 async function main() {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private capture root');
@@ -42,10 +43,9 @@ async function main() {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/operations`, { waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '부스', exact: true }).click();
-    const row = () => page.locator('li').filter({ hasText: /시간 검증 부스/ });
+    // Reopened 2026-11-20: 부스는 더 이상 탭이 아니라 같은 화면의 구역이고, 행의 '편집' 버튼은 상세 시트의 '부스 편집'으로 옮겨졌다.
     const dialog = page.getByRole('dialog', { name: '부스 편집' });
-    const open = async () => { await row().getByRole('button', { name: '편집', exact: true }).click(); await dialog.waitFor(); };
+    const open = async () => { await openLocationEditor(page, '부스', /시간 검증 부스/); await dialog.waitFor(); };
     const save = async () => { await dialog.getByRole('button', { name: '부스 저장', exact: true }).click(); await dialog.waitFor({ state: 'detached' }); };
     await open();
     if (before) {
@@ -198,7 +198,6 @@ async function main() {
     assert.equal(blockedVisit.status, 409);
     assert.equal(blockedVisit.json.code, 'BOOTH_UNAVAILABLE');
     await page.reload({ waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '부스', exact: true }).click();
     await open();
     await dialog.getByText(/시간대 확인 필요/).waitFor();
     assert.equal(await dialog.locator('#booth-starts').inputValue(), '');
@@ -222,7 +221,6 @@ async function main() {
     impossible.booths.find(item => item.id === boothId).startsAt = '2026-02-30T09:00:00+09:00';
     await f.harness.database.query('UPDATE event_workspaces SET payload=$2::jsonb WHERE event_id=$1', [f.eventId, JSON.stringify(impossible)]);
     await page.reload({ waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '부스', exact: true }).click();
     await open();
     await dialog.getByText(/확인 필요 \(2026-02-30T09:00:00\+09:00\)/).waitFor();
     assert.equal(await dialog.locator('#booth-starts').inputValue(), '');
@@ -239,7 +237,6 @@ async function main() {
     nonString.booths.find(item => item.id === boothId).startsAt = { broken: 'legacy' };
     await f.harness.database.query('UPDATE event_workspaces SET payload=$2::jsonb WHERE event_id=$1', [f.eventId, JSON.stringify(nonString)]);
     await page.reload({ waitUntil: 'networkidle' });
-    await page.getByRole('tab', { name: '부스', exact: true }).click();
     await open();
     await dialog.getByText(/시간 형식 확인 필요/).waitFor();
     assert.equal((await dialog.innerText()).includes('__invalid_booth_'), false);
