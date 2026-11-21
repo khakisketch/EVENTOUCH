@@ -10,8 +10,7 @@ export default async function ConsoleAttendeePage({
   const { id } = await params;
   return (
     <section className="console-page">
-      <AttendeeScreenHub eventId={id} active="design" />
-      <ThemeWorkspace eventId={id} publicBase={configuredPublicBase()} />
+      <ThemeWorkspace eventId={id} publicBase={configuredPublicBase()} afterHeader={<AttendeeScreenHub eventId={id} active="design" />} />
     </section>
   );
 }

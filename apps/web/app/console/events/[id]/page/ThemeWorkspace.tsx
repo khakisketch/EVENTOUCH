@@ -427,7 +427,7 @@ async function loadSnapshot(eventId: string, afterWrite = false): Promise<Snapsh
   }
 }
 
-export default function ThemeWorkspace({ eventId, publicBase = null }: { eventId: string; publicBase?: string | null }) {
+export default function ThemeWorkspace({ eventId, publicBase = null, afterHeader }: { eventId: string; publicBase?: string | null; afterHeader?: ReactNode }) {
   const router = useRouter();
   const [state, setState] = useState<EditorState>({ kind: "loading" });
   // Which sub-panel replaces the settings list (null = the list), and the
@@ -1254,21 +1254,21 @@ export default function ThemeWorkspace({ eventId, publicBase = null }: { eventId
 
   if (state.kind === "loading" || (state.kind === "ready" && loadedThemeEventRef.current !== eventId)) {
     return (
-      <ConsolePage pageId="attendeePage" eventId={eventId}>
+      <ConsolePage pageId="attendeePage" eventId={eventId} afterHeader={afterHeader}>
         <ConsoleStatePanel kind="loading" message="참가자 페이지 설정을 불러오고 있습니다." onRetry={() => {}} />
       </ConsolePage>
     );
   }
   if (state.kind === "failed") {
     return (
-      <ConsolePage pageId="attendeePage" eventId={eventId}>
+      <ConsolePage pageId="attendeePage" eventId={eventId} afterHeader={afterHeader}>
         <ConsoleStatePanel kind="failed" message={state.message} onRetry={() => setReloadTick((tick) => tick + 1)} />
       </ConsolePage>
     );
   }
   if (state.kind === "denied") {
     return (
-      <ConsolePage pageId="attendeePage" eventId={eventId} feedback={<ConsoleFeedback kind="error">{state.message}</ConsoleFeedback>}>
+      <ConsolePage pageId="attendeePage" eventId={eventId} afterHeader={afterHeader} feedback={<ConsoleFeedback kind="error">{state.message}</ConsoleFeedback>}>
         {null}
       </ConsolePage>
     );
@@ -1445,7 +1445,7 @@ export default function ThemeWorkspace({ eventId, publicBase = null }: { eventId
   return (
     <ConsolePage
       pageId="attendeePage"
-      eventId={eventId}
+      eventId={eventId} afterHeader={afterHeader}
       eventName={state.eventName}
       meta={state.eventMeta}
       headerActions={publicAvailable ? <AttendeeGuideQr eventName={state.eventName} slug={state.slug} publicBase={publicBase} /> : undefined}

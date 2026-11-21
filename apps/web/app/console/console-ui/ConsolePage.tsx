@@ -20,6 +20,8 @@ type ConsolePageProps = {
   badges?: ReactNode;
   /** Page-level actions such as creation; contextual writes stay with their task. */
   headerActions?: ReactNode;
+  /** A frame element that belongs under the title, e.g. the 참가자 화면 tab row. */
+  afterHeader?: ReactNode;
   toolbar?: ReactNode;
   feedback?: ReactNode;
   sectionNav?: ReactNode;
@@ -53,6 +55,7 @@ export default function ConsolePage({
   meta,
   badges,
   headerActions,
+  afterHeader,
   toolbar,
   feedback,
   sectionNav,
@@ -91,6 +94,7 @@ export default function ConsolePage({
         badges={badges}
         actions={headerActions}
       />
+      {afterHeader ?? null}
       {eventId && ["settings", "participants", "programs", "draws", "messages"].includes(pageId) ? (
         <Suspense fallback={null}><EventCloseReturn eventId={eventId} pageId={pageId} snapshot={closeSnapshot} noticeStatus={closeNoticeStatus} archiveControl={closeArchiveControl} archiveOpen={closeArchiveOpen} /></Suspense>
       ) : null}

@@ -315,7 +315,7 @@ class CommandFailure extends Error {
   }
 }
 
-export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
+export default function ProgramsWorkspace({ eventId, afterHeader }: { eventId: string; afterHeader?: ReactNode }) {
   const closeHref = useEventCloseHandoff(eventId);
   const router = useRouter();
   const pendingCommandsRef = useRef(new Map<string, string>());
@@ -1686,14 +1686,14 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
 
   if (state.kind === "loading" || (state.kind === "ready" && loadedProgramEventRef.current !== eventId)) {
     return (
-      <ConsolePage pageId="programs" eventId={eventId}>
+      <ConsolePage pageId="programs" eventId={eventId} afterHeader={afterHeader}>
         <ConsoleStatePanel kind="loading" message="참여 이벤트 정보를 불러오고 있습니다." onRetry={() => {}} />
       </ConsolePage>
     );
   }
   if (state.kind === "failed") {
     return (
-      <ConsolePage pageId="programs" eventId={eventId}>
+      <ConsolePage pageId="programs" eventId={eventId} afterHeader={afterHeader}>
         {/* ConsoleStatePanel renders "다시 불러오기" and dispatches eventouch:shell-reload before retrying. */}
         <ConsoleStatePanel
           kind="failed"
@@ -1781,7 +1781,7 @@ export default function ProgramsWorkspace({ eventId }: { eventId: string }) {
     <ConsolePage
       pageId="programs"
       closeSnapshot={state.closeSnapshot}
-      eventId={eventId}
+      eventId={eventId} afterHeader={afterHeader}
       eventName={state.eventName}
       meta={state.eventMeta}
       headerActions={

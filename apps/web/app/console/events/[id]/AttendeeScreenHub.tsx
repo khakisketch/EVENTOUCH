@@ -92,6 +92,15 @@ export default function AttendeeScreenHub({ eventId, active }: { eventId: string
         })}
       </nav>
       {statuses.length ? (
+        // Phones get one line instead of the chips (CSS toggles which is shown),
+        // so the hub no longer pushes the screen's own content down the page.
+        pending && pendingHref ? (
+          <Link className={styles.summary} href={pendingHref}>게시 상태 · 게시 전 {pending.count}건 확인 <span aria-hidden="true">→</span></Link>
+        ) : (
+          <p className={styles.summary}>게시 상태 · 모두 게시됨</p>
+        )
+      ) : null}
+      {statuses.length ? (
         <div className={styles.status} role="group" aria-label="게시 상태">
           <span className={styles.statusLabel}>게시 상태</span>
           <span className={styles.chips}>

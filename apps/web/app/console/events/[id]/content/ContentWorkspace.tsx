@@ -3,7 +3,7 @@
 import ValidatedForm from "../../../../ui/ValidatedForm";
 import ProductButton from "../../../../ui/ProductButton";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import ProductLink from "../../../../ui/ProductLink";
 import { useRouter } from "next/navigation";
 import { loginHrefForLocation } from "../../../../auth-redirect";
@@ -394,7 +394,7 @@ class CommandFailure extends Error {
   }
 }
 
-export default function ContentWorkspace({ eventId }: { eventId: string }) {
+export default function ContentWorkspace({ eventId, afterHeader }: { eventId: string; afterHeader?: ReactNode }) {
   const router = useRouter();
   const [state, setState] = useState<WorkspaceState>({ kind: "loading" });
   const [notice, setNotice] = useState<string | null>(null);
@@ -1498,7 +1498,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
 
   if (state.kind === "loading") {
     return (
-      <ConsolePage pageId="content" eventId={eventId}>
+      <ConsolePage pageId="content" eventId={eventId} afterHeader={afterHeader}>
         <ConsoleStatePanel
           kind="loading"
           message="콘텐츠 정보를 불러오고 있습니다."
@@ -1509,7 +1509,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
   }
   if (state.kind === "failed") {
     return (
-      <ConsolePage pageId="content" eventId={eventId}>
+      <ConsolePage pageId="content" eventId={eventId} afterHeader={afterHeader}>
         {/* ConsoleStatePanel dispatches eventouch:shell-reload and renders 다시 불러오기. */}
         <ConsoleStatePanel
           kind="failed"
@@ -1622,7 +1622,7 @@ export default function ContentWorkspace({ eventId }: { eventId: string }) {
   return (
     <ConsolePage
       pageId="content"
-      eventId={eventId}
+      eventId={eventId} afterHeader={afterHeader}
       eventName={state.eventName}
       meta={formatConsoleEventMeta(state.eventMeta)}
       headerActions={headerAdd}

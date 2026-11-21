@@ -105,8 +105,39 @@
   color: var(--on-brand-hover);
 }
 
+/* One-line publish summary: phones only. Wide screens keep the chips. */
+.summary {
+  display: none;
+  align-items: center;
+  min-height: 44px;
+  margin: 0;
+  padding-inline: var(--s3);
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
+  text-decoration: none;
+}
+
+a.summary:hover {
+  color: var(--brand-text);
+}
+
+a.summary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+
 @media (max-width: 640px) {
   .title {
+    display: none;
+  }
+
+  .summary {
+    display: flex;
+  }
+
+  .status {
     display: none;
   }
 

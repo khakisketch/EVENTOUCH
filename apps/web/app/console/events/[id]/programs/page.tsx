@@ -9,8 +9,7 @@ export default async function ConsoleProgramsPage({
   const { id } = await params;
   return (
     <section className="console-page programs-page">
-      <AttendeeScreenHub eventId={id} active="programs" />
-      <ProgramsWorkspace eventId={id} />
+      <ProgramsWorkspace eventId={id} afterHeader={<AttendeeScreenHub eventId={id} active="programs" />} />
     </section>
   );
 }

@@ -9,8 +9,7 @@ export default async function ConsoleContentPage({
   const { id } = await params;
   return (
     <section className="console-page content-page">
-      <AttendeeScreenHub eventId={id} active="content" />
-      <ContentWorkspace eventId={id} />
+      <ContentWorkspace eventId={id} afterHeader={<AttendeeScreenHub eventId={id} active="content" />} />
     </section>
   );
 }

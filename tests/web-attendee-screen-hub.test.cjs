@@ -66,9 +66,17 @@ test('the one-click review targets the first tab with something waiting', () => 
 test('the hub frames the three existing screens without touching them', () => {
   for (const [dir, tab, workspace] of [['page', 'design', 'ThemeWorkspace'], ['content', 'content', 'ContentWorkspace'], ['programs', 'programs', 'ProgramsWorkspace']]) {
     const page = web(`app/console/events/[id]/${dir}/page.tsx`);
-    assert.match(page, new RegExp(`<AttendeeScreenHub eventId=\\{id\\} active="${tab}" />`), `${dir} mounts the hub with its tab`);
+    // Reopened 2026-11-21: the hub moved from above the screen to under its
+    // title, handed to the workspace as `afterHeader`; the workspace only
+    // forwards it to ConsolePage.
+    assert.match(page, new RegExp(`afterHeader=\\{<AttendeeScreenHub eventId=\\{id\\} active="${tab}" />\\}`), `${dir} hands the hub to its workspace under the title`);
     assert.match(page, new RegExp(`<${workspace} `), `${dir} keeps its own workspace`);
+    const source = web(`app/console/events/[id]/${dir}/${workspace}.tsx`);
+    assert.match(source, /afterHeader\?: ReactNode/, `${workspace} accepts afterHeader`);
+    assert.doesNotMatch(source, /<ConsolePage(?![^>]*afterHeader=\{afterHeader\})[^>]*eventId=\{eventId\}/, `${workspace} forwards afterHeader to every ConsolePage`);
   }
+  const frame = web('app/console/console-ui/ConsolePage.tsx');
+  assert.match(frame, /\{afterHeader \?\? null\}/, 'the frame renders afterHeader right below the header');
   const hub = web('app/console/events/[id]/AttendeeScreenHub.tsx');
   // Read-only: the hub reads bootstrap and links; it never sends a command.
   assert.match(hub, /\/bootstrap/);
