@@ -373,6 +373,8 @@ Placement (2026-11-21, mobile review): the frame sits directly under the screen 
 
 Reopened 2026-11-21 (owner: 모바일 실화면 점검 뒤 시안 선택). Only control placement and navigation aids change; columns, previews, editing, save and publish stay as confirmed. Phones (≤768px) on 참가자 명단: search, 필터 and a ⋯ menu (엑셀·CSV 내보내기 + 명단 가져오기) share one row, 참가자 추가 docks at the bottom of the screen, and the first person starts about 100px higher (`data-console-toolbar` markers on `ConsoleToolbar` let the workbench flatten its slots). 참가자 페이지 레이아웃 선택 (≤640px): one swipeable row of 150px previews with the next card peeking. 모바일 메뉴 서랍: the drawer fits the screen height, drops the 현재 행사 label, and shows a "메뉴 더 보기" cue with a fade while it still scrolls. Navigation links in page-header actions and 양식 CSV 받기 / 참가자 목록으로 on 명단 가져오기 read as bordered 44px buttons (still the ghost role, so the secondary-button ceiling is unchanged).
 
+행사 설정 (2026-11-21, 시안 A + ① + ②): on phones the section list is four status tiles (current value, a status dot, a note such as "확인할 안내 1건"); once they scroll away a chip bar sticks under the top bar, marks the section being read and ends with 맨 위로. 운영 기능 shows its on/off counts, a count per group and "저장 안 된 변경 N개", two tiles per row with "on" as a tinted tile and a dark switch. Switches, the two sticky save rows and what each section saves are unchanged; each save row names its section.
+
 ## 참가자 페이지 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/page/`, the studio; `apps/web/app/event/[slug]/home/`, the compositions). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-home-layouts.test.cjs` guards it. This is the core product screen for event agencies: they pick how the attendee home looks.
@@ -700,6 +702,8 @@ Reopened 2026-11-20 (owner chose proposal C1 in `design-review/create-event-impr
 ## 현장 전환 "다른 행사" (2026-11-20)
 
 Reopened 2026-11-20 (owner chose proposal A in `design-review/event-switcher-options.html`): the event name row of event pages has a "다른 행사" control (`apps/web/app/console/console-ui/EventSwitcher.tsx`). It loads the directory only when opened, lists events with stage and date, marks the current one, and links to the same menu page of the chosen event. Phones show it as a bottom sheet. The overview body and its locked composition are not changed.
+
+Reopened 2026-11-21 (owner: 행사를 메뉴에서 바꾸게, 모바일 시안 보드 9): the "다른 행사" button left the event name row, so event pages show only the plain `행사 / {행사명}` path. 행사 바꾸기 is the current-event card itself: the desktop rail card (⌄) opens a panel beside the rail, the phone drawer's 현재 행사 card unfolds the same list inline (`EventSwitcher variant="rail" | "drawer"`). The panel groups events as 진행 중 / 준비 중 / 종료 with a stage pill and a check on the current one, shows a search field only above six events, links to the same menu page of the chosen event, and ends with 전체 행사 목록. The rail panel is portaled to the page body so the rail cannot clip it. 새 행사 stays on the event list.
 
 ## 디자인 시스템 기초 (2026-11-20)
 

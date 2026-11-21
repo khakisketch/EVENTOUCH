@@ -780,3 +780,48 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Reopened 2026-11-21 (owner: 행사 설정 시안 A + ② 운영 기능 묶음 타일). Same switches and
+   same save; only the look changes: a count line, a count per group, two columns on
+   phones, and "on" shown as a tinted tile with a dark switch instead of a heavy black frame. */
+.featureSummary {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
+}
+
+.featureGroupLabel {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.featureGroupCount {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.featureGrid > .check:has(input:checked) {
+  background: var(--brand-tint);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-text) 28%, var(--paper));
+}
+
+.barSection {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: var(--fw-strong);
+}
+
+@media (max-width: 768px) {
+  .featureGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .featureGrid > .check { min-height: 56px; padding-inline: var(--s3); font-size: var(--text-sm); }
+  .featureGrid > .check::before { right: calc(var(--s3) + 18px); }
+  .featureGrid > .check:has(input:checked)::before { right: calc(var(--s3) + 3px); }
+  .featureGrid > .check input { left: var(--s2); }
+}
+

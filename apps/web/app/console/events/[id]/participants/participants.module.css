@@ -446,7 +446,7 @@
   .workbenchControls .utilityMenu .menuImport { display: inline-flex; }
   .workbenchControls .utilityPair > .toolbarImport { display: none; }
   .workbenchControls .utilityPair > :global([data-variant="primary"]) {
-    position: fixed; z-index: 8; left: var(--s4); right: var(--s4); bottom: var(--s3);
+    position: fixed; z-index: 4; left: var(--s4); right: var(--s4); bottom: var(--s3);
     grid-column: auto; grid-row: auto; width: auto; min-height: 52px; font-size: var(--text-base);
     box-shadow: 0 0 0 var(--s3) var(--paper), 0 -6px 18px var(--s2) var(--shadow-color);
   }

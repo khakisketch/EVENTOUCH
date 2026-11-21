@@ -1454,6 +1454,14 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       ? { kind: "success" as const, message: notice }
       : latestSectionStatus;
 
+  // 운영 기능 summary for the TOC tiles and the group headers (2026-11-21): only features the
+  // screen can switch count; an unknown stored feature never shows up as "켜짐".
+  const switchableFeatureIds = FEATURE_GROUPS.flatMap((group) => group.ids);
+  const featureTotal = switchableFeatureIds.length;
+  const featureOnCount = switchableFeatureIds.filter((id) => (features ?? state.features).includes(id)).length;
+  const featureChangeCount = switchableFeatureIds.filter((id) => (features ?? state.features).includes(id) !== state.features.includes(id)).length;
+  const recoveryGap = isRecoveryBlocked(verificationMode) && !state.recoveryContact;
+
   return (
     <ConsolePage
       pageId="settings"
@@ -1517,10 +1525,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       {otherSettingsReceipt ? <ConsoleFeedback kind="warning">이전 행사 설정의 처리 결과를 화면 위에서 먼저 확인하세요. 서버 확인은 요청을 다시 보내지 않습니다.</ConsoleFeedback> : null}
       <div className={styles.layout}>
       <SettingsToc items={[
-        { id: "basics", label: "기본 정보", hint: `정원 ${state.basics.capacity === "0" ? "제한 없음" : `${state.basics.capacity}명`}`, dirty: Boolean(basicsDirty), onSelect: () => setBasicsOpen(true), disabled: archived || !canWriteSettings },
-        { id: "stage", label: "진행 단계", hint: stageText, href: "#settings-stage" },
-        { id: "intake", label: "참가 접수", hint: state.registrationOpen ? "접수 중" : "접수 닫힘", dirty: Boolean(intakeDirty), href: "#settings-intake" },
-        { id: "features", label: "운영 기능", hint: `${(features ?? state.features).length}개 사용`, dirty: Boolean(featuresDirty), href: "#settings-features" },
+        { id: "basics", label: "기본 정보", hint: `정원 ${state.basics.capacity === "0" ? "제한 없음" : `${state.basics.capacity}명`}`, tone: "ok", dirty: Boolean(basicsDirty), onSelect: () => setBasicsOpen(true), disabled: archived || !canWriteSettings },
+        { id: "stage", label: "진행 단계", hint: stageText, tone: "ok", href: "#settings-stage" },
+        { id: "intake", label: "참가 접수", hint: state.registrationOpen ? "접수 중" : "접수 닫힘", note: recoveryGap ? "확인할 안내 1건" : undefined, tone: recoveryGap ? "attention" : state.registrationOpen ? "ok" : "neutral", dirty: Boolean(intakeDirty), href: "#settings-intake" },
+        { id: "features", label: "운영 기능", hint: `${featureOnCount}개 켜짐`, note: `나머지 ${featureTotal - featureOnCount}개 꺼짐`, tone: "neutral", dirty: Boolean(featuresDirty), href: "#settings-features" },
       ]} />
       <div className={styles.main}>
       <section className={styles.eventCard} aria-label="행사 개요와 진행 단계">
@@ -2029,6 +2037,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             </> : null}
           </div>
           <ConsoleFormActions sticky>
+            <span className={styles.barSection}>참가 접수</span>
             {/* 게시 버튼은 항상 둔다. 신청 항목은 별도 페이지에서 바뀌어
                 동의 문구가 그대로어도 게시할 일이 있다(버전이 바뀌면 게시
                 검토에서 충돌로 알려준다). 바뀐 게 있으면 "변경 게시"라고
@@ -2076,6 +2085,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         ) : null}
         <p className={styles.help}>끈 기능은 콘솔 메뉴와 참가자 화면에서 함께 사라집니다. 기존 응답과 기록은 삭제되지 않습니다.</p>
         <p className={styles.help}>행사장 출력을 끄면 열린 전광판도 다음 확인 때 멈춥니다. 다시 켜면 저장된 출력을 표시합니다.</p>
+        <p className={styles.featureSummary}>{featureOnCount}개 켜짐 · {featureTotal - featureOnCount}개 꺼짐</p>
         {featuresConflict ? <section className={styles.conflict} aria-labelledby="features-conflict-heading">
           <h3 id="features-conflict-heading" tabIndex={-1} className={styles.blockTitle}>다른 작업에서 운영 기능이 변경됐습니다</h3>
           <p>이번 저장 요청은 반영되지 않았습니다. 선택 중인 기능은 그대로 있습니다. 최신 설정과 비교해 사용할 선택을 정해 주세요.</p>
@@ -2102,7 +2112,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           <legend id="settings-features-legend" tabIndex={-1}>사용할 기능</legend>
           {FEATURE_GROUPS.map((group) => (
             <div key={group.label} className={styles.featureGroup}>
-              <p className={styles.featureGroupLabel}>{group.label}</p>
+              <p className={styles.featureGroupLabel}>
+                {group.label}
+                <span className={styles.featureGroupCount}>{group.ids.filter((id) => features.includes(id)).length} / {group.ids.length} 켜짐</span>
+              </p>
               <div className={styles.featureGrid}>
                 {group.ids.map((id) => {
                   const feature = FEATURES.find((item) => item.id === id);
@@ -2130,9 +2143,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           ))}
         </fieldset>
         <ConsoleFormActions sticky>
+          <span className={styles.barSection}>운영 기능</span>
           {featuresDirty ? (
             <span role="status" className={styles.unsavedTag}>
-              <StatusPill tone="wait" size="sm" dot>저장 안 된 변경</StatusPill>
+              <StatusPill tone="wait" size="sm" dot>저장 안 된 변경{featureChangeCount > 0 ? ` ${featureChangeCount}개` : ""}</StatusPill>
             </span>
           ) : null}
           {featuresDirty ? (
