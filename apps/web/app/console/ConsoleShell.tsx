@@ -13,6 +13,7 @@ import { loginHrefForLocation } from "../auth-redirect";
 import { CONSOLE_PAGES, EVENT_HUBS, RAIL_HIDDEN_PAGE_IDS, consoleHubForPage, consolePageHref, eventMenuShortcuts, matchesEventMenu, railLabel, railPageFor, resolveConsolePage, type ConsolePageId } from "./console-navigation";
 import { BarsIcon } from "./console-ui/ConsoleIcons";
 import EventMenuSearch from "./console-ui/EventMenuSearch";
+import EventSwitcher from "./console-ui/EventSwitcher";
 import { useConsoleLeaveConfirmation } from "./console-draft-guard";
 import { consoleFetch, invalidateConsoleReads, subscribeConsoleFreshness } from "../../lib/console-api";
 import freshnessStyles from "./console-ui/freshness.module.css";
@@ -927,8 +928,10 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     return (
       <div className="console-menu-event">
         <p className="console-menu-section-label">현재 행사</p>
-        <p className="console-menu-event-name">{shellData?.currentEventName}</p>
-        <p className="console-menu-event-meta">{meta}</p>
+        <EventSwitcher eventId={eventId} pageId={currentPageId ?? "overview"} variant="drawer">
+          <span className="console-menu-event-name">{shellData?.currentEventName}</span>
+          <span className="console-menu-event-meta">{meta}</span>
+        </EventSwitcher>
         <EventMenuSearch query={eventMenuQuery} onChange={setEventMenuQuery} resultCount={menuResultCount} resultsId="mobile-event-menu-results" />
         <div id="mobile-event-menu-results" className="console-menu-hubs">
           {matchingHubs.map(({ hub, pages, shortcuts }) => {
@@ -977,14 +980,16 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         >
           {shellData?.currentEventMeta ? (
             <div className="nav-event-card">
-              <span className="nav-event-head">
-                <span className={`nav-stage-dot nav-stage-${stageTone(shellData.currentEventMeta.stage)}`} aria-hidden="true" />
-                <strong title={shellData?.currentEventName ?? undefined}>{shellData?.currentEventName}</strong>
-                <span className="sr-only">{stageLabel(shellData.currentEventMeta.stage)}</span>
-              </span>
-              <span className="nav-event-meta">
-                {[formatShortDate(shellData.currentEventMeta.date), shellData.currentEventMeta.venue].filter(Boolean).join(" · ")}
-              </span>
+              <EventSwitcher eventId={eventId} pageId={currentPageId ?? "overview"} variant="rail">
+                <span className="nav-event-head">
+                  <span className={`nav-stage-dot nav-stage-${stageTone(shellData.currentEventMeta.stage)}`} aria-hidden="true" />
+                  <strong title={shellData?.currentEventName ?? undefined}>{shellData?.currentEventName}</strong>
+                  <span className="sr-only">{stageLabel(shellData.currentEventMeta.stage)}</span>
+                </span>
+                <span className="nav-event-meta">
+                  {[formatShortDate(shellData.currentEventMeta.date), shellData.currentEventMeta.venue].filter(Boolean).join(" · ")}
+                </span>
+              </EventSwitcher>
             </div>
           ) : (
             <div className="nav-current-event">

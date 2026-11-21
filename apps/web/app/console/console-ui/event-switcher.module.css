@@ -1,53 +1,118 @@
-/* "다른 행사" switcher in the event context row (EventSwitcher.tsx).
-   Sits beside the event-name link; the panel is a plain list so it works
-   with the keyboard and screen readers without a menu role. */
+/* 행사 바꾸기 in the menu (EventSwitcher.tsx). The current-event card of the desktop
+   rail and of the phone drawer is the trigger; the panel is a plain list of links so
+   it works with the keyboard and screen readers without a menu role. The rail trigger
+   takes the dark nav colors; the drawer is paper and opens inline. */
 
 .root {
   position: relative;
-  display: inline-flex;
+  display: block;
+  min-width: 0;
 }
 
 .trigger {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: var(--s1);
+  gap: var(--s2);
+  width: 100%;
   min-height: 44px;
-  padding-inline: var(--s2);
-  border: 1px solid var(--line-strong);
+  padding: 0;
+  border: 0;
   border-radius: var(--r-ctl);
-  background: var(--surface-work);
-  color: var(--ink);
+  background: transparent;
+  color: inherit;
   font: inherit;
-  font-size: var(--text-sm);
-  font-weight: var(--fw-strong);
+  text-align: left;
   cursor: pointer;
 }
 
-.trigger:hover {
-  background: var(--surface-muted);
+.triggerBody {
+  display: block;
+  flex: 1;
+  min-width: 0;
 }
 
-.trigger[aria-expanded="true"] {
+.trigger:hover {
+  background: var(--nav-hover);
+}
+
+.trigger:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.root[data-variant="drawer"] .trigger {
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.root[data-variant="drawer"] .trigger[aria-expanded="true"] {
   border-color: var(--ink);
 }
 
 .chevron {
-  color: var(--muted);
-  font-size: var(--text-xs);
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-right: var(--s2);
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.trigger[aria-expanded="true"] .chevron {
+  transform: translateY(2px) rotate(-135deg);
 }
 
 .panel {
-  position: absolute;
-  top: calc(100% + var(--s1));
-  left: 0;
-  z-index: 20;
-  width: min(360px, calc(100vw - 32px));
-  max-height: min(60vh, 440px);
+  z-index: 50;
+  display: grid;
+  gap: var(--s1);
   overflow: auto;
-  padding: var(--s1);
+  padding: var(--s2);
   border-radius: var(--r-card);
-  background: var(--surface-work);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.panel[data-variant="rail"] {
+  position: fixed;
+  width: min(360px, calc(100vw - 32px));
   box-shadow: var(--shadow-raised);
+}
+
+.panel[data-variant="drawer"] {
+  position: static;
+  margin-top: var(--s1);
+  padding: var(--s1) 0 0;
+  border-radius: 0;
+}
+
+.search input {
+  width: 100%;
+  min-height: 44px;
+  border-radius: var(--r-pill);
+}
+
+.groups {
+  display: grid;
+  gap: var(--s1);
+  max-height: 360px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.group {
+  display: grid;
+  gap: 2px;
+}
+
+.groupLabel {
+  margin: 0;
+  padding: var(--s2) var(--s2) var(--s1);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: var(--fw-strong);
 }
 
 .list {
@@ -59,28 +124,29 @@
 }
 
 .item {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2px var(--s2);
+  display: flex;
   align-items: center;
-  min-height: 52px;
+  gap: var(--s2);
+  min-height: 56px;
   padding: var(--s1) var(--s2);
   border-radius: var(--r-ctl);
   color: var(--ink);
   text-decoration: none;
 }
 
-.item:hover {
+.item:hover,
+.item[aria-current="true"] {
   background: var(--surface-muted);
   text-decoration: none;
 }
 
-.item[aria-current="true"] {
-  background: var(--surface-muted);
+.itemText {
+  display: grid;
+  flex: 1;
+  min-width: 0;
 }
 
 .itemName {
-  min-width: 0;
   overflow: hidden;
   font-weight: var(--fw-strong);
   text-overflow: ellipsis;
@@ -88,17 +154,38 @@
 }
 
 .itemMeta {
-  grid-column: 1;
   color: var(--muted);
   font-size: var(--text-xs);
 }
 
-.current {
-  grid-row: 1 / span 2;
-  grid-column: 2;
-  color: var(--ink);
+.pill {
+  flex: none;
+  padding: 2px var(--s2);
+  border-radius: var(--r-pill);
+  background: var(--surface-muted);
+  color: var(--muted);
   font-size: var(--text-xs);
   font-weight: var(--fw-strong);
+  white-space: nowrap;
+}
+
+.pill[data-tone="live"] {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.pill[data-tone="wait"] {
+  background: var(--brand-tint);
+  color: var(--brand-text);
+}
+
+.check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12 5 5 9-10'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12 5 5 9-10'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
 .note {
@@ -121,9 +208,11 @@
 }
 
 .all {
-  display: block;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
   margin-top: var(--s1);
-  padding: var(--s2);
+  padding: 0 var(--s2);
   border-top: 1px solid var(--line);
   color: var(--ink);
   font-size: var(--text-sm);
@@ -133,16 +222,4 @@
 
 .all:hover {
   text-decoration: underline;
-}
-
-/* On phones the panel becomes a bottom sheet: the trigger can sit far right
-   after a long event name, so an anchored panel would overflow the screen. */
-@media (max-width: 640px) {
-  .panel {
-    position: fixed;
-    inset: auto var(--s2) var(--s2) var(--s2);
-    width: auto;
-    max-height: 60vh;
-    border-radius: var(--r-card);
-  }
 }

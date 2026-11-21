@@ -17,11 +17,16 @@ const switcherCss = read("console-ui", "event-switcher.module.css");
 const dialog = read("CreateEventDialog.tsx");
 const homeCss = read("console-home.module.css");
 
-test("the event name row gets the switcher only on event-scoped pages", () => {
-  assert.match(page, /import EventSwitcher from "\.\/EventSwitcher";/);
-  const branch = page.slice(page.indexOf("const context = overviewHref"), page.indexOf("const classNames"));
-  assert.match(branch, /<EventSwitcher eventId=\{eventId!\} pageId=\{pageId\} \/>/);
+// Reopened 2026-11-21 (owner: 행사 바꾸기를 메뉴로): the switcher left the event name row;
+// the current-event card of the rail and of the phone drawer is the control.
+const shell = read("ConsoleShell.tsx");
+
+test("the event name row has no switcher; the rail card and the drawer card are the control", () => {
+  assert.doesNotMatch(page, /EventSwitcher/);
   assert.match(page, /page\.scope === "event" && eventId\?\.trim\(\)/);
+  assert.match(shell, /import EventSwitcher from "\.\/console-ui\/EventSwitcher";/);
+  assert.match(shell, /<EventSwitcher eventId=\{eventId\} pageId=\{currentPageId \?\? "overview"\} variant="rail">/);
+  assert.match(shell, /<EventSwitcher eventId=\{eventId\} pageId=\{currentPageId \?\? "overview"\} variant="drawer">/);
 });
 
 test("the switcher loads the directory only when opened, never from an effect keyed to load state", () => {
@@ -39,10 +44,12 @@ test("the switcher keeps the current menu page, marks the current event, and clo
   assert.match(switcher, /aria-label="행사 바꾸기"/);
 });
 
-test("on phones the switcher panel is a bottom sheet, not anchored to the trigger", () => {
-  const mobile = switcherCss.slice(switcherCss.indexOf("@media (max-width: 640px)"));
-  assert.match(mobile, /position: fixed;/);
-  assert.match(mobile, /inset: auto var\(--s2\) var\(--s2\) var\(--s2\)/);
+test("the panel groups events by stage, searches only past six events, and opens inline in the drawer", () => {
+  assert.match(switcher, /SEARCH_THRESHOLD = 6/);
+  assert.match(switcher, /events\.length > SEARCH_THRESHOLD/);
+  assert.match(switcher, /\["live", "진행 중"\], \["wait", "준비 중"\], \["end", "종료"\]/);
+  assert.match(switcherCss, /\.panel\[data-variant="rail"\] \{[^}]*position: fixed;/);
+  assert.match(switcherCss, /\.panel\[data-variant="drawer"\] \{[^}]*position: static;/);
 });
 
 test("new event dialog shows a summary column only on wide screens and keeps the form first", () => {

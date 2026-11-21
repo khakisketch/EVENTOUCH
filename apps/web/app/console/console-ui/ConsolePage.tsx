@@ -3,7 +3,6 @@ import { Suspense, type ReactNode } from "react";
 import Link from "../../ui/ProductLink";
 import { CONSOLE_PAGES, consolePageHref, type ConsolePageId } from "../console-navigation";
 import ConsolePageHeader from "./ConsolePageHeader";
-import EventSwitcher from "./EventSwitcher";
 import styles from "./console-ui.module.css";
 import EventCloseReturn from "./EventCloseReturn";
 import type { CloseSnapshot } from "../console-event-close";
@@ -79,7 +78,6 @@ export default function ConsolePage({
         {trimmedName ? `행사 / ${trimmedName}` : "행사"}
       </Link>
       {parentContext ? <> <span aria-hidden="true"> / </span> <Link className={styles.contextLink} href={parentContext.href}>{parentContext.label}</Link></> : null}
-      <EventSwitcher eventId={eventId!} pageId={pageId} />
     </>
   ) : null;
 

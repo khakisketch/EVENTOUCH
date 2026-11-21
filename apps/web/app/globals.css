@@ -1425,6 +1425,23 @@ a.pill:hover {
 .nav-stage-dot.nav-stage-planned { background: var(--warning-line); }
 .nav-stage-dot.nav-stage-ended { background: var(--nav-muted); }
 
+/* 행사 바꾸기 trigger holds the card's two lines; they stack inside the button. */
+.nav-event-card button > span > .nav-event-head,
+.nav-event-card button > span > .nav-event-meta {
+  display: flex;
+}
+
+.nav-event-card button > span > .nav-event-meta {
+  display: block;
+  margin-top: var(--s1);
+}
+
+.console-menu-event button > span > .console-menu-event-name,
+.console-menu-event button > span > .console-menu-event-meta {
+  display: block;
+}
+
+
 .nav-event-meta {
   color: var(--nav-muted);
   font-size: var(--label);

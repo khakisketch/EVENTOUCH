@@ -1,5 +1,5 @@
 'use strict';
-// Browser check for the "다른 행사" switcher and its unsaved-draft guard.
+// Browser check for the 행사 바꾸기 switcher (rail card / drawer card) and its unsaved-draft guard.
 // Synthetic fixture data only: two events from the audit fixture.
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
@@ -25,7 +25,9 @@ async function main() {
     });
     await fixture.helpers.insertMembership(fixture.harness.database, fixture.manager.id, otherId, ['all']);
     const panelName = { name: '행사 바꾸기', exact: true };
-    const trigger = (page) => page.getByRole('button', { name: '다른 행사', exact: true });
+    // Reopened 2026-11-21: the control is the current-event card in the rail (desktop) or the drawer (phone).
+    const trigger = (page) => page.getByRole('button', { name: /행사 바꾸기/ }).first();
+    const openMenu = async (page) => { const menu = page.getByRole('button', { name: '메뉴', exact: true }); if (await menu.isVisible().catch(() => false)) await menu.click(); };
     browser = await launchBrowser();
 
     for (const [label, viewport] of [['desktop', { width: 1440, height: 900 }], ['mobile', { width: 390, height: 844 }]]) {
@@ -35,6 +37,7 @@ async function main() {
       const errors = [];
       page.on('pageerror', (error) => errors.push(error.message));
       await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/participants`, { waitUntil: 'networkidle' });
+      await openMenu(page);
       await trigger(page).waitFor({ timeout: 15000 });
       check(`${label}: trigger visible and page does not overflow`, await trigger(page).isVisible() &&
         await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
@@ -48,7 +51,7 @@ async function main() {
       if (label === 'desktop') {
         await page.keyboard.press('Escape');
         check('desktop: Escape closes the panel and returns focus to the trigger', await panel.count() === 0 &&
-          await page.evaluate(() => document.activeElement?.textContent?.includes('다른 행사')));
+          await page.evaluate(() => document.activeElement?.textContent?.includes('행사 바꾸기')));
         await trigger(page).click();
       }
       await otherLink.click();

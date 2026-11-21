@@ -46,8 +46,8 @@
   background: var(--surface-muted);
 }
 
-/* Event link, optional parent link and the 다른 행사 switcher share one wrapping
-   row: the switcher drops under a long name instead of touching or clipping it. */
+/* Event link and optional parent link share one wrapping row, so a long name or a
+   long parent label wraps instead of clipping. (행사 바꾸기 moved to the menu, 2026-11-21.) */
 .pageContext {
   grid-area: context;
   display: flex;
