@@ -26,10 +26,15 @@ for (const width of [320, 390]) {
   test(`mobile roster uses an intentional two-row action grid at ${width}px`, () => {
     // Reopened 2026-11-20: the native status picker left the toolbar (count tabs carry the
     // views), so tools and import share row 1 and creation owns row 2.
-    assert.equal(propertyAt('.workbenchControls span[data-toolbar-inline].utilityPair', 'grid-template-columns', width), 'repeat(2, minmax(0, 1fr))');
-    assert.equal(propertyAt('.workbenchControls .utilityPair > :global([data-variant="ghost"])', 'grid-row', width), '1', 'import sits beside the tools, not as a third cramped filter');
-    assert.equal(propertyAt('.workbenchControls .utilityPair > :global([data-variant="ghost"])', 'grid-column', width), '2');
-    assert.equal(propertyAt('.workbenchControls .utilityPair > :global([data-variant="primary"])', 'grid-row', width), '2');
-    assert.equal(propertyAt('.workbenchControls .utilityPair > :global([data-variant="primary"])', 'grid-column', width), '1 / -1');
+    // Reopened 2026-11-21 (owner: 명단 모바일 컨트롤 시안 A): search, 필터 and the ⋯ menu share
+    // one row; 내보내기 and 명단 가져오기 live in that menu; 참가자 추가 docks at the bottom.
+    assert.equal(propertyAt('.workbenchControls [data-console-toolbar="main"]', 'grid-template-columns', width), 'minmax(0, 1fr) auto 44px');
+    assert.equal(propertyAt('.workbenchControls .searchField[data-toolbar-span="full"]', 'grid-row', width), '1');
+    assert.equal(propertyAt('.workbenchControls .filterToggle', 'grid-column', width), '2');
+    assert.equal(propertyAt('.workbenchControls .rosterUtilities', 'grid-column', width), '3', 'the ⋯ menu is the third cell of the tools row');
+    assert.equal(propertyAt('.workbenchControls .utilityPair > .toolbarImport', 'display', width), 'none', 'import moved into the ⋯ menu on phones');
+    assert.equal(propertyAt('.workbenchControls .utilityMenu .menuImport', 'display', width), 'inline-flex');
+    assert.equal(propertyAt('.workbenchControls .utilityPair > :global([data-variant="primary"])', 'position', width), 'fixed', 'creation docks at the bottom of the screen');
+    assert.equal(propertyAt('.workbenchControls .utilityPair > :global([data-variant="primary"])', 'bottom', width), 'var(--s3)');
   });
 }

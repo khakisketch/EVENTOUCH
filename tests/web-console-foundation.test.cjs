@@ -168,8 +168,10 @@ test('toolbar, section nav and form actions render only what they are given', ()
   }
   assert.match(toolbar, /if \(!filters && !actions && !selection && !children\) return null;/u, 'no placeholder rows');
   assert.match(toolbar, /\{selection \? <div className=\{styles\.toolbarSelection\}>/u, 'selection owns a conditional row');
-  assert.match(toolbar, /<div className=\{styles\.toolbarFilters\}>/u);
-  assert.match(toolbar, /<div className=\{styles\.toolbarActions\}>/u);
+  // Reopened 2026-11-21: the slots carry data-console-toolbar markers so a workbench can
+  // flatten them into one grid row on phones (명단 시안 A).
+  assert.match(toolbar, /<div className=\{styles\.toolbarFilters\}( data-console-toolbar="filters")?>/u);
+  assert.match(toolbar, /<div className=\{styles\.toolbarActions\}( data-console-toolbar="actions")?>/u);
   assert.doesNotMatch(toolbar, HOOK_CALL);
 
   const nav = readUi('ConsoleSectionNav.tsx');

@@ -31,7 +31,7 @@ import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import ConsoleConfirm from "../../../console-ui/ConsoleConfirm";
 import ConsoleChoiceGroup from "../../../console-ui/ConsoleChoiceGroup";
 import uiStyles from "../../../console-ui/console-ui.module.css";
-import { CheckIcon, ChevronRightIcon, CopyIcon, DownloadIcon, FilterIcon, MessageIcon, PlusIcon, SearchIcon, UploadIcon, UsersIcon, XIcon } from "../../../console-ui/ConsoleIcons";
+import { CheckIcon, ChevronRightIcon, CopyIcon, DownloadIcon, FilterIcon, MessageIcon, MoreIcon, PlusIcon, SearchIcon, UploadIcon, UsersIcon, XIcon } from "../../../console-ui/ConsoleIcons";
 import { UNCONFIRMED_WRITE_CLOSE_MESSAGE, useConsoleDraftGuard } from "../../../console-draft-guard";
 import { buildApprovedMessageHandoffHref } from "../../../console-handoff";
 import { useEventCloseHandoff } from "../../../use-event-close-handoff";
@@ -2017,7 +2017,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           actions={
             <span data-toolbar-inline className={styles.utilityPair}>
               <details className={styles.rosterUtilities} ref={rosterUtilitiesRef}>
-                <summary aria-label="내보내기"><DownloadIcon /><span className={styles.longAction}>내보내기</span><span className={styles.shortAction} aria-hidden="true">내보내기</span></summary>
+                <summary aria-label="내보내기"><span className={styles.summaryDesktop}><DownloadIcon /><span className={styles.longAction}>내보내기</span><span className={styles.shortAction} aria-hidden="true">내보내기</span></span><span className={styles.summaryMore} aria-hidden="true"><MoreIcon /></span></summary>
                 <div className={styles.utilityMenu}>
               <ProductButton type="button" className="button button-secondary" aria-label={`엑셀 내보내기 · 검색·필터 결과 ${visiblePeople.length}명`} aria-describedby={state.exportIssue ? "roster-export-unavailable" : undefined} title={`검색·필터 결과 ${visiblePeople.length}명을 현재 정렬 순서로 내보냅니다.`} disabled={exporting || rosterUnavailable || Boolean(state.exportIssue)} onClick={() => void exportXlsx()} icon={<DownloadIcon />}>
 
@@ -2027,9 +2027,11 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
 
                 CSV 내보내기
               </ProductButton>
+              {/* Phones fold 명단 가져오기 into this menu (시안 A, 2026-11-21); the toolbar copy below is hidden there. */}
+              {canMutateStatus ? <ProductButton type="button" variant="ghost" className={styles.menuImport} onClick={() => { if (rosterUtilitiesRef.current) rosterUtilitiesRef.current.open = false; setImportOpen(true); }} icon={<UploadIcon />}>명단 가져오기</ProductButton> : null}
               </div>
               </details>
-              {canMutateStatus ? <ProductButton type="button" variant="ghost" onClick={() => setImportOpen(true)} icon={<UploadIcon />}>명단 가져오기</ProductButton> : null}
+              {canMutateStatus ? <ProductButton type="button" variant="ghost" onClick={() => setImportOpen(true)} className={styles.toolbarImport} icon={<UploadIcon />}>명단 가져오기</ProductButton> : null}
               {canMutateStatus ? (
                 <ProductButton type="button" className="button button-primary" aria-label="참가자 추가" disabled={unconfirmedAdd} onClick={() => { setAddError(addUnconfirmed ? { message: "등록 결과가 확인되지 않았습니다. 같은 요청으로 다시 확인하세요.", field: null } : null); setAddOpen(true); }} icon={<PlusIcon />}>
 

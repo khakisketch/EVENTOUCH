@@ -369,6 +369,10 @@ Reopened 2026-11-21 (owner: 참가자 페이지·공지·안내·참여 이벤�
 
 Placement (2026-11-21, mobile review): the frame sits directly under the screen title (`ConsolePage` `afterHeader`, forwarded by the three workspaces) instead of above the event link and title, so the screen's own content starts where every other console page starts. At 640px and below the status line is one 44px line ("게시 상태 · 게시 전 N건 확인 →", or "모두 게시됨"); the chips stay on wider screens. In every console page the event link, optional parent link and 다른 행사 switcher share one wrapping row, so a long name moves the switcher to the next line instead of touching or clipping it.
 
+## 모바일 사용성 개선 (2026-11-21)
+
+Reopened 2026-11-21 (owner: 모바일 실화면 점검 뒤 시안 선택). Only control placement and navigation aids change; columns, previews, editing, save and publish stay as confirmed. Phones (≤768px) on 참가자 명단: search, 필터 and a ⋯ menu (엑셀·CSV 내보내기 + 명단 가져오기) share one row, 참가자 추가 docks at the bottom of the screen, and the first person starts about 100px higher (`data-console-toolbar` markers on `ConsoleToolbar` let the workbench flatten its slots). 참가자 페이지 레이아웃 선택 (≤640px): one swipeable row of 150px previews with the next card peeking. 모바일 메뉴 서랍: the drawer fits the screen height, drops the 현재 행사 label, and shows a "메뉴 더 보기" cue with a fade while it still scrolls. Navigation links in page-header actions and 양식 CSV 받기 / 참가자 목록으로 on 명단 가져오기 read as bordered 44px buttons (still the ghost role, so the secondary-button ceiling is unchanged).
+
 ## 참가자 페이지 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/page/`, the studio; `apps/web/app/event/[slug]/home/`, the compositions). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-home-layouts.test.cjs` guards it. This is the core product screen for event agencies: they pick how the attendee home looks.

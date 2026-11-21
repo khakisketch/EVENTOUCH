@@ -255,7 +255,7 @@ test('trigger and popup stay phone-only in the dark sidebar voice', () => {
   assert.match(css, /\.console-global-trigger-bars\s*\{[^}]*stroke:\s*currentColor/su);
   assert.match(css, /\.console-global-menu\s*\{[^}]*z-index:\s*30/su);
   assert.match(css, /\.console-global-menu\s*\{[^}]*width:\s*min\(320px,\s*calc\(100vw - var\(--s5\)\)\)/su);
-  assert.match(css, /\.console-global-menu\s*\{[^}]*max-height:\s*min\(70svh,\s*560px\)/su);
+  assert.match(css, /\.console-global-menu\s*\{[^}]*max-height:\s*calc\(100svh - var\(--s7\) - var\(--s5\) - var\(--s2\)\)/su); // Reopened 2026-11-21 (owner: 메뉴 서랍 시안 A+B): the drawer fits the screen height.
   assert.match(css, /\.console-global-menu\s*\{[^}]*overflow-y:\s*auto/su);
   assert.match(css, /\.console-global-menu\s*\{[^}]*background:\s*var\(--nav\)/su);
   assert.match(css, /\.console-global-menu\[hidden\]\s*\{\s*display:\s*none/su);

@@ -163,6 +163,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const operatorMenuRef = useRef<HTMLDivElement>(null);
   const globalTriggerRef = useRef<HTMLButtonElement>(null);
   const globalMenuRef = useRef<HTMLElement>(null);
+  const [menuHasMore, setMenuHasMore] = useState(false);
   const menuFocusPendingRef = useRef(false);
   const globalFocusPendingRef = useRef(false);
 
@@ -601,6 +602,22 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     setGlobalMenuOpen(false);
     setEventMenuQuery("");
   }, [pathname, organization.context?.organizationId]);
+
+  useEffect(() => {
+    const menu = globalMenuRef.current;
+    if (!globalMenuOpen || !menu) { setMenuHasMore(false); return; }
+    const update = () => setMenuHasMore(menu.scrollHeight - menu.scrollTop - menu.clientHeight > 8);
+    update();
+    menu.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    observer?.observe(menu);
+    return () => {
+      menu.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+      observer?.disconnect();
+    };
+  }, [globalMenuOpen, eventMenuQuery, shellData]);
 
   useEffect(() => {
     if (!globalMenuOpen) return;
@@ -1097,6 +1114,15 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
               {renderEventsLink("workspace-events-link-global", "행사 목록")}
               {renderClientsLink("workspace-clients-link-global")}
               {renderMobileEventMenu()}
+              {/* Reopened 2026-11-21 (owner: 메뉴 서랍 시안 A+B): a zero-height sticky row paints a fade
+                  and a "더 있음" cue while the drawer still scrolls; it adds nothing to the scroll height. */}
+              {menuHasMore ? (
+                <div className="console-menu-more" aria-hidden="false">
+                  <button type="button" className="console-menu-more-button" onClick={() => globalMenuRef.current?.scrollBy({ top: 240, behavior: "smooth" })}>
+                    메뉴 더 보기
+                  </button>
+                </div>
+              ) : null}
             </nav>
           </div>
         ) : null}

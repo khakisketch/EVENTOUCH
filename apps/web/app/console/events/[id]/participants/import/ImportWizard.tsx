@@ -11,7 +11,7 @@ import ConsoleFeedback from "../../../../console-ui/ConsoleFeedback";
 import ConsoleFormActions from "../../../../console-ui/ConsoleFormActions";
 import ConsoleConfirm from "../../../../console-ui/ConsoleConfirm";
 import ConsoleAvatar from "../../../../console-ui/ConsoleAvatar";
-import { CheckIcon, DocumentIcon, UploadIcon } from "../../../../console-ui/ConsoleIcons";
+import { CheckIcon, DocumentIcon, DownloadIcon, UploadIcon } from "../../../../console-ui/ConsoleIcons";
 import {
   formatConsoleEventMeta,
   type ConsoleEventMeta,
@@ -872,7 +872,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
   const listHref = `/console/events/${encodeURIComponent(eventId)}/participants`;
   const actions = canWriteImport && headers ? (
     <div className={styles.actions}><ConsoleFormActions note="가져온 유효 행은 승인 검토 없이 참가 확정으로 등록됩니다. 동의 기록은 가져오기만으로 생성하지 않습니다. 열 제목이 행사의 신청 항목 이름과 같으면 그 응답도 함께 가져옵니다.">
-      {onDismiss ? null : <ProductLink className="button button-ghost" variant="ghost" href={listHref}>참가자 목록으로</ProductLink>}
+      {onDismiss ? null : <ProductLink className={`button button-ghost ${styles.outlinedAction}`} variant="ghost" href={listHref}>참가자 목록으로</ProductLink>}
       {importUncertain ? <ProductButton type="button" variant="secondary" disabled={committing || checkingImport} onClick={() => void checkImportResult()}>{checkingImport ? "확인 중입니다" : "서버 처리 확인"}</ProductButton> : null}
       {reviewing ? <ProductButton type="button" variant="primary" disabled={commitDisabled} onClick={() => void commit()}>
         {committing ? "등록 중입니다" : importUncertain ? "같은 요청 다시 시도" : `${preview?.valid.length ?? 0}명 등록`}
@@ -963,6 +963,8 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
                   <ProductButton
                     type="button"
                     variant="ghost"
+                    className={styles.outlinedAction}
+                    icon={<DownloadIcon />}
                     onClick={() =>
                       downloadCsv("EVENTOUCH_import_template.csv", [
                         ["이름", "연락처", "이메일", "소속", ...extraFields.map((field) => field.label)],
@@ -1167,7 +1169,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
       /> : null}
       {onDismiss ? null : <>
         {actions}
-        {!headers && committed === null ? <p><ProductLink className="button button-ghost" variant="ghost" href={listHref}>참가자 목록으로</ProductLink></p> : null}
+        {!headers && committed === null ? <p><ProductLink className={`button button-ghost ${styles.outlinedAction}`} variant="ghost" href={listHref}>참가자 목록으로</ProductLink></p> : null}
       </>}
     </ImportFrame>
   );

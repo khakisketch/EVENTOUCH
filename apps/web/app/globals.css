@@ -2180,7 +2180,7 @@ a.pill:hover {
     display: grid;
     gap: var(--s1);
     width: min(320px, calc(100vw - var(--s5)));
-    max-height: min(70svh, 560px);
+    max-height: calc(100svh - var(--s7) - var(--s5) - var(--s2));
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: var(--s2);
@@ -2205,9 +2205,68 @@ a.pill:hover {
     display: grid;
     min-width: 0;
     gap: var(--s1);
-    margin-top: var(--s1);
-    padding-top: var(--s3);
+    margin-top: 0;
+    padding-top: var(--s2);
     border-top: 1px solid var(--nav-active);
+  }
+
+  /* 2026-11-21: the event name already says it is the current event; dropping
+     the label gives the drawer room to show more menu without scrolling. */
+  .console-menu-event > .console-menu-section-label:first-child {
+    display: none;
+  }
+
+  .console-menu-more {
+    position: sticky;
+    bottom: 0;
+    height: 0;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .console-menu-more::before {
+    content: "";
+    position: absolute;
+    right: calc(var(--s2) * -1);
+    bottom: calc(var(--s2) * -1);
+    left: calc(var(--s2) * -1);
+    height: calc(var(--s7) + var(--s4));
+    background: linear-gradient(to bottom, transparent, var(--paper) 70%);
+  }
+
+  .console-menu-more-button {
+    position: absolute;
+    left: 50%;
+    bottom: var(--s1);
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    gap: var(--s1);
+    padding: 0 var(--s4);
+    border: 0;
+    border-radius: var(--r-pill);
+    background: var(--ink);
+    color: var(--paper);
+    font: inherit;
+    font-size: var(--small);
+    font-weight: 700;
+    transform: translateX(-50%);
+    pointer-events: auto;
+    cursor: pointer;
+  }
+
+  .console-menu-more-button::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: translateY(-2px) rotate(45deg);
+  }
+
+  .console-menu-more-button:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
   }
 
   .console-menu-section-label {

@@ -318,3 +318,8 @@ fieldset.notice > legend + * { clear: both; }
 .autoFix > summary small { color: var(--muted); font-size: var(--text-sm); font-weight: var(--fw-regular); }
 .autoFix > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .autoFix > .notice { margin: 0; border-radius: 0 0 var(--r-card) var(--r-card); background: transparent; }
+
+/* 2026-11-21 (owner: 링크가 글자처럼 보인다): ghost actions on this screen keep their
+   role but show a border, so 양식 CSV 받기 and 참가자 목록으로 read as buttons. */
+.outlinedAction { min-height: 44px; padding-inline: var(--s3); border: 1px solid var(--line-strong); border-radius: var(--r-ctl); background: var(--surface-work); }
+.outlinedAction:hover { background: var(--surface-muted); }

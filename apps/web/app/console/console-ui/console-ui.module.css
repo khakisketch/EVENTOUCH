@@ -30,6 +30,22 @@
   word-break: keep-all;
   overflow-wrap: break-word;
 }
+/* Reopened 2026-11-21 (owner: 링크가 글자처럼 보인다): a navigation link placed in the
+   page header actions reads as a bordered 44px button, so it is seen as something
+   to press. Same destination, same label; icon buttons and real buttons are untouched. */
+.pageActions :global([data-product-link][data-action-variant="ghost"]) {
+  min-height: 44px;
+  padding-inline: var(--s3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-ctl);
+  background: var(--surface-work);
+  color: var(--ink);
+}
+
+.pageActions :global([data-product-link][data-action-variant="ghost"]:hover) {
+  background: var(--surface-muted);
+}
+
 /* Event link, optional parent link and the 다른 행사 switcher share one wrapping
    row: the switcher drops under a long name instead of touching or clipping it. */
 .pageContext {

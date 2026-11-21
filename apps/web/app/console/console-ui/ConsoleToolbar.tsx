@@ -31,9 +31,9 @@ export default function ConsoleToolbar({
   return (
     <div className={styles.toolbar}>
       {filters || actions ? (
-        <div className={styles.toolbarMain}>
-          {filters ? <div className={styles.toolbarFilters}>{filters}</div> : null}
-          {actions ? <div className={styles.toolbarActions}>{actions}</div> : null}
+        <div className={styles.toolbarMain} data-console-toolbar="main">
+          {filters ? <div className={styles.toolbarFilters} data-console-toolbar="filters">{filters}</div> : null}
+          {actions ? <div className={styles.toolbarActions} data-console-toolbar="actions">{actions}</div> : null}
         </div>
       ) : null}
       {selection ? <div className={styles.toolbarSelection}>{selection}</div> : null}

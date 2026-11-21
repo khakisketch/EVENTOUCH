@@ -421,3 +421,35 @@
   }
 }
 @media (prefers-reduced-motion: reduce) { :global(.dialog)[role="dialog"]:has(> .rosterSheet) { animation: none; } }
+
+/* Reopened 2026-11-21 (owner: 명단 모바일 컨트롤 시안 A). Phones: search, 필터 and a
+   ⋯ menu (내보내기 + 명단 가져오기) share one row, and 참가자 추가 docks at the
+   bottom of the screen, so the first person starts about 130px higher.
+   Desktop and the table are untouched. The toolbar slots are flattened with
+   display: contents so the three controls become grid cells of one row. */
+.summaryMore, .menuImport { display: none; }
+@media (max-width: 768px) {
+  .workbenchPage { padding-bottom: calc(52px + var(--s6)); }
+  .workbenchControls [data-console-toolbar="main"] { display: grid; grid-template-columns: minmax(0, 1fr) auto 44px; align-items: center; gap: var(--s2); }
+  .workbenchControls [data-console-toolbar="filters"],
+  .workbenchControls [data-console-toolbar="actions"],
+  .workbenchControls span[data-toolbar-inline].utilityPair { display: contents; }
+  .workbenchControls .searchField[data-toolbar-span="full"] { grid-column: 1; grid-row: 1; flex: none; }
+  .workbenchControls .filterToggle { grid-column: 2; grid-row: 1; }
+  .workbenchControls .rosterUtilities { grid-column: 3; grid-row: 1; justify-self: stretch; position: relative; }
+  .workbenchControls .rosterUtilities > summary { width: 44px; min-width: 44px; padding: 0; justify-content: center; }
+  .workbenchControls .rosterUtilities > summary::after { display: none; }
+  .workbenchControls .summaryDesktop { display: none; }
+  .workbenchControls .summaryMore { display: inline-flex; }
+  .workbenchControls .advancedFilters[data-open="true"] { grid-column: 1 / -1; grid-row: 2; }
+  .workbenchControls .utilityMenu { right: 0; left: auto; width: min(272px, calc(100vw - 32px)); max-width: none; }
+  .workbenchControls .utilityMenu .menuImport { display: inline-flex; }
+  .workbenchControls .utilityPair > .toolbarImport { display: none; }
+  .workbenchControls .utilityPair > :global([data-variant="primary"]) {
+    position: fixed; z-index: 8; left: var(--s4); right: var(--s4); bottom: var(--s3);
+    grid-column: auto; grid-row: auto; width: auto; min-height: 52px; font-size: var(--text-base);
+    box-shadow: 0 0 0 var(--s3) var(--paper), 0 -6px 18px var(--s2) var(--shadow-color);
+  }
+  .workbenchControls .utilityPair > :global([data-variant="primary"]) .longAction { display: inline; }
+  .workbenchControls .utilityPair > :global([data-variant="primary"]) .shortAction { display: none; }
+}
