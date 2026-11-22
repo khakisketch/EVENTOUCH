@@ -87,7 +87,8 @@ export default function CancellationConflictReview({ eventId, participantId, onR
     if (busy || request.current || operator.changed) return;
     const prior = attemptRef.current;
     if (!prior && (!snapshot || !confirmed || !reason.trim())) { setError("참가 의사를 확인하고 확인 사유를 입력하세요."); return; }
-    const attempt = prior ?? { commandId: crypto.randomUUID(), payload: { id: participantId, fingerprint: snapshot!.fingerprint, reason: reason.trim(), confirmed: true as const } };
+    // randomUUID is missing outside secure contexts (plain-http venue LAN); same fallback as the other roster dialogs.
+    const attempt = prior ?? { commandId: typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `web-${Date.now()}-${Math.floor(Math.random() * 1e9)}`, payload: { id: participantId, fingerprint: snapshot!.fingerprint, reason: reason.trim(), confirmed: true as const } };
     const controller = new AbortController(); request.current = controller;
     const timer = window.setTimeout(() => controller.abort(), 12000);
     setBusy(true); setError("");

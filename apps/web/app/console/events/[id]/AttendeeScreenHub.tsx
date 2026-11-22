@@ -12,7 +12,7 @@
  * unsaved screen is left.
  */
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import StatusPill from "../../console-ui/StatusPill";
 import { consoleFetch, subscribeConsoleFreshness } from "../../../../lib/console-api";
 import { drawEventsSnapshot } from "../../../../lib/participation-events";
@@ -53,9 +53,13 @@ async function readSummary(eventId: string, signal?: AbortSignal): Promise<Summa
 export default function AttendeeScreenHub({ eventId, active }: { eventId: string; active: ScreenTab }) {
   const [summary, setSummary] = useState<Summary | null>(null);
 
+  // Only the newest read may write: a freshness refresh and the first load can overlap,
+  // and a slow older answer must not replace a newer one (or outlive this event).
+  const latest = useRef(0);
   const refresh = useCallback(async (signal?: AbortSignal) => {
+    const ticket = ++latest.current;
     const next = await readSummary(eventId, signal);
-    if (next && !signal?.aborted) setSummary(next);
+    if (next && !signal?.aborted && ticket === latest.current) setSummary(next);
   }, [eventId]);
 
   useEffect(() => {
@@ -64,16 +68,24 @@ export default function AttendeeScreenHub({ eventId, active }: { eventId: string
     const unsubscribe = subscribeConsoleFreshness(() => { void refresh(); });
     return () => {
       controller.abort();
+      latest.current += 1;
       unsubscribe();
     };
   }, [refresh]);
 
   // 참여 이벤트 is a destination only for events with a participation feature,
-  // like the rail. The tab you are on always stays.
+  // like the rail. The tab you are on always stays. It is the last tab, so when it
+  // appears after the first read nothing the operator may be aiming at moves.
   const tabs = TABS.filter(({ tab }) => tab !== "programs" || active === "programs" || summary?.participation);
   const statuses = summary?.statuses ?? [];
   const pending = firstPendingTab(statuses);
-  const pendingHref = pending ? consolePageHref(TABS.find(({ tab }) => tab === pending.tab)!.pageId, eventId) : undefined;
+  const pendingTab = pending ? TABS.find(({ tab }) => tab === pending.tab) : undefined;
+  const pendingHref = pendingTab ? consolePageHref(pendingTab.pageId, eventId) : undefined;
+  // The link opens one tab. When more is waiting elsewhere, name that tab and its own count
+  // so the number promised matches what the page shows.
+  const pendingText = pending && pendingTab
+    ? pending.count > pending.tabCount ? `게시 전 ${pending.count}건 · ${pendingTab.label} ${pending.tabCount}건부터 확인` : `게시 전 ${pending.count}건 확인`
+    : "";
 
   return (
     <div className={styles.hub} data-attendee-screen-hub="">
@@ -95,7 +107,7 @@ export default function AttendeeScreenHub({ eventId, active }: { eventId: string
         // Phones get one line instead of the chips (CSS toggles which is shown),
         // so the hub no longer pushes the screen's own content down the page.
         pending && pendingHref ? (
-          <Link className={styles.summary} href={pendingHref}>게시 상태 · 게시 전 {pending.count}건 확인 <span aria-hidden="true">→</span></Link>
+          <Link className={styles.summary} href={pendingHref}>게시 상태 · {pendingText} <span aria-hidden="true">→</span></Link>
         ) : (
           <p className={styles.summary}>게시 상태 · 모두 게시됨</p>
         )
@@ -109,7 +121,7 @@ export default function AttendeeScreenHub({ eventId, active }: { eventId: string
             ))}
           </span>
           {pending && pendingHref ? (
-            <Link className={styles.review} href={pendingHref}>게시 전 {pending.count}건 확인</Link>
+            <Link className={styles.review} href={pendingHref}>{pendingText}</Link>
           ) : null}
         </div>
       ) : null}

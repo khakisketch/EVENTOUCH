@@ -1418,6 +1418,11 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   // 먼저 확인 창을 거친다. 기획 단계에서는 바로 저장한다.
   function submitBasicsForm() {
     if (state.kind !== "ready" || !basics || basicsConflict) return;
+    // 0 means 제한 없음; an empty or malformed box must not silently become it.
+    if (!/^\d+$/.test(basics.capacity.trim())) {
+      setFailure({ message: "정원은 0 이상의 숫자로 입력해 주세요. 제한이 없으면 0을 입력합니다.", field: "capacity" });
+      return;
+    }
     if (currentStage !== "DRAFT" && basics.slug !== state.basics.slug) {
       setSlugConfirm(true);
       return;
@@ -1429,7 +1434,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       date: basics.date,
       start: basics.start,
       end: basics.end,
-      capacity: Number(basics.capacity) || 0,
+      capacity: Number(basics.capacity.trim()),
       // price/format은 화면에서 고치지 않지만 저장값은 그대로 유지한다.
       price: Number(basics.price) || 0,
       format: basics.format,

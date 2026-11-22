@@ -57,9 +57,10 @@ test('programs status appears only for events with a participation feature and n
 
 test('the one-click review targets the first tab with something waiting', () => {
   const waiting = attendeeScreenStatuses({}, { pageExperience: { publishedAt: null }, notices: [{ id: 'b', title: 't', published: false }], program: [] });
-  assert.deepEqual(firstPendingTab(waiting), { tab: 'design', count: 2 });
+  // Reopened 2026-11-22: tabCount is what the linked tab itself holds (count stays the hub-wide total).
+  assert.deepEqual(firstPendingTab(waiting), { tab: 'design', count: 2, tabCount: 1 });
   const onlyContent = attendeeScreenStatuses({}, { ...publishedPage, notices: [{ id: 'b', title: 't', published: false }], program: [] });
-  assert.deepEqual(firstPendingTab(onlyContent), { tab: 'content', count: 1 });
+  assert.deepEqual(firstPendingTab(onlyContent), { tab: 'content', count: 1, tabCount: 1 });
   assert.equal(firstPendingTab(attendeeScreenStatuses({}, publishedPage)), null);
 });
 

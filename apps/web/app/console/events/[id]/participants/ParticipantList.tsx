@@ -1219,10 +1219,13 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   function copyRegistrationLink() {
     if (state.kind !== "ready" || !state.eventSlug) return;
     const link = `${window.location.origin}/event/${encodeURIComponent(state.eventSlug)}`;
+    const copyFailed = () => setFailure("링크를 복사하지 못했습니다. 주소창에서 직접 복사해 주세요.");
+    // No clipboard API (plain-http venue LAN, older tablets): say so instead of staying silent.
+    if (typeof navigator.clipboard?.writeText !== "function") { copyFailed(); return; }
     void navigator.clipboard
-      ?.writeText(link)
+      .writeText(link)
       .then(() => setNotice("참가 신청 링크를 복사했습니다."))
-      .catch(() => setFailure("링크를 복사하지 못했습니다. 주소창에서 직접 복사해 주세요."));
+      .catch(copyFailed);
   }
 
   async function changeStatus(person: Person, status: string) {

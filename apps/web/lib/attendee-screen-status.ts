@@ -63,11 +63,28 @@ function programHasEdit(item: Rec): boolean {
   return text(rec(draft.attachment)?.fileId) !== text(rec(item.attachment)?.fileId);
 }
 
-function contentStatus(workspace: Rec): ScreenStatus {
+/**
+ * 장소 안내 has one record with a draft beside the published copy (ContentWorkspace
+ * "수정본 있음": the same fields venueChanges compares). Only an event that offers
+ * the venue feature has a 장소 안내 tab, so only then does an unpublished edit count.
+ */
+function venueHasEdit(workspace: Rec): boolean {
+  const venue = rec(workspace.venue);
+  const draft = rec(venue?.draft);
+  if (!venue || !draft) return false;
+  if (["name", "address", "directions", "contact", "description"].some((field) => text(draft[field]) !== text(venue[field]))) return true;
+  const published = rec(venue.map);
+  const next = rec(draft.map);
+  if (!published && !next) return false;
+  return text(rec(published?.image)?.fileId) !== text(rec(next?.image)?.fileId) || text(published?.alt) !== text(next?.alt);
+}
+
+function contentStatus(workspace: Rec, venueEnabled: boolean): ScreenStatus {
   const notices = Array.isArray(workspace.notices) ? workspace.notices.flatMap((value) => (rec(value) ? [rec(value) as Rec] : [])) : [];
   const program = Array.isArray(workspace.program) ? workspace.program.flatMap((value) => (rec(value) ? [rec(value) as Rec] : [])) : [];
   const waiting = (item: Rec, hasEdit: (item: Rec) => boolean) => item.published !== true || hasEdit(item);
-  const pending = notices.filter((item) => waiting(item, noticeHasEdit)).length + program.filter((item) => waiting(item, programHasEdit)).length;
+  const pending = notices.filter((item) => waiting(item, noticeHasEdit)).length + program.filter((item) => waiting(item, programHasEdit)).length
+    + (venueEnabled && venueHasEdit(workspace) ? 1 : 0);
   if (pending > 0) return { tab: "content", label: `공지·안내 · 게시 전 ${pending}건`, tone: "wait", pending };
   if (notices.length + program.length === 0) return { tab: "content", label: "공지·안내 · 등록 없음", tone: "neutral", pending: 0 };
   return { tab: "content", label: "공지·안내 · 게시됨", tone: "ok", pending: 0 };
@@ -93,14 +110,21 @@ function programsStatus(workspace: Rec, drawStatuses: readonly string[]): Screen
  */
 export function attendeeScreenStatuses(event: unknown, workspace: unknown, drawStatuses: readonly string[] = []): ScreenStatus[] {
   const space = rec(workspace) ?? {};
-  const statuses = [designStatus(space), contentStatus(space)];
+  const features = rec(event)?.features;
+  const venueEnabled = Array.isArray(features) && features.includes("venue");
+  const statuses = [designStatus(space), contentStatus(space, venueEnabled)];
   if (hasParticipationFeature(event)) statuses.push(programsStatus(space, drawStatuses));
   return statuses;
 }
 
-/** The first tab with something waiting to be published, for the hub's one-click review. */
-export function firstPendingTab(statuses: readonly ScreenStatus[]): { tab: ScreenTab; count: number } | null {
+/**
+ * The first tab with something waiting to be published, for the hub's one-click review.
+ * `count` is everything waiting across the hub; `tabCount` is what the linked tab itself
+ * holds, so the hub can say so when the two differ instead of promising more than the
+ * page it opens shows.
+ */
+export function firstPendingTab(statuses: readonly ScreenStatus[]): { tab: ScreenTab; count: number; tabCount: number } | null {
   const count = statuses.reduce((sum, status) => sum + status.pending, 0);
   const first = statuses.find((status) => status.pending > 0);
-  return first && count > 0 ? { tab: first.tab, count } : null;
+  return first && count > 0 ? { tab: first.tab, count, tabCount: first.pending } : null;
 }
