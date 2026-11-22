@@ -43,7 +43,7 @@ async function main() {
     await sort.click(); // descending
     const tableNames = await page.locator('table tbody tr').allTextContents();
     assert.match(tableNames[0], /엑셀 검증 B/);
-    await page.locator('summary[aria-label="내보내기"]').click();
+    await page.locator('summary[aria-label="내보내기·가져오기"]').click();
     await page.screenshot({ path: path.join(out, 'roster-export-menu-1280.png'), fullPage: true });
     stage = 'XLSX';
     const xlsxDownload = page.waitForEvent('download');

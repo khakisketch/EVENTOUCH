@@ -152,7 +152,7 @@ async function main() {
     await page.locator('#roster-search').waitFor();
     const addReadOnly = page.getByRole('button', { name: '참가자 추가', exact: true });
     check('read-only roster has no enabled add action', await addReadOnly.count() === 0 || await addReadOnly.isDisabled());
-    await page.locator('summary[aria-label="내보내기"]').click();
+    await page.locator('summary[aria-label="내보내기·가져오기"]').click();
     const csvRead = page.getByRole('button', { name: /CSV 내보내기/ });
     check('read-only roster retains CSV read', await csvRead.isVisible() && await csvRead.isEnabled());
     check('read-only roster offers no dead-end page selection', await page.getByRole('button', { name: /이 페이지 .*명 선택/ }).count() === 0);

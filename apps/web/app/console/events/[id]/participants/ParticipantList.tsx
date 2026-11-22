@@ -2017,7 +2017,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           actions={
             <span data-toolbar-inline className={styles.utilityPair}>
               <details className={styles.rosterUtilities} ref={rosterUtilitiesRef}>
-                <summary aria-label="내보내기"><span className={styles.summaryDesktop}><DownloadIcon /><span className={styles.longAction}>내보내기</span><span className={styles.shortAction} aria-hidden="true">내보내기</span></span><span className={styles.summaryMore} aria-hidden="true"><MoreIcon /></span></summary>
+                <summary aria-label="내보내기·가져오기"><span className={styles.summaryDesktop}><DownloadIcon /><span className={styles.longAction}>내보내기</span><span className={styles.shortAction} aria-hidden="true">내보내기</span></span><span className={styles.summaryMore} aria-hidden="true"><MoreIcon /></span></summary>
                 <div className={styles.utilityMenu}>
               <ProductButton type="button" className="button button-secondary" aria-label={`엑셀 내보내기 · 검색·필터 결과 ${visiblePeople.length}명`} aria-describedby={state.exportIssue ? "roster-export-unavailable" : undefined} title={`검색·필터 결과 ${visiblePeople.length}명을 현재 정렬 순서로 내보냅니다.`} disabled={exporting || rosterUnavailable || Boolean(state.exportIssue)} onClick={() => void exportXlsx()} icon={<DownloadIcon />}>
 

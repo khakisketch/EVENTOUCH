@@ -66,7 +66,7 @@ async function main() {
     const search = page.locator('#roster-search'); await search.fill('합성 원본 참가자');
     const chosen = page.getByRole('checkbox', { name: '합성 원본 참가자 선택', exact: true });
     await chosen.check();
-    const summary = page.locator('summary[aria-label="내보내기"]');
+    const summary = page.locator('summary[aria-label="내보내기·가져오기"]');
     const menu = summary.locator('..');
     await summary.click();
     const csv = page.getByRole('button', { name: /CSV 내보내기/ });
@@ -85,7 +85,7 @@ async function main() {
       mode = nextMode; await refresh.click();
       const alert = page.locator('#roster-export-unavailable');
       await alert.getByText(phrase, { exact: false }).waitFor();
-      await page.waitForFunction(() => !document.querySelector('summary[aria-label="내보내기"]')?.parentElement?.open);
+      await page.waitForFunction(() => !document.querySelector('summary[aria-label="내보내기·가져오기"]')?.parentElement?.open);
       await summary.click();
       assert.equal(await csv.isDisabled(), true, nextMode); assert.equal(await xlsx.isDisabled(), true, nextMode);
       assert.equal(await csv.getAttribute('aria-describedby'), 'roster-export-unavailable');
@@ -130,7 +130,7 @@ async function main() {
     for (const fault of ['missing-id', 'duplicate-id', 'one-row', 'failure']) {
       mode = fault; await refresh.click();
       await page.getByText(/최신 목록을 불러오지 못했습니다|참가자 명단을 확인할 수 없어/).first().waitFor();
-      await page.waitForFunction(() => !document.querySelector('summary[aria-label="내보내기"]')?.parentElement?.open);
+      await page.waitForFunction(() => !document.querySelector('summary[aria-label="내보내기·가져오기"]')?.parentElement?.open);
       await summary.click();
       assert.equal(await csv.isDisabled(), true, `${fault} cannot export the previous snapshot`);
       assert.equal(await search.inputValue(), '합성 원본 참가자'); assert.equal(await chosen.isChecked(), true);

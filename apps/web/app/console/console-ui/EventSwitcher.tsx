@@ -94,14 +94,17 @@ export default function EventSwitcher({ eventId, pageId, variant, children }: Pr
     }
   };
 
+  // The rail scrolls and clips, so the popover is positioned from the card instead of inside it.
+  const anchorFromCard = (): CSSProperties | undefined => {
+    if (!trigger.current) return undefined;
+    const rect = trigger.current.getBoundingClientRect();
+    const rail = trigger.current.closest("aside")?.getBoundingClientRect();
+    return { top: Math.max(8, rect.top), left: Math.max(rect.right, rail?.right ?? 0) + 8, maxHeight: `calc(100vh - ${Math.max(8, rect.top) + 16}px)` };
+  };
+
   const toggle = () => {
     const next = !open;
-    if (next && variant === "rail" && trigger.current) {
-      // The rail scrolls and clips, so the popover is positioned from the card instead of inside it.
-      const rect = trigger.current.getBoundingClientRect();
-      const rail = trigger.current.closest("aside")?.getBoundingClientRect();
-      setAnchor({ top: Math.max(8, rect.top), left: Math.max(rect.right, rail?.right ?? 0) + 8, maxHeight: `calc(100vh - ${Math.max(8, rect.top) + 16}px)` });
-    }
+    if (next && variant === "rail") setAnchor(anchorFromCard());
     setOpen(next);
     if (next && load.kind !== "ready" && load.kind !== "loading") void loadEvents();
   };
@@ -113,14 +116,36 @@ export default function EventSwitcher({ eventId, pageId, variant, children }: Pr
       if (root.current && !root.current.contains(target) && !panelRef.current?.contains(target)) setOpen(false);
     };
     const onViewport = () => { if (variant === "rail") setOpen(false); };
+    // The popover is anchored to the card, so a scroll outside the panel (the page, or the
+    // rail itself) moves the card and the popover follows it; once the card has left the
+    // screen there is nothing to anchor to and the popover closes. Following instead of
+    // closing also survives a smooth scroll still running when the popover opens.
+    let frame = 0;
+    const follow = () => {
+      frame = 0;
+      const rect = trigger.current?.getBoundingClientRect();
+      if (!rect || rect.bottom <= 0 || rect.top >= window.innerHeight) { setOpen(false); return; }
+      setAnchor(anchorFromCard());
+    };
+    const onScroll = (event: Event) => {
+      const target = event.target;
+      if (variant !== "rail" || (target instanceof Node && panelRef.current?.contains(target))) return;
+      if (!frame) frame = window.requestAnimationFrame(follow);
+    };
     document.addEventListener("pointerdown", onPointer);
     window.addEventListener("resize", onViewport);
+    window.addEventListener("scroll", onScroll, true);
     return () => {
       document.removeEventListener("pointerdown", onPointer);
       window.removeEventListener("resize", onViewport);
+      window.removeEventListener("scroll", onScroll, true);
+      if (frame) window.cancelAnimationFrame(frame);
     };
   }, [open, variant]);
 
+  // Escape and choosing an event close through here so keyboard focus returns to the
+  // card instead of falling to <body> when the focused link unmounts. An outside click
+  // does not: focus belongs to whatever the pointer landed on.
   const close = () => {
     setOpen(false);
     trigger.current?.focus();
@@ -159,7 +184,7 @@ export default function EventSwitcher({ eventId, pageId, variant, children }: Pr
                         const href = consolePageHref(pageId, event.id) ?? consolePageHref("overview", event.id) ?? "/console";
                         return (
                           <li key={event.id}>
-                            <Link className={styles.item} href={href} aria-current={current ? "true" : undefined} onClick={() => setOpen(false)}>
+                            <Link className={styles.item} href={href} aria-current={current ? "true" : undefined} onClick={close}>
                               <span className={styles.itemText}>
                                 <span className={styles.itemName}>{event.name}</span>
                                 <span className={styles.itemMeta}>{event.date ? event.date.replace(/-/g, ".") : "일정 미정"}</span>

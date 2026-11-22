@@ -31,7 +31,10 @@ test('a chip bar sticks under the phone top bar once the tiles scroll away, mark
   assert.match(toc, /aria-current=\{active \? "location" : undefined\}/);
   assert.match(toc, /aria-label="맨 위로"/);
   assert.match(toc, /prefers-reduced-motion/);
-  assert.match(tocCss, /\.chipsAnchor \{[^}]*position: sticky;[^}]*top: 57px;[^}]*height: 0;/s, 'zero-height sticky row adds nothing to the layout');
+  assert.match(tocCss, /\.chipsAnchor \{[^}]*position: sticky;[^}]*top: var\(--settings-bar-h, 57px\);[^}]*height: 0;/s, 'zero-height sticky row adds nothing to the layout');
+  assert.match(toc, /measureTopBar/, 'the top bar height is measured, not assumed, so a notched phone does not hide the chips');
+  assert.match(toc, /rootMargin: `-\$\{barHeight\}px 0px 0px 0px`/);
+  assert.match(toc, /observe\(bar, \{ box: "border-box" \}\)/, 'padding (safe area) changes are observed, not just the content box');
   // The phone top bar is z-index 5 and owns the menu drawer: nothing here may sit above it.
   const z = Number(/\.chipsAnchor \{[^}]*z-index: (\d+)/s.exec(tocCss)[1]);
   assert.ok(z < 5, 'chip bar stays under the top bar so the drawer opens over it');
@@ -59,4 +62,18 @@ test('행사 바꾸기 is the current-event card in the rail and the drawer; the
   assert.match(switcher, /"live"[\s\S]*"wait"[\s\S]*"end"/);
   assert.doesNotMatch(read('console', 'console-ui', 'ConsolePage.tsx'), /EventSwitcher/);
   assert.match(globals, /\.console-menu-event > \.console-menu-section-label:first-child \{\s*display: none;/);
+});
+
+test('the rail popover follows its card on outside scroll, closes once the card is off screen, and every non-pointer close returns focus', () => {
+  const switcher = read('console', 'console-ui', 'EventSwitcher.tsx');
+  assert.match(switcher, /addEventListener\("scroll", onScroll, true\)/);
+  assert.match(switcher, /!\(target instanceof Node && panelRef\.current\?\.contains\(target\)\)|\(target instanceof Node && panelRef\.current\?\.contains\(target\)\)\) return/, 'scrolling inside the panel is ignored; a non-node target (window) counts as outside');
+  assert.match(switcher, /rect\.bottom <= 0 \|\| rect\.top >= window\.innerHeight\) \{ setOpen\(false\)/, 'no anchor left on screen -> close');
+  assert.match(switcher, /setAnchor\(anchorFromCard\(\)\)/, 'otherwise the popover is re-anchored to the card');
+  assert.match(switcher, /aria-current=\{current \? "true" : undefined\} onClick=\{close\}/, 'choosing an event restores focus like Escape');
+});
+
+test('the roster ⋯ menu trigger is named for everything in it', () => {
+  const roster = fs.readFileSync(path.join(app, 'console', 'events', '[id]', 'participants', 'ParticipantList.tsx'), 'utf8');
+  assert.match(roster, /<summary aria-label="내보내기·가져오기">/);
 });

@@ -82,7 +82,7 @@ async function main() {
     await page.getByRole('button', { name: '새로고침', exact: true }).click();
     await page.getByText(/이전에 확인한 목록을 표시합니다/).waitFor();
     assert.equal(await selected.isChecked(), true, 'a failed refresh preserves an existing selection');
-    await page.locator('summary[aria-label="내보내기"]').click();
+    await page.locator('summary[aria-label="내보내기·가져오기"]').click();
     assert.equal(await page.getByRole('button', { name: /^엑셀 내보내기/ }).isDisabled(), true);
     assert.equal(await page.getByRole('button', { name: /^CSV 내보내기/ }).isDisabled(), true);
     stale.participants = participants; await save(stale);

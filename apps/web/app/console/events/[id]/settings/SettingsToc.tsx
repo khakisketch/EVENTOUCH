@@ -10,7 +10,7 @@
  * section anchors; the basics entry is a button because it opens the drawer rather than
  * scrolling. Nothing here writes or changes what a section saves.
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import StatusPill from "../../../console-ui/StatusPill";
 import styles from "./settings-toc.module.css";
 
@@ -31,8 +31,20 @@ export type SettingsTocItem = {
   disabled?: boolean;
 };
 
-/** The phone top bar is 57px tall and sticky; the chip bar sits right under it. */
+/**
+ * The phone top bar is sticky and the chip bar sits right under it. It is 57px on a
+ * plain screen but taller on a notched one (its top padding grows with the safe area),
+ * so the real height is measured; 57 is only the fallback before the first measure.
+ */
+const TOP_BAR_FALLBACK = 57;
+const PHONE_QUERY = "(max-width: 768px)";
 const SECTION_ATTR = "data-settings-section";
+
+function measureTopBar(): number {
+  if (typeof window === "undefined" || !window.matchMedia?.(PHONE_QUERY).matches) return TOP_BAR_FALLBACK;
+  const bar = document.querySelector<HTMLElement>(".console-sidebar");
+  return bar ? Math.round(bar.getBoundingClientRect().height) || TOP_BAR_FALLBACK : TOP_BAR_FALLBACK;
+}
 
 function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
@@ -42,6 +54,22 @@ export default function SettingsToc({ items }: { items: readonly SettingsTocItem
   const tiles = useRef<HTMLOListElement>(null);
   const [stuck, setStuck] = useState(false);
   const [current, setCurrent] = useState<string | null>(null);
+  const [barHeight, setBarHeight] = useState(TOP_BAR_FALLBACK);
+
+  // Follow the top bar's real height (safe area, orientation, font scaling).
+  useEffect(() => {
+    const update = () => setBarHeight(measureTopBar());
+    update();
+    const bar = document.querySelector<HTMLElement>(".console-sidebar");
+    const resizeObserver = bar && typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+    // border-box: safe-area growth changes the bar's padding, not its content box.
+    if (bar) resizeObserver?.observe(bar, { box: "border-box" });
+    window.addEventListener("resize", update);
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, []);
 
   // The chip bar and 맨 위로 appear only after the tiles have scrolled above the top bar.
   useEffect(() => {
@@ -49,10 +77,10 @@ export default function SettingsToc({ items }: { items: readonly SettingsTocItem
     if (!list || typeof IntersectionObserver === "undefined") return;
     const observer = new IntersectionObserver(([entry]) => {
       setStuck(!entry.isIntersecting && entry.boundingClientRect.top < 0);
-    }, { rootMargin: "-57px 0px 0px 0px" });
+    }, { rootMargin: `-${barHeight}px 0px 0px 0px` });
     observer.observe(list);
     return () => observer.disconnect();
-  }, []);
+  }, [barHeight]);
 
   // The section being read is the last one whose top has passed the reading line.
   useEffect(() => {
@@ -120,7 +148,7 @@ export default function SettingsToc({ items }: { items: readonly SettingsTocItem
         </ol>
       </nav>
       {/* Phones only (CSS): a zero-height sticky row, so it adds nothing to the layout. */}
-      <div className={styles.chipsAnchor}>
+      <div className={styles.chipsAnchor} style={{ "--settings-bar-h": `${barHeight}px` } as CSSProperties}>
         {stuck ? (
           <div className={styles.chips}>
             <nav ref={chipList} className={styles.chipList} aria-label="설정 구역 바로가기">

@@ -166,7 +166,7 @@
   .chipsAnchor {
     display: block;
     position: sticky;
-    top: 57px;
+    top: var(--settings-bar-h, 57px);
     z-index: 4;
     height: 0;
     overflow: visible;

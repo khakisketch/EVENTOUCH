@@ -175,7 +175,7 @@ async function main() {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.getByRole('button', { name: /참가자.*이름순 정렬/ }).click();
     check('table sort reports ascending', await page.locator('th[aria-sort="ascending"]').count() === 1);
-    await page.locator('summary[aria-label="내보내기"]').click();
+    await page.locator('summary[aria-label="내보내기·가져오기"]').click();
     const download = page.waitForEvent('download'); await page.getByRole('button', { name: /CSV 내보내기/ }).click();
     check('CSV download remains real', (await download).suggestedFilename() === 'EVENTOUCH_participants.csv');
 

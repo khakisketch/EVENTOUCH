@@ -1066,7 +1066,7 @@ async function main() {
           await toggle.click();
           await page.locator('#roster-filter-reset').click();
           if (!await selected.isChecked()) throw new Error('filter reset discarded selection');
-          await page.locator('summary[aria-label="내보내기"]').click();
+          await page.locator('summary[aria-label="내보내기·가져오기"]').click();
           const download = page.waitForEvent('download');
           await page.getByRole('button', { name: /CSV 내보내기/ }).click();
           if (!(await download).suggestedFilename().endsWith('.csv')) throw new Error('CSV no longer downloads');
