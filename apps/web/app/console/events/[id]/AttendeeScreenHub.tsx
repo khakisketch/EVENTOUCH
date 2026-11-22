@@ -51,15 +51,21 @@ async function readSummary(eventId: string, signal?: AbortSignal): Promise<Summa
 }
 
 export default function AttendeeScreenHub({ eventId, active }: { eventId: string; active: ScreenTab }) {
-  const [summary, setSummary] = useState<Summary | null>(null);
+  // The summary is kept with the event it was read for, so another event never shows it.
+  const [read, setRead] = useState<{ eventId: string; summary: Summary } | null>(null);
+  const summary = read?.eventId === eventId ? read.summary : null;
 
-  // Only the newest read may write: a freshness refresh and the first load can overlap,
-  // and a slow older answer must not replace a newer one (or outlive this event).
-  const latest = useRef(0);
+  // Reads can overlap (first load, freshness refreshes). A read may write only if it is
+  // newer than the last one applied: a slow older answer never replaces a newer one, and
+  // a newer read that failed (null) never throws away an older good one.
+  const issued = useRef(0);
+  const applied = useRef(0);
   const refresh = useCallback(async (signal?: AbortSignal) => {
-    const ticket = ++latest.current;
+    const ticket = ++issued.current;
     const next = await readSummary(eventId, signal);
-    if (next && !signal?.aborted && ticket === latest.current) setSummary(next);
+    if (!next || signal?.aborted || ticket <= applied.current) return;
+    applied.current = ticket;
+    setRead({ eventId, summary: next });
   }, [eventId]);
 
   useEffect(() => {
@@ -68,7 +74,6 @@ export default function AttendeeScreenHub({ eventId, active }: { eventId: string
     const unsubscribe = subscribeConsoleFreshness(() => { void refresh(); });
     return () => {
       controller.abort();
-      latest.current += 1;
       unsubscribe();
     };
   }, [refresh]);
@@ -80,7 +85,9 @@ export default function AttendeeScreenHub({ eventId, active }: { eventId: string
   const statuses = summary?.statuses ?? [];
   const pending = firstPendingTab(statuses);
   const pendingTab = pending ? TABS.find(({ tab }) => tab === pending.tab) : undefined;
-  const pendingHref = pendingTab ? consolePageHref(pendingTab.pageId, eventId) : undefined;
+  const pendingBase = pendingTab ? consolePageHref(pendingTab.pageId, eventId) : undefined;
+  // 공지·안내 holds three sub-tabs; open the one that has the waiting item (existing anchors).
+  const pendingHref = pendingBase && pending?.source ? `${pendingBase}#content-${({ notice: "notices", program: "program", venue: "venue" })[pending.source]}` : pendingBase;
   // The link opens one tab. When more is waiting elsewhere, name that tab and its own count
   // so the number promised matches what the page shows.
   const pendingText = pending && pendingTab

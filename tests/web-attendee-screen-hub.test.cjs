@@ -46,8 +46,9 @@ test('programs status appears only for events with a participation feature and n
   assert.equal(hasParticipationFeature({ features: ['draw'] }), true);
   assert.equal(hasParticipationFeature({ features: ['screen'] }), false);
 
-  const workspace = { ...publishedPage, notices: [], program: [], modules: [{ status: 'OPEN' }] };
-  const programs = attendeeScreenStatuses({ features: ['poll'] }, workspace, ['DRAFT', 'DRAFT'])[2];
+  // Reopened 2026-11-22: the programs line counts only modules of features that are on, so a module carries its type.
+  const workspace = { ...publishedPage, notices: [], program: [], modules: [{ type: 'poll', status: 'OPEN' }] };
+  const programs = attendeeScreenStatuses({ features: ['poll', 'draw'] }, workspace, ['DRAFT', 'DRAFT'])[2];
   assert.deepEqual([programs.label, programs.tone, programs.pending], ['참여 이벤트 · 준비 중 2건', 'neutral', 0]);
   const running = attendeeScreenStatuses({ features: ['poll'] }, workspace)[2];
   assert.equal(running.label, '참여 이벤트 · 진행 중 1건');
@@ -60,7 +61,8 @@ test('the one-click review targets the first tab with something waiting', () => 
   // Reopened 2026-11-22: tabCount is what the linked tab itself holds (count stays the hub-wide total).
   assert.deepEqual(firstPendingTab(waiting), { tab: 'design', count: 2, tabCount: 1 });
   const onlyContent = attendeeScreenStatuses({}, { ...publishedPage, notices: [{ id: 'b', title: 't', published: false }], program: [] });
-  assert.deepEqual(firstPendingTab(onlyContent), { tab: 'content', count: 1, tabCount: 1 });
+  // source: the 공지·안내 sub-tab that holds it (the hub links straight to it).
+  assert.deepEqual(firstPendingTab(onlyContent), { tab: 'content', count: 1, tabCount: 1, source: 'notice' });
   assert.equal(firstPendingTab(attendeeScreenStatuses({}, publishedPage)), null);
 });
 

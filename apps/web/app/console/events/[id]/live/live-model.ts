@@ -134,10 +134,10 @@ export function parseLiveModel(
     notices: records(workspace.notices).flatMap((notice) => typeof notice.id === "string" ? [{ id: notice.id, title: text(notice.title), published: notice.published === true }] : []),
     modules: drawModules.flatMap((module) => {
       if (typeof module.id !== "string" || typeof module.type !== "string") return [];
-      // The server only outputs a module whose feature is on (setDisplay); a leftover
-      // module of a switched-off feature must not be offered as a choice.
-      if (!enabled.has(module.type)) return [];
       return [{
+        // Kept (not dropped) when its feature is off, so what is still on air can be named;
+        // displayChoices skips it for the picker.
+        enabled: enabled.has(module.type),
         id: module.id, title: text(module.title), type: module.type, published: module.published === true, revealed: module.revealed === true,
         draws: module.type === "draw" && enabled.has("draw") && module.status !== "DRAFT"
           ? records(module.drawHistory).flatMap((draw) => draw.published === true && typeof draw.id === "string" && draw.id
@@ -146,7 +146,7 @@ export function parseLiveModel(
       }];
     }),
     approvedPhotos: enabled.has("photo") ? photos.filter((photo) => photo.status === "APPROVED").length : 0,
-    approvedQuestions: questions.filter((question) => question.approved === true).length,
+    approvedQuestions: enabled.has("qa") ? questions.filter((question) => question.approved === true).length : 0,
   };
 
   const drawPrograms: LiveDrawProgram[] = enabled.has("draw") ? records(workspace.drawPrograms).flatMap((program) => {

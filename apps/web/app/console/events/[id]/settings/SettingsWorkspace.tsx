@@ -154,6 +154,44 @@ function sameFeatures(left: string[], right: string[]): boolean {
   return a.size === b.size && [...a].every((item) => b.has(item));
 }
 
+const CAPACITY_MAX = 10_000_000;
+
+/**
+ * 정원 to send, or null when the box cannot be saved: empty, text, negative, fractional or
+ * absurdly large (0 means 제한 없음, never a stand-in for a bad entry). A value the operator
+ * did not touch is sent as it was stored, so an older record with an odd stored capacity
+ * does not block unrelated edits.
+ */
+function capacityToSave(draft: string, saved: string): number | null {
+  if (draft === saved) return Number(draft) || 0;
+  const value = draft.trim();
+  if (!/^\d{1,8}$/.test(value)) return null;
+  const parsed = Number(value);
+  return parsed <= CAPACITY_MAX ? parsed : null;
+}
+
+const CAPACITY_MESSAGE = "정원은 0 이상 1천만 이하의 숫자로 입력해 주세요. 제한이 없으면 0을 입력합니다.";
+
+/** The event.basics.save payload; both save paths (direct and slug-confirm) build it here. */
+function basicsSavePayload(basics: Basics, saved: Basics, capacity: number) {
+  return {
+    name: basics.name,
+    slug: basics.slug,
+    clientId: basics.clientId,
+    date: basics.date,
+    start: basics.start,
+    end: basics.end,
+    capacity,
+    // price/format은 화면에서 고치지 않지만 저장값은 그대로 유지한다.
+    price: Number(basics.price) || 0,
+    format: basics.format,
+    approvalRequired: basics.approvalRequired,
+    allowReentry: basics.allowReentry,
+    verificationRequired: basics.verificationRequired,
+    expectedBasics: basicsPayload(saved),
+  };
+}
+
 function basicsPayload(basics: Basics) {
   return { ...basics, capacity: Number(basics.capacity) || 0, price: Number(basics.price) || 0 };
 }
@@ -1419,30 +1457,16 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   function submitBasicsForm() {
     if (state.kind !== "ready" || !basics || basicsConflict) return;
     // 0 means 제한 없음; an empty or malformed box must not silently become it.
-    if (!/^\d+$/.test(basics.capacity.trim())) {
-      setFailure({ message: "정원은 0 이상의 숫자로 입력해 주세요. 제한이 없으면 0을 입력합니다.", field: "capacity" });
+    const capacity = capacityToSave(basics.capacity, state.basics.capacity);
+    if (capacity === null) {
+      setFailure({ message: CAPACITY_MESSAGE, field: "capacity" });
       return;
     }
     if (currentStage !== "DRAFT" && basics.slug !== state.basics.slug) {
       setSlugConfirm(true);
       return;
     }
-    void runCommand("event.basics.save", {
-      name: basics.name,
-      slug: basics.slug,
-      clientId: basics.clientId,
-      date: basics.date,
-      start: basics.start,
-      end: basics.end,
-      capacity: Number(basics.capacity.trim()),
-      // price/format은 화면에서 고치지 않지만 저장값은 그대로 유지한다.
-      price: Number(basics.price) || 0,
-      format: basics.format,
-      approvalRequired: basics.approvalRequired,
-      allowReentry: basics.allowReentry,
-      verificationRequired: basics.verificationRequired,
-      expectedBasics: basicsPayload(state.basics),
-    }, "기본 정보를 저장했습니다.", "basics");
+    void runCommand("event.basics.save", basicsSavePayload(basics, state.basics, capacity), "기본 정보를 저장했습니다.", "basics");
   }
 
   const latestSectionStatus = [basicsStatus, intakeStatus, featuresStatus].reduce<SectionStatus | null>(
@@ -1871,21 +1895,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             confirmLabel="주소 바꾸고 저장"
             onConfirm={() => {
               setSlugConfirm(false);
-              void runCommand("event.basics.save", {
-                name: basics.name,
-                slug: basics.slug,
-                clientId: basics.clientId,
-                date: basics.date,
-                start: basics.start,
-                end: basics.end,
-                capacity: Number(basics.capacity) || 0,
-                price: Number(basics.price) || 0,
-                format: basics.format,
-                approvalRequired: basics.approvalRequired,
-                allowReentry: basics.allowReentry,
-                verificationRequired: basics.verificationRequired,
-                expectedBasics: basicsPayload(state.basics),
-              }, "기본 정보를 저장했습니다.", "basics");
+              // The box may have changed since the confirm opened: validate again, same rule.
+              const capacity = capacityToSave(basics.capacity, state.basics.capacity);
+              if (capacity === null) { setFailure({ message: CAPACITY_MESSAGE, field: "capacity" }); return; }
+              void runCommand("event.basics.save", basicsSavePayload(basics, state.basics, capacity), "기본 정보를 저장했습니다.", "basics");
             }}
             onCancel={() => setSlugConfirm(false)}
           />

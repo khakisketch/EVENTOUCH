@@ -30,6 +30,7 @@ import { abandonOperatorAttempt, acknowledgeOperatorReceipt, confirmsContentComm
 import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib/operator-receipts";
 import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 import { normalizeHomeMenus } from "../../../../../lib/attendee-home-menus";
+import { normalizeVenue } from "../../../../../lib/attendee-screen-status";
 import { normalizeHomeImage, normalizeHomeStyle } from "../../../../../lib/attendee-home";
 import RichEditor from "./RichEditor";
 import { richSummary } from "../../../../../lib/rich-text";
@@ -263,19 +264,9 @@ function parseProgram(value: unknown): ProgramItem | null {
   };
 }
 
+// Shared with the hub's 게시 상태 line (lib/attendee-screen-status) so both read a venue the same way.
 function parseVenue(value: unknown): Venue {
-  const item = asRecord(value) ?? {};
-  const map = asRecord(item.map);
-  const image = asRecord(map?.image);
-  const fileId = text(image?.fileId);
-  return {
-    name: text(item.name),
-    address: text(item.address),
-    directions: text(item.directions),
-    contact: text(item.contact),
-    description: text(item.description),
-    map: map && fileId ? { image: { fileId, name: text(image?.name, "행사장 안내도") }, alt: text(map.alt) } : null,
-  };
+  return normalizeVenue(value);
 }
 
 function noticeChanges(item: Notice, publish = true): PublicationChange[] {

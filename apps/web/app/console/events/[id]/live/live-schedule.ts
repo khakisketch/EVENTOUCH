@@ -82,7 +82,7 @@ export type LiveDisplay = { type: string; moduleId: string; noticeId: string; dr
 export type LiveDisplayDraw = { id: string; name: string; at: string };
 export type LiveDisplayOptions = {
   notices: Array<{ id: string; title: string; published: boolean }>;
-  modules: Array<{ id: string; title: string; type: string; published: boolean; revealed: boolean; draws: LiveDisplayDraw[] }>;
+  modules: Array<{ id: string; title: string; type: string; published: boolean; revealed: boolean; draws: LiveDisplayDraw[]; /** Its feature is on; missing counts as on. */ enabled?: boolean }>;
   approvedPhotos: number;
   approvedQuestions: number;
 };
@@ -102,32 +102,45 @@ export function drawDisplayLabel(draw: LiveDisplayDraw, moduleTitle: string): st
   return `추첨 결과 · ${draw.name || moduleTitle} · ${at}`;
 }
 
-/** Output choices mirror the server contract: unpublished or unrevealed things are not offered. */
-export function displayChoices(options: LiveDisplayOptions): Array<{ value: string; label: string }> {
-  const choices: Array<{ value: string; label: string }> = [{ value: "idle|", label: "유휴 화면 (안내 없음)" }];
+type DisplayChoice = { value: string; label: string; /** Its feature is switched off: shown only to name what is on air. */ off?: boolean };
+
+function collectChoices(options: LiveDisplayOptions, includeOff: boolean): DisplayChoice[] {
+  const choices: DisplayChoice[] = [{ value: "idle|", label: "유휴 화면 (안내 없음)" }];
   for (const notice of options.notices) {
     if (notice.published) choices.push({ value: `notice|${notice.id}`, label: `공지 · ${notice.title}` });
   }
   for (const module of options.modules) {
     if (!module.published) continue;
-    if (module.type === "poll") choices.push({ value: `poll|${module.id}`, label: `투표 · ${module.title}` });
-    if (module.type === "quiz" && module.revealed) choices.push({ value: `quiz|${module.id}`, label: `퀴즈 정답 · ${module.title}` });
-    if (module.type === "draw" && module.draws[0]) choices.push({ value: `draw|${module.id}|${module.draws[0].id}`, label: drawDisplayLabel(module.draws[0], module.title) });
-    if (module.type === "qa" && options.approvedQuestions > 0) choices.push({ value: `qa|${module.id}`, label: `Q&A · ${module.title}` });
+    const off = module.enabled === false;
+    // The server only outputs a module whose feature is on (setDisplay), so the picker
+    // skips leftovers of a switched-off feature; the on-air label still names them.
+    if (off && !includeOff) continue;
+    const mark = off ? { off: true } : {};
+    if (module.type === "poll") choices.push({ value: `poll|${module.id}`, label: `투표 · ${module.title}`, ...mark });
+    if (module.type === "quiz" && module.revealed) choices.push({ value: `quiz|${module.id}`, label: `퀴즈 정답 · ${module.title}`, ...mark });
+    if (module.type === "draw" && module.draws[0]) choices.push({ value: `draw|${module.id}|${module.draws[0].id}`, label: drawDisplayLabel(module.draws[0], module.title), ...mark });
+    if (module.type === "qa" && (options.approvedQuestions > 0 || includeOff)) choices.push({ value: `qa|${module.id}`, label: `Q&A · ${module.title}`, ...mark });
   }
-  if (options.approvedPhotos > 0) choices.push({ value: "photo|", label: `사진 · 승인 ${options.approvedPhotos}장` });
+  if (options.approvedPhotos > 0 || includeOff) choices.push({ value: "photo|", label: options.approvedPhotos > 0 ? `사진 · 승인 ${options.approvedPhotos}장` : "사진" });
   return choices;
+}
+
+/** Output choices mirror the server contract: unpublished, unrevealed or switched-off things are not offered. */
+export function displayChoices(options: LiveDisplayOptions): Array<{ value: string; label: string }> {
+  return collectChoices(options, false).map(({ value, label }) => ({ value, label }));
 }
 
 /** What the venue screen shows now, in words. */
 export function currentDisplayLabel(display: LiveDisplay, options: LiveDisplayOptions): string {
   if (display.type === "idle") return "유휴 화면";
-  const choices = displayChoices(options);
+  const choices = collectChoices(options, true);
   const drawModule = display.type === "draw"
     ? options.modules.find((module) => module.id === display.moduleId && module.type === "draw" && module.published)
     : undefined;
   const draw = display.drawId ? drawModule?.draws.find((item) => item.id === display.drawId) : drawModule?.draws[0];
   if (draw && drawModule) return drawDisplayLabel(draw, drawModule.title);
   if (display.type === "draw" && display.drawId) return "기본 화면 · 선택한 추첨 결과 출력 불가";
-  return choices.find((choice) => choice.value === displayKey(display))?.label ?? "출력 확인 필요";
+  const onAir = choices.find((choice) => choice.value === displayKey(display));
+  if (!onAir) return "출력 확인 필요";
+  return onAir.off ? `${onAir.label} · 기능 꺼짐` : onAir.label;
 }
