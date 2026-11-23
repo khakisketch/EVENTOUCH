@@ -49,8 +49,12 @@ test('the move reveals review and focuses its heading without sending', () => {
   assert.match(fn, /campaign-review-heading/u);
   assert.match(fn, /target\?\.focus/u);
   assert.match(fn, /scrollIntoView/u);
-  assert.match(fn, /!selectedIds\.length/u);
-  assert.match(fn, /!campaignDraft\.body\.trim\(\)/u);
+  // Reopened 2026-11-23: one-screen checklist. Moving between zones never
+  // gates; the recipient and body checks live in the submit (발송 검토).
+  assert.doesNotMatch(fn, /setCampaignFieldError/u, 'zone moves never raise field errors');
+  const submit = SOURCE.slice(SOURCE.indexOf('function requestCampaignCreate'), SOURCE.indexOf('const fingerprint = fingerprintFor("message.create-charset-reviewed"'));
+  assert.match(submit, /!selectedIds\.length/u);
+  assert.match(submit, /!campaignDraft\.body\.trim\(\)/u);
   assert.doesNotMatch(fn, /postCommand|executeCampaignCreate|requestSubmit|\.submit\(/u);
 });
 

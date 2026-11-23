@@ -127,7 +127,14 @@ test('approved messages design stays locked', () => {
   // Reopened 2026-11-19: steps are three pills; the active one is ink-filled. History gets
   // status pills with a dot beside the colour.
   // Reopened 2026-11-20: the three filter cards (전체·예약·확인 필요) became one row of count tabs.
-  assert.match(CSS, /\.composeSteps button\[aria-current="step"\]\s*\{[^}]*border-color:\s*var\(--ink\)[^}]*background:\s*var\(--ink\)/u, 'active step is an ink-filled pill');
+  // Reopened 2026-11-23 (owner decision): the step pills became a four-item
+  // checklist on one screen — 받는 사람 (audience presets first), 내용 (purpose
+  // templates load starting text), 보낼 때, 발송 전 검토. Done items turn green.
+  assert.match(SOURCE, /<nav className=\{styles\.composeChecklist\} aria-label="메시지 작성 항목">/u, 'one checklist names the zones');
+  assert.match(CSS, /\.composeChecklist li\[data-done="true"\] \.checkMark\s*\{[^}]*var\(--success-soft\)/u, 'filled items read as done');
+  assert.match(SOURCE, /className=\{styles\.audiencePresets\} role="group" aria-label="받는 사람 묶음"/u, 'audience presets lead the recipient zone');
+  assert.match(SOURCE, /PURPOSE_TEMPLATES\.map\(purpose =>/u, 'purpose templates load starting text');
+  assert.doesNotMatch(SOURCE, /composeSteps|data-step=|stepActions/u, 'no step-only navigation remains');
   assert.doesNotMatch(CSS, /\.historyOverview/u, 'the history filter cards are gone');
   // Reopened 2026-11-20 (디자인 시스템 적용): history status is the shared StatusPill (always a visible label, never colour alone).
   assert.match(SOURCE, /<StatusPill tone=\{resultMatchUnconfirmed \? "wait" : statusTone\(campaign\.status\)\}>/u, 'history status is a StatusPill');
@@ -135,7 +142,7 @@ test('approved messages design stays locked', () => {
   assert.match(SOURCE, /<CountTabs\s+className=\{styles\.historyTabs\}\s+ariaLabel="발송 빠른 필터"/u, 'history filters are count tabs');
   for (const key of ['all', 'scheduled', 'attention']) assert.match(SOURCE, new RegExp(`\\{ key: "${key}", label: `, 'u'), `${key} history tab`);
   assert.match(SOURCE, /key: "attention", label: "확인 필요", count: attentionCampaigns\.length, tone: "wait"/u, 'only the waiting work is amber');
-  assert.match(CSS, /\.composeGrid\[data-step="2"\] \.composeDraft\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(260px,\s*300px\)/u, 'writing column plus one narrow preview');
+  assert.match(CSS, /\.composeGrid\[data-layout="checklist"\]\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(280px,\s*340px\)/u, 'writing column plus one narrow preview');
   assert.match(CSS, /\.inkTabs :global\(\[role="tab"\]\[aria-selected="true"\]\)\s*\{[^}]*background:\s*var\(--ink\)/u, 'history/template tabs are an ink-filled segment');
   assert.match(CSS, /\.inkLink\s*\{\s*color:\s*var\(--ink\)/u, 'utility links are ink, not orange');
   const personalization = CSS.match(/\.personalizationTools > button\s*\{[^}]*\}/u);
@@ -144,6 +151,6 @@ test('approved messages design stays locked', () => {
   for (const id of ['message-compose-close']) {
     assert.match(SOURCE, new RegExp(`id="${id}"[^>]*variant="ghost"`, 'u'), `${id} stays ghost`);
   }
-  assert.match(SOURCE, /<ProductButton[^>]*variant="ghost"[^>]*>\s*수신자 변경/u, '수신자 변경 stays ghost');
+  assert.doesNotMatch(SOURCE, /<ProductButton[^>]*variant="primary"[^>]*>\s*(내용 작성|발송 검토로)/u, 'no step-advance orange actions; the send review is the one primary');
   assert.match(SOURCE, /<ProductLink className=\{styles\.inkLink\} variant="ghost"[^>]*>참가자 명단에서 확인/u, '참가자 명단에서 확인 stays an ink ghost link');
 });

@@ -186,7 +186,9 @@ test('event context is centralized while domain actions retain their meaning and
 
   const messages = read(targets[4]);
   assert.equal((messages.match(/id="campaign-submit"/gu) ?? []).length, 1, 'one final submit remains');
-  assert.match(messages, /composeStep !== 3/u, 'navigation actions are only shown before review');
+  // Reopened 2026-11-23: one-screen checklist, no step-only navigation actions.
+  assert.match(messages, /aria-label="메시지 작성 항목"/u, 'the checklist names every zone');
+  assert.equal((messages.match(/variant="primary"/gu) ?? []).length >= 1, true);
   assert.doesNotMatch(content, />\s*운영 현황\s*<\/Link>/u);
   assert.doesNotMatch(participants, />\s*운영 현황으로\s*<\/Link>/u);
   assert.doesNotMatch(messages, />\s*운영 현황\s*<\/Link>/u);

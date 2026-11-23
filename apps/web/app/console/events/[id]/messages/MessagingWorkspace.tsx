@@ -52,7 +52,10 @@ type Template = {
   archived: boolean;
   version: number;
 };
-type Participant = { id: string; name: string; company: string; group: string; phone: string; status: string; reviewVersion: string; ticketReview: string };
+// notEntered: a confirmed-known "never came in" state from the bootstrap's
+// attendance fields (inside/everIn). Unknown or under-review presence is not
+// counted, so the 미입장 preset never guesses.
+type Participant = { id: string; name: string; company: string; group: string; phone: string; status: string; reviewVersion: string; ticketReview: string; notEntered: boolean };
 function recipientEligible(person: Participant): boolean {
   return person.status.toUpperCase() !== "CANCELLED" && person.ticketReview !== "cancelled";
 }
@@ -194,6 +197,54 @@ function previewMessageExample(body: string, eventName: string, eventDate: strin
   };
   return body.replace(/\{\{(이름|행사명|행사일|티켓링크|럭키번호)\}\}/g, (_match, key: string) => values[key]);
 }
+// Reopened 2026-11-23 (owner decision): one-screen checklist composer.
+// Audience presets come first (A), content can start from a purpose template
+// (B's purposes as a loader, not a separate screen), and the four zones sit
+// on one screen (C). Purpose templates are built-in starting text only: they
+// never send, never bind a server template, and every field stays editable.
+type AudiencePreset = "approved" | "not-entered" | "pending";
+type EventOffset = { days: number; time: string };
+type PurposeTemplate = { key: string; label: string; hint: string; body: string; audience: AudiencePreset | null; schedule: EventOffset | null };
+const PURPOSE_TEMPLATES: readonly PurposeTemplate[] = [
+  { key: "reminder", label: "전날 리마인드", hint: "참가 확정 · 행사 1일 전 18:00", audience: "approved", schedule: { days: 1, time: "18:00" },
+    body: "안녕하세요 {{이름}}님, 내일 {{행사명}}에서 뵙겠습니다.\n일시: {{행사일}}\n입장할 때 아래 티켓의 QR을 보여 주세요.\n{{티켓링크}}" },
+  { key: "entry", label: "입장 안내", hint: "확정자 중 미입장 · 지금", audience: "not-entered", schedule: null,
+    body: "{{이름}}님, {{행사명}} 입장이 시작되었습니다.\n입구에서 아래 티켓의 QR을 보여 주세요.\n{{티켓링크}}" },
+  { key: "change", label: "일정·장소 변경", hint: "참가 확정 · 지금", audience: "approved", schedule: null,
+    body: "[{{행사명}}] 변경 안내\n{{이름}}님, 행사 정보가 바뀌어 알려 드립니다.\n- 변경 전: \n- 변경 후: \n문의: " },
+  { key: "winner", label: "당첨 안내", hint: "직접 고른 당첨자 · 지금", audience: null, schedule: null,
+    body: "{{이름}}님, 축하합니다! {{행사명}} 추첨에 당첨되었습니다.\n럭키 번호: {{럭키번호}}\n경품 수령처에서 티켓을 보여 주세요." },
+  { key: "thanks", label: "감사 인사", hint: "참가 확정 · 행사 다음 날 10:00", audience: "approved", schedule: { days: -1, time: "10:00" },
+    body: "{{이름}}님, {{행사명}}에 함께해 주셔서 감사합니다.\n다음 행사에서 다시 뵙겠습니다." },
+];
+const EVENT_OFFSET_CHOICES = [
+  { days: 3, label: "행사 3일 전" },
+  { days: 2, label: "행사 2일 전" },
+  { days: 1, label: "행사 1일 전" },
+  { days: 0, label: "행사 당일" },
+  { days: -1, label: "행사 다음 날" },
+] as const;
+// Event-relative scheduling is a convenience over the existing absolute
+// reservation: it computes one Korea-time datetime-local value from the event
+// date. The server still stores that absolute time, so a later change to the
+// event date does not move the reservation (stated next to the control).
+export function eventRelativeSchedule(eventDate: string, offset: EventOffset): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(eventDate);
+  if (!match || !/^([01]\d|2[0-3]):[0-5]\d$/.test(offset.time)) return "";
+  const day = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) - offset.days));
+  if (Number.isNaN(day.getTime())) return "";
+  return `${day.toISOString().slice(0, 10)}T${offset.time}`;
+}
+function koreaToday(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+// Records need a title; the operator no longer has to invent one. An empty
+// title becomes "<purpose or 안내 메시지> · M/D" (the send day, Korea time).
+export function autoCampaignTitle(purposeLabel: string, scheduled: string, today: string): string {
+  const day = /^\d{4}-(\d{2})-(\d{2})/.exec(scheduled || today);
+  return `${purposeLabel || "안내 메시지"}${day ? ` · ${Number(day[1])}/${Number(day[2])}` : ""}`;
+}
+
 const FIELD_LABELS: Record<string, string> = {
   name: "템플릿 이름",
   channel: "메시지 채널",
@@ -660,6 +711,8 @@ function parseParticipant(value: unknown, reviewVersions: Record<string, unknown
     status: text(item.status, "PENDING"),
     reviewVersion: text(reviewVersions?.[item.id]),
     ticketReview: text(item.ticketReview, "unknown"),
+    notEntered: item.inside === false && item.everIn !== true && item.attendanceReview !== true &&
+      (!Object.hasOwn(item, "everIn") || typeof item.everIn === "boolean"),
   };
 }
 
@@ -792,11 +845,20 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   const campaignBodyRef = useRef<HTMLTextAreaElement>(null);
   const scheduleInputRef = useRef<HTMLInputElement>(null);
   const [scheduleBadInput, setScheduleBadInput] = useState(false);
-  const scheduleDetailsRef = useRef<HTMLDetailsElement>(null);
+  // 보낼 때: 지금 / 행사 기준 / 날짜·시각. Only the choice lives here; the
+  // reservation itself is still campaignDraft.scheduled.
+  const [scheduleChoice, setScheduleChoice] = useState<"NOW" | "EVENT" | "DATE">("NOW");
+  const [eventOffset, setEventOffset] = useState<EventOffset>({ days: 1, time: "18:00" });
+  const [loadedPurpose, setLoadedPurpose] = useState<PurposeTemplate | null>(null);
+  const [pendingPurpose, setPendingPurpose] = useState<PurposeTemplate | null>(null);
+  const [composeNotice, setComposeNotice] = useState<string | null>(null);
+  // Two presets can hold the same people (no one has entered yet); only the
+  // one the operator chose reads as chosen.
+  const [chosenPreset, setChosenPreset] = useState<AudiencePreset | null>(null);
   useEffect(() => {
-    if (campaignFieldError?.field !== "scheduled" || !scheduleDetailsRef.current) return;
-    scheduleDetailsRef.current.open = true;
-    requestAnimationFrame(() => document.getElementById("campaign-scheduled")?.focus());
+    if (campaignFieldError?.field !== "scheduled") return;
+    setScheduleChoice(current => current === "EVENT" ? current : "DATE");
+    requestAnimationFrame(() => document.getElementById(scheduleChoice === "EVENT" ? "campaign-event-offset" : "campaign-scheduled")?.focus());
   }, [campaignFieldError]);
   const [templateNotice, setTemplateNotice] = useState<string | null>(null);
   const [campaignNotice, setCampaignFeedback] = useState<{ message: string; kind: "success" | "warning" } | null>(null);
@@ -860,11 +922,15 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   // (see below); mobile starts folded and unfolds on demand.
   const [recipientListOpen, setRecipientListOpen] = useState(false);
   const [recipientReviewRequired, setRecipientReviewRequired] = useState(false);
-  const desktopListOpenAppliedRef = useRef(false);
   // Desktop starts with the recipient list unfolded next to the draft so
   // counts, off-screen picks and caution targets stay visible. Mobile
   // starts folded and can unfold on demand; the handoff/reload paths
   // below still force it open when they select a set for review.
+  // Desktop starts with the recipient list unfolded under the audience
+  // presets (the list is height-capped) so counts, off-screen picks and
+  // caution targets stay visible. Mobile starts folded and unfolds from
+  // 직접 고르기; handoff/reload paths still force it open for review.
+  const desktopListOpenAppliedRef = useRef(false);
   useEffect(() => {
     if (desktopListOpenAppliedRef.current) return;
     desktopListOpenAppliedRef.current = true;
@@ -904,37 +970,25 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       document.getElementById("recipient-review-refresh")?.focus();
     }
   }, [busyAction, composeStep, recipientReviewRequired]);
-  useEffect(() => { setComposeStep(1); setPendingTemplateUse(null); setRecipientGroup(""); setCharsetCandidatesOnly(false); }, [eventId]);
+  useEffect(() => { setComposeStep(1); setPendingTemplateUse(null); setRecipientGroup(""); setCharsetCandidatesOnly(false); setScheduleChoice("NOW"); setEventOffset({ days: 1, time: "18:00" }); setLoadedPurpose(null); setPendingPurpose(null); setComposeNotice(null); }, [eventId]);
   useEffect(() => { if (uncertainCreate) setComposeStep(3); }, [uncertainCreate]);
 
+  // Reopened 2026-11-23: one screen, so moving between zones never gates or
+  // validates; the submit (발송 검토) keeps every check and field error.
   function goComposeStep(next: 1 | 2 | 3) {
-    if (inFlightRef.current || uncertainCreateRef.current || uncertainMmsUpload || (recipientReviewRequired && next > 1)) return;
-    if (!messagesLocked && next > 1 && !selectedIds.length) {
-      const picker = document.querySelector<HTMLDetailsElement>("#campaign-recipients details");
-      if (picker) picker.open = true;
-      setRecipientListOpen(true);
-      setCampaignFieldError({ field: "ids", message: "발송 대상이 없습니다. 수신자를 선택하세요." }); return;
-    }
-    if (!messagesLocked && next === 3 && (!campaignDraft.title.trim() || !campaignDraft.body.trim())) {
-      setCampaignFieldError(!campaignDraft.title.trim() ? { field: "title", message: "발송 제목을 입력하세요." } : { field: campaignDraft.channel === "ALIMTALK" ? "templateId" : "body", message: campaignDraft.channel === "ALIMTALK" ? "승인된 알림톡 템플릿을 선택하세요." : "메시지 내용을 입력하세요." }); return;
-    }
-    if (!messagesLocked && next === 3) {
-      const template = state.kind === "ready" ? state.templates.find(item => item.id === selectedTemplateId) : undefined;
-      const issue = messageContentIssue(campaignDraft, template);
-      if (issue) { setCampaignFieldError(issue); return; }
-      const charsetIssue = campaignCharsetIssue(campaignDraft, state.kind === "ready" ? state.integrations.provider : "");
-      if (charsetIssue) { setCampaignFieldError(charsetIssue); return; }
-    }
+    if (inFlightRef.current || uncertainCreateRef.current || uncertainMmsUpload) return;
     const focusOrigin = document.activeElement;
-    setCampaignFieldError(null); setComposeStep(next);
-    if (next === 1) setRecipientListOpen(true);
+    setComposeStep(next);
     window.setTimeout(() => {
       const active = document.activeElement;
       if (active && active !== document.body && active !== focusOrigin && active.isConnected) return;
-      const target = messagesLocked ? document.querySelector<HTMLElement>('nav[aria-label="메시지 작성 단계"] button[aria-current="step"]') : document.getElementById(next === 1 ? "recipient-status-filter" : next === 2 ? "campaign-title" : "campaign-review-heading");
+      const target = messagesLocked ? document.querySelector<HTMLElement>('nav[aria-label="메시지 작성 항목"] a[aria-current="true"]') : document.getElementById(composeFocusId(next));
       target?.focus({ preventScroll: true });
-      document.getElementById("campaign-heading")?.scrollIntoView({ block: "start" });
+      document.getElementById(next === 1 ? "campaign-recipients" : next === 2 ? "campaign-content" : "campaign-review-heading")?.scrollIntoView({ block: "start" });
     }, 0);
+  }
+  function composeFocusId(step: 1 | 2 | 3): string {
+    return step === 1 ? "recipient-heading" : step === 2 ? "campaign-body" : "campaign-review-heading";
   }
 
   const focusComposerOnOpenRef = useRef(false);
@@ -945,7 +999,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     if (!composerOpen || !focusComposerOnOpenRef.current) return;
     focusComposerOnOpenRef.current = false;
     document.getElementById("campaign-heading")?.scrollIntoView({ block: "start" });
-    document.getElementById(composeStep === 1 ? "recipient-status-filter" : composeStep === 2 ? "campaign-title" : "campaign-review-heading")?.focus({ preventScroll: true });
+    document.getElementById(composeFocusId(composeStep))?.focus({ preventScroll: true });
   }, [composerOpen, composeStep]);
   useLayoutEffect(() => {
     if (composerOpen || !historyOpen || !focusHistoryOnCloseRef.current) return;
@@ -1079,7 +1133,6 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     }
     hadOtherTemplateReceiptRef.current = otherTemplateReceipt;
     // A shared, status-only confirmation after reload never repeats the save.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [otherTemplateReceipt, pendingTemplate]);
   useEffect(() => {
     const present = new Set(eventReceipts.map((entry) => entry.commandId));
@@ -1116,7 +1169,6 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     };
     window.addEventListener("eventouch:operator-receipt-applied", onApplied);
     return () => window.removeEventListener("eventouch:operator-receipt-applied", onApplied);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
   // Synchronous in-flight gate shared by every command handler. React state
@@ -1431,7 +1483,6 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     setArchiveUnresolved(false);
     archiveCommandRef.current = null;
     // Bootstrap is scoped by this event; the session cookie is same-origin.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
   useEffect(() => {
@@ -1552,7 +1603,6 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
         : `명단에서 ${valid.length}명을 인계받았습니다`
     );
     stripHandoffParams();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, eventId]);
 
   useEffect(() => {
@@ -1620,7 +1670,6 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       if (historyGuardDirty || busyAction !== null || inFlightRef.current || uploadingImage) return;
       void refresh(true);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId, historyGuardDirty, busyAction, uploadingImage]);
 
   const hasFutureScheduled = state.kind === "ready" && state.campaigns.some((campaign) =>
@@ -1872,6 +1921,74 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     }
     applyTemplate(template);
   }
+  function audienceIds(preset: AudiencePreset): string[] {
+    if (state.kind !== "ready") return [];
+    return state.participants.filter(person => recipientEligible(person) && (
+      preset === "pending" ? person.status === "PENDING"
+        : person.status === "APPROVED" && (preset === "approved" || person.notEntered)
+    )).map(person => person.id);
+  }
+  // A preset replaces the selection with that whole group; 직접 고르기 keeps
+  // today's filter-and-check list for anything finer.
+  function selectAudience(preset: AudiencePreset, label: string) {
+    if (inFlightRef.current || uncertainCreateRef.current || uncertainMmsUpload || messagesLocked) return;
+    const ids = audienceIds(preset);
+    if (!ids.length) return;
+    setSelectedIds(ids); setChosenPreset(preset);
+    setShowSelectedOnly(false); setCharsetCandidatesOnly(false);
+    setCampaignFieldError(current => current?.field === "ids" ? null : current);
+    setComposeNotice(`${label} ${ids.length}명을 받는 사람으로 골랐습니다.`);
+  }
+  function applyPurpose(purpose: PurposeTemplate) {
+    setPendingPurpose(null);
+    setReloadSummary(null);
+    setSelectedTemplateId(""); setPendingTemplateUse(null);
+    setCampaignDraft(current => ({ ...current, channel: textFamilyChannel("SMS", current.imageFileId), body: purpose.body }));
+    setLoadedPurpose(purpose);
+    setCampaignFieldError(null); setCampaignError(null);
+    const filled: string[] = [];
+    if (!selectedIds.length && purpose.audience) {
+      const ids = audienceIds(purpose.audience);
+      if (ids.length) {
+        setSelectedIds(ids); setChosenPreset(purpose.audience);
+        filled.push(`받는 사람(${purpose.audience === "approved" ? "참가 확정" : purpose.audience === "pending" ? "승인 대기" : "확정자 중 미입장"} ${ids.length}명)`);
+      }
+    }
+    if (!campaignDraft.scheduled && purpose.schedule && state.kind === "ready") {
+      const scheduled = eventRelativeSchedule(state.eventDate, purpose.schedule);
+      const instant = scheduled ? scheduledInstant(scheduled) : null;
+      if (instant && Date.parse(instant) > messageNow()) {
+        setScheduleChoice("EVENT"); setEventOffset(purpose.schedule);
+        setCampaignDraft(current => ({ ...current, scheduled }));
+        filled.push(`보낼 때(${formatScheduledInput(scheduled).replace(" (한국 시간)", "")})`);
+      }
+    }
+    setComposeNotice(`〈${purpose.label}〉 문구를 불러왔습니다.${filled.length ? ` ${filled.join("와 ")}도 채웠습니다.` : ""} 모두 고칠 수 있고, 발송 검토 전에는 보내지 않습니다.`);
+    window.requestAnimationFrame(() => campaignBodyRef.current?.focus({ preventScroll: true }));
+  }
+  function requestPurpose(purpose: PurposeTemplate) {
+    if (inFlightRef.current || uncertainCreateRef.current || uncertainMmsUpload || messagesLocked) return;
+    if (campaignDraft.body.trim() && campaignDraft.body !== purpose.body) { setPendingPurpose(purpose); return; }
+    applyPurpose(purpose);
+  }
+  function chooseSchedule(choice: "NOW" | "EVENT" | "DATE") {
+    if (messagesLocked) return;
+    setScheduleChoice(choice);
+    setScheduleBadInput(false);
+    setCampaignFieldError(current => current?.field === "scheduled" ? null : current);
+    if (choice === "NOW") setCampaignDraft(current => ({ ...current, scheduled: "", scheduleMode: "MANUAL" }));
+    else if (choice === "EVENT" && state.kind === "ready") setCampaignDraft(current => ({ ...current, scheduled: eventRelativeSchedule(state.eventDate, eventOffset) }));
+  }
+  function changeEventOffset(next: EventOffset) {
+    setEventOffset(next);
+    if (state.kind === "ready") setCampaignDraft(current => ({ ...current, scheduled: eventRelativeSchedule(state.eventDate, next) }));
+    setCampaignFieldError(current => current?.field === "scheduled" ? null : current);
+  }
+  function openDirectPick() {
+    setRecipientListOpen(true);
+    window.setTimeout(() => document.getElementById("recipient-status-filter")?.focus(), 0);
+  }
+
   function openTemplateManager() {
     if (inFlightRef.current || uploadingImage) return;
     focusHistoryOnCloseRef.current = false;
@@ -2022,9 +2139,11 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       requireRecipientReview("발송 대상의 최신 정보가 필요합니다. 수신자 목록을 다시 불러오세요.");
       return;
     }
-    if (!campaignDraft.title.trim() || !campaignDraft.body.trim()) {
-      setCampaignFieldError(!campaignDraft.title.trim() ? { field: "title", message: "발송 제목을 입력하세요." } : { field: campaignDraft.channel === "ALIMTALK" ? "templateId" : "body", message: campaignDraft.channel === "ALIMTALK" ? "승인된 알림톡 템플릿을 선택하세요." : "메시지 내용을 입력하세요." }); return;
+    if (!campaignDraft.body.trim()) {
+      setCampaignFieldError({ field: campaignDraft.channel === "ALIMTALK" ? "templateId" : "body", message: campaignDraft.channel === "ALIMTALK" ? "승인된 알림톡 템플릿을 선택하세요." : "메시지 내용을 입력하세요." }); return;
     }
+    // An empty record title is filled, never asked for (Reopened 2026-11-23).
+    const campaignTitle = campaignDraft.title.trim() ? campaignDraft.title : autoCampaignTitle(loadedPurpose?.label ?? "", campaignDraft.scheduled, koreaToday());
     const isAlimtalk = campaignDraft.channel === "ALIMTALK";
     const boundTemplate = state.kind === "ready"
       ? state.templates.find((template) => template.id === selectedTemplateId)
@@ -2079,7 +2198,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     const payload: Record<string, unknown> = {
       ids: [...selectedIds],
       expectedRecipientVersions,
-      title: campaignDraft.title,
+      title: campaignTitle,
       channel: campaignDraft.channel,
       body: campaignDraft.body,
       simulate: campaignDraft.simulate,
@@ -2204,6 +2323,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       // Proven send consumes the reloaded source: its summary must not
       // linger above the next blank composer.
       setReloadSummary(null);
+      setScheduleChoice("NOW"); setLoadedPurpose(null); setPendingPurpose(null); setComposeNotice(null);
       // Proven send consumes the draft and returns to the ledger: closing
       // the compose surface reveals the new row below. Failures never
       // reach here — the draft, selection and receipts stay for retry.
@@ -2786,12 +2906,6 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   const selectedWaitlist = selectedPeople.filter((person) => person.status === "WAITLIST").length;
   const selectedMissing = selectedCount - selectedPeople.length;
   const pendingRiskCount = selectedPending + selectedWaitlist;
-  const selectedGroups = [...new Set(selectedPeople.map(person => person.group || "일반"))];
-  const recipientIdentity = selectedPeople.length === 1 ? selectedPeople[0].name
-    : selectedPeople.length > 0 && selectedPeople.length === activeParticipants.length && !selectedMissing ? "전체 참가자"
-    : selectedGroups.length === 1 ? `${selectedGroups[0]} 그룹에서 선택`
-    : selectedGroups.length > 1 ? `${selectedGroups.slice(0, 2).join(" · ")}${selectedGroups.length > 2 ? ` 외 ${selectedGroups.length - 2}개 그룹` : ""}` : "선택한 수신자";
-  const recipientStatusSummary = [selectedApproved ? `참가 확정 ${selectedApproved}명` : "", selectedPending ? `승인 대기 ${selectedPending}명` : "", selectedWaitlist ? `대기 명단 ${selectedWaitlist}명` : "", selectedMissing ? `목록 제외 ${selectedMissing}명` : ""].filter(Boolean).join(" · ");
   const bodyMeasure = measureMessage(campaignDraft.body);
   const contentIssue = messageContentIssue(campaignDraft, state.templates.find(item => item.id === selectedTemplateId));
   const charsetIssue = campaignCharsetIssue(campaignDraft, state.integrations.provider);
@@ -2836,6 +2950,27 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     : simulateDraft
       ? "모의 발송(전달 없음)"
       : "실제 발송 시도";
+  const eventDateKnown = Boolean(eventRelativeSchedule(state.eventDate, { days: 0, time: "09:00" }));
+  const effectiveScheduleChoice: "NOW" | "EVENT" | "DATE" = scheduleChoice === "EVENT" && eventDateKnown ? "EVENT"
+    : campaignDraft.scheduled || scheduleBadInput || scheduleChoice !== "NOW" ? "DATE" : "NOW";
+  const autoTitlePreview = autoCampaignTitle(loadedPurpose?.label ?? "", campaignDraft.scheduled, koreaToday());
+  const audiencePresets = ([
+    { key: "approved", label: "참가 확정 전원", hint: "가장 많이 쓰는 대상" },
+    { key: "not-entered", label: "확정자 중 아직 입장 안 함", hint: "입장 기록이 확인된 사람만 셉니다" },
+    { key: "pending", label: "승인 대기", hint: "승인 전 안내" },
+  ] as const).map(preset => {
+    const ids = audienceIds(preset.key);
+    return { ...preset, count: ids.length, active: chosenPreset === preset.key && ids.length > 0 && ids.length === selectedCount && ids.every(id => selectedSet.has(id)) };
+  });
+  const scheduleSummary = scheduleBadInput ? "날짜·시각 확인 필요" : campaignDraft.scheduled
+    ? `예약 ${formatScheduledInput(campaignDraft.scheduled).replace(" (한국 시간)", "")}` : effectiveScheduleChoice === "NOW" ? "지금 바로" : "시각을 정하세요";
+  const checklistItems = [
+    { key: "recipients", step: 1 as const, target: "campaign-recipients", label: "받는 사람", done: selectedCount > 0, summary: selectedCount > 0 ? `${selectedCount}명${pendingRiskCount ? ` · 대기 ${pendingRiskCount}명 포함` : ""}` : "아직 0명" },
+    { key: "content", step: 2 as const, target: "campaign-content", label: "내용", done: Boolean(campaignDraft.body.trim()) && !contentIssue, summary: campaignDraft.body.trim() ? `${familyLabel(campaignDraft.channel)}${loadedPurpose && campaignDraft.body === loadedPurpose.body ? ` · ${loadedPurpose.label}` : ""}${contentIssue ? " · 확인 필요" : ""}` : "작성 전" },
+    { key: "schedule", step: 2 as const, target: "campaign-schedule", label: "보낼 때", done: !scheduleBadInput && (effectiveScheduleChoice === "NOW" || Boolean(campaignDraft.scheduled)), summary: `${scheduleSummary}${simulateDraft ? " · 모의" : ""}` },
+    { key: "review", step: 3 as const, target: "campaign-review-heading", label: "검토·발송", done: false, summary: selectedCount > 0 && campaignDraft.body.trim() ? "검토할 수 있음" : "앞 항목을 채우세요" },
+  ];
+  const checklistActive = composeStep === 1 ? 0 : composeStep === 2 ? 1 : 3;
 
   function revealComposer() {
     if (messagesLocked && !composeDirty && !uncertainCreate) return;
@@ -2849,11 +2984,10 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     setHistoryOpen(false);
     if (composerOpen) {
       document.getElementById("campaign-heading")?.scrollIntoView({ block: "start" });
-      document.getElementById(composeStep === 1 ? "recipient-status-filter" : composeStep === 2 ? "campaign-title" : "campaign-review-heading")?.focus({ preventScroll: true });
+      document.getElementById(composeFocusId(composeStep))?.focus({ preventScroll: true });
       return;
     }
     focusComposerOnOpenRef.current = true;
-    setRecipientListOpen(true);
     setComposerOpen(true);
   }
 
@@ -3007,25 +3141,27 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 window.history.replaceState(window.history.state, "", "#history-heading");
               }}>발송 기록 보기</ProductButton><small id="compose-return-help">입력·선택 유지</small></div>}
             >
-              <ValidatedForm className={uiStyles.formStack} onSubmit={(event) => {
-                if (composeStep !== 3) { event.preventDefault(); goComposeStep(composeStep === 1 ? 2 : 3); }
-                else requestCampaignCreate(event);
-              }}>
-                <nav className={styles.composeSteps} aria-label="메시지 작성 단계">
-                  {(["수신자", "내용", "검토·발송"] as const).map((label, index) => <ProductButton key={label} type="button" aria-current={composeStep === index + 1 ? "step" : undefined} disabled={compositionPending || (!messagesLocked && index + 1 > composeStep)} title={index === 1 && selectedIds.length === 0 ? "수신자를 먼저 선택하세요" : index === 2 && (!campaignDraft.title.trim() || !campaignDraft.body.trim()) ? "제목과 내용을 먼저 입력하세요" : undefined} onClick={() => goComposeStep((index + 1) as 1 | 2 | 3)}><span>{index + 1}</span>{label}</ProductButton>)}
+              <ValidatedForm className={uiStyles.formStack} onSubmit={requestCampaignCreate}>
+                {/* Reopened 2026-11-23: a checklist of the four zones replaces the 3-step tabs.
+                    Each item says what is filled; nothing is hidden or gated. */}
+                <nav className={styles.composeChecklist} aria-label="메시지 작성 항목">
+                  <ol>
+                    {checklistItems.map((item, index) => <li key={item.key} data-done={item.done ? "true" : undefined}>
+                      <a href={`#${item.target}`} aria-current={composeStep === item.step && index === checklistActive ? "true" : undefined} onClick={(event) => { event.preventDefault(); if (item.key === "schedule") { setComposeStep(2); document.getElementById("campaign-schedule")?.scrollIntoView({ block: "start" }); document.getElementById("campaign-schedule-heading")?.focus({ preventScroll: true }); } else goComposeStep(item.step); }}>
+                        <span className={styles.checkMark} aria-hidden="true">{item.done ? "✓" : index + 1}</span>
+                        <span><strong>{item.label}</strong><small>{item.summary}</small></span>
+                      </a>
+                    </li>)}
+                  </ol>
                 </nav>
+                {composeNotice ? <p className={styles.composeNotice} role="status">{composeNotice}</p> : null}
                 <fieldset className={styles.composeLock} disabled={messagesLocked || compositionPending}>
                 <legend className="sr-only">발송 내용과 수신자</legend>
 
-                {composeStep !== 1 ? <div className={styles.stepRecipientSummary} role="group" aria-label="선택한 수신자 요약">
-                  <div><p><span className={styles.recipientCountLabel}>수신자</span> <strong>{selectedIds.length}명</strong><span>{recipientIdentity}</span></p>{recipientStatusSummary ? <p className={styles.recipientSummaryMeta}>{recipientStatusSummary}</p> : null}</div>
-                  <ProductButton type="button" variant="ghost" onClick={jumpToRecipientFilter}>수신자 변경</ProductButton>
-                </div> : null}
-
                 <a
                   className="skip-link"
-                  href="#campaign-title"
-                  data-skip-to="campaign-title"
+                  href="#campaign-body"
+                  data-skip-to="campaign-body"
                   onClick={(event) => {
                     event.preventDefault();
                     goComposeStep(2);
@@ -3033,12 +3169,19 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 >
                   메시지 작성으로 건너뛰기
                 </a>
-                <div className={styles.composeGrid} data-step={composeStep}>
+                <div className={styles.composeGrid} data-layout="checklist">
                   <fieldset id="campaign-recipients" className={styles.recipientFieldset} aria-describedby={campaignFieldError?.field === "ids" ? "campaign-recipients-error" : "recipient-summary"}>
-                    <legend>수신자 선택</legend>
-                    {composeStep === 1 && reloadSummary ? (
+                    <legend className="sr-only">받는 사람</legend>
+                    <h3 className={styles.zoneHead} id="recipient-heading" tabIndex={-1}><span aria-hidden="true">1</span>받는 사람</h3>
+                    {reloadSummary ? (
                       <ConsoleFeedback kind="info" id="campaign-reload-summary">{reloadSummary}</ConsoleFeedback>
                     ) : null}
+                    <div className={styles.audiencePresets} role="group" aria-label="받는 사람 묶음">
+                      {audiencePresets.map(preset => <button key={preset.key} type="button" id={`recipient-preset-${preset.key}`} className={styles.audienceCard} aria-pressed={preset.active} disabled={preset.count === 0 || messagesLocked} onClick={() => selectAudience(preset.key, preset.label)}>
+                        <span><strong>{preset.label}</strong><small>{preset.hint}</small></span>
+                        <b>{preset.count}</b>
+                      </button>)}
+                    </div>
                     <p className={styles.selectionSummary} id="recipient-summary" role="status" data-empty={selectedCount === 0 ? "true" : undefined}>
                       <strong className={styles.selectionCount}>선택 {selectedCount}명</strong>
                       {selectedApproved > 0 ? <> · 확정 {selectedApproved}명</> : null}
@@ -3100,7 +3243,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                       }}
                     >
                       <summary id="recipient-list-summary" className={styles.recipientSummaryButton} aria-describedby={recipientListOpen ? "recipient-list-keyboard-help" : undefined}>
-                        <span className={styles.recipientSummaryLabel}>{recipientListOpen ? "수신자 목록 닫기" : "수신자 목록 열기"}</span>
+                        <span className={styles.recipientSummaryLabel}>{recipientListOpen ? "직접 고르기 · 목록 닫기" : "직접 고르기 · 상태·그룹·이름으로 한 명씩"}</span>
                         <span className={styles.recipientSummaryCount}>
                           {recipientSearch || showSelectedOnly || recipientStatus !== "ALL" || recipientGroup
                             ? `표시 ${visibleRecipients.length}명`
@@ -3197,27 +3340,23 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
 
                   <div className={`${uiStyles.formStack} ${styles.composeDraft}`}>
                     <div className={styles.contentFields}>
-                    <div>
-                      {composeStep !== 1 && reloadSummary ? (
-                        <ConsoleFeedback kind="info" id="campaign-reload-summary">{reloadSummary}</ConsoleFeedback>
-                      ) : null}
-                      <label htmlFor="campaign-title">발송 제목</label>
-                  <input
-                    id="campaign-title"
-                    maxLength={100}
-                    required={composeStep === 2}
-                    value={campaignDraft.title}
-                    aria-invalid={campaignFieldError?.field === "title"}
-                    aria-describedby={campaignFieldError?.field === "title" ? (reloadSummary && composeStep !== 1 ? "campaign-reload-summary campaign-title-error" : "campaign-title-error") : (reloadSummary && composeStep !== 1 ? "campaign-reload-summary" : undefined)}
-                    onChange={(event) => setCampaignDraft({ ...campaignDraft, title: event.target.value })}
-                  />
-                  <p className={styles.help}>기록을 구분하는 제목입니다. 장문·사진 문자에는 앞부분이 제목으로 표시됩니다.</p>
-                  {campaignFieldError?.field === "title" ? <p className={styles.fieldError} id="campaign-title-error" role="alert">{campaignFieldError.message}</p> : null}
-                </div>
-
+                    <h3 className={styles.zoneHead} id="campaign-content" tabIndex={-1}><span aria-hidden="true">2</span>내용</h3>
                 <div className={uiStyles.formStack}>
+                  <div className={styles.purposeLoader} role="group" aria-labelledby="campaign-purpose-label">
+                    <p id="campaign-purpose-label" className={styles.purposeLabel}>목적으로 불러오기</p>
+                    <div className={styles.purposeChips}>
+                      {PURPOSE_TEMPLATES.map(purpose => <button key={purpose.key} type="button" className={styles.purposeChip} aria-pressed={loadedPurpose?.key === purpose.key && campaignDraft.body === purpose.body} disabled={messagesLocked} title={purpose.hint} onClick={() => requestPurpose(purpose)}>
+                        <strong>{purpose.label}</strong><small>{purpose.hint}</small>
+                      </button>)}
+                    </div>
+                    {pendingPurpose ? <ConsoleConfirm
+                      summary={confirmLines(`〈${pendingPurpose.label}〉 문구로 작성 내용을 바꿀까요?\n\n현재 문구가 교체됩니다. 이미 고른 받는 사람과 예약은 유지되며 발송되지는 않습니다.`)}
+                      confirmLabel="문구 바꾸기" cancelLabel="현재 내용 유지"
+                      busy={busyAction !== null || uncertainMmsUpload || Boolean(uncertainCreate)}
+                      onConfirm={() => applyPurpose(pendingPurpose)} onCancel={() => setPendingPurpose(null)} /> : null}
+                  </div>
                   <div>
-                    <div className={styles.templatePickerLabel}><label htmlFor="campaign-template">메시지 템플릿</label><ProductButton type="button" className={styles.textButton} variant="ghost" disabled={busyAction !== null || uploadingImage} onClick={openTemplateManager}>템플릿 관리</ProductButton></div>
+                    <div className={styles.templatePickerLabel}><label htmlFor="campaign-template">저장한 템플릿</label><ProductButton type="button" className={styles.textButton} variant="ghost" disabled={busyAction !== null || uploadingImage} onClick={openTemplateManager}>템플릿 관리</ProductButton></div>
                     <select
                       id="campaign-template"
                       value={selectedTemplateId}
@@ -3280,8 +3419,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     id="campaign-body"
                     ref={campaignBodyRef}
                     maxLength={2000}
-                    required={composeStep === 2}
-                    rows={4}
+                    rows={5}
                     value={campaignDraft.body}
                     readOnly={campaignDraft.channel === "ALIMTALK"}
                     aria-invalid={campaignFieldError?.field === "body"}
@@ -3311,6 +3449,20 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     {campaignDraft.channel === "ALIMTALK" ? "선택한 템플릿 문구를 그대로 사용하고 개인화 정보만 자동으로 바꿉니다. 문구를 바꾸려면 템플릿 관리에서 승인 내용과 맞추거나 문자로 전환하세요." : "받는 사람의 정보로 자동 바뀝니다."} 럭키 번호는 추첨·투표에서 먼저 발급하세요.
                   </p>
                   <ProductLink className={styles.guideAction} variant="ghost" href={`/console/events/${encodeURIComponent(eventId)}/draws`}>추첨·투표 열기 <ArrowRightIcon /></ProductLink>
+                </div>
+                <div className={styles.titleField}>
+                  <label htmlFor="campaign-title">기록용 제목 · 비우면 자동</label>
+                  <input
+                    id="campaign-title"
+                    maxLength={100}
+                    value={campaignDraft.title}
+                    placeholder={autoTitlePreview}
+                    aria-invalid={campaignFieldError?.field === "title"}
+                    aria-describedby={campaignFieldError?.field === "title" ? "campaign-title-help campaign-title-error" : "campaign-title-help"}
+                    onChange={(event) => setCampaignDraft({ ...campaignDraft, title: event.target.value })}
+                  />
+                  <p className={styles.help} id="campaign-title-help">발송 기록을 구분하는 이름입니다. 비워 두면 “{autoTitlePreview}”로 저장합니다. 장문·사진 문자에는 앞부분이 제목으로 표시됩니다.</p>
+                  {campaignFieldError?.field === "title" ? <p className={styles.fieldError} id="campaign-title-error" role="alert">{campaignFieldError.message}</p> : null}
                 </div>
                     </div>
 
@@ -3369,15 +3521,32 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   </div>
                 ) : null}
 
-                <div className={styles.sendCard}>
+                <div className={styles.sendCard} id="campaign-schedule">
+                <h3 className={styles.zoneHead} id="campaign-schedule-heading" tabIndex={-1}><span aria-hidden="true">3</span>보낼 때</h3>
                 <div className={uiStyles.formGrid}>
-                  <details className={styles.scheduleDetails} ref={scheduleDetailsRef}>
-                    <summary>
-                      예약 등록 · 선택
-                      {campaignDraft.scheduled ? <span>{formatScheduledInput(campaignDraft.scheduled)} · {campaignDraft.simulate || campaignDraft.scheduleMode === "MANUAL" ? "수동 실행" : "자동 실행"}</span> : null}
-                      {campaignFieldError?.field === "scheduled" ? <span>시간 확인 필요</span> : null}
-                    </summary>
-                    <div className={styles.scheduleFields}>
+                  <div className={styles.scheduleFields}>
+                    <ConsoleChoiceGroup id="campaign-schedule-choice" label="보내는 시점" value={effectiveScheduleChoice} disabled={messagesLocked}
+                      options={[
+                        { value: "NOW", label: "지금", description: "발송 검토 후 바로 처리합니다." },
+                        { value: "EVENT", label: "행사 기준", description: eventDateKnown ? "행사일에서 며칠 전·후 시각으로 예약합니다." : "행사일이 없어 쓸 수 없습니다." },
+                        { value: "DATE", label: "날짜·시각 지정", description: "원하는 날짜와 시각으로 예약합니다." },
+                      ]}
+                      onChange={(value) => chooseSchedule(value === "EVENT" ? (eventDateKnown ? "EVENT" : "DATE") : value === "DATE" ? "DATE" : "NOW")} />
+                    {effectiveScheduleChoice === "EVENT" ? <div className={styles.eventOffsetRow}>
+                      <div>
+                        <label htmlFor="campaign-event-offset">행사 기준</label>
+                        <select id="campaign-event-offset" value={eventOffset.days} onChange={(event) => changeEventOffset({ ...eventOffset, days: Number(event.target.value) })}>
+                          {EVENT_OFFSET_CHOICES.map(choice => <option key={choice.days} value={choice.days}>{choice.label}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="campaign-event-time">시각 (한국 시간)</label>
+                        <input id="campaign-event-time" type="time" step={60} value={eventOffset.time} onChange={(event) => { if (/^([01]\d|2[0-3]):[0-5]\d$/.test(event.target.value)) changeEventOffset({ ...eventOffset, time: event.target.value }); }} />
+                      </div>
+                      <p className={styles.eventOffsetResult} id="campaign-event-result" aria-live="polite">{campaignDraft.scheduled ? `→ ${formatScheduledInput(campaignDraft.scheduled)}` : "행사일을 확인할 수 없습니다."}</p>
+                      <p className={styles.help}>예약 시각은 지금 계산해 저장합니다. 나중에 행사 일정이 바뀌어도 이 예약은 자동으로 옮겨지지 않습니다.</p>
+                    </div> : null}
+                    {effectiveScheduleChoice === "DATE" ? <div>
                     <label htmlFor="campaign-scheduled">예약 시각 (한국 시간)</label>
                     <input
                       id="campaign-scheduled"
@@ -3413,12 +3582,12 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                         ? "한국 시간 기준입니다. 모의 예약은 시각 이후 직접 실행하며, 실행해도 수신자에게 전달되지 않습니다."
                         : "한국 시간 기준입니다. 선택한 실행 방식과 서버 상태는 아래 발송 전 확인에서 볼 수 있습니다."}
                     </p>
+                    </div> : null}
                     {campaignDraft.scheduled && !campaignDraft.simulate ? <ConsoleChoiceGroup id="campaign-schedule-mode" label="예약 실행 방식"
                       value={campaignDraft.scheduleMode} onChange={(value) => setCampaignDraft({ ...campaignDraft, scheduleMode: value === "AUTO" ? "AUTO" : "MANUAL" })}
                       options={[{ value: "MANUAL", label: "수동 실행" }, { value: "AUTO", label: "자동 실행" }]} /> : null}
                     {campaignFieldError?.field === "scheduled" ? <p className={styles.fieldError} id="campaign-scheduled-error" role="alert">{campaignFieldError.message}</p> : null}
-                    </div>
-                  </details>
+                  </div>
                   <label className={styles.simulateOption}>
                     <input
                       type="checkbox"
@@ -3434,15 +3603,10 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   </div>
                 </div>
 
-                {composeStep !== 3 ? <div className={styles.stepActions}>
-                  {composeStep === 2 ? <ProductButton type="button" variant="ghost" onClick={() => goComposeStep(1)}>이전</ProductButton> : null}
-                  <ProductButton type="button" variant="primary" disabled={busyAction !== null || uploadingImage || Boolean(uncertainCreate) || recipientReviewRequired} onClick={() => goComposeStep(composeStep === 1 ? 2 : 3)}>{composeStep === 1 ? "내용 작성" : "발송 검토로"}</ProductButton>
-                  {composeStep === 2 ? <p className={styles.help}>예약 발송과 모의 발송 설정은 다음 검토 단계에서 입력합니다.</p> : null}
-                </div> : null}
                 {campaignError && !uncertainCreate ? <p className={styles.fieldError} id="campaign-request-error" role="alert">{campaignError}</p> : null}
-                <section className={styles.reviewCard} hidden={composeStep !== 3} aria-labelledby="campaign-review-heading">
+                <section className={styles.reviewCard} aria-labelledby="campaign-review-heading">
                   <div className={styles.reviewHeading}>
-                    <h3 id="campaign-review-heading" tabIndex={-1}>발송 전 검토</h3>
+                    <h3 className={styles.zoneHead} id="campaign-review-heading" tabIndex={-1}><span aria-hidden="true">4</span>발송 전 검토</h3>
                     <p>대상과 내용을 확인한 뒤 발송 확인을 진행합니다.</p>
                   </div>
                   {/* Reopened 2026-11-20: who gets it, how, what it costs and the exact wording sit in one summary card. */}
@@ -3458,13 +3622,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                           : "수신자를 선택하세요 · 아직 0명입니다"}
                       </li>
                       <li>
-                        {campaignDraft.title.trim() && campaignDraft.body.trim()
-                          ? `${channelLabel(campaignDraft.channel)} · 제목·본문 입력됨`
-                          : !campaignDraft.title.trim() && !campaignDraft.body.trim()
-                            ? "제목·본문을 입력하세요"
-                            : !campaignDraft.title.trim()
-                              ? "발송 제목을 입력하세요"
-                              : "메시지 내용을 입력하세요"}
+                        {campaignDraft.body.trim()
+                          ? `${channelLabel(campaignDraft.channel)} · 내용 입력됨 · 기록 제목 “${campaignDraft.title.trim() || autoTitlePreview}”`
+                          : "메시지 내용을 입력하세요"}
                       </li>
                       <li>
                         {scheduleBadInput ? "예약 날짜와 시간을 확인하세요" : scheduledDraft
@@ -3501,7 +3661,6 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   {campaignDraft.channel === "ALIMTALK" && !simulateDraft ? <p className={styles.help} role="note">{campaignDraft.smsFallback ? ALIMTALK_FALLBACK_NOTICE : ALIMTALK_NO_FALLBACK_NOTICE}</p> : null}
                   {scheduledDraft && !simulateDraft ? <p className={styles.help}>{scheduleServerStatus(state.messageSchedule)} 현재 서버 기준이며 실제 발송 성공을 보장하지 않습니다.</p> : null}
                 <div className={styles.reviewBar}>
-                  <ProductButton type="button" variant="ghost" onClick={() => goComposeStep(2)}>내용 수정</ProductButton>
                   <p className={styles.reviewSummary} id="campaign-submit-warning" tabIndex={-1}>
                     선택 {selectedCount}명 · {channelLabel(campaignDraft.channel)} · {submitModeLabel}{simulateDraft ? "" : " · 발송은 되돌릴 수 없습니다."}
                     {campaignDraft.channel === "MMS" && !simulateDraft ? " 별도 요금이 발생합니다." : ""}

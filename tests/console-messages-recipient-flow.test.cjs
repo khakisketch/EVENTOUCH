@@ -34,7 +34,10 @@ test('recipient state heads the compose form with a return path from review', ()
   assert.ok(head < SOURCE.indexOf('id="campaign-body"'), 'head bar must precede the body field');
   assert.ok(head > SOURCE.indexOf('id="campaign-recipients"') && head < SOURCE.indexOf('id="recipient-list-summary"'), 'jumps sit within the recipient section before its long list');
   // The picker section keeps its title and detailed summary.
-  assert.match(SOURCE, /<legend>수신자 선택<\/legend>/u);
+  // Reopened 2026-11-23: the zone is named 받는 사람 (screen-reader legend +
+  // numbered visible heading) and starts with the audience presets.
+  assert.match(SOURCE, /<legend className="sr-only">받는 사람<\/legend>/u);
+  assert.match(SOURCE, /id="recipient-heading" tabIndex=\{-1\}/u);
   assert.match(SOURCE, /id="recipient-summary"/u);
   assert.match(SOURCE, /확정 \{selectedApproved\}명/u);
   assert.match(CSS, /\.recipientTopBar/u);

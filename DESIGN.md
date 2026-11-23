@@ -426,6 +426,15 @@ Reopened 2026-11-19 (owner: the screens look plain; improve directly, keep behav
 - Reopened 2026-11-20 (owner: 카드 띠도 개수 탭으로): 카드 띠 → 개수 탭. The three history filter cards are one row of count tabs (전체 · 예약 · 확인 필요; 확인 필요 amber) above the search; accessible names stay "전체 발송 N건" etc. Shared component `console-ui/CountTabs` (segmented control, pill count badges, ink fill when chosen, amber badge only for waiting work, scrolls inside its own box on phones). Big-number cards and rings stay only on 운영 현황, 현장 모드, 결과 보고서 and 기간 분석.
 - Reopened 2026-11-20 (디자인 시스템 적용): the review step opens with one summary card (the count large, channel and send mode, a pill that says 실제 발송·되돌릴 수 없음 or 모의 발송, the 작성 요약 list including cost, and the exact wording) so everything checked before sending is in one place. History status, delivery status and the recipient avatars are `StatusPill` and `ConsoleAvatar`; empty lists are `ConsoleEmptyState`. Gates, receipts and the confirmation are unchanged.
 
+Reopened 2026-11-23 (owner: "A로 하고, 내용은 목적 템플릿으로 불러와 쓰고, 화면은 한 화면 체크리스트"; mockup `design-review/messages-flow-options.html`). This replaces the step rules above; `tests/web-message-checklist-2026-11-23.test.cjs` guards it.
+
+- One screen, four numbered zones in order: 1 받는 사람, 2 내용, 3 보낼 때, 4 발송 전 검토. A checklist row on top names each zone with what is filled (done items turn green) and moves focus to it. Nothing is hidden or gated by step; the submit (발송 검토) keeps every check, field error, receipt and the confirmation.
+- 받는 사람 starts with audience presets: 참가 확정 전원, 확정자 중 아직 입장 안 함 (only people whose non-entry is known), 승인 대기. A preset replaces the selection with that whole group. 직접 고르기 is the existing filter-and-check list (open on desktop, height-capped; folded on phones).
+- 내용 offers 목적으로 불러오기: built-in starting text for 전날 리마인드, 입장 안내, 일정·장소 변경, 당첨 안내, 감사 인사. Loading one never sends and never binds a server template. It replaces existing text only after a confirm. It fills the audience and time only when they are still empty, and never sets a time in the past. Saved templates stay as a separate picker.
+- The record title is optional. When it is empty, the record is saved as "<목적 or 안내 메시지> · M/D".
+- 보낼 때 is 지금 / 행사 기준 / 날짜·시각 지정. 행사 기준 computes one Korea-time reservation from the event date and says so: a later change to the event date does not move it. The server still stores an absolute time.
+- The preview sits beside the content on wide screens. The send review is the only orange action in the composer.
+
 ## 현장 운영 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/operations/OperationsWorkspace.tsx`, mockup scene A3). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-operations-composition.test.cjs` ("approved operations design stays locked") guards it.

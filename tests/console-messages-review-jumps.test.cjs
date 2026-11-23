@@ -22,13 +22,16 @@ const CSS = fs.readFileSync(
   'utf8'
 );
 
+// Reopened 2026-11-23: one-screen checklist. The jump only moves; the
+// submit (발송 검토) names a missing prerequisite and focuses its field. An
+// empty record title is filled automatically instead of being asked for.
 test('review navigation shows the relevant input stage when prerequisites are missing', () => {
-  const fn = SOURCE.slice(SOURCE.indexOf('function goComposeStep'), SOURCE.indexOf('const focusComposerOnOpenRef'));
+  const fn = SOURCE.slice(SOURCE.indexOf('function requestCampaignCreate'), SOURCE.indexOf('const fingerprint = fingerprintFor("message.create-charset-reviewed"'));
   assert.match(fn, /!selectedIds\.length/u);
   assert.match(fn, /field: "ids"/u);
-  assert.match(fn, /field: "title"/u);
+  assert.match(fn, /autoCampaignTitle\(/u);
   assert.match(fn, /field: campaignDraft\.channel === "ALIMTALK" \? "templateId" : "body"/u);
-  assert.match(fn, /messageContentIssue\(campaignDraft, template\)/u);
+  assert.match(fn, /messageContentIssue\(campaignDraft, boundTemplate\)/u);
   assert.match(SOURCE, /campaignFieldError\.field === "ids" \? 1/u);
   assert.match(SOURCE, /document\.getElementById\(ids\[campaignFieldError\.field\]/u);
   assert.doesNotMatch(fn, /postCommand|executeCampaignCreate|requestSubmit|\.submit\(/u);

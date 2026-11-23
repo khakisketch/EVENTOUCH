@@ -19,10 +19,12 @@ const SOURCE = fs.readFileSync(
 
 test('a focus-only skip leads into the draft before the recipient list', () => {
   assert.match(SOURCE, /className="skip-link"/u, 'skip uses the shared focus-only pattern');
-  assert.match(SOURCE, /data-skip-to="campaign-title"/u, 'skip carries the audit hook');
+  // Reopened 2026-11-23: the record title is optional (auto-filled), so the
+  // skip lands in the message body, the first thing the operator writes.
+  assert.match(SOURCE, /data-skip-to="campaign-body"/u, 'skip carries the audit hook');
   assert.match(SOURCE, /메시지 작성으로 건너뛰기/u, 'skip names the draft');
-  assert.match(SOURCE, /href="#campaign-title"/u, 'skip targets the title field');
-  const skipAt = SOURCE.indexOf('data-skip-to="campaign-title"');
+  assert.match(SOURCE, /href="#campaign-body"/u, 'skip targets the message body');
+  const skipAt = SOURCE.indexOf('data-skip-to="campaign-body"');
   assert.ok(skipAt !== -1, 'expected the compose skip');
   const skipWindow = SOURCE.slice(Math.max(0, skipAt - 600), skipAt + 600);
   assert.match(skipWindow, /goComposeStep\(2\)/u, 'skip reveals the content stage');

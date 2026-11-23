@@ -33,7 +33,8 @@ test('handoff, template use and failed-reload recovery reveal the mounted compos
   assert.match(source, /function reportBlockedReload\(\) \{\s*setComposeStep\(3\);\s*setComposerOpen\(true\)/u);
   assert.match(source, /id="message-history-search"/u);
   assert.match(source, /historyScope\.filter/u);
-  assert.match(css, /\.composeGrid\[data-step="2"\] \.recipientFieldset/u, 'DOM and visual order agree');
+  // Reopened 2026-11-23: one-screen checklist; zones follow DOM order and only the preview takes the side column.
+  assert.match(css, /\.composeGrid\[data-layout="checklist"\] > fieldset \{[^}]*grid-column: 1 \/ -1/u, 'DOM and visual order agree');
   assert.match(css, /\.historyTable tr\[data-history-row\]/u, 'mobile retains every field and action in compact records');
 });
 

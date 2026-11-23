@@ -215,9 +215,10 @@ test('reloaded-source summary renders as info before the title, never as global 
   assert.ok(titleField !== -1, 'expected the campaign title field');
   assert.ok(summaryRender < titleField, 'summary must precede the title field');
   assert.match(SOURCE, /<ConsoleFeedback kind="info" id="campaign-reload-summary">\{reloadSummary\}<\/ConsoleFeedback>/u);
-  // Title exposes the summary to assistive tech alongside any field error.
-  assert.match(SOURCE, /"campaign-reload-summary campaign-title-error"/u);
-  assert.match(SOURCE, /: \(reloadSummary && composeStep !== 1 \? "campaign-reload-summary" : undefined\)/u);
+  // Reopened 2026-11-23: one screen, so the summary renders once at the top of
+  // the 받는 사람 zone (no per-step copy) and is read before every field.
+  assert.equal(SOURCE.split('id="campaign-reload-summary"').length - 1, 1, 'one summary render');
+  assert.ok(summaryRender < SOURCE.indexOf('id="campaign-body"'), 'summary precedes the body field');
   // No duplicate global notice: reload clears it and sets the summary.
   const applyStart = SOURCE.indexOf('function applyFailedReload(campaign: Campaign)');
   const applyEnd = SOURCE.indexOf('function requestFailedReload', applyStart);
