@@ -12,7 +12,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { messageStep } = require('./ui-journey-helpers.cjs');
+const { messageStep, openMessageMore } = require('./ui-journey-helpers.cjs');
 const before = process.argv.includes('--before');
 const out = (process.env.CAPTURE_DIR || '').trim()
   || path.join(defaultCaptureDir(`task-flow-${runStamp()}`), before ? 'before' : 'after');
@@ -167,9 +167,12 @@ async function main() {
         // Reopened 2026-11-23: no reservation carried over means 지금 is chosen and no datetime field exists.
         assert.equal(await page.locator('#campaign-scheduled').count(), 0);
         assert.equal(await page.locator('#campaign-schedule-choice input[value="NOW"]').isChecked(), true);
-        // A cancelled historical recipient sends the operator through the recipient review first.
-        await act(() => messageStep(page, 2));
-        // The content zone now opens on the message body (the record title is optional and sits below it).
+        // A cancelled historical recipient sends the operator through the recipient review first:
+        // Reopened 2026-11-24 (시안 A) the reload opens the 받는 사람 panel and focuses its search.
+        assert.equal(await page.locator('#campaign-recipients').isVisible(), true);
+        await page.waitForFunction(() => document.activeElement?.id === 'recipient-search');
+        // The skip link then moves straight to the message body (the record title is optional, under 더 보기).
+        await act(async () => { await page.locator('a[data-skip-to="campaign-body"]').focus(); await page.keyboard.press('Enter'); });
         await page.waitForFunction(() => document.activeElement?.id === 'campaign-body');
         assert.equal(await page.locator('#campaign-body').evaluate(el => el === document.activeElement), true);
         await shot('message-recomposed-390');
@@ -193,6 +196,7 @@ async function main() {
       const oldRow = page.locator(`#campaign-${old.id}`);
       await failedRowAction(old.id);
       await messageStep(page, 2);
+      await openMessageMore(page);
       await page.locator('#campaign-title').fill('덮어쓰지 말아야 할 초안');
       const writes = f.gateway.commands.length;
       await failedRowAction(old.id);
@@ -204,7 +208,7 @@ async function main() {
       assert.equal(await confirm.getByRole('button', { name: '불러온다', exact: true }).evaluate(el => el === document.activeElement), true);
       await page.keyboard.press('Enter');
       await messageStep(page, 2);
-      await page.locator('#campaign-title').waitFor();
+      await page.locator('#campaign-body').waitFor();
       assert.equal(await page.locator('#campaign-title').inputValue(), old.title);
       assert.equal(f.gateway.commands.length, writes, 'loading a draft is not a write');
       await shot('message-overwrite-keyboard-result-390');

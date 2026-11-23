@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep, chooseScheduleDate } = require('./ui-journey-helpers.cjs');
+const { messageStep, chooseScheduleDate, openMessageMore } = require('./ui-journey-helpers.cjs');
 
 
 // Browser -> real API -> isolated PostgreSQL. Fixture records and captures are synthetic.
@@ -299,6 +299,7 @@ const snapshot = async (page, name) => {
     await snapshot(manager, 'schedule-after');
     assert.ok((await manager.locator('#campaign-detail-qa-audit-schedule').innerText()).includes('수동 실행'));
     await manager.goto(`${f.baseUrl}/console/events/${f.eventId}/messages?to=${encodeURIComponent(owner.id)}`, { waitUntil: 'networkidle' });
+    await openMessageMore(manager); // Reopened 2026-11-24 (시안 A): the optional record title sits under 더 보기
     await manager.locator('#campaign-title').fill('새 자동 예약 검증');
     await manager.locator('#campaign-body').fill('합성 안내');
     await messageStep(manager, 3);

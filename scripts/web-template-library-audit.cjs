@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { messageStep } = require('./ui-journey-helpers.cjs');
+const { messageStep, openRecipientList, openMessageMore } = require('./ui-journey-helpers.cjs');
 const axe = require('axe-core').source;
 let phase = 'setup';
 (async () => {
@@ -89,9 +89,10 @@ let phase = 'setup';
     check('archived wording cannot be used or edited', await row(templates[0].id).getByRole('button', { name: '사용', exact: true }).count() === 0 && await row(templates[0].id).getByRole('button', { name: '편집', exact: true }).isDisabled());
     await capture('archived-1280');
     await page.getByRole('tab', { name: '발송 기록', exact: true }).click(); await page.locator('#message-compose-open').click();
-    if (!await page.locator('#recipient-list-summary').evaluate(el => el.closest('details').open)) await page.locator('#recipient-list-summary').click();
+    await openRecipientList(page); // Reopened 2026-11-24 (시안 A): the list is folded inside the 받는 사람 panel
     await page.getByRole('checkbox', { name: new RegExp(person.name) }).first().check(); await messageStep(page, 2);
     check('archived template is absent from new message selection', await page.locator(`#campaign-template option[value="${templates[0].id}"]`).count() === 0);
+    await openMessageMore(page); // the saved-template picker (and its 템플릿 관리 link) sits under 더 보기
     await page.getByRole('button', { name: '템플릿 관리', exact: true }).click();
     await row(templates[0].id).getByRole('button', { name: '복원', exact: true }).click(); await row(templates[0].id).waitFor({ state: 'hidden' });
     await scope.selectOption('ACTIVE'); check('restore makes the original wording usable', await row(templates[0].id).getByRole('button', { name: '사용', exact: true }).isVisible());

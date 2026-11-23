@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep, openStudioPanel, chooseScheduleDate } = require('./ui-journey-helpers.cjs');
+const { messageStep, openStudioPanel, chooseScheduleDate, openMessagePanel, closeMessagePanel, openMessageMore } = require('./ui-journey-helpers.cjs');
 
 
 // Usability audit: measures how many user operations it takes to finish real
@@ -444,18 +444,22 @@ async function probeKeyboard(page, task, locator, label) {
 
   // Jump-hook route. Returns { value, desc } on success, { broken: true }
   // when the hook exists but does not move focus, or null when unusable.
+  // Reopened 2026-11-24 (owner: 시안 A): a hook may also land on a control that PRECEDES the target in the same
+  // scope (the composer's skip link lands in the message body, a few Tabs before the send review). That is the real
+  // shortest keyboard path, so it competes with the direct hook: value = Tabs to the hook + 1 activation + the Tabs
+  // from the landing control to the target. A hook that points at the target itself still wins ties by being shortest.
   const probeHook = async (targetId) => {
     if (!targetId) return null;
     const found = await page.evaluate((id) => {
       const target = document.getElementById(id);
       if (!target) return null;
-      let hook = null;
-      try {
-        hook = document.querySelector(`[data-skip-to="${CSS.escape(id)}"]`);
-      } catch {
-        return null;
-      }
-      if (!hook) return null;
+      const candidates = [...document.querySelectorAll('[data-skip-to]')]
+        .map((hook) => ({ hook, landing: document.getElementById(hook.getAttribute('data-skip-to') || '') }))
+        .filter(({ landing }) => landing && (landing === target || (landing.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING)));
+      if (!candidates.length) return null;
+      // The hook that points at the target itself is the canonical shortcut; otherwise the nearest landing before it.
+      candidates.sort((a, b) => (b.landing === target) - (a.landing === target));
+      const { hook, landing } = candidates[0];
       const tag = hook.tagName;
       const focusable = /^(A|BUTTON|INPUT|SELECT|TEXTAREA)$/.test(tag)
         || (typeof hook.tabIndex === 'number' && hook.tabIndex >= 0);
@@ -473,7 +477,7 @@ async function probeKeyboard(page, task, locator, label) {
       hook.dataset.usHook = '1';
       const hookLabel = (hook.innerText || hook.getAttribute('aria-label') || hook.id || tag)
         .replace(/\s+/g, ' ').trim().slice(0, 24);
-      return { usable: true, label: `${tag.toLowerCase()} "${hookLabel}"` };
+      return { usable: true, label: `${tag.toLowerCase()} "${hookLabel}"`, landingId: landing.id, direct: landing === target };
     }, targetId).catch(() => null);
     if (!found || !found.usable) return null;
     try {
@@ -485,9 +489,14 @@ async function probeKeyboard(page, task, locator, label) {
       const landed = await page.evaluate((id) => {
         const active = document.activeElement;
         return !!active && (active.id === id || (active.dataset && active.dataset.usTarget === '1'));
-      }, targetId).catch(() => false);
+      }, found.landingId).catch(() => false);
       if (!landed) return { broken: true, desc: found.label };
-      return { value: toHook + 1, desc: found.label };
+      if (found.direct) return { value: toHook + 1, desc: found.label };
+      // Continue from the landing control to the target with real Tabs (already on the target counts 0 more).
+      const onTarget = await page.evaluate(() => !!document.activeElement?.dataset?.usTarget).catch(() => false);
+      const rest = onTarget ? 0 : await sweep(KEYBOARD_CAP);
+      if (rest === null) return null;
+      return { value: toHook + 1 + rest, desc: `${found.label} → #${found.landingId}` };
     } finally {
       await clearHookMark();
       await resetFocus(page);
@@ -821,14 +830,22 @@ async function main() {
       try {
         await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/messages`, { waitUntil: 'networkidle', timeout: 30000 });
         await act(task, () => page.locator('#message-compose-open').click());
-        await page.locator('#recipient-status-filter').waitFor();
+        // Reopened 2026-11-24 (owner: 시안 A): the composer is one sentence; the sentence is the composer-open marker.
+        await page.locator('#campaign-sentence').waitFor();
         await verifySkipLink(page, task);
         await installScrollCounter(page);
+        // 받는 사람 pill → 직접 고르기 → one checkbox. The step buttons are gone, so there is nothing to press between
+        // zones: the body is always mounted and the 발송 검토 button sits in the dock. The optional record title (kept
+        // here so the history row can be found by name) opens from 더 보기.
+        await act(task, () => openMessagePanel(page, 'who'));
+        await act(task, () => page.locator('#recipient-list-summary').click());
         await act(task, () => page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check());
-        await act(task, () => messageStep(page, 2));
+        // 완료 folds the panel (and its long list) out of the Tab order, the way an operator who is done choosing would.
+        await act(task, () => closeMessagePanel(page, 'who'));
+        await act(task, () => openMessageMore(page));
         await act(task, () => page.locator('#campaign-title').fill(title));
         await act(task, () => page.locator('#campaign-body').fill('{{이름}}님 사용성 감사 안내입니다.'));
-        await act(task, () => messageStep(page, 3));
+        await messageStep(page, 3);
         await probeKeyboard(page, task, page.locator('#campaign-submit'), '발송 요청 버튼');
         await act(task, () => page.locator('#campaign-submit').click());
         await page.getByRole('button', { name: '발송 요청한다', exact: true }).waitFor({ state: 'visible', timeout: 10000 });
@@ -1259,15 +1276,17 @@ async function main() {
       try {
         await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/messages`, { waitUntil: 'networkidle', timeout: 30000 });
         await act(task, () => page.locator('#message-compose-open').click());
-        await page.locator('#recipient-status-filter').waitFor();
+        await page.locator('#campaign-sentence').waitFor(); // Reopened 2026-11-24 (시안 A): see the 발송 요청 task
         await verifySkipLink(page, task);
         await installScrollCounter(page);
+        await act(task, () => openMessagePanel(page, 'who'));
+        await act(task, () => page.locator('#recipient-list-summary').click());
         await act(task, () => page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check());
-        await act(task, () => messageStep(page, 2));
+        await act(task, () => openMessageMore(page));
         await act(task, () => page.locator('#campaign-title').fill(title));
         await act(task, () => page.locator('#campaign-body').fill('{{이름}}님 사용성 감사 예약 안내입니다.'));
-        await act(task, () => messageStep(page, 3));
-        // Reopened 2026-11-23: choosing 날짜·시각 지정 replaces opening the folded 예약 details (still one operator step).
+        await messageStep(page, 3);
+        // Reopened 2026-11-24 (시안 A): the 시점 pill opens its panel, then 날짜·시각 지정 is chosen (one operator step here).
         await act(task, () => chooseScheduleDate(page));
         await act(task, () => page.locator('#campaign-scheduled').fill(scheduled));
         await probeKeyboard(page, task, page.locator('#campaign-submit'), '예약 등록 버튼');

@@ -5,7 +5,7 @@ const { source: axeSource } = require('axe-core');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { messageStep } = require('./ui-journey-helpers.cjs');
+const { messageStep, openRecipientList, openMessageMore } = require('./ui-journey-helpers.cjs');
 (async () => {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private EVENTOUCH_CAPTURE_ROOT');
   const before = process.argv.includes('--before');
@@ -43,7 +43,7 @@ const { messageStep } = require('./ui-journey-helpers.cjs');
       }
     });
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/messages?to=${encodeURIComponent(conflict.id)},${encodeURIComponent(valid.id)}`, { waitUntil: 'networkidle' });
-    await messageStep(page, 1);
+    await openRecipientList(page); // Reopened 2026-11-24 (시안 A): the list is folded inside the 받는 사람 panel
     if (await page.locator('#recipient-selected-only').isChecked()) await page.locator('#recipient-selected-only').uncheck();
     const list = page.getByRole('list', { name: '참가자 선택', exact: true });
     await list.waitFor();
@@ -79,6 +79,7 @@ const { messageStep } = require('./ui-journey-helpers.cjs');
     await reviewPage.getByText(conflict.name, { exact: true }).first().waitFor();
     await reviewPage.getByText('취소 상태 확인 필요', { exact: true }).first().waitFor();
     await messageStep(page, 2);
+    await openMessageMore(page);
     await page.locator('#campaign-title').fill('합성 안내');
     await page.locator('#campaign-body').fill('작성한 내용은 보존됩니다.');
     await messageStep(page, 3);

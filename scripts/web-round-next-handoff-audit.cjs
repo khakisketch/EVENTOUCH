@@ -12,7 +12,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { messageStep } = require('./ui-journey-helpers.cjs');
+const { openRecipientList } = require('./ui-journey-helpers.cjs');
 
 const root = process.env.CAPTURE_DIR || defaultCaptureDir(`round-next/after-${runStamp()}`);
 const baseline = process.env.ROUND_NEXT_BASELINE === '1';
@@ -206,18 +206,11 @@ async function main() {
       await page.setViewportSize({ width: 1280, height: 900 });
       const before = fixture.gateway.commands.filter(c => ['message.create', 'message.create-reviewed'].includes(c.command)).length;
       await handoff.click();
-      // Reopened 2026-11-20: 메시지 작성은 3단계(수신자 → 내용 → 검토·발송)이고, 명단에서 인계받으면 수신자가 이미 정해졌으므로
-      // 2단계(내용)에서 시작한다. 인계된 수신자·필터는 1단계(수신자)로 돌아가 같은 방식으로 확인한다.
+      // Reopened 2026-11-24 (owner: 시안 A): a handoff with every recipient valid leaves the 받는 사람 panel folded; the
+      // handed-over recipients and filter are confirmed by opening the panel and its 직접 고르기 list (state-aware, never closing it).
       await page.getByText('명단에서 2명을 인계받았습니다', { exact: false }).waitFor();
-      await messageStep(page, 1);
-      await page.locator('#recipient-status-filter').waitFor();
+      await openRecipientList(page);
       assert.equal(await page.locator('#recipient-status-filter').inputValue(), 'APPROVED');
-      // State-aware toggle: the handoff/desktop may already leave the list
-      // open, so only open it when closed — an unconditional click would
-      // close it and hide the list being asserted below.
-      if (!await page.locator('#campaign-recipients details').evaluate(element => element.open)) {
-        await page.getByText(/직접 고르기/, { exact: false }).first().click();
-      }
       await page.getByRole('list', { name: '참가자 선택', exact: true }).waitFor({ state: 'visible' });
       const selected = await page.getByRole('list', { name: '참가자 선택', exact: true }).locator('input[type="checkbox"]:checked').count();
       assert.equal(selected, 2);

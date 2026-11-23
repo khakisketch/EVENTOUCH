@@ -56,29 +56,79 @@ async function chooseRadio(root, id, value) {
   }
   throw new Error(`Unavailable single choice: ${id}/${value}`);
 }
-// Reopened 2026-11-23: the composer is one screen with a checklist
-// (nav[aria-label="메시지 작성 항목"]) instead of gated steps. The checklist
-// links only scroll/focus a zone; nothing is validated or blocked by moving.
-// Step 1 = 받는 사람, 2 = 내용, 3 = 검토·발송. Validation now lives in the
-// 발송 검토 submit, so this helper never manufactures recipients or bypasses it.
-const MESSAGE_CHECKLIST_TARGET = { 1: '#campaign-recipients', 2: '#campaign-content', 3: '#campaign-review-heading' };
+// Reopened 2026-11-24 (owner: 시안 A): the composer is ONE sentence with three pill buttons
+// (#campaign-who-pill 받는 사람 / #campaign-how-pill 보내는 방법 / #campaign-when-pill 시점), each
+// opening one inline panel (one at a time; folded panels stay mounted with `hidden`). The body,
+// purpose chips and 더 보기 sit below, the send review button in a dock. Nothing is validated or
+// blocked by moving between them; validation lives in the 발송 검토 submit, so these helpers never
+// manufacture recipients or bypass it.
+const MESSAGE_PANEL = {
+  who: { pill: '#campaign-who-pill', panel: '#campaign-recipients' },
+  how: { pill: '#campaign-how-pill', panel: '#campaign-how-panel' },
+  when: { pill: '#campaign-when-pill', panel: '#campaign-schedule' },
+};
+// Opens one sentence panel (idempotent) and waits until it is visible.
+async function openMessagePanel(page, which) {
+  const { pill, panel } = MESSAGE_PANEL[which];
+  if (!(await page.locator(panel).isVisible())) await page.locator(pill).click();
+  await page.locator(panel).waitFor({ state: 'visible' });
+}
+// Closes the open panel through its pill (idempotent).
+async function closeMessagePanel(page, which) {
+  const { pill, panel } = MESSAGE_PANEL[which];
+  if (await page.locator(panel).isVisible()) await page.locator(pill).click();
+  await page.locator(panel).waitFor({ state: 'hidden' });
+}
+// 더 보기 (저장한 템플릿 · 사진 · 기록 제목): idempotent open.
+async function openMessageMore(page) {
+  const more = page.locator('details:has(> summary[data-disclosure-indicator]):has(#campaign-title)');
+  if (!(await more.evaluate(element => element.open))) await more.locator(':scope > summary').click();
+  await page.locator('#campaign-title').waitFor({ state: 'visible' });
+}
+// The phone preview sits beside the writing on desktop; at <=1024px it is a bottom sheet opened by
+// #message-preview-open ("미리보기") and closed by #message-preview-close or Esc. Opens it only when
+// the opener is shown (idempotent) and waits for the bubble.
+async function openMessagePreview(page) {
+  const opener = page.locator('#message-preview-open');
+  if (await opener.isVisible() && (await opener.getAttribute('aria-expanded')) !== 'true') await opener.click();
+  await page.locator('#message-draft-preview').waitFor({ state: 'visible' });
+}
+async function closeMessagePreview(page) {
+  if ((await page.locator('#message-preview-open').getAttribute('aria-expanded')) === 'true') await page.locator('#message-preview-close').click();
+}
+// The saved-template picker lives under 더 보기 for 문자 and inside the 보내는 방법 panel for 알림톡;
+// open whichever one holds it right now and return its locator.
+async function openTemplatePicker(page) {
+  const select = page.locator('#campaign-template');
+  if (await select.isVisible()) return select;
+  if (await select.evaluate(element => Boolean(element.closest('#campaign-how-panel')))) await openMessagePanel(page, 'how');
+  else await openMessageMore(page);
+  await select.waitFor({ state: 'visible' });
+  return select;
+}
+// Step 1 = 받는 사람 (opens the who panel), 2 = 내용 (the message body), 3 = 검토·발송 (the dock).
 async function messageStep(page, step) {
-  const nav = page.getByRole('navigation', { name: '메시지 작성 항목', exact: true });
-  const link = nav.locator(`a[href="${MESSAGE_CHECKLIST_TARGET[step]}"]`);
-  await link.click();
-  await nav.locator(`a[href="${MESSAGE_CHECKLIST_TARGET[step]}"][aria-current="true"]`).waitFor();
-  await page.locator(step === 3 ? '#campaign-review-heading' : step === 2 ? '#campaign-body' : '#recipient-heading').waitFor({ state: 'visible' });
+  if (step === 1) await openMessagePanel(page, 'who');
+  else if (step === 2) {
+    await page.locator('#campaign-body').scrollIntoViewIfNeeded();
+    await page.locator('#campaign-body').waitFor({ state: 'visible' });
+  } else {
+    await page.locator('#campaign-submit').scrollIntoViewIfNeeded();
+    await page.locator('#campaign-submit').waitFor({ state: 'visible' });
+  }
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 30))));
 }
-// The "직접 고르기" recipient list is open by default on desktop and folded on
-// phones; open it (never close it) before touching its filters or checkboxes.
+// The "직접 고르기" recipient list is folded by default inside the 받는 사람 panel; open the panel
+// and then the list (never close either) before touching its filters or checkboxes.
 async function openRecipientList(page) {
+  await openMessagePanel(page, 'who');
   if (!(await page.locator('#recipient-status-filter').isVisible())) await page.locator('#recipient-list-summary').click();
   await page.locator('#recipient-status-filter').waitFor({ state: 'visible' });
 }
-// "보낼 때" zone: the datetime-local only exists once 날짜·시각 지정 is chosen.
-// Picks DATE (idempotent) and returns the #campaign-scheduled locator.
+// "시점" panel: the datetime-local only exists once 날짜·시각 지정 is chosen.
+// Opens the panel, picks DATE (idempotent) and returns the #campaign-scheduled locator.
 async function chooseScheduleDate(page) {
+  await openMessagePanel(page, 'when');
   const scheduled = page.locator('#campaign-scheduled');
   if (!(await scheduled.count())) await chooseRadio(page, 'campaign-schedule-choice', 'DATE');
   await scheduled.waitFor({ state: 'visible' });
@@ -138,4 +188,4 @@ async function openLocationEditor(page, kind, hasText) {
   await page.getByRole('button', { name: `${kind} 편집`, exact: true }).click();
 }
 
-module.exports = { closeSettingsBasics, openLocationEditor, settleLayout, openStudioPanel, selectDrawStage, openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, chooseScheduleDate, openRecipientList, waitForDialogExitFocus };
+module.exports = { closeSettingsBasics, openLocationEditor, settleLayout, openStudioPanel, selectDrawStage, openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, openMessagePanel, closeMessagePanel, openMessageMore, openMessagePreview, closeMessagePreview, openTemplatePicker, chooseScheduleDate, openRecipientList, waitForDialogExitFocus };

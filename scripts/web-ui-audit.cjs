@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep } = require('./ui-journey-helpers.cjs');
+const { messageStep, openRecipientList, openMessagePanel, openMessageMore } = require('./ui-journey-helpers.cjs');
 
 const { chooseRadio } = require('./ui-journey-helpers.cjs');
 const fs = require('node:fs');
@@ -191,8 +191,10 @@ const check = (name, condition) => { assert.ok(condition, name); checks.push(nam
     choices.on('request', request => { if (request.method()==='POST' && /\/api\/events\/[^/]+\/commands$/.test(new URL(request.url()).pathname)) choiceWrites++; });
     await choices.goto(`${base}/messages`,{waitUntil:'networkidle'});
     await choices.locator('#message-compose-open').click();
+    // Reopened 2026-11-24 (시안 A): the recipient list is folded in the 받는 사람 panel and the channel choice lives in the 보내는 방법 panel.
+    await openRecipientList(choices);
     await choices.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check();
-    await messageStep(choices, 2);
+    await openMessagePanel(choices, 'how');
     const channels = choices.locator('#campaign-channel');
     check('two delivery families are visible single choices', await channels.getByRole('radio').count()===2 && await channels.locator('input:checked').count()===1);
     await choices.locator('#campaign-body').fill('채널을 바꿔도 보존할 문구');
@@ -213,6 +215,7 @@ const check = (name, condition) => { assert.ok(condition, name); checks.push(nam
     check('message choices have no phone overflow', await choices.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
     await a11y(choices,'phone message choices');
     await choices.screenshot({path:path.join(out,'channel-choices-phone.png'),fullPage:true});
+    await openMessageMore(choices); // the saved-template picker and its 템플릿 관리 link sit under 더 보기 for 문자
     await choices.getByRole('button',{name:'템플릿 관리',exact:true}).click();
     await chooseRadio(choices,'template-channel','ALIMTALK');
     check('template channel reveals required approved template ID', await choices.locator('#template-solapi-id').isVisible() && await choices.locator('#template-solapi-id').getAttribute('required')!==null);

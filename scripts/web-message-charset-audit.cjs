@@ -7,7 +7,7 @@ const path = require('node:path');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { messageStep, chooseScheduleDate } = require('./ui-journey-helpers.cjs');
+const { messageStep, chooseScheduleDate, openRecipientList, openMessageMore, openMessagePanel, openTemplatePicker } = require('./ui-journey-helpers.cjs');
 const axe = require('axe-core').source;
 let phase = 'setup';
 (async () => {
@@ -45,7 +45,7 @@ let phase = 'setup';
     const providerCalls = () => calls.filter(call => call.path.startsWith('/messages/v4/send-many/detail'));
     const open = async title => {
       await page.goto(`${f.baseUrl}/console/events/${f.eventId}/messages?to=${encodeURIComponent(person.id)}`, { waitUntil: 'networkidle' });
-      await messageStep(page, 2); await page.locator('#campaign-title').fill(title);
+      await messageStep(page, 2); await openMessageMore(page); await page.locator('#campaign-title').fill(title);
     };
     phase = 'body validation'; await open('합성 문자');
     const original = '환영합니다 🎉'; await page.locator('#campaign-body').fill(original);
@@ -80,7 +80,7 @@ let phase = 'setup';
     phase = 'personalized recipient';
     const updated = await getWorkspace(); updated.participants.find(item => item.id === person.id).name = '합성 🎉'; await saveWorkspace(updated);
     await open('합성 개인화'); await page.locator('#campaign-body').fill('{{이름}}님 환영합니다');
-    await messageStep(page, 1); if (!(await page.locator('#recipient-status-filter').isVisible())) await page.locator('#recipient-list-summary').click(); await page.locator('#recipient-status-filter').selectOption('PENDING'); await messageStep(page, 2);
+    await openRecipientList(page); await page.locator('#recipient-status-filter').selectOption('PENDING'); await messageStep(page, 2);
     const candidateUrl = page.url();
     await page.getByRole('button', { name: '이름 확인이 필요한 참가자 보기', exact: true }).click();
     assert.equal(page.url(), candidateUrl, 'candidate navigation does not add identity to the URL');
@@ -93,7 +93,7 @@ let phase = 'setup';
     await page.getByRole('alert').filter({ hasText: '문자로 보낼 수 없는 글자' }).waitFor();
     assert.equal(await page.locator('#campaign-body').inputValue(), '{{이름}}님 환영합니다'); assert.equal(providerCalls().length, 0);
     await page.screenshot({ path: path.join(out, 'personalized-rejected-390.png'), fullPage: true });
-    phase = 'Alimtalk explicit fallback'; await open('합성 알림톡'); await page.locator('#campaign-template').selectOption(template.id);
+    phase = 'Alimtalk explicit fallback'; await open('합성 알림톡'); await (await openTemplatePicker(page)).selectOption(template.id);
     assert.equal(await page.locator('#campaign-sms-fallback input[value=on]').isChecked(), true);
     await page.locator('#campaign-submit').click(); // Reopened 2026-11-23: validation runs on 발송 검토 itself
     await page.getByRole('alert').filter({ hasText: '대체 문자로 보낼 수 없는' }).waitFor();
@@ -110,8 +110,13 @@ let phase = 'setup';
     await page.screenshot({ path: path.join(out, 'alimtalk-fallback-off-390.png'), fullPage: true });
     await page.locator('#campaign-sms-fallback').scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(out, 'alimtalk-fallback-viewport-390.png') });
-    await messageStep(page, 3); await page.locator(':is(section,[role=region])[aria-labelledby="campaign-review-heading"]').getByText('알림톡을 전달하지 못해도 문자로 대체 발송하지 않습니다.', { exact: false }).waitFor();
+    // Reopened 2026-11-24 (시안 A): the no-fallback disclosure is shown with the choice in the 보내는 방법
+    // panel and again, before anything is requested, in the confirmation opened by 발송 검토.
+    const noFallback = '알림톡을 전달하지 못해도 문자로 대체 발송하지 않습니다.';
+    await openMessagePanel(page, 'how'); await page.locator('#campaign-sms-fallback').getByText(noFallback, { exact: false }).first().waitFor();
+    await messageStep(page, 3);
     await page.locator('#campaign-submit').click();
+    await page.getByRole('group', { name: '실행 확인', exact: true }).getByText(noFallback, { exact: false }).waitFor();
     await page.getByRole('button', { name: '발송 요청한다', exact: true }).click();
     try { await page.getByRole('button', { name: '메시지 작성', exact: true }).waitFor(); }
     catch (error) { console.error('Alimtalk response:', (await page.locator('body').innerText()).slice(-2200)); await page.screenshot({ path: path.join(out, 'alimtalk-failure.png'), fullPage: true }); throw error; }

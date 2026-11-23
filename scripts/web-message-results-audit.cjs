@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep, chooseScheduleDate } = require('./ui-journey-helpers.cjs');
+const { messageStep, chooseScheduleDate, openMessageMore } = require('./ui-journey-helpers.cjs');
 
 // Synthetic status snapshots only: no message dispatch or real provider.
 for (const key of ['SOLAPI_API_KEY', 'SOLAPI_API_SECRET', 'SOLAPI_SENDER', 'SOLAPI_KAKAO_PFID']) delete process.env[key];
@@ -163,6 +163,7 @@ async function main() {
     phase = 'schedule compose';
     const createsBeforeReview = fixture.gateway.commands.filter(call => ['message.create', 'message.create-reviewed', 'message.create-charset-reviewed'].includes(call.command)).length;
     await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/messages?to=${encodeURIComponent(persons[0].id)}`, { waitUntil: 'networkidle' });
+    await openMessageMore(page); // Reopened 2026-11-24 (시안 A): the optional record title sits under 더 보기
     await page.locator('#campaign-title').fill('합성 예약');
     await page.locator('#campaign-body').fill('합성 안내');
     await messageStep(page, 3);

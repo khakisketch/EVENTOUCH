@@ -11,7 +11,7 @@ const axeSource = require('axe-core').source;
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
-const { messageStep } = require('./ui-journey-helpers.cjs');
+const { messageStep, openRecipientList, openMessageMore } = require('./ui-journey-helpers.cjs');
 const before = process.argv.includes('--before');
 let phase = 'setup';
 async function main() {
@@ -77,6 +77,8 @@ async function main() {
     });
     async function prepare(title) {
       await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/messages?to=${encodeURIComponent(person.id)}`, { waitUntil: 'networkidle' });
+      // Reopened 2026-11-24 (시안 A): the record title is an optional field under 더 보기.
+      await openMessageMore(page);
       await page.locator('#campaign-title').fill(title);
       await page.locator('#campaign-body').fill('외부로 나가지 않는 합성 본문');
       // Reopened 2026-11-23: the review zone is always on screen; no step button to press.
@@ -145,9 +147,11 @@ async function main() {
     const shared = page.getByRole('region', { name: '처리 결과 확인' });
     await shared.waitFor();
     if (!(await page.locator('#campaign-submit').isVisible())) await page.locator('#message-compose-open').click();
+    await openRecipientList(page);
     await page.locator('ul[aria-label="참가자 선택"] li').filter({ hasText: person.name }).locator('input[type="checkbox"]').check();
     assert.match(await page.locator('#recipient-summary').innerText(), /선택 1명/);
     await messageStep(page, 2);
+    await openMessageMore(page);
     await page.locator('#campaign-title').fill('새 작성은 아직 차단');
     await page.locator('#campaign-body').fill('처리 확인 이후에만 검토');
     assert.equal(await page.locator('#campaign-submit').isDisabled(), true, 'unresolved create blocks a new send after reload');

@@ -7,7 +7,7 @@ const crypto = require('node:crypto');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { messageStep, chooseRadio, selectTask } = require('./ui-journey-helpers.cjs');
+const { messageStep, chooseRadio, selectTask, openRecipientList, openMessagePanel, openMessageMore, openTemplatePicker } = require('./ui-journey-helpers.cjs');
 const axeSource = require('axe-core').source;
 let phase = 'setup';
 (async () => {
@@ -28,8 +28,8 @@ let phase = 'setup';
     });
   };
   const read = async () => (await f.harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [f.eventId])).rows[0].payload;
-  // Reopened 2026-11-23: the picker stays folded on narrow screens; open it before touching its filters.
-  const ensureListOpen = async () => { if (!(await page.locator('#recipient-status-filter').isVisible())) await page.locator('#recipient-list-summary').click(); await page.locator('#recipient-status-filter').waitFor({ state: 'visible' }); };
+  // Reopened 2026-11-24 (시안 A): the picker lives in the 받는 사람 panel and its list is folded by default.
+  const ensureListOpen = () => openRecipientList(page);
   const selectedRows = () => page.getByRole('list', { name: '참가자 선택', exact: true }).locator('li');
   const call = async (command, payload) => {
     const result = await f.helpers.requestJson(f.harness.baseUrl, `/api/events/${f.eventId}/commands`, { cookie: f.manager.cookie, method: 'POST', body: { commandId: crypto.randomUUID(), command, payload } });
@@ -55,11 +55,11 @@ let phase = 'setup';
     // The composer starts collapsed behind the compose button unless the link already opened it.
     if (await page.locator('#message-compose-open').isVisible()) await page.locator('#message-compose-open').click();
     await messageStep(page, 1); await capture('01-recipients-1280');
-    await messageStep(page, 2); await page.locator('#campaign-title').fill('합성 업무 안내');
+    await messageStep(page, 2); await openMessageMore(page); await page.locator('#campaign-title').fill('합성 업무 안내');
     await page.locator('#campaign-body').fill('행사 시작 시간과 등록 데스크를 확인해 주세요.'); await capture('02-composition-1280');
-    await page.locator('#campaign-template').selectOption(template.id);
+    await (await openTemplatePicker(page)).selectOption(template.id);
     const replace = page.getByRole('button', { name: '템플릿 적용', exact: true }); if (await replace.count()) await replace.click();
-    await page.getByText('알림톡 도착 예시', { exact: true }).waitFor(); await capture('03-alimtalk-1280');
+    await page.getByText('카카오 알림톡 도착 예시', { exact: true }).waitFor(); await capture('03-alimtalk-1280');
     await page.setViewportSize({ width: 390, height: 844 }); await capture('03-alimtalk-390');
     const before = process.argv.includes('--before');
     if (!before) {
@@ -103,7 +103,7 @@ let phase = 'setup';
       await messageStep(page, 2);
       check('composition summary describes the actual selected groups', /선택 3명/.test(await summary.innerText()) && (await summary.innerText()).includes('확정 3명') && await page.locator('#recipient-selected-only').isChecked() && /파트너/.test(await selectedRows().allInnerTexts().then(rows => rows.join(' '))) && /스피커/.test(await selectedRows().allInnerTexts().then(rows => rows.join(' '))));
       phase = 'automatic length and validation';
-      await chooseRadio(page, 'campaign-channel', 'SMS');
+      await openMessagePanel(page, 'how'); await chooseRadio(page, 'campaign-channel', 'SMS');
       check('ordinary text remains editable', await page.locator('#campaign-body').getAttribute('readonly') === null);
       await page.locator('#campaign-body').fill('가'.repeat(45));
       check('90-byte Korean source has SMS feedback', /90byte.*단문 SMS/.test(await page.locator('#campaign-body-length').innerText()));
@@ -137,6 +137,7 @@ let phase = 'setup';
       const reloadRecipients = page.getByRole('button', { name: '최신 수신자 불러오기', exact: true });
       await reloadRecipients.waitFor();
       await page.waitForFunction(() => document.activeElement?.id === 'recipient-review-refresh');
+      check('a required recipient review opens the 받는 사람 panel by itself', await page.locator('#campaign-recipients').isVisible());
       check('recipient conflict returns to the recipients zone and preserves the message', await page.locator('#campaign-title').inputValue() === '합성 업무 안내' && await page.locator('#campaign-body').inputValue() === '그룹 대상 합성 안내입니다.');
       // Reopened 2026-11-23: one-screen checklist. Zones no longer gate each other, so the same
       // guarantee is: 발송 검토 on the stale list shows the review-required warning, opens no
@@ -155,6 +156,7 @@ let phase = 'setup';
       check('a failed refresh keeps the draft and the review lock', await reloadRecipients.isEnabled() && await page.getByRole('group', { name: '실행 확인', exact: true }).count() === 0 && commands.length === failedRefreshCommands && await page.locator('#campaign-body').inputValue() === '그룹 대상 합성 안내입니다.');
       await reloadRecipients.click();
       await page.getByText(/최신 수신자를 불러왔습니다/).waitFor();
+      await ensureListOpen();
       const changedRow = page.getByRole('list', { name: '참가자 선택', exact: true }).locator('li').filter({ hasText: changed.name });
       check('the refreshed selected row shows the changed group, contact and approval state', /스피커.*1234.*승인 대기/.test(await changedRow.innerText()) && await changedRow.getByRole('checkbox').isChecked());
       await messageStep(page, 2);
@@ -172,8 +174,9 @@ let phase = 'setup';
       phase = 'legacy MMS without its photo';
       await page.locator(`[id="campaign-${legacyId}"]`).getByRole('button', { name: '내용·대상 불러오기', exact: true }).click();
       const reload = page.getByRole('button', { name: '불러온다', exact: true }); if (await reload.count()) await reload.click();
-      await page.locator('#campaign-title').waitFor({ state: 'visible' });
-      check('legacy MMS without a stored photo becomes ordinary text', await page.locator('#campaign-channel input[value="SMS"]').isChecked() && await page.getByText('SMS/LMS · 내용에 따라 자동', { exact: true }).isVisible());
+      await page.locator('#campaign-body').waitFor({ state: 'visible' });
+      await openMessagePanel(page, 'how');
+      check('legacy MMS without a stored photo becomes ordinary text', await page.locator('#campaign-channel input[value="SMS"]').isChecked() && (await page.locator('aside[aria-labelledby="message-preview-heading"]').textContent()).includes('SMS/LMS · 내용에 따라 자동'));
       check('missing legacy photo is explained without discarding the message', await page.getByText(/기존 사진이 없어 일반 문자로 불러왔습니다/).isVisible() && await page.locator('#campaign-body').inputValue() === '예전 사진 안내 문구입니다.');
       check('instant reload omits irrelevant reservation and zero-exclusion wording', !/예약 시각|제외 0명/.test(await page.locator('#campaign-reload-summary').innerText()));
       check('loading legacy content never sends another message', commands.filter(row => ['message.create', 'message.create-reviewed', 'message.create-charset-reviewed'].includes(row.command)).length === 2);
@@ -188,7 +191,7 @@ let phase = 'setup';
       page = await context.newPage(); observePage(page);
       await page.goto(base, { waitUntil: 'networkidle' }); await previousPage.close();
       await page.locator(`[id="campaign-${older.id}"]`).getByRole('button', { name: '내용·대상 불러오기', exact: true }).click();
-      await page.locator('#campaign-title').waitFor({ state: 'visible' });
+      await page.locator('#campaign-body').waitFor({ state: 'visible' });
       check('historical Alimtalk keeps its old body without claiming a current approval', await page.locator('#campaign-body').inputValue() === template.body && await page.locator('#campaign-template').inputValue() === '');
       check('historical approval mismatch requests reselection', await page.getByText(/승인된 알림톡 템플릿을 다시 선택하세요/).isVisible());
       const unboundCommands = commands.length;
@@ -196,7 +199,7 @@ let phase = 'setup';
       await page.locator('#campaign-template-error').waitFor();
       await page.waitForFunction(() => document.activeElement?.id === 'campaign-template');
       check('unbound history cannot advance to send review', await page.getByRole('group', { name: '실행 확인', exact: true }).count() === 0 && commands.length === unboundCommands);
-      await page.locator('#campaign-template').selectOption(template.id);
+      await (await openTemplatePicker(page)).selectOption(template.id);
       await page.getByRole('button', { name: '템플릿 적용', exact: true }).click();
       check('explicit template replacement uses the current saved approved wording', await page.locator('#campaign-body').inputValue() === latestBody && await page.locator('#campaign-body').getAttribute('readonly') !== null);
       check('reselecting current wording clears the resolved historical approval warning', await page.locator('#campaign-reload-summary').count() === 0);
@@ -234,13 +237,14 @@ let phase = 'setup';
       const beforeArchiveViews = commands.length;
       await viewDraft.click(); await page.getByRole('heading', { name: '작성 내용 확인', exact: true }).waitFor();
       check('archiving preserves the current approved body and disables editing', await page.locator('#campaign-body').inputValue() === latestBody && await page.locator('#campaign-body').isDisabled());
-      const readonlySteps = page.getByRole('navigation', { name: '메시지 작성 항목', exact: true });
-      await readonlySteps.locator('a[href="#campaign-recipients"]').click();
+      // Reopened 2026-11-24 (시안 A): a locked composer opens the 받는 사람 panel and its selected-only
+      // list by itself (the pills are disabled with the rest of the form), so no navigation is needed.
+      await page.locator('#campaign-recipients').waitFor({ state: 'visible' });
       check('read-only recipient review remains reachable and shows the selected person', await page.locator('#recipient-selected-only').isChecked() && await page.getByRole('list', { name: '참가자 선택', exact: true }).locator('li').count() === 1);
       check('read-only review cannot change recipients', await page.locator('#recipient-status-filter').isDisabled());
-      await readonlySteps.locator('a[href="#campaign-review-heading"]').click();
+      await messageStep(page, 3);
       check('read-only send review can be inspected but never submitted', await page.locator('#campaign-submit').isVisible() && await page.locator('#campaign-submit').isDisabled());
-      await readonlySteps.locator('a[href="#campaign-content"]').click();
+      await messageStep(page, 2);
       await capture('09-archived-draft-1280'); await assess('archived draft desktop');
       await page.setViewportSize({ width: 390, height: 844 }); await capture('09-archived-draft-390'); await assess('archived draft 390');
       check('viewing a retained archived draft issues no command', commands.length === beforeArchiveViews);

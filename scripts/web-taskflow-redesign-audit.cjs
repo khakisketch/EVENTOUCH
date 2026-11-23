@@ -7,7 +7,7 @@ const { startAuditFixture } = require('./audit-fixture.cjs');
 const { extendFixtureSeed } = require('./web-console-audit.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { messageStep, chooseScheduleDate } = require('./ui-journey-helpers.cjs');
+const { messageStep, chooseScheduleDate, openRecipientList, openMessageMore } = require('./ui-journey-helpers.cjs');
 let stage = 'setup';
 (async () => {
   const out = path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'taskflow-redesign');
@@ -97,20 +97,21 @@ let stage = 'setup';
     const read = async()=> (await f.harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1',[f.eventId])).rows[0].payload;
     assert.equal((await read()).participants.filter(p=>p.name==='합성 반영').length,1);
     stage = 'message step navigation';
-    // Reopened 2026-11-23: one-screen checklist. Zones no longer hide or gate each other; the
-    // checklist links only move focus, and 발송 검토 keeps every validation.
+    // Reopened 2026-11-24 (owner: 시안 A): one sentence with three pills opening folded panels. Panels
+    // neither hide nor gate each other, and 발송 검토 keeps every validation.
     await page.goto(base+'/messages'); await page.locator('#message-compose-open').click();
-    await page.waitForFunction(()=>document.activeElement?.id==='recipient-heading');
+    await page.waitForFunction(()=>document.activeElement?.id==='campaign-who-pill');
     assert.match(await page.locator('#recipient-summary').innerText(),/선택 0명/);
     assert.equal(await page.locator('#campaign-submit').isDisabled(),true,'empty recipients keep review disabled');
     assert.match(await page.locator('#campaign-submit-warning').innerText(),/수신자를 먼저 고르세요/);
-    if(!(await page.locator('#recipient-status-filter').isVisible())) await page.locator('#recipient-list-summary').click();
+    await openRecipientList(page);
     await page.getByRole('checkbox',{name:/감사 참가자 1 감사 업체 1/}).check();
     await messageStep(page,2);
     assert.equal(await page.locator('#campaign-title').evaluate(el=>el.tabIndex),0,'checklist navigation preserves normal Tab order');
+    await openMessageMore(page);
     await page.locator('#campaign-title').fill('합성 단계 안내');
     await page.locator('#campaign-body').fill('{{이름}}님 안내입니다.');
-    assert.equal(await page.locator('#recipient-summary').isVisible(),true,'recipient zone stays on screen while writing');
+    assert.match(await page.locator('#campaign-who-pill').innerText(),/1명/,'the recipient count stays on screen in the sentence while writing');
     await shot('message-step2-1280.png'); await a11y();
     await messageStep(page,1);
     assert.match(await page.locator('#recipient-summary').innerText(),/선택 1명/);

@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep, waitForDialogExitFocus, openRecipientList } = require('./ui-journey-helpers.cjs');
+const { messageStep, waitForDialogExitFocus, openRecipientList, openMessageMore } = require('./ui-journey-helpers.cjs');
 
 
 // Approved white product system: real routes and real API, synthetic data in
@@ -344,16 +344,16 @@ async function main() {
           await openRecipientList(page);
           await page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check();
           await messageStep(page, 2);
+          await openMessageMore(page); // Reopened 2026-11-24 (시안 A): the optional record title sits under 더 보기
           await page.locator('#campaign-title').fill('서밋 입장 안내');
           const body = '{{이름}}님, 반갑습니다.\n행사장 입구에서 모바일 티켓을 준비해 주세요.';
           await page.locator('#campaign-body').fill(body);
           check(`compose@${width}: preview substitutes an anonymous example without changing the draft`, (await page.locator('#message-draft-preview').innerText()).includes('홍길동님') && await page.locator('#campaign-body').inputValue() === body);
           if (width <= 390) {
-            // Reopened 2026-11-23: the step buttons became checklist links; the same readability promise
-            // holds for the checklist labels and the one primary 발송 검토 action (one line, touch width).
-            const actionLines = await page.locator('nav[aria-label="메시지 작성 항목"] a, #campaign-submit').evaluateAll(buttons => buttons.map(button => {
-              // Each checklist link names its zone in a <strong>; the one-line promise applies to that label, the touch width to the whole link.
-              const walker = document.createTreeWalker(button.querySelector('strong') || button, NodeFilter.SHOW_TEXT);
+            // Reopened 2026-11-24 (owner: 시안 A): the checklist became one sentence with three pills. The same
+            // readability promise holds for the pills and the one primary 발송 검토 action (one line, touch width).
+            const actionLines = await page.locator('#campaign-sentence button, #campaign-submit').evaluateAll(buttons => buttons.map(button => {
+              const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
               const lines = new Set();
               while (walker.nextNode()) {
                 if (!walker.currentNode.textContent.trim()) continue;
@@ -363,8 +363,12 @@ async function main() {
               }
               return { text: button.textContent.trim(), lines: lines.size, width: button.getBoundingClientRect().width };
             }));
-            check(`compose@${width}: checklist labels and review action remain readable`, actionLines.length === 5 && actionLines.every(action => action.lines === 1 && action.width >= 44), actionLines);
-            check(`compose@${width}: guidance does not contain an inline button`, await page.locator('#campaign-variables a').count() === 0 && await page.locator('#campaign-variables + a[href*="/draws"]').isVisible());
+            check(`compose@${width}: sentence pills and review action remain readable`, actionLines.length === 4 && actionLines.every(action => action.lines === 1 && action.width >= 44), actionLines);
+            // Guidance never holds a button; the 추첨·투표 link appears (as a link) only once a lucky number is used.
+            check(`compose@${width}: guidance does not contain an inline button`, await page.locator('#campaign-variables button').count() === 0 && await page.locator('#campaign-variables a').count() === 0);
+            await page.locator('#campaign-body').fill(`${body}\n{{럭키번호}}`);
+            check(`compose@${width}: a lucky number points to 추첨·투표 with a plain link`, await page.locator('#campaign-variables a[href*="/draws"]').isVisible() && await page.locator('#campaign-variables button').count() === 0);
+            await page.locator('#campaign-body').fill(body);
           }
           await render(page, 'compose', width);
           await messageStep(page, 3);
@@ -375,8 +379,8 @@ async function main() {
           check(`review@${width}: preview and review do not dispatch`, f.gateway.commands.length === 0);
           await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '취소', exact: true }).click();
           await messageStep(page, 2);
+          await openMessageMore(page);
           await page.locator('#campaign-title').fill(''); await page.locator('#campaign-body').fill('');
-          await messageStep(page, 1);
           await openRecipientList(page);
           await page.locator('#recipient-clear-all').click();
         }
@@ -454,6 +458,7 @@ async function main() {
     await openRecipientList(uncertainPage);
     await uncertainPage.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check();
     await messageStep(uncertainPage, 2);
+    await openMessageMore(uncertainPage);
     await uncertainPage.locator('#campaign-title').fill(uncertainTitle);
     await uncertainPage.locator('#campaign-body').fill('{{이름}}님, 행사장 입구에서 티켓을 준비해 주세요.');
     await messageStep(uncertainPage, 3);
@@ -475,8 +480,9 @@ async function main() {
     check('unknown message retains its original simulated draft', attempts[0].payload.title === uncertainTitle && attempts[0].payload.simulate === true &&
       await uncertainPage.locator('#campaign-title').inputValue() === uncertainTitle &&
       await uncertainPage.locator('#campaign-body').inputValue() === attempts[0].payload.body);
-    const previewCopy = await uncertainPage.locator(':is(section,[role="region"])[aria-labelledby="message-preview-heading"]').innerText();
-    check('unknown message preview never claims non-delivery', !previewCopy.includes('아직 저장·발송하지 않았습니다') && previewCopy.includes('이름·티켓 링크·번호는 예시입니다'), previewCopy);
+    // Reopened 2026-11-24 (시안 A): the preview is the aside beside the writing (a bottom sheet on a phone), read as text.
+    const previewCopy = await uncertainPage.locator('aside[aria-labelledby="message-preview-heading"]').textContent();
+    check('unknown message preview never claims non-delivery', !previewCopy.includes('아직 저장·발송하지 않았습니다') && previewCopy.includes('이름·티켓 링크·번호는 예시이고 받는 사람마다 달라집니다'), previewCopy);
     await render(uncertainPage, 'compose-response-unknown', 390);
     const receiptResponse = uncertainPage.waitForResponse(response => response.url().endsWith(`/api/events/${f.eventId}/command-receipts/${attempts[0].commandId}`));
     await recovery.getByRole('button', { name: '서버 처리 확인', exact: true }).click();

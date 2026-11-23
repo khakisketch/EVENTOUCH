@@ -11,7 +11,7 @@ const axeSource = require('axe-core').source;
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
-const { chooseRadio } = require('./ui-journey-helpers.cjs');
+const { chooseRadio, openMessageMore } = require('./ui-journey-helpers.cjs');
 const before = process.argv.includes('--before');
 let phase = 'setup';
 async function main() {
@@ -57,6 +57,7 @@ async function main() {
       return route.continue();
     });
     await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/messages?to=${encodeURIComponent(person.id)}`, { waitUntil: 'networkidle' });
+    await openMessageMore(page); // Reopened 2026-11-24 (시안 A): the photo and the optional record title sit under 더 보기
     await page.locator('#campaign-title').fill('합성 사진 확인');
     await page.locator('#campaign-body').fill('발송하지 않는 합성 본문');
     if (before) await chooseRadio(page, 'campaign-channel', 'MMS');

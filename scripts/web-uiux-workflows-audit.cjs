@@ -12,7 +12,7 @@ const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { extendFixtureSeed } = require('./web-console-audit.cjs');
-const { messageStep, chooseScheduleDate } = require('./ui-journey-helpers.cjs');
+const { messageStep, chooseScheduleDate, openRecipientList, openMessageMore, openMessagePanel, openMessagePreview, closeMessagePreview } = require('./ui-journey-helpers.cjs');
 let stage = 'setup';
 async function main() {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private EVENTOUCH_CAPTURE_ROOT');
@@ -43,8 +43,11 @@ async function main() {
     await current.locator('#campaign-body').waitFor();
     assert.match(await current.locator('#recipient-summary').innerText(), /선택 1명/);
     const raw = '{{이름}}님 {{행사명}} {{행사일}} {{티켓링크}} {{럭키번호}}';
+    await openMessageMore(current); // Reopened 2026-11-24 (시안 A): the optional record title sits under 더 보기
     await current.locator('#campaign-title').fill('합성 안내');
     await current.locator('#campaign-body').fill(raw);
+    // On a phone the example is a bottom sheet opened by 미리보기; beside the writing on desktop.
+    await openMessagePreview(current);
     const preview = await current.locator('#message-draft-preview').innerText();
     assert.match(preview, /홍길동님 감사 검증 행사 2027-01-16/);
     assert.match(preview, /\[개별 티켓 링크\] \[배정된 번호\]/);
@@ -52,6 +55,8 @@ async function main() {
     assert.equal(preview.includes('{{이름}}'), false);
     await current.locator('#message-draft-preview').scrollIntoViewIfNeeded();
     await current.screenshot({ path: path.join(out, 'message-example-390.png') });
+    await closeMessagePreview(current);
+    await openMessagePanel(current, 'how');
     const sms = current.locator('#campaign-channel input[value="SMS"]');
     const alimtalk = current.locator('#campaign-channel input[value="ALIMTALK"]');
     assert.equal(await current.locator('#campaign-channel input[type="radio"]').count(), 2);
@@ -149,7 +154,7 @@ async function main() {
     await desktopPage.goto(`${f.baseUrl}/console/events/${f.eventId}/messages`);
     await desktopPage.locator('#message-compose-open').click();
     // The recipient list is folded on phones; open it the way an operator would.
-    if (!(await desktopPage.locator('#recipient-status-filter').isVisible())) await desktopPage.locator('#recipient-list-summary').click();
+    await openRecipientList(desktopPage);
     await desktopPage.getByRole('checkbox', { name: /감사 참가자 1 감사 업체 1/ }).check();
     await messageStep(desktopPage, 2);
     await desktopPage.locator('#campaign-body').fill(raw);
@@ -172,10 +177,11 @@ async function main() {
     await narrowPage.goto(`${f.baseUrl}/console/events/${f.eventId}/messages`);
     await narrowPage.locator('#message-compose-open').click();
     // The recipient list is folded on phones; open it the way an operator would.
-    if (!(await narrowPage.locator('#recipient-status-filter').isVisible())) await narrowPage.locator('#recipient-list-summary').click();
+    await openRecipientList(narrowPage);
     await narrowPage.getByRole('checkbox', { name: /감사 참가자 1 감사 업체 1/ }).check();
     await messageStep(narrowPage, 2);
     await narrowPage.locator('#campaign-body').fill(raw);
+    await openMessagePreview(narrowPage);
     await narrowPage.locator('#message-draft-preview').scrollIntoViewIfNeeded();
     assert.equal(await narrowPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'message composition fits a 320px viewport');
     await narrowPage.screenshot({ path: path.join(out, 'message-example-320.png') });

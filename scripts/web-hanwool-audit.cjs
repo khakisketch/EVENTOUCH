@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep, selectDrawStage } = require('./ui-journey-helpers.cjs');
+const { messageStep, selectDrawStage, openRecipientList, openMessageMore } = require('./ui-journey-helpers.cjs');
 // The roulette settings sit in a collapsed disclosure of the roulette card.
 async function openRouletteSettings(page) {
   await selectDrawStage(page, '모바일 룰렛');
@@ -259,8 +259,11 @@ async function main() {
     phase = 'UI simulated invitation and real personalized entry';
     await operator.goto(`${gateway.baseUrl}/console/events/${eventId}/messages`, { waitUntil: 'networkidle' });
     await operator.locator('#message-compose-open').click();
+    // Reopened 2026-11-24 (시안 A): the list is folded inside the 받는 사람 panel and the optional title sits under 더 보기.
+    await openRecipientList(operator);
     await operator.getByRole('checkbox', { name: /표시 \d+명 모두 선택/ }).check();
     await messageStep(operator, 2);
+    await openMessageMore(operator);
     await operator.locator('#campaign-title').fill('검증 초대');
     await operator.locator('#campaign-body').fill('{{이름}}님, 럭키번호 {{럭키번호}} / {{티켓링크}}');
     await messageStep(operator, 3);

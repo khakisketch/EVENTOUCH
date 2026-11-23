@@ -1,5 +1,7 @@
 'use strict';
-const { messageStep } = require('./ui-journey-helpers.cjs');
+const { messageStep, openRecipientList, openMessageMore } = require('./ui-journey-helpers.cjs');
+// Reopened 2026-11-24 (owner: 시안 A): the record title now sits under 더 보기, so the always-visible
+// message body is the marker for "the composer is on screen".
 
 
 // Owned Next + real isolated API/PostgreSQL. Mock delivery only; never use
@@ -48,7 +50,7 @@ async function main() {
     const loaded = async (url = base) => {
       await page.goto(url, { waitUntil: 'networkidle' });
       const handoff = new URL(url).searchParams.has('to');
-      await page.locator(before || handoff ? '#campaign-title' : '#history-heading').waitFor();
+      await page.locator(before || handoff ? '#campaign-body' : '#history-heading').waitFor();
     };
     const shot = async (name, width, anchor = null) => {
       await page.evaluate(() => document.fonts.ready); await page.evaluate(() => scrollTo(0, 0));
@@ -67,7 +69,7 @@ async function main() {
     // via break-word instead of mid-syllable anywhere breaks.
     const checkRecipientMeta = async (name) => {
       if (!(await page.locator('ul[aria-label="참가자 선택"]').isVisible())) {
-        await page.locator('#recipient-list-summary').click();
+        await openRecipientList(page);
         await page.locator('ul[aria-label="참가자 선택"]').waitFor();
       }
       const result = await page.evaluate(() => {
@@ -120,7 +122,7 @@ async function main() {
       await page.setViewportSize({ width, height: width > 768 ? 900 : 844 }); await loaded();
       if (!before) {
         check(`header@${width}: event context precedes the task title`, await page.locator('main header').first().evaluate(el => el.querySelector('a').getBoundingClientRect().bottom <= el.querySelector('h1').getBoundingClientRect().top + 1));
-        check(`history@${width}: visible before compose`, await page.locator('[data-history-row]').first().isVisible() && !await page.locator('#campaign-title').isVisible());
+        check(`history@${width}: visible before compose`, await page.locator('[data-history-row]').first().isVisible() && !await page.locator('#campaign-body').isVisible());
         check(`history@${width}: create reachable`, await page.locator('#message-compose-open').isVisible());
       }
       await shot('history', width);
@@ -209,8 +211,8 @@ async function main() {
             && Math.abs(g.innerTop) <= 2 && Math.abs(g.innerBottom) <= 2), rows);
       }
       if (!before) {
-        // Reopened 2026-11-23: the picker folds on narrow screens, so wait on the always-visible recipients zone.
-        await page.locator('#message-compose-open').click(); await page.locator('#recipient-heading').waitFor();
+        // Reopened 2026-11-24: the sentence (with its three pills) is the always-visible head of the composer.
+        await page.locator('#message-compose-open').click(); await page.locator('#campaign-sentence').waitFor();
         check(`compose@${width}: history yields to the active workspace`,
           !await page.locator('#history-heading').isVisible() && await page.locator('#message-compose-close').isVisible());
         await shot('compose', width, '#campaign-heading');
@@ -222,15 +224,15 @@ async function main() {
     if (before) { completed = true; return; }
     // Behavioral scenarios follow the same persisted workspace, not API stubs.
     await page.setViewportSize({ width: 1280, height: 900 }); await loaded(`${base}?to=${ids.join(',')}`);
-    await page.locator('#campaign-title').waitFor();
+    await page.locator('#campaign-body').waitFor();
     check('exact-ID handoff reveals composer', (await page.locator('#recipient-summary').innerText()).includes('선택 2명'));
     check('handoff is consumed without send', !new URL(page.url()).searchParams.has('to') && f.gateway.commands.length === 0);
-    await page.locator('#campaign-title').fill('보존할 안내'); await page.locator('#campaign-body').fill('입력과 선택을 보존합니다.');
+    await openMessageMore(page); await page.locator('#campaign-title').fill('보존할 안내'); await page.locator('#campaign-body').fill('입력과 선택을 보존합니다.');
     await page.locator('#message-compose-close').click();
-    check('history return hides but does not destroy draft', !await page.locator('#campaign-title').isVisible());
+    check('history return hides but does not destroy draft', !await page.locator('#campaign-body').isVisible());
     await page.locator('#message-compose-open').click();
     check('compose return retains input and exact selection', await page.locator('#campaign-title').inputValue() === '보존할 안내' && (await page.locator('#recipient-summary').innerText()).includes('선택 2명'));
-    await messageStep(page, 1);
+    await openRecipientList(page);
     await page.locator('#recipient-selected-only').uncheck();
     await page.locator('#recipient-search').fill(people[0].name);
     check('recipient filter keeps hidden selection', (await page.locator('#recipient-summary').innerText()).includes('화면 밖 선택 1명'));
@@ -242,7 +244,7 @@ async function main() {
     check('failed reload cancel preserves draft', await page.locator('#campaign-title').inputValue() === '보존할 안내');
     await failedRow.getByRole('button', { name: '내용·대상 불러오기', exact: true }).click();
     await overwrite.getByRole('button', { name: '불러온다', exact: true }).click();
-    await page.locator('#campaign-title').waitFor();
+    await page.locator('#campaign-body').waitFor();
     check('failed reload reveals exact saved content without sending', await page.locator('#campaign-body').inputValue() === failed.body && await page.locator('#campaign-scheduled').count() === 0 && await page.locator('#campaign-schedule-choice input[value="NOW"]').isChecked() && f.gateway.commands.length === 0);
     await messageStep(page, 3);
     await page.getByLabel('모의 발송으로 기록', { exact: false }).check();
@@ -287,7 +289,7 @@ async function main() {
     check('lost response reuses receipt exactly once', attempts.length === 2 && attempts[0] === attempts[1] && (await workspace()).messages.filter(m => m.id === lostId).length === 1);
     await page.locator(`#campaign-${lostId}`).waitFor({ state: 'visible' });
     await page.waitForFunction(id => document.activeElement?.id === `campaign-${id}`, lostId);
-    check('proven send returns focus to its visible history record', !await page.locator('#campaign-title').isVisible() && await page.locator(`#campaign-${lostId}`).isVisible());
+    check('proven send returns focus to its visible history record', !await page.locator('#campaign-body').isVisible() && await page.locator(`#campaign-${lostId}`).isVisible());
     await page.unroute('**/api/events/*/commands');
     const reservation = page.locator(`#campaign-${scheduled.id}`);
     await reservation.getByRole('button', { name: '예약 취소', exact: true }).click();
@@ -309,12 +311,12 @@ async function main() {
     await template.getByRole('button', { name: '사용', exact: true }).first().click();
     const applyTemplate = page.getByRole('button', { name: '템플릿 적용', exact: true });
     if (await applyTemplate.isVisible()) await applyTemplate.click();
-    await page.locator('#recipient-heading').waitFor();
+    await page.locator('#campaign-sentence').waitFor();
     check('a completed draft does not leave a stale selected-only filter', !await page.locator('#recipient-selected-only').isChecked());
-    if (!await page.locator('#recipient-list-summary').evaluate(el => el.closest('details').open)) await page.locator('#recipient-list-summary').click();
+    await openRecipientList(page);
     await page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check();
     await messageStep(page, 2);
-    await page.locator('#campaign-title').waitFor();
+    await page.locator('#campaign-body').waitFor();
     check('template use reveals composer without sending', await page.locator('#campaign-body').inputValue() === '{{이름}}님, 안내 데스크에서 티켓을 보여 주세요.');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator('#message-compose-close').click();

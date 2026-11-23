@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep } = require('./ui-journey-helpers.cjs');
+const { messageStep, openRecipientList, openMessagePanel, openMessageMore } = require('./ui-journey-helpers.cjs');
 
 const { chooseRadio, openStudioPanel } = require('./ui-journey-helpers.cjs');
 
@@ -302,14 +302,15 @@ async function main() {
     const messaging = { name: '선택 명단 → 안내 작성 → 명시적 검토 → 모의 발송', operations: 0, scrollEvents: null };
     journeys.push(messaging);
     await act(messaging, () => page.locator('#roster-send-message').click());
-    await page.locator('#campaign-title').waitFor();
+    await page.locator('#campaign-body').waitFor(); // Reopened 2026-11-24 (시안 A): the optional title sits under 더 보기, the body is always on screen
     await page.evaluate(() => { window.__workbenchScrolls = 0; window.addEventListener('scroll', () => window.__workbenchScrolls += 1); });
     check('handoff retains two known recipients', (await page.locator('#recipient-summary').textContent()).includes('선택 2명'));
     // Reopened 2026-11-23: no schedule means 지금 is chosen and the datetime field does not exist.
     check('handoff never schedules', await page.locator('#campaign-scheduled').count() === 0 && await page.locator('#campaign-schedule-choice input[value="NOW"]').isChecked());
+    await act(messaging, () => openMessageMore(page));
     await act(messaging, () => page.locator('#campaign-title').fill('선택 명단 안내'));
     await act(messaging, () => page.locator('#campaign-body').fill('행사 안내를 확인해 주세요.'));
-    await act(messaging, () => messageStep(page, 3));
+    await messageStep(page, 3); // no step buttons: the review dock is already on screen
     await act(messaging, () => page.getByLabel('모의 발송으로 기록', { exact: false }).check());
     await act(messaging, () => page.locator('#campaign-submit').click());
     check('review does not send automatically', (await bootstrap()).workspaces[f.eventId].messages.length === 0);
@@ -414,8 +415,9 @@ async function main() {
     // mobile keyboard paging, empty search, grouped nav and preset anchors.
     await page.goto(base + '/messages');
     await page.locator('#message-compose-open').click();
-    await page.locator('#recipient-heading').waitFor();
-    await page.waitForFunction(() => document.activeElement?.id === 'recipient-heading');
+    // Reopened 2026-11-24 (시안 A): opening the composer focuses the first pill of the sentence (받는 사람).
+    await page.locator('#campaign-who-pill').waitFor();
+    await page.waitForFunction(() => document.activeElement?.id === 'campaign-who-pill');
     check('opening the composer focuses recipient selection', true);
     await page.locator('#message-compose-close').click();
     await page.waitForFunction(() => document.activeElement?.id === 'message-compose-open');
@@ -428,7 +430,7 @@ async function main() {
     check('skip-link focus is not stolen back by composer closing',
       await page.evaluate(() => document.activeElement?.id === 'main-content'));
     await page.locator('#message-compose-open').click();
-    await page.waitForFunction(() => document.activeElement?.id === 'recipient-heading');
+    await page.waitForFunction(() => document.activeElement?.id === 'campaign-who-pill');
     await page.evaluate(() => { document.body.setAttribute('tabindex', '-1'); document.body.focus(); });
     await page.keyboard.press('Tab');
     check('global skip link is reached after opening the composer',
@@ -447,15 +449,20 @@ async function main() {
     check('future review controls are mounted and the schedule starts at 지금', await page.locator('#campaign-schedule-choice input[value="NOW"]').isChecked() && await page.locator('#campaign-scheduled').count() === 0 && await page.locator('#campaign-submit').count() === 1);
     for (const width of [1280, 390, 320]) {
       await page.setViewportSize({ width, height: width === 1280 ? 900 : 844 });
-      // Reopened 2026-11-23: zones no longer gate each other, so the 내용 checklist link moves to the
-      // body without an error; the empty review is stopped by a disabled 발송 검토 with its
-      // reason, and 수신자 다시 확인 is the explicit way back to the picker filter.
+      // Reopened 2026-11-24 (시안 A): panels never gate each other. The composer's skip link moves straight to the
+      // body without an error; the empty review is stopped by a disabled 발송 검토 with its reason; and the way back
+      // to the picker is the sentence's first pill (Enter opens its panel, never sends).
       const commandsBeforeContinue = f.gateway.commands.length;
-      await page.locator('nav[aria-label="메시지 작성 항목"] a[href="#campaign-content"]').press('Enter');
+      await page.locator('a[data-skip-to="campaign-body"]').focus();
+      await page.keyboard.press('Enter');
       await page.waitForFunction(() => document.activeElement?.id === 'campaign-body');
       check(`empty review stays blocked with a visible reason at ${width}`, await page.locator('#campaign-submit').isDisabled() && (await page.locator('#campaign-submit-warning').textContent()).includes('수신자를 먼저 고르세요') && f.gateway.commands.length === commandsBeforeContinue);
-      await page.getByRole('button', { name: '수신자 다시 확인', exact: true }).press('Enter');
-      await page.waitForFunction(() => document.activeElement?.id === 'recipient-status-filter').catch(async e => { console.error('recipient focus diagnostic', await page.evaluate(() => ({ active: document.activeElement?.outerHTML, open: document.querySelector('#campaign-recipients details')?.open, selection: document.querySelector('#recipient-summary')?.textContent }))); throw e; });
+      await page.locator('#campaign-who-pill').focus();
+      if (!(await page.locator('#campaign-recipients').isVisible())) await page.keyboard.press('Enter');
+      await page.locator('#campaign-recipients').waitFor({ state: 'visible' });
+      check(`the first pill returns to the recipient panel by keyboard at ${width}`, (await page.locator('#campaign-who-pill').getAttribute('aria-expanded')) === 'true' && f.gateway.commands.length === commandsBeforeContinue);
+      if (!(await page.locator('#campaign-recipients details').evaluate(e => e.open))) await page.locator('#recipient-list-summary').click();
+      await page.locator('#recipient-status-filter').waitFor({ state: 'visible' });
       await page.screenshot({ path: `${OUT}/state-message-empty-review-${width}.png` });
       await page.locator('#recipient-status-filter').selectOption('ALL');
       const picker = page.locator('#campaign-recipients details');
@@ -487,8 +494,8 @@ async function main() {
       check(`focused recipient summary is in the viewport at ${width}`, focusPosition.top >= focusPosition.minimum && focusPosition.bottom <= focusPosition.viewport, focusPosition);
       await page.screenshot({ path: `${OUT}/state-message-keyboard-${width}.png` });
       await page.keyboard.press('Tab');
-      // Reopened 2026-11-23: the step button is gone; after the closed list the next stop is the content zone's first control.
-      check(`next Tab reaches the content zone at ${width}`, await page.evaluate(() => Boolean(document.activeElement?.closest('[aria-labelledby="campaign-purpose-label"]'))));
+      // Reopened 2026-11-24 (시안 A): after the closed list the next stop is the panel's own 완료 button (the way out of the panel).
+      check(`next Tab reaches the panel's 완료 at ${width}`, await page.evaluate(() => Boolean(document.activeElement?.closest('#campaign-recipients')) && document.activeElement?.textContent?.trim() === '완료'));
       await page.keyboard.press('Shift+Tab');
       await page.keyboard.press('Enter');
       check(`reopening keeps the exact selection at ${width}`, await picker.evaluate(e => e.open) && await chosen.isChecked());
@@ -542,10 +549,12 @@ async function main() {
     check('the second safety recipient is known', Boolean(changedRecipient));
     await safetyBoxes.nth(0).check();
     await messageStep(page, 2);
+    await openMessageMore(page);
     await page.locator('#campaign-title').fill('검토할 안내');
     await page.locator('#campaign-body').fill('실제 발송하지 않는 검토 검사입니다.');
     await messageStep(page, 3);
     check('simulation is visible at review', await page.getByLabel('모의 발송으로 기록', { exact: false }).isVisible());
+    await openMessagePanel(page, 'when');
     await page.locator('#campaign-schedule-choice-2').focus(); await page.keyboard.press('Space');
     check('keyboard opens schedule and help', await page.locator('#campaign-scheduled').isVisible() && await page.locator('#campaign-scheduled-help').isVisible());
     for (const width of [1280,390,320]) {
@@ -567,6 +576,7 @@ async function main() {
     await page.locator('#campaign-submit').click();
     check('changed recipient requires and permits a fresh review', await sendConfirmation.isVisible());
     await messageStep(page, 2);
+    await openMessageMore(page);
     await page.locator('#campaign-title').fill('수정된 안내');
     check('changing the message invalidates the old confirmation', !await sendConfirmation.isVisible() && (await page.locator('#campaign-review-status').textContent()).includes('발송 검토를 다시 눌러 주세요'));
     await page.locator('#campaign-title').fill('검토할 안내');
@@ -579,18 +589,20 @@ async function main() {
     await page.getByLabel('모의 발송으로 기록', { exact: false }).check();
     check('restoring simulation mode does not revive the earlier confirmation', !await sendConfirmation.isVisible());
     await page.locator('#campaign-submit').click();
+    await openMessagePanel(page, 'when');
     await page.locator('#campaign-scheduled').fill('2028-01-16T10:00');
     check('changing the manual schedule invalidates its earlier confirmation', !await sendConfirmation.isVisible());
-    // Reopened 2026-11-23: the schedule can no longer be folded away, so the same promise is that
-    // the value stays visible with manual execution stated in the zone and in the review summary.
+    // Reopened 2026-11-24 (시안 A): the value stays in its panel and on the 시점 pill, with manual execution
+    // stated in the send summary beside the 발송 검토 button.
     check('schedule retains its value and shows that execution is manual',
       await page.locator('#campaign-scheduled').isVisible()
       && (await page.locator('#campaign-scheduled').inputValue()) === '2028-01-16T10:00'
-      && (await page.locator('[aria-label="작성 요약"]').innerText()).includes('수동 실행'));
+      && (await page.locator('#campaign-when-pill').innerText()).includes('2028')
+      && (await page.locator('#campaign-submit-warning').innerText()).includes('수동 실행'));
     await page.getByLabel('모의 발송으로 기록', { exact: false }).uncheck();
     check('real scheduled draft defaults to manual execution',
       await page.getByRole('radio', { name: '수동 실행', exact: true }).isChecked()
-      && (await page.locator('#campaign-review-heading').locator('..').locator('..').innerText()).includes('이 예약은 자동 발송되지 않습니다'));
+      && (await page.locator('#campaign-schedule').innerText()).includes('이 예약은 자동 발송되지 않습니다'));
     await page.locator('#campaign-submit').click();
     check('manual reservation confirmation names the mode and action',
       (await sendConfirmation.innerText()).includes('수동 실행')
@@ -598,6 +610,7 @@ async function main() {
       && (await sendConfirmation.innerText()).includes('예약 시각:')
       && (await sendConfirmation.innerText()).includes('2028'));
     await sendConfirmation.getByRole('button', { name: '취소', exact: true }).click();
+    await openMessagePanel(page, 'when');
     await chooseRadio(page, 'campaign-schedule-mode', 'AUTO');
     await page.locator('#campaign-submit').click();
     check('explicit auto reservation confirmation names the mode and future activation',
@@ -607,6 +620,7 @@ async function main() {
     await page.screenshot({ path: `${OUT}/state-real-scheduled-review-320.png` });
     await sendConfirmation.getByRole('button', { name: '취소', exact: true }).click();
     await page.getByLabel('모의 발송으로 기록', { exact: false }).check();
+    await openMessagePanel(page, 'when');
     await page.locator('#campaign-scheduled').fill('');
     check('removing the new schedule does not revive the earlier confirmation', !await sendConfirmation.isVisible());
     await page.locator('#campaign-submit').click();
@@ -617,7 +631,9 @@ async function main() {
     // is rejected and the previous valid attachment remains in the draft.
     // Only the disposable fixture receives the synthetic JPG upload.
     await messageStep(page, 2);
+    await openMessagePanel(page, 'how');
     await chooseRadio(page, 'campaign-channel', 'SMS'); // The attachment switches the new request to MMS.
+    await openMessageMore(page); // the photo attachment sits under 더 보기
     const jpeg = Buffer.alloc(1024);
     Buffer.from('ffd8ffc0000b080001000a01011100ffd9', 'hex').copy(jpeg);
     await page.locator('#campaign-image').setInputFiles({ name: 'review-test.jpg', mimeType: 'image/jpeg', buffer: jpeg });
@@ -634,6 +650,7 @@ async function main() {
     // focus to the field without creating a message or losing its value.
     await messageStep(page, 3);
     const beforePastSchedule = (await bootstrap()).workspaces[f.eventId].messages.length;
+    await openMessagePanel(page, 'when');
     await page.locator('#campaign-scheduled').fill('2020-01-16T10:00');
     await page.locator('#campaign-submit').click();
     // The form now refuses a past time before any confirmation; a server refusal would still arrive after one.
@@ -657,18 +674,19 @@ async function main() {
     // before opening a fresh draft; the composer remains mounted but hidden.
     await page.locator(`#campaign-${freshReviewMessage.id}`).waitFor({ state: 'visible' });
     await page.waitForFunction(id => document.activeElement?.id === `campaign-${id}`, freshReviewMessage.id);
-    check('proven simulation returns focus to its history record', !await page.locator('#campaign-title').isVisible());
+    check('proven simulation returns focus to its history record', !await page.locator('#campaign-body').isVisible());
     await page.locator('#message-compose-open').click();
-    await page.locator('#recipient-heading').waitFor({ state: 'visible' });
-    await page.waitForFunction(() => document.activeElement?.id === 'recipient-heading');
-    check('a fresh draft starts by choosing recipients', (await page.locator('#recipient-summary').innerText()).includes('선택 0명'));
-    if (!(await safetyPicker.evaluate(e => e.open))) await safetyPicker.locator('summary').click();
+    await page.locator('#campaign-who-pill').waitFor({ state: 'visible' });
+    await page.waitForFunction(() => document.activeElement?.id === 'campaign-who-pill');
+    check('a fresh draft starts by choosing recipients', (await page.locator('#recipient-summary').innerText()).includes('선택 0명') && (await page.locator('#campaign-who-pill').innerText()).includes('받는 사람 고르기'));
+    await openRecipientList(page);
     await safetyPicker.locator('ul input[type="checkbox"]').first().check();
     await messageStep(page, 2);
+    await openMessageMore(page);
     await page.locator('#campaign-title').fill('선택한 대상에게 작성');
     check('content opens after selecting a recipient', await page.locator('#campaign-title').inputValue() === '선택한 대상에게 작성');
     await page.locator('#campaign-title').fill('');
-    await messageStep(page, 1);
+    await openRecipientList(page);
     await page.locator('#recipient-clear-all').click();
     await page.goto(base + '/participants?status=PENDING');
     await page.getByRole('combobox', { name: '상태별 보기', exact: true }).waitFor();

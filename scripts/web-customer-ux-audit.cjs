@@ -11,7 +11,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { messageStep, openSettingsBasics } = require('./ui-journey-helpers.cjs');
+const { messageStep, openSettingsBasics, openRecipientList, openMessageMore } = require('./ui-journey-helpers.cjs');
 const axe = require('axe-core').source;
 const OUT = process.env.EVENTOUCH_CAPTURE_ROOT
   ? path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'customer-ux')
@@ -96,28 +96,29 @@ async function main() {
 
       await page.goto(`${base}/messages`);
       await page.locator('#message-compose-open').click();
-      // Reopened 2026-11-20: 메시지 작성은 3단계(수신자 → 내용 → 검토·발송)이며 단계 밖의 영역은 숨겨진다. 이전의 '수신자·본문·검토가
-      // 한 화면에 함께 있다'는 전제 대신 각 단계를 실제로 거쳐 검토 단계에서 같은 의도(검토 줄이 위의 내용을 덮지 않음)를 확인한다.
+      // Reopened 2026-11-24 (owner: 시안 A): one sentence with folded panels. Open 받는 사람 → 직접 고르기, pick a
+      // recipient, write the body, and check the same intent at the end (the send dock never covers the send summary above it).
       const recipientDetails = page.locator('#campaign-recipients details');
-      if (!await recipientDetails.evaluate(el => el.open)) await recipientDetails.locator('summary').click();
+      await openRecipientList(page);
       await recipientDetails.locator('ul input[type="checkbox"]').first().check();
       await messageStep(page, 2);
+      await openMessageMore(page);
       await page.locator('#campaign-title').fill('검수 안내');
       await page.locator('#campaign-body').fill('행사 안내를 확인해 주세요.');
       check(`messages@${width}: delivery limit visible without opening help`, await page.getByText('발송 연결 · 미연동 · 실제 전달 안 됨', { exact: true }).isVisible());
       await messageStep(page, 3);
+      // Reopened 2026-11-24 (시안 A): the 발송 검토 button lives in a sticky dock (an opaque strip that keeps it in reach
+      // while writing). At the end of the form the dock must sit below the send summary, never over it.
       const geometry = await page.locator('#campaign-submit').evaluate(el => {
-        const bar = el.closest('[class*="reviewBar"]');
-        const above = [];
-        for (let node = bar; node && !node.matches('[class*="reviewCard"]'); node = node.parentElement) {
-          for (let sibling = node.previousElementSibling; sibling; sibling = sibling.previousElementSibling) {
-            const box = sibling.getBoundingClientRect();
-            if (box.height > 0) above.push(box.bottom);
-          }
-        }
-        return { position: getComputedStyle(bar).position, reviewTop: bar.getBoundingClientRect().top, aboveBottom: Math.max(0, ...above), aboveCount: above.length };
+        const dock = el.closest('[class*="sendDock"]');
+        // Scroll every scroller to its end: a sticky element is already "in view", so scrollIntoView would not move it.
+        for (let node = dock.parentElement; node; node = node.parentElement) if (node.scrollHeight > node.clientHeight + 1) node.scrollTop = node.scrollHeight;
+        window.scrollTo(0, document.documentElement.scrollHeight);
+        const area = dock.parentElement.querySelector('[class*="sendArea"]');
+        const style = getComputedStyle(dock);
+        return { position: style.position, background: style.backgroundColor, dockTop: dock.getBoundingClientRect().top, areaBottom: area.getBoundingClientRect().bottom, areaHeight: area.getBoundingClientRect().height };
       });
-      check(`messages@${width}: review never covers the content above it`, geometry.position === 'static' && geometry.aboveCount > 0 && geometry.reviewTop >= geometry.aboveBottom, geometry);
+      check(`messages@${width}: review dock never covers the send summary above it`, geometry.position === 'sticky' && geometry.background !== 'rgba(0, 0, 0, 0)' && geometry.areaHeight > 0 && geometry.dockTop >= geometry.areaBottom - 1, geometry);
       await capture('messages', width);
 
       await page.goto(`${base}/reports`);
@@ -166,11 +167,12 @@ async function main() {
     // Simulated delivery only; explicit review must precede the real command.
     await page.goto(`${base}/messages`);
     await page.locator('#message-compose-open').click();
-    // Reopened 2026-11-20: 수신자 → 내용 → 검토·발송 3단계를 차례로 거친다(각 단계 밖의 영역은 숨겨짐).
+    // Reopened 2026-11-24 (시안 A): 받는 사람 panel → 직접 고르기 list → body → review; the title is optional, under 더 보기.
     const recipients = page.locator('#campaign-recipients details');
-    if (!await recipients.evaluate(el => el.open)) await recipients.locator('summary').click();
+    await openRecipientList(page);
     await recipients.locator('ul input[type="checkbox"]').first().check();
     await messageStep(page, 2);
+    await openMessageMore(page);
     await page.locator('#campaign-title').fill('검수 안내');
     await page.locator('#campaign-body').fill('행사 안내를 확인해 주세요.');
     await messageStep(page, 3);

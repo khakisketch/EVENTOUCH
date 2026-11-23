@@ -6,7 +6,7 @@ const path = require('node:path');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { messageStep } = require('./ui-journey-helpers.cjs');
+const { messageStep, openMessageMore } = require('./ui-journey-helpers.cjs');
 const axeSource = require('axe-core').source;
 let stage = 'setup';
 (async () => {
@@ -28,6 +28,7 @@ let stage = 'setup';
     stage = 'compose';
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/messages?to=${encodeURIComponent(ws.participants[0].id)}`, { waitUntil: 'networkidle' });
     await messageStep(page, 2);
+    await openMessageMore(page); // Reopened 2026-11-24 (시안 A): the optional record title sits under 더 보기
     await page.locator('#campaign-title').fill('합성 티켓 안내');
     await page.locator('#campaign-body').fill('입장 안내 {{티켓링크}}');
     // Reopened 2026-11-23: the review zone is always on screen; the checklist link only moves there.

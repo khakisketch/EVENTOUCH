@@ -11,7 +11,7 @@ const axeSource = require('axe-core').source;
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { messageStep } = require('./ui-journey-helpers.cjs');
+const { messageStep, openMessageMore, openMessagePanel } = require('./ui-journey-helpers.cjs');
 
 async function main() {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private EVENTOUCH_CAPTURE_ROOT');
@@ -65,11 +65,13 @@ async function main() {
       });
       await page.goto(`${f.baseUrl}/console/events/${f.eventId}/messages?to=${encodeURIComponent(person.id)}`, { waitUntil: 'networkidle' });
       await messageStep(page, 2);
+      await openMessageMore(page); // Reopened 2026-11-24 (시안 A): the optional record title sits under 더 보기
       await page.locator('#campaign-title').fill(`합성 예약 ${timezoneId}`);
       await page.locator('#campaign-body').fill('실제로 전달하지 않는 합성 안내입니다.');
       await messageStep(page, 3);
-      // Reopened 2026-11-23: the 예약 details wrapper is a 보낼 때 radio group; the datetime
-      // field exists only after 날짜·시각 지정 is chosen, here by keyboard.
+      // Reopened 2026-11-24 (시안 A): the 시점 pill opens a panel with the 지금/행사 기준/날짜·시각 지정 radio
+      // group; the datetime field exists only after 날짜·시각 지정 is chosen, here by keyboard.
+      await openMessagePanel(page, 'when');
       assert.equal(await page.locator('#campaign-scheduled').count(), 0, 'no reservation field while sending now');
       await page.locator('#campaign-schedule-choice-2').focus();
       await page.keyboard.press('Space');
@@ -80,7 +82,7 @@ async function main() {
       await input.focus();
       await page.keyboard.type('02302030');
       assert.equal(await input.evaluate(node => node.validity.badInput), true, 'incomplete or invalid native date is not treated as immediate');
-      await page.getByText('예약 날짜와 시간을 확인하세요', { exact: true }).waitFor();
+      await page.locator('#campaign-when-pill').filter({ hasText: '시각 확인 필요' }).waitFor(); // the sentence's 시점 pill names the problem
       assert.match(await page.locator('#campaign-submit-warning').innerText(), /예약 날짜·시간 확인 필요/);
       await page.getByRole('checkbox', { name: /^모의 발송으로 기록/ }).focus();
       await page.locator('#campaign-scheduled-error').waitFor();
@@ -98,7 +100,9 @@ async function main() {
       await input.fill('2030-11-12T09:00');
       const mock = page.getByRole('checkbox', { name: /^모의 발송으로 기록/ });
       if (!await mock.isChecked()) await mock.check();
-      assert.match(await page.locator('section[aria-labelledby="campaign-review-heading"]').innerText(), /예약 · 2030\. 11\. 12\. 오전 9:00 \(한국 시간\)/);
+      // Reopened 2026-11-24: the sentence reads the reservation back the way a person says it (Korea time, year shown because 2030 is not this year).
+      assert.match(await page.locator('#campaign-sentence').innerText(), /2030년 11월 12일 \(화\) 오전 9:00에 보냅니다/);
+      assert.match(await page.locator('#campaign-submit-warning').innerText(), /모의 예약/);
       await page.screenshot({ path: path.join(out, `compose-${width}.png`), fullPage: true });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'no page overflow');
       await page.evaluate(axeSource);
