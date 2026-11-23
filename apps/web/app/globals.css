@@ -1385,6 +1385,48 @@ a.pill:hover {
 /* Current event as a card: the box says "this is the event", not a menu.
    First line carries the name with its stage; the second line carries the
    facts. Same sidebar voice, no new hue. */
+/* Rail placeholder while the shell data loads (2026-11-23). Neutral blocks in
+   the rail's own text colour at low opacity, so it works on the dark rail. */
+.nav-event-skeleton {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3) var(--s4);
+}
+
+.nav-skeleton-block {
+  display: block;
+  border-radius: var(--radius-small);
+  background: currentColor;
+  opacity: 0.1;
+  animation: nav-skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+.nav-skeleton-title {
+  width: 70%;
+  height: var(--s4);
+}
+
+.nav-skeleton-meta {
+  width: 50%;
+  height: var(--s3);
+}
+
+.nav-skeleton-search {
+  height: var(--control-min-size);
+  border-radius: var(--radius-medium);
+}
+
+.nav-skeleton-row {
+  height: var(--s5);
+  width: 80%;
+}
+
+@keyframes nav-skeleton-pulse {
+  50% {
+    opacity: 0.18;
+  }
+}
+
 .nav-event-card {
   display: grid;
   gap: var(--s1);

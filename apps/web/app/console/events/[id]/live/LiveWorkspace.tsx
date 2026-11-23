@@ -186,7 +186,7 @@ export default function LiveWorkspace({ eventId }: { eventId: string }) {
   if (state.kind === "loading") {
     return (
       <ConsolePage pageId="live" eventId={eventId}>
-        <ConsoleStatePanel kind="loading" message="현장 모드를 불러오고 있습니다." onRetry={() => {}} />
+        <ConsoleStatePanel kind="loading" shape="cards" message="현장 모드를 불러오고 있습니다." onRetry={() => {}} />
       </ConsolePage>
     );
   }

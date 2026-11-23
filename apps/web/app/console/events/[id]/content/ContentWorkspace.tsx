@@ -1491,7 +1491,7 @@ export default function ContentWorkspace({ eventId, afterHeader }: { eventId: st
     return (
       <ConsolePage pageId="content" eventId={eventId} afterHeader={afterHeader}>
         <ConsoleStatePanel
-          kind="loading"
+          kind="loading" shape="split"
           message="콘텐츠 정보를 불러오고 있습니다."
           onRetry={() => { void load(); }}
         />

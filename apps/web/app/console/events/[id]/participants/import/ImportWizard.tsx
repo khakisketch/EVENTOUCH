@@ -789,7 +789,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
     return (
       <ImportFrame pageId="participantImport" eventId={eventId} onDismiss={onDismiss} busy={committing || checkingImport} canClose={canDismiss}>
         <ConsoleStatePanel
-          kind="loading"
+          kind="loading" shape="form"
           message="가져오기 화면을 불러오고 있습니다."
           onRetry={() => setRetryTick((tick) => tick + 1)}
         />

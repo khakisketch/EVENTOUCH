@@ -540,7 +540,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
   if (state.kind === "loading" || (state.kind === "ready" && loadedEventId !== eventId)) {
     return (
       <ConsolePage pageId="rewards" eventId={eventId}>
-        <ConsoleStatePanel kind="loading" message="경품 정보를 불러오고 있습니다." onRetry={() => {}} />
+        <ConsoleStatePanel kind="loading" shape="list" message="경품 정보를 불러오고 있습니다." onRetry={() => {}} />
       </ConsolePage>
     );
   }

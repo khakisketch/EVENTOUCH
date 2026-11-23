@@ -742,7 +742,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
     return (
       <ConsolePage pageId="overview" eventId={eventId}>
         <ConsoleStatePanel
-          kind="loading"
+          kind="loading" shape="overview"
           message="운영 현황을 불러오고 있습니다."
           onRetry={requestOverviewReload}
         />

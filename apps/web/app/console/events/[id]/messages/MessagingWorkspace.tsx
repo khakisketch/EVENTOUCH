@@ -2706,7 +2706,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     return (
       <ConsolePage pageId="messages" eventId={eventId}>
         <ConsoleStatePanel
-          kind="loading"
+          kind="loading" shape="list"
           message="메시지 정보를 불러오고 있습니다."
           onRetry={() => { void refresh(); }}
         />

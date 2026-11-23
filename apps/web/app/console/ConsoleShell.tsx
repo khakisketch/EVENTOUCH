@@ -1021,6 +1021,18 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           </div>
         ) : null}
       </>
+    ) : isEventPath && !shellData && !shellError ? (
+      // First paint of an event page: the shell data (event name, stage, menu
+      // badges) is still in flight. Hold the card and a few menu rows so the
+      // rail does not pop in and push everything down (2026-11-23).
+      <div className="nav-event-skeleton" aria-hidden="true">
+        <span className="nav-skeleton-block nav-skeleton-title" />
+        <span className="nav-skeleton-block nav-skeleton-meta" />
+        <span className="nav-skeleton-block nav-skeleton-search" />
+        {[0, 1, 2, 3].map((key) => (
+          <span key={key} className="nav-skeleton-block nav-skeleton-row" />
+        ))}
+      </div>
     ) : null;
   }
 

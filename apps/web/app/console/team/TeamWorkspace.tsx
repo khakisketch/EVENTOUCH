@@ -471,7 +471,7 @@ export default function TeamWorkspace() {
   if (state.kind === "loading") {
     return (
       <ConsolePage pageId="team">
-        <ConsoleStatePanel kind="loading" message="팀 정보를 불러오고 있습니다." onRetry={() => {}} />
+        <ConsoleStatePanel kind="loading" shape="list" message="팀 정보를 불러오고 있습니다." onRetry={() => {}} />
       </ConsolePage>
     );
   }

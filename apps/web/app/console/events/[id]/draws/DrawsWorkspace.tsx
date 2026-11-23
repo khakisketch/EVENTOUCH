@@ -1544,7 +1544,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
   if (state.kind === "loading" || (state.kind === "ready" && loadedDrawEventRef.current !== eventId)) {
     return (
       <ConsolePage pageId="draws" eventId={eventId}>
-        <ConsoleStatePanel kind="loading" message="추첨·투표 정보를 불러오고 있습니다." onRetry={() => load()} />
+        <ConsoleStatePanel kind="loading" shape="list" message="추첨·투표 정보를 불러오고 있습니다." onRetry={() => load()} />
       </ConsolePage>
     );
   }

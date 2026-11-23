@@ -232,7 +232,7 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
     setDeleteId(null);
     void execute({ eventId, command: "field.delete", commandId: commandId(), payload: { id, expectedOrder, expectedFormVersion: state.formVersion } }, false);
   }
-  if (state.kind === "loading" || (state.kind === "ready" && loadedIdRef.current !== eventId)) return <ConsolePage pageId="settings" title="신청 항목" eventId={eventId}><ConsoleStatePanel kind="loading" message="신청 항목을 불러오고 있습니다." onRetry={() => void load()} /></ConsolePage>;
+  if (state.kind === "loading" || (state.kind === "ready" && loadedIdRef.current !== eventId)) return <ConsolePage pageId="settings" title="신청 항목" eventId={eventId}><ConsoleStatePanel kind="loading" shape="form" message="신청 항목을 불러오고 있습니다." onRetry={() => void load()} /></ConsolePage>;
   if (state.kind === "failed") return <ConsolePage pageId="settings" title="신청 항목" eventId={eventId}><ConsoleStatePanel kind="failed" message={state.message} onRetry={() => void load()} /></ConsolePage>;
   const writable = state.canWrite && !state.archived;
   const latestField = draft?.existing ? state.fields.find((field) => field.id === draft.id) : null;

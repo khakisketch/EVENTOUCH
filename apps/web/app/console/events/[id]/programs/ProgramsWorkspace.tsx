@@ -1687,7 +1687,7 @@ export default function ProgramsWorkspace({ eventId, afterHeader }: { eventId: s
   if (state.kind === "loading" || (state.kind === "ready" && loadedProgramEventRef.current !== eventId)) {
     return (
       <ConsolePage pageId="programs" eventId={eventId} afterHeader={afterHeader}>
-        <ConsoleStatePanel kind="loading" message="참여 이벤트 정보를 불러오고 있습니다." onRetry={() => {}} />
+        <ConsoleStatePanel kind="loading" shape="list" message="참여 이벤트 정보를 불러오고 있습니다." onRetry={() => {}} />
       </ConsolePage>
     );
   }

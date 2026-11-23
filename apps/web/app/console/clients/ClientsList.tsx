@@ -464,7 +464,7 @@ export default function ClientsList() {
   if (state.kind === "loading") {
     return (
       <ConsolePage pageId="clients">
-        <ConsoleStatePanel kind="loading" message="고객사 목록을 불러오고 있습니다." onRetry={() => {}} />
+        <ConsoleStatePanel kind="loading" shape="list" message="고객사 목록을 불러오고 있습니다." onRetry={() => {}} />
       </ConsolePage>
     );
   }

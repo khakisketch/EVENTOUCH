@@ -1255,7 +1255,7 @@ export default function ThemeWorkspace({ eventId, publicBase = null, afterHeader
   if (state.kind === "loading" || (state.kind === "ready" && loadedThemeEventRef.current !== eventId)) {
     return (
       <ConsolePage pageId="attendeePage" eventId={eventId} afterHeader={afterHeader}>
-        <ConsoleStatePanel kind="loading" message="참가자 페이지 설정을 불러오고 있습니다." onRetry={() => {}} />
+        <ConsoleStatePanel kind="loading" shape="split" message="참가자 페이지 설정을 불러오고 있습니다." onRetry={() => {}} />
       </ConsolePage>
     );
   }

@@ -268,10 +268,6 @@
   overflow-wrap: anywhere;
 }
 
-.stateLoading .stateMessage {
-  color: var(--muted);
-}
-
 .stateFailed .stateMessage {
   color: var(--danger);
 }

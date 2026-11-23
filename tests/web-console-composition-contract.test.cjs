@@ -130,7 +130,12 @@ test('console layout primitives expose stable, hook-free composition', () => {
 
 test('state panel unifies loading, alert and shell-aware retry', () => {
   const state = read('app/console/console-ui/ConsoleStatePanel.tsx');
-  assert.match(state, /role=\{loading \? "status" : "alert"\}/);
+  // Reopened 2026-11-23: loading no longer prints one line of text. It draws a
+  // skeleton shaped like the screen, announces the message through a visually
+  // hidden role="status", and shows the sentence to everyone only after 4s.
+  assert.match(state, /role="status"/);
+  assert.match(state, /<ConsoleSkeleton shape=\{shape\} \/>/);
+  assert.match(state, /role="alert"/);
   assert.match(state, /window\.dispatchEvent\(new CustomEvent\("eventouch:shell-reload"\)\)/);
   assert.match(state, /onRetry\(\)/);
   assert.match(state, />\s*다시 불러오기\s*</);

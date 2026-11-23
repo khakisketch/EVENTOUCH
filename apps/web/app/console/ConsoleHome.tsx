@@ -571,7 +571,7 @@ export default function ConsoleHome() {
     return (
       <ConsolePage pageId="events">
         {/* Page title comes from the ConsolePage registry; this file owns no heading. */}
-        <ConsoleStatePanel kind="loading" message="행사 목록을 불러오고 있습니다." onRetry={() => {}} />
+        <ConsoleStatePanel kind="loading" shape="cards" message="행사 목록을 불러오고 있습니다." onRetry={() => {}} />
       </ConsolePage>
     );
   }

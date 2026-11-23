@@ -1162,7 +1162,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
   if (state.kind === "loading") {
     return (
       <ConsolePage pageId="reports" eventId={eventId}>
-        <ConsoleStatePanel kind="loading" message="결과 데이터를 불러오고 있습니다." onRetry={() => {}} />
+        <ConsoleStatePanel kind="loading" shape="overview" message="결과 데이터를 불러오고 있습니다." onRetry={() => {}} />
       </ConsolePage>
     );
   }

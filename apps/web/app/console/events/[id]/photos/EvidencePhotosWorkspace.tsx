@@ -699,7 +699,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
   if (state.kind === "loading") {
     return (
       <ConsolePage pageId="photos" eventId={eventId}>
-        <ConsoleStatePanel kind="loading" message="현장 사진 정보를 불러오고 있습니다." onRetry={() => {}} />
+        <ConsoleStatePanel kind="loading" shape="cards" message="현장 사진 정보를 불러오고 있습니다." onRetry={() => {}} />
       </ConsolePage>
     );
   }

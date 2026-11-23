@@ -1,0 +1,218 @@
+/* Loading skeleton (2026-11-23).
+   Quiet neutral blocks shaped like the screen that is about to appear, so
+   the page does not jump when data arrives. Rules:
+   - the whole group fades in after a short delay, so a fast response never
+     flashes a skeleton;
+   - the highlight sweep is slow and decorative; reduced motion turns it off
+     and the blocks simply stay as flat neutral shapes;
+   - every size comes from spacing/radius tokens, every colour from the two
+     skeleton tokens. */
+
+.group {
+  display: grid;
+  gap: var(--s5);
+  min-width: 0;
+  animation: skeleton-in var(--enter) var(--ease-out) 120ms both;
+}
+
+@keyframes skeleton-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.block {
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  border-radius: var(--radius-medium);
+  background: var(--skeleton-base);
+}
+
+.block::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--skeleton-shine), transparent);
+  animation: skeleton-sweep 1.6s ease-in-out infinite;
+}
+
+@keyframes skeleton-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.line {
+  height: var(--s3);
+  border-radius: var(--radius-small);
+}
+
+.lineWide {
+  width: 100%;
+}
+
+.lineMid {
+  width: 64%;
+}
+
+.lineShort {
+  width: 36%;
+}
+
+.title {
+  height: var(--s6);
+  width: min(100%, calc(var(--s8) * 4));
+  border-radius: var(--radius);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: var(--s6) minmax(0, 1fr) var(--s8);
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.rowDot {
+  height: var(--s6);
+  border-radius: 50%;
+}
+
+.rowText {
+  display: grid;
+  gap: var(--s2);
+}
+
+.rowPill {
+  height: var(--s5);
+  border-radius: calc(var(--s5) / 2);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+}
+
+.search {
+  flex: 1 1 calc(var(--s8) * 3);
+  height: var(--control-min-size);
+  border-radius: calc(var(--control-min-size) / 2);
+}
+
+.tabs {
+  flex: 0 1 calc(var(--s8) * 5);
+  height: var(--control-min-size);
+  border-radius: calc(var(--control-min-size) / 2);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(calc(var(--s8) * 2), 1fr));
+  gap: var(--s3);
+}
+
+.stat {
+  height: calc(var(--s8) + var(--s4));
+  border-radius: var(--radius-large);
+}
+
+.hero {
+  height: calc(var(--s8) * 3);
+  border-radius: var(--radius-card);
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--s8) * 4), 1fr));
+  gap: var(--s4);
+}
+
+.card {
+  height: calc(var(--s8) * 2 + var(--s4));
+  border-radius: var(--radius-card);
+}
+
+.field {
+  display: grid;
+  gap: var(--s2);
+}
+
+.input {
+  height: var(--control-min-size);
+  border-radius: var(--radius);
+}
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, calc(var(--s8) * 5)) minmax(0, 1fr);
+  gap: var(--s5);
+}
+
+.phone {
+  height: calc(var(--s8) * 8);
+  border-radius: var(--radius-card);
+}
+
+.pageHeader {
+  display: grid;
+  gap: var(--s3);
+  padding-bottom: var(--s4);
+  border-bottom: 1px solid var(--line);
+}
+
+.page {
+  display: grid;
+  gap: var(--s5);
+  width: 100%;
+  max-width: var(--web-content-max);
+  min-width: 0;
+}
+
+/* A slow load earns a plain sentence. Before that the skeleton alone speaks. */
+.hint {
+  margin: 0;
+  color: var(--muted);
+  animation: skeleton-in var(--enter) var(--ease-out) 4s both;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 720px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .phone {
+    height: calc(var(--s8) * 5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group,
+  .hint {
+    animation: none;
+  }
+
+  .block::after {
+    animation: none;
+    display: none;
+  }
+}

@@ -99,6 +99,14 @@
 
   --enter: 200ms;
   --exit: 120ms;
+  /* Motion curves (2026-11-23): one decelerate curve for things that arrive,
+     one accelerate curve for things that leave, so every surface that moves
+     agrees on feel. Durations stay --enter / --exit. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  /* Loading skeleton: a quiet neutral block with a slow highlight. */
+  --skeleton-base: #F0F1F3;
+  --skeleton-shine: #F8F8F9;
   --body: 16px;
   --body-work: 15px;
   --small: 14px;

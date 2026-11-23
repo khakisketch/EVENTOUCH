@@ -168,7 +168,7 @@ export default function PeriodAnalysisWorkspace({ eventId }: { eventId: string }
   if (state.kind === "loading") {
     return (
       <ConsolePage pageId="analysis" eventId={eventId} eventName="">
-        <ConsoleStatePanel kind="loading" message="기간 분석을 불러오는 중입니다." onRetry={refresh} />
+        <ConsoleStatePanel kind="loading" shape="overview" message="기간 분석을 불러오는 중입니다." onRetry={refresh} />
       </ConsolePage>
     );
   }

@@ -1356,7 +1356,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     return (
       <ConsolePage pageId="participants" eventId={eventId}>
         <ConsoleStatePanel
-          kind="loading"
+          kind="loading" shape="list"
           message="참가자 목록을 불러오고 있습니다."
           onRetry={() => { void load(); }}
         />

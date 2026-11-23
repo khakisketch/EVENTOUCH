@@ -1312,7 +1312,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   if (state.kind === "loading" || (state.kind === "ready" && loadedSettingsEventRef.current !== eventId)) {
     return (
       <ConsolePage pageId="settings" eventId={eventId}>
-        <ConsoleStatePanel kind="loading" message="행사 설정을 불러오고 있습니다." onRetry={() => {}} />
+        <ConsoleStatePanel kind="loading" shape="form" message="행사 설정을 불러오고 있습니다." onRetry={() => {}} />
       </ConsolePage>
     );
   }
@@ -1327,7 +1327,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   if (!basics || !features) {
     return (
       <ConsolePage pageId="settings" eventId={eventId}>
-        <ConsoleStatePanel kind="loading" message="행사 설정을 준비하고 있습니다." onRetry={() => {}} />
+        <ConsoleStatePanel kind="loading" shape="form" message="행사 설정을 준비하고 있습니다." onRetry={() => {}} />
       </ConsolePage>
     );
   }
