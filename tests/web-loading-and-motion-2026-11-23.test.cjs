@@ -117,3 +117,10 @@ test('the notice editor loads on demand with a placeholder', () => {
   assert.doesNotMatch(content, /import RichEditor from/u);
   assert.match(read('event/[slug]/home/HomeHero.tsx'), /decoding="async" fetchPriority="high"/u);
 });
+
+test('shell does not show the choose-an-organization gate while the context is still loading', () => {
+  const shell = read('console/ConsoleShell.tsx');
+  assert.match(shell, /!organization\.context && organization\.loading && !organization\.error\s*\?\s*\(/u);
+  assert.match(shell, /<ConsolePageSkeleton shape="list" \/>\s*\)\s*:\s*!organization\.context \?/u);
+  assert.match(read('../lib/use-operator-context.ts'), /loading: true/u, 'the snapshot starts as loading, so the first paint is never the gate');
+});

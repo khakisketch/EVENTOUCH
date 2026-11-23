@@ -14,6 +14,7 @@ import { CONSOLE_PAGES, EVENT_HUBS, RAIL_HIDDEN_PAGE_IDS, consoleHubForPage, con
 import { BarsIcon } from "./console-ui/ConsoleIcons";
 import EventMenuSearch from "./console-ui/EventMenuSearch";
 import EventSwitcher from "./console-ui/EventSwitcher";
+import { ConsolePageSkeleton } from "./console-ui/ConsoleSkeleton";
 import { useConsoleLeaveConfirmation } from "./console-draft-guard";
 import { consoleFetch, invalidateConsoleReads, subscribeConsoleFreshness } from "../../lib/console-api";
 import freshnessStyles from "./console-ui/freshness.module.css";
@@ -1193,7 +1194,14 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         <main id="main-content" className="console-main" tabIndex={-1}>
           <OrganizationContextNotice confirmLeave={confirmLeave} />
           <OperatorReceiptRecovery currentEventId={eventId} currentEventName={shellData?.currentEventName} />
-          {!organization.context ? <section className={freshnessStyles.selectionRequired}>
+          {!organization.context && organization.loading && !organization.error ? (
+            // The organization context is still on its way (it starts as
+            // loading). Say nothing about choosing a company yet: that
+            // screen only applies once the answer is "none selected", and
+            // showing it first made every reload flash a wrong-looking gate
+            // (2026-11-23).
+            <ConsolePageSkeleton shape="list" />
+          ) : !organization.context ? <section className={freshnessStyles.selectionRequired}>
             <h1>작업할 운영사를 선택하세요</h1>
             <p>소속 운영사와 그곳에서 맡은 역할을 확인한 뒤 이동합니다.</p>
             <OrganizationSwitcher />
