@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep, waitForDialogExitFocus } = require('./ui-journey-helpers.cjs');
+const { messageStep, waitForDialogExitFocus, openRecipientList } = require('./ui-journey-helpers.cjs');
 
 
 // Approved white product system: real routes and real API, synthetic data in
@@ -341,6 +341,7 @@ async function main() {
         if (role === 'owner') {
           await page.goto(`${f.baseUrl}/console/events/${f.eventId}/messages`, { waitUntil: 'networkidle' });
           await page.locator('#message-compose-open').click();
+          await openRecipientList(page);
           await page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check();
           await messageStep(page, 2);
           await page.locator('#campaign-title').fill('서밋 입장 안내');
@@ -348,8 +349,11 @@ async function main() {
           await page.locator('#campaign-body').fill(body);
           check(`compose@${width}: preview substitutes an anonymous example without changing the draft`, (await page.locator('#message-draft-preview').innerText()).includes('홍길동님') && await page.locator('#campaign-body').inputValue() === body);
           if (width <= 390) {
-            const actionLines = await page.locator('[class*="stepActions"] > button').evaluateAll(buttons => buttons.map(button => {
-              const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
+            // Reopened 2026-11-23: the step buttons became checklist links; the same readability promise
+            // holds for the checklist labels and the one primary 발송 검토 action (one line, touch width).
+            const actionLines = await page.locator('nav[aria-label="메시지 작성 항목"] a, #campaign-submit').evaluateAll(buttons => buttons.map(button => {
+              // Each checklist link names its zone in a <strong>; the one-line promise applies to that label, the touch width to the whole link.
+              const walker = document.createTreeWalker(button.querySelector('strong') || button, NodeFilter.SHOW_TEXT);
               const lines = new Set();
               while (walker.nextNode()) {
                 if (!walker.currentNode.textContent.trim()) continue;
@@ -359,7 +363,7 @@ async function main() {
               }
               return { text: button.textContent.trim(), lines: lines.size, width: button.getBoundingClientRect().width };
             }));
-            check(`compose@${width}: step buttons remain readable`, actionLines.length === 2 && actionLines.every(action => action.lines === 1 && action.width >= 44), actionLines);
+            check(`compose@${width}: checklist labels and review action remain readable`, actionLines.length === 5 && actionLines.every(action => action.lines === 1 && action.width >= 44), actionLines);
             check(`compose@${width}: guidance does not contain an inline button`, await page.locator('#campaign-variables a').count() === 0 && await page.locator('#campaign-variables + a[href*="/draws"]').isVisible());
           }
           await render(page, 'compose', width);
@@ -373,6 +377,7 @@ async function main() {
           await messageStep(page, 2);
           await page.locator('#campaign-title').fill(''); await page.locator('#campaign-body').fill('');
           await messageStep(page, 1);
+          await openRecipientList(page);
           await page.locator('#recipient-clear-all').click();
         }
         await context.close();
@@ -446,6 +451,7 @@ async function main() {
     await uncertainPage.goto(`${f.baseUrl}/console/events/${f.eventId}/messages`, { waitUntil: 'networkidle' });
     await uncertainPage.locator('#message-compose-open').click();
     const uncertainTitle = '응답 확인 재시도 검증';
+    await openRecipientList(uncertainPage);
     await uncertainPage.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check();
     await messageStep(uncertainPage, 2);
     await uncertainPage.locator('#campaign-title').fill(uncertainTitle);

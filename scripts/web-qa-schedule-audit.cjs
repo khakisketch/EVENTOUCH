@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep } = require('./ui-journey-helpers.cjs');
+const { messageStep, chooseScheduleDate } = require('./ui-journey-helpers.cjs');
 
 
 // Browser -> real API -> isolated PostgreSQL. Fixture records and captures are synthetic.
@@ -302,9 +302,8 @@ const snapshot = async (page, name) => {
     await manager.locator('#campaign-title').fill('새 자동 예약 검증');
     await manager.locator('#campaign-body').fill('합성 안내');
     await messageStep(manager, 3);
-    const schedule = manager.locator('details').filter({ has: manager.locator('#campaign-scheduled') });
-    await schedule.locator('summary').click();
-    await manager.locator('#campaign-scheduled').fill('2099-01-16T10:00');
+    // Reopened 2026-11-23: the 예약 details is the 보낼 때 radio zone; pick 날짜·시각 지정 first.
+    await (await chooseScheduleDate(manager)).fill('2099-01-16T10:00');
     const manual = manager.getByRole('radio', { name: '수동 실행', exact: true });
     const automatic = manager.getByRole('radio', { name: '자동 실행', exact: true });
     assert.equal(await manual.isChecked(), true);

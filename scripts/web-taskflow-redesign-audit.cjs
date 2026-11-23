@@ -7,6 +7,7 @@ const { startAuditFixture } = require('./audit-fixture.cjs');
 const { extendFixtureSeed } = require('./web-console-audit.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
+const { messageStep, chooseScheduleDate } = require('./ui-journey-helpers.cjs');
 let stage = 'setup';
 (async () => {
   const out = path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'taskflow-redesign');
@@ -96,33 +97,34 @@ let stage = 'setup';
     const read = async()=> (await f.harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1',[f.eventId])).rows[0].payload;
     assert.equal((await read()).participants.filter(p=>p.name==='합성 반영').length,1);
     stage = 'message step navigation';
+    // Reopened 2026-11-23: one-screen checklist. Zones no longer hide or gate each other; the
+    // checklist links only move focus, and 발송 검토 keeps every validation.
     await page.goto(base+'/messages'); await page.locator('#message-compose-open').click();
-    assert.equal(await page.locator('#campaign-title').isVisible(),false);
-    await page.locator('#recipient-list-summary').click();
-    await page.getByRole('button',{name:'내용 작성',exact:true}).click();
-    await page.getByText('발송 대상이 없습니다. 수신자를 선택하세요.',{exact:true}).waitFor();
-    await page.waitForFunction(()=>document.activeElement?.id==='recipient-status-filter');
+    await page.waitForFunction(()=>document.activeElement?.id==='recipient-heading');
+    assert.match(await page.locator('#recipient-summary').innerText(),/선택 0명/);
+    assert.equal(await page.locator('#campaign-submit').isDisabled(),true,'empty recipients keep review disabled');
+    assert.match(await page.locator('#campaign-submit-warning').innerText(),/수신자를 먼저 고르세요/);
+    if(!(await page.locator('#recipient-status-filter').isVisible())) await page.locator('#recipient-list-summary').click();
     await page.getByRole('checkbox',{name:/감사 참가자 1 감사 업체 1/}).check();
-    await page.getByRole('button',{name:'내용 작성',exact:true}).click();
-    assert.equal(await page.locator('#campaign-title').evaluate(el=>el.tabIndex),0,'step navigation preserves normal Tab order');
+    await messageStep(page,2);
+    assert.equal(await page.locator('#campaign-title').evaluate(el=>el.tabIndex),0,'checklist navigation preserves normal Tab order');
     await page.locator('#campaign-title').fill('합성 단계 안내');
     await page.locator('#campaign-body').fill('{{이름}}님 안내입니다.');
-    assert.equal(await page.locator('#recipient-status-filter').isVisible(),false);
+    assert.equal(await page.locator('#recipient-summary').isVisible(),true,'recipient zone stays on screen while writing');
     await shot('message-step2-1280.png'); await a11y();
-    await page.getByRole('button',{name:'이전',exact:true}).click();
+    await messageStep(page,1);
     assert.match(await page.locator('#recipient-summary').innerText(),/선택 1명/);
-    await page.getByRole('button',{name:'내용 작성',exact:true}).click();
+    await messageStep(page,2);
     assert.equal(await page.locator('#campaign-body').inputValue(),'{{이름}}님 안내입니다.');
-    await page.getByRole('button',{name:'발송 검토로',exact:true}).click();
+    await messageStep(page,3);
     await page.getByRole('heading',{name:'발송 전 검토',exact:true}).waitFor();
-    assert.equal(await page.locator('#campaign-body').isVisible(),false);
+    assert.equal(await page.locator('#campaign-body').inputValue(),'{{이름}}님 안내입니다.','moving to the review zone keeps the draft');
     await page.getByLabel('모의 발송으로 기록',{exact:false}).check();
-    await page.locator('summary').filter({hasText:'예약 등록'}).click();
-    await page.locator('#campaign-scheduled').fill('2027-01-10T10:00');
+    await (await chooseScheduleDate(page)).fill('2027-01-10T10:00');
     await shot('message-step3-1280.png'); await a11y();
-    await page.getByRole('button',{name:'내용 수정',exact:true}).click();
+    await messageStep(page,2);
     await page.locator('#campaign-body').fill('');
-    await page.getByRole('button',{name:'발송 검토로',exact:true}).click();
+    await page.locator('#campaign-submit').click();
     await page.getByText('메시지 내용을 입력하세요.',{exact:true}).waitFor();
     assert.equal(await page.locator('#campaign-body').isVisible(),true);
     await page.locator('#campaign-body').fill('보존할 원문');
@@ -133,7 +135,7 @@ let stage = 'setup';
       await shot(`message-step2-${width}.png`); await a11y();
     }
     stage = 'simulated message committed response loss';
-    await page.getByRole('button',{name:'발송 검토로',exact:true}).click();
+    await messageStep(page,3);
     // Repeated navigation and draft edits must not submit anything.
     const sends=[];
     await page.route('**/api/events/*/commands', async route=>{

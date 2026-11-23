@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep, openSettingsBasics, settleLayout } = require('./ui-journey-helpers.cjs');
+const { messageStep, openSettingsBasics, settleLayout, openRecipientList } = require('./ui-journey-helpers.cjs');
 
 
 // Event-close paired journey: one operator closes out a LIVE event end to
@@ -247,7 +247,7 @@ async function main() {
       try {
         await page.goto(baseUrl + target, { waitUntil: 'networkidle', timeout: 30000 });
         if (marker === '#campaign-title') await page.locator('#message-compose-open').click();
-        await page.locator(marker === '#campaign-title' ? '#recipient-status-filter' : marker).first().waitFor({ state: 'visible', timeout: 15000 });
+        await page.locator(marker === '#campaign-title' ? '#recipient-heading' : marker).first().waitFor({ state: 'visible', timeout: 15000 });
       } finally {
         if (scrollCounter) {
           scrollCounter.paused = false;
@@ -448,7 +448,7 @@ async function main() {
       if (marker === '#campaign-title' && await page.locator('#message-compose-open').isVisible()) await act('click', () => page.locator('#message-compose-open').click());
       // Basics editing lives in a drawer: open it before waiting for the field.
       if (marker === '#set-name') await act('open', () => openSettingsBasics(page));
-      await page.locator(marker === '#campaign-title' ? '#recipient-status-filter' : marker).first().waitFor({ state: 'visible', timeout: 15000 });
+      await page.locator(marker === '#campaign-title' ? '#recipient-heading' : marker).first().waitFor({ state: 'visible', timeout: 15000 });
     };
 
     const followNext = async (act, marker, label) => {
@@ -458,7 +458,7 @@ async function main() {
       const href = await next.getAttribute('href');
       if (href) assert.ok(new URL(href, baseUrl).searchParams.get('closeReturn'), 'every departure carries an explicit return path');
       await act('click', () => next.click());
-      await page.locator(marker === '#campaign-title' ? '#recipient-status-filter' : marker).first().waitFor({ state: 'visible', timeout: 15000 });
+      await page.locator(marker === '#campaign-title' ? '#recipient-heading' : marker).first().waitFor({ state: 'visible', timeout: 15000 });
     };
     const followLinear = async (act, marker, label) => {
       const next = page.locator('[data-close-linear-next]');
@@ -467,7 +467,7 @@ async function main() {
       const href = await next.getAttribute('href');
       if (!href.startsWith('#')) assert.ok(new URL(href, baseUrl).searchParams.get('closeReturn'), 'linear handoff retains the optional map return');
       await act('click', () => next.click());
-      await page.locator(marker === '#campaign-title' ? '#recipient-status-filter' : marker).first().waitFor({ state: 'visible', timeout: 15000 });
+      await page.locator(marker === '#campaign-title' ? '#recipient-heading' : marker).first().waitFor({ state: 'visible', timeout: 15000 });
     };
 
     {
@@ -674,15 +674,16 @@ async function main() {
       // ---- Phase 7: result notice as a SIMULATED campaign (never a send) ----
       await measure('result-notify', '결과 안내 모의 발송 (메시지 작성 → 모의 기록 → 확정)', async (act, task, { touchOk }) => {
         task.screens = [eventPath('/messages')];
-        task.fields = ['#campaign-title', '#campaign-body', '모의 발송으로 기록 checkbox', '수신자 목록 열기/닫기', '표시 N명 모두 선택 checkbox', '발송 검토', '모의 발송을 기록한다'];
+        task.fields = ['#campaign-title', '#campaign-body', '모의 발송으로 기록 checkbox', '직접 고르기 목록 열기/닫기', '표시 N명 모두 선택 checkbox', '발송 검토', '모의 발송을 기록한다'];
         if (before) await menuTo('/messages', '#campaign-title', act);
         else {
           await act('click', () => page.locator('[data-close-report-next]').click());
           await act('click', () => page.locator('#message-compose-open').click());
-          await page.locator('#recipient-status-filter').waitFor({ state: 'visible', timeout: 15000 });
+          // Reopened 2026-11-23: the picker folds on phones; the recipients zone heading is the composer-open marker.
+          await page.locator('#recipient-heading').waitFor({ state: 'visible', timeout: 15000 });
           assert.ok(new URL(page.url()).searchParams.get('closeReturn').includes('closeReport='), 'chosen report survives the messages handoff');
         }
-        const list = page.locator('summary').filter({ hasText: '수신자 목록' });
+        const list = page.locator('#recipient-list-summary');
         if (!await list.locator('..').evaluate(element => element.open)) await act('click', () => list.click());
         await act('check', () => page.getByRole('checkbox', { name: /표시 \d+명 모두 선택/ }).check());
         await act('click', () => messageStep(page, 2));
@@ -869,7 +870,8 @@ async function main() {
       // The composer now starts collapsed behind #message-compose-open (same
       // as the measured result-notify handoff): open it before drafting.
       if (await page.locator('#message-compose-open').isVisible()) await page.locator('#message-compose-open').click();
-      await page.locator('#recipient-status-filter').waitFor();
+      await page.locator('#recipient-heading').waitFor();
+      await openRecipientList(page);
       // This ended-event exception intentionally contains only a pending
       // participant. Broaden the default approved-only view explicitly.
       await page.locator('#recipient-status-filter').selectOption('ALL');
@@ -883,6 +885,7 @@ async function main() {
       assert.equal(await page.getByRole('group', { name: '단계 전환 확인' }).count(), 0);
       await page.locator('#campaign-title').fill('');
       await messageStep(page, 1);
+      await openRecipientList(page);
       await page.locator('#recipient-clear-all').click();
       const archiveAttempts = [];
       let loseArchiveReply = true;

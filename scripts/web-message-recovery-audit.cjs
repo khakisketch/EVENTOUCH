@@ -11,6 +11,7 @@ const axeSource = require('axe-core').source;
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
+const { messageStep } = require('./ui-journey-helpers.cjs');
 const before = process.argv.includes('--before');
 let phase = 'setup';
 async function main() {
@@ -78,7 +79,8 @@ async function main() {
       await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/messages?to=${encodeURIComponent(person.id)}`, { waitUntil: 'networkidle' });
       await page.locator('#campaign-title').fill(title);
       await page.locator('#campaign-body').fill('외부로 나가지 않는 합성 본문');
-      await page.getByRole('button', { name: '발송 검토로', exact: true }).click();
+      // Reopened 2026-11-23: the review zone is always on screen; no step button to press.
+      await messageStep(page, 3);
       const mock = page.getByLabel(/모의 발송으로 기록/);
       if (!(await mock.isChecked())) await mock.check();
       await page.locator('#campaign-submit').click();
@@ -145,7 +147,7 @@ async function main() {
     if (!(await page.locator('#campaign-submit').isVisible())) await page.locator('#message-compose-open').click();
     await page.locator('ul[aria-label="참가자 선택"] li').filter({ hasText: person.name }).locator('input[type="checkbox"]').check();
     assert.match(await page.locator('#recipient-summary').innerText(), /선택 1명/);
-    await page.getByRole('button', { name: '내용 작성', exact: true }).click();
+    await messageStep(page, 2);
     await page.locator('#campaign-title').fill('새 작성은 아직 차단');
     await page.locator('#campaign-body').fill('처리 확인 이후에만 검토');
     assert.equal(await page.locator('#campaign-submit').isDisabled(), true, 'unresolved create blocks a new send after reload');

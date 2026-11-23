@@ -224,7 +224,8 @@ async function main() {
     });
     await first.goto(`${f.baseUrl}/console/events/${cEvent}/messages`);
     await first.locator('#message-compose-open').click();
-    await first.locator('#recipient-status-filter').waitFor();
+    // Reopened 2026-11-23: the picker folds on phones; the recipients zone heading is the always-visible composer marker.
+    await first.locator('#recipient-heading').waitFor();
     const simulation = first.getByLabel('모의 발송으로 기록', { exact: false });
     check('fresh org starts in locked simulation mode without inherited real send', await simulation.isChecked() && await simulation.isDisabled());
     await capture(first, 'new-org-simulation-only-390');

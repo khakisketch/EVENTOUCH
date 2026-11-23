@@ -12,6 +12,7 @@ const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { startAuditFixture } = require('./audit-fixture.cjs');
 const { extendFixtureSeed } = require('./web-console-audit.cjs');
+const { messageStep, chooseScheduleDate } = require('./ui-journey-helpers.cjs');
 let stage = 'setup';
 async function main() {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private EVENTOUCH_CAPTURE_ROOT');
@@ -56,9 +57,9 @@ async function main() {
     assert.equal(await current.locator('#campaign-channel input[type="radio"]').count(), 2);
     await sms.focus(); await current.keyboard.press('ArrowRight'); assert.equal(await alimtalk.isChecked(), true);
     await current.keyboard.press('ArrowLeft'); assert.equal(await sms.isChecked(), true);
-    await current.getByRole('button', { name: '발송 검토로', exact: true }).click();
-    await current.locator('summary').filter({ hasText: '예약 등록' }).click();
-    await current.locator('#campaign-scheduled').fill('2027-01-10T10:00');
+    // Reopened 2026-11-23: no step buttons or folded 예약 등록; choose 날짜·시각 지정 in the 보낼 때 zone.
+    await messageStep(current, 3);
+    await (await chooseScheduleDate(current)).fill('2027-01-10T10:00');
     assert.equal(await current.getByRole('radio', { name: '수동 실행' }).isChecked(), true, 'new reservation defaults to manual');
     await current.getByRole('radio', { name: '자동 실행' }).check();
     await current.getByRole('radio', { name: '수동 실행' }).check();
@@ -147,8 +148,10 @@ async function main() {
     const desktopPage = await desktop.newPage();
     await desktopPage.goto(`${f.baseUrl}/console/events/${f.eventId}/messages`);
     await desktopPage.locator('#message-compose-open').click();
+    // The recipient list is folded on phones; open it the way an operator would.
+    if (!(await desktopPage.locator('#recipient-status-filter').isVisible())) await desktopPage.locator('#recipient-list-summary').click();
     await desktopPage.getByRole('checkbox', { name: /감사 참가자 1 감사 업체 1/ }).check();
-    await desktopPage.getByRole('button', { name: '내용 작성', exact: true }).click();
+    await messageStep(desktopPage, 2);
     await desktopPage.locator('#campaign-body').fill(raw);
     await desktopPage.locator('#message-draft-preview').scrollIntoViewIfNeeded();
     assert.match(await desktopPage.locator('#message-draft-preview').innerText(), /홍길동님/);
@@ -168,8 +171,10 @@ async function main() {
     const narrowPage = await narrow.newPage();
     await narrowPage.goto(`${f.baseUrl}/console/events/${f.eventId}/messages`);
     await narrowPage.locator('#message-compose-open').click();
+    // The recipient list is folded on phones; open it the way an operator would.
+    if (!(await narrowPage.locator('#recipient-status-filter').isVisible())) await narrowPage.locator('#recipient-list-summary').click();
     await narrowPage.getByRole('checkbox', { name: /감사 참가자 1 감사 업체 1/ }).check();
-    await narrowPage.getByRole('button', { name: '내용 작성', exact: true }).click();
+    await messageStep(narrowPage, 2);
     await narrowPage.locator('#campaign-body').fill(raw);
     await narrowPage.locator('#message-draft-preview').scrollIntoViewIfNeeded();
     assert.equal(await narrowPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'message composition fits a 320px viewport');

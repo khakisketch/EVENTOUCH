@@ -209,7 +209,8 @@ async function main() {
             && Math.abs(g.innerTop) <= 2 && Math.abs(g.innerBottom) <= 2), rows);
       }
       if (!before) {
-        await page.locator('#message-compose-open').click(); await page.locator('#recipient-status-filter').waitFor();
+        // Reopened 2026-11-23: the picker folds on narrow screens, so wait on the always-visible recipients zone.
+        await page.locator('#message-compose-open').click(); await page.locator('#recipient-heading').waitFor();
         check(`compose@${width}: history yields to the active workspace`,
           !await page.locator('#history-heading').isVisible() && await page.locator('#message-compose-close').isVisible());
         await shot('compose', width, '#campaign-heading');
@@ -242,7 +243,7 @@ async function main() {
     await failedRow.getByRole('button', { name: '내용·대상 불러오기', exact: true }).click();
     await overwrite.getByRole('button', { name: '불러온다', exact: true }).click();
     await page.locator('#campaign-title').waitFor();
-    check('failed reload reveals exact saved content without sending', await page.locator('#campaign-body').inputValue() === failed.body && await page.locator('#campaign-scheduled').inputValue() === '' && f.gateway.commands.length === 0);
+    check('failed reload reveals exact saved content without sending', await page.locator('#campaign-body').inputValue() === failed.body && await page.locator('#campaign-scheduled').count() === 0 && await page.locator('#campaign-schedule-choice input[value="NOW"]').isChecked() && f.gateway.commands.length === 0);
     await messageStep(page, 3);
     await page.getByLabel('모의 발송으로 기록', { exact: false }).check();
     const countBefore = (await workspace()).messages.length;
@@ -262,7 +263,7 @@ async function main() {
     await recovery.waitFor();
     check('lost response freezes the original draft and send request',
       await page.locator('#campaign-title').isDisabled() && await page.locator('#campaign-body').isDisabled()
-      && await page.locator('#campaign-scheduled').isDisabled() && await page.locator('#campaign-submit').isDisabled());
+      && await page.locator('#campaign-schedule-choice input[value="NOW"]').isDisabled() && await page.locator('#campaign-submit').isDisabled());
     await shot('lost-response', 1280, '#message-recovery-heading');
     // Recovery actions must remain reachable while the frozen compose fields
     // cannot change the original request. The preview cannot paint over them.
@@ -308,7 +309,7 @@ async function main() {
     await template.getByRole('button', { name: '사용', exact: true }).first().click();
     const applyTemplate = page.getByRole('button', { name: '템플릿 적용', exact: true });
     if (await applyTemplate.isVisible()) await applyTemplate.click();
-    await page.locator('#recipient-status-filter').waitFor();
+    await page.locator('#recipient-heading').waitFor();
     check('a completed draft does not leave a stale selected-only filter', !await page.locator('#recipient-selected-only').isChecked());
     if (!await page.locator('#recipient-list-summary').evaluate(el => el.closest('details').open)) await page.locator('#recipient-list-summary').click();
     await page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check();

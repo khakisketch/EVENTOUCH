@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep } = require('./ui-journey-helpers.cjs');
+const { messageStep, chooseScheduleDate } = require('./ui-journey-helpers.cjs');
 
 // Synthetic status snapshots only: no message dispatch or real provider.
 for (const key of ['SOLAPI_API_KEY', 'SOLAPI_API_SECRET', 'SOLAPI_SENDER', 'SOLAPI_KAKAO_PFID']) delete process.env[key];
@@ -134,7 +134,9 @@ async function main() {
       await messageStep(page, 2);
       assert.equal(await page.locator('#campaign-title').inputValue(), title);
       assert.equal(await page.locator('#campaign-body').inputValue(), body);
-      assert.equal(await page.locator('#campaign-scheduled').inputValue(), '');
+      // Reopened 2026-11-23: no reservation carried over means 지금 is chosen and the datetime field is absent.
+      assert.equal(await page.locator('#campaign-scheduled').count(), 0);
+      assert.equal(await page.locator('#campaign-schedule-choice input[value="NOW"]').isChecked(), true);
       const saved = (await database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [fixture.eventId])).rows[0].payload;
       const original = saved.messages.find(message => message.id === reservation.id);
       assert.equal(original.status, 'CANCELLED');
@@ -164,8 +166,7 @@ async function main() {
     await page.locator('#campaign-title').fill('합성 예약');
     await page.locator('#campaign-body').fill('합성 안내');
     await messageStep(page, 3);
-    await page.locator('details').filter({ has: page.locator('#campaign-scheduled') }).locator('summary').click();
-    await page.locator('#campaign-scheduled').fill('2099-01-16T10:00');
+    await (await chooseScheduleDate(page)).fill('2099-01-16T10:00');
     assert.equal(await page.getByRole('radio', { name: '수동 실행', exact: true }).isChecked(), true);
     await page.getByRole('radio', { name: '자동 실행', exact: true }).check();
     await page.setViewportSize({ width: 1280, height: 900 });

@@ -30,7 +30,8 @@ let stage = 'setup';
     await messageStep(page, 2);
     await page.locator('#campaign-title').fill('합성 티켓 안내');
     await page.locator('#campaign-body').fill('입장 안내 {{티켓링크}}');
-    await page.getByRole('button', { name: '발송 검토로', exact: true }).click();
+    // Reopened 2026-11-23: the review zone is always on screen; the checklist link only moves there.
+    await messageStep(page, 3);
     await page.getByRole('heading', { name: '발송 전 검토' }).waitFor();
     if (process.argv.includes('--before')) {
       assert.equal(await page.getByText(/티켓을 사용할 수 없거나 상태를 확인할 수 없는 수신자/).count(), 0);

@@ -73,7 +73,7 @@ const { launchBrowser } = require('./audit-browser.cjs');
     await statusRow.getByRole('button', { name: '내용·대상 불러오기' }).waitFor();
     await statusRow.getByRole('button', { name: '내용·대상 불러오기' }).click();
     await page.locator('#campaign-reload-summary').getByText(/선택 1명/).waitFor();
-    await page.getByRole('navigation', { name: '메시지 작성 단계' }).getByRole('button', { name: /수신자/ }).waitFor();
+    await page.getByRole('navigation', { name: '메시지 작성 항목' }).locator('a[aria-current="true"]').filter({ hasText: '받는 사람' }).waitFor(); // Reopened 2026-11-23: one-screen checklist
     const final = await read();
     assert.equal(final.messages.find(item => item.id === ids[0]).status, 'CANCELLED');
     assert.equal(final.messages.find(item => item.id === ids[1]).status, 'SCHEDULED');

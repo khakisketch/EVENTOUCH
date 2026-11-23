@@ -164,11 +164,14 @@ async function main() {
         await act(() => failedRowAction(old.id));
         assert.equal(await page.locator('#campaign-title').inputValue(), old.title);
         assert.equal(await page.locator('#campaign-body').inputValue(), old.body);
-        assert.equal(await page.locator('#campaign-scheduled').inputValue(), '');
+        // Reopened 2026-11-23: no reservation carried over means 지금 is chosen and no datetime field exists.
+        assert.equal(await page.locator('#campaign-scheduled').count(), 0);
+        assert.equal(await page.locator('#campaign-schedule-choice input[value="NOW"]').isChecked(), true);
         // A cancelled historical recipient sends the operator through the recipient review first.
         await act(() => messageStep(page, 2));
-        await page.waitForFunction(() => document.activeElement?.id === 'campaign-title');
-        assert.equal(await page.locator('#campaign-title').evaluate(el => el === document.activeElement), true);
+        // The content zone now opens on the message body (the record title is optional and sits below it).
+        await page.waitForFunction(() => document.activeElement?.id === 'campaign-body');
+        assert.equal(await page.locator('#campaign-body').evaluate(el => el === document.activeElement), true);
         await shot('message-recomposed-390');
         await act(() => messageStep(page, 3));
         assert.equal(await page.getByRole('checkbox', { name: /모의 발송으로 기록/ }).isChecked(), true);

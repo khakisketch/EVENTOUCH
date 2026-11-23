@@ -216,7 +216,7 @@ async function main() {
       // open, so only open it when closed — an unconditional click would
       // close it and hide the list being asserted below.
       if (!await page.locator('#campaign-recipients details').evaluate(element => element.open)) {
-        await page.getByText(/수신자 목록 (열기|닫기)/, { exact: false }).first().click();
+        await page.getByText(/직접 고르기/, { exact: false }).first().click();
       }
       await page.getByRole('list', { name: '참가자 선택', exact: true }).waitFor({ state: 'visible' });
       const selected = await page.getByRole('list', { name: '참가자 선택', exact: true }).locator('input[type="checkbox"]:checked').count();

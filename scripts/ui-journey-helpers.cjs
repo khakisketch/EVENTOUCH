@@ -56,17 +56,33 @@ async function chooseRadio(root, id, value) {
   }
   throw new Error(`Unavailable single choice: ${id}/${value}`);
 }
-// Traverse the same visible step controls as an operator. Never manufacture
-// recipients or bypass validation; a blocked transition fails the audit.
+// Reopened 2026-11-23: the composer is one screen with a checklist
+// (nav[aria-label="메시지 작성 항목"]) instead of gated steps. The checklist
+// links only scroll/focus a zone; nothing is validated or blocked by moving.
+// Step 1 = 받는 사람, 2 = 내용, 3 = 검토·발송. Validation now lives in the
+// 발송 검토 submit, so this helper never manufactures recipients or bypasses it.
+const MESSAGE_CHECKLIST_TARGET = { 1: '#campaign-recipients', 2: '#campaign-content', 3: '#campaign-review-heading' };
 async function messageStep(page, step) {
-  const nav = page.getByRole('navigation', { name: '메시지 작성 단계', exact: true });
-  const current = Number.parseInt(await nav.locator('[aria-current="step"]').innerText(), 10);
-  if (step < current) await nav.getByRole('button', { name: new RegExp(`^${step}\\s*`) }).click();
-  else {
-    if (current === 1 && step > 1) await page.getByRole('button', { name: '내용 작성', exact: true }).click();
-    if (current < 3 && step === 3) await page.getByRole('button', { name: '발송 검토로', exact: true }).click();
-  }
-  await nav.getByRole('button', { name: new RegExp(`^${step}\\s*`) }).and(nav.locator('[aria-current="step"]')).waitFor();
+  const nav = page.getByRole('navigation', { name: '메시지 작성 항목', exact: true });
+  const link = nav.locator(`a[href="${MESSAGE_CHECKLIST_TARGET[step]}"]`);
+  await link.click();
+  await nav.locator(`a[href="${MESSAGE_CHECKLIST_TARGET[step]}"][aria-current="true"]`).waitFor();
+  await page.locator(step === 3 ? '#campaign-review-heading' : step === 2 ? '#campaign-body' : '#recipient-heading').waitFor({ state: 'visible' });
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 30))));
+}
+// The "직접 고르기" recipient list is open by default on desktop and folded on
+// phones; open it (never close it) before touching its filters or checkboxes.
+async function openRecipientList(page) {
+  if (!(await page.locator('#recipient-status-filter').isVisible())) await page.locator('#recipient-list-summary').click();
+  await page.locator('#recipient-status-filter').waitFor({ state: 'visible' });
+}
+// "보낼 때" zone: the datetime-local only exists once 날짜·시각 지정 is chosen.
+// Picks DATE (idempotent) and returns the #campaign-scheduled locator.
+async function chooseScheduleDate(page) {
+  const scheduled = page.locator('#campaign-scheduled');
+  if (!(await scheduled.count())) await chooseRadio(page, 'campaign-schedule-choice', 'DATE');
+  await scheduled.waitFor({ state: 'visible' });
+  return scheduled;
 }
 // Dismissal and exact trigger focus are separate asynchronous transitions.
 async function waitForDialogExitFocus(page, trigger, timeout = 5000) {
@@ -122,4 +138,4 @@ async function openLocationEditor(page, kind, hasText) {
   await page.getByRole('button', { name: `${kind} 편집`, exact: true }).click();
 }
 
-module.exports = { closeSettingsBasics, openLocationEditor, settleLayout, openStudioPanel, selectDrawStage, openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, waitForDialogExitFocus };
+module.exports = { closeSettingsBasics, openLocationEditor, settleLayout, openStudioPanel, selectDrawStage, openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, chooseScheduleDate, openRecipientList, waitForDialogExitFocus };

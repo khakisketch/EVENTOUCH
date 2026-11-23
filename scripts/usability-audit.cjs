@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep, openStudioPanel } = require('./ui-journey-helpers.cjs');
+const { messageStep, openStudioPanel, chooseScheduleDate } = require('./ui-journey-helpers.cjs');
 
 
 // Usability audit: measures how many user operations it takes to finish real
@@ -1267,7 +1267,8 @@ async function main() {
         await act(task, () => page.locator('#campaign-title').fill(title));
         await act(task, () => page.locator('#campaign-body').fill('{{이름}}님 사용성 감사 예약 안내입니다.'));
         await act(task, () => messageStep(page, 3));
-        await act(task, () => page.locator('details').filter({ has: page.locator('#campaign-scheduled') }).locator('summary').click());
+        // Reopened 2026-11-23: choosing 날짜·시각 지정 replaces opening the folded 예약 details (still one operator step).
+        await act(task, () => chooseScheduleDate(page));
         await act(task, () => page.locator('#campaign-scheduled').fill(scheduled));
         await probeKeyboard(page, task, page.locator('#campaign-submit'), '예약 등록 버튼');
         await act(task, () => page.locator('#campaign-submit').click());

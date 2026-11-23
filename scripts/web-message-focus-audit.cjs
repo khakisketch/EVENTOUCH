@@ -5,6 +5,7 @@ const path = require('node:path');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
+const { messageStep } = require('./ui-journey-helpers.cjs');
 
 async function main() {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private capture root');
@@ -21,20 +22,23 @@ async function main() {
       await page.locator('#message-compose-open').click();
       await page.getByRole('checkbox', { name: /표시 \d+명 모두 선택/ }).check();
     };
-    await open(); await page.getByRole('button', { name: '내용 작성', exact: true }).click();
-    await page.waitForFunction(() => document.activeElement?.id === 'campaign-title');
-    // Delay only the app's step-transition focus callback. This represents a
+    // Reopened 2026-11-23: one-screen checklist. The 내용 link only scrolls and
+    // moves focus to the body; nothing is gated, so the title is optional.
+    const contentLink = () => page.getByRole('navigation', { name: '메시지 작성 항목', exact: true }).locator('a[href="#campaign-content"]');
+    await open(); await contentLink().click();
+    await page.waitForFunction(() => document.activeElement?.id === 'campaign-body');
+    // Delay only the app's zone-transition focus callback. This represents a
     // busy browser where an operator reaches another field before the timer.
     await open(); await page.evaluate(() => {
       const original = window.setTimeout.bind(window); window.__heldFocus = [];
       window.setTimeout = function (fn, delay, ...args) {
-        if (typeof fn === 'function' && delay === 0 && String(fn).includes('campaign-heading') && String(fn).includes('campaign-title')) {
+        if (typeof fn === 'function' && delay === 0 && String(fn).includes('campaign-review-heading') && String(fn).includes('campaign-content') && String(fn).includes('campaign-recipients')) {
           window.__heldFocus.push(() => fn(...args)); return 999999;
         }
         return original(fn, delay, ...args);
       };
     });
-    await page.getByRole('button', { name: '내용 작성', exact: true }).click();
+    await contentLink().click();
     await page.locator('#campaign-title').fill('합성 제목');
     await page.locator('#campaign-body').focus();
     assert.equal(await page.evaluate(() => window.__heldFocus.length), 1);
@@ -44,24 +48,25 @@ async function main() {
     assert.equal(await page.locator('#campaign-title').inputValue(), '합성 제목');
     assert.equal(await page.locator('#campaign-body').inputValue(), '합성 내용');
     await page.screenshot({ path: path.join(out, 'composer-1280.png'), fullPage: true });
-    await page.getByRole('button', { name: '발송 검토로', exact: true }).click();
-    await page.getByRole('navigation', { name: '메시지 작성 단계' }).locator('[aria-current="step"]').filter({ hasText: '검토·발송' }).waitFor();
-    // Validation still directs the operator to the missing field normally.
-    await open(); await page.getByRole('button', { name: '내용 작성', exact: true }).click(); await page.waitForFunction(() => document.activeElement?.id === 'campaign-title'); await page.locator('#campaign-title').fill('합성 제목');
-    await page.getByRole('button', { name: '발송 검토로', exact: true }).click();
+    // The review zone is always on screen; the checklist link just moves there.
+    await messageStep(page, 3);
+    await page.getByRole('navigation', { name: '메시지 작성 항목', exact: true }).locator('a[aria-current="true"]').filter({ hasText: '검토·발송' }).waitFor();
+    // Validation lives in 발송 검토: with recipients but no body it directs focus to the body.
+    await open(); await page.locator('#campaign-title').fill('합성 제목');
+    await page.locator('#campaign-submit').click();
     await page.waitForFunction(() => document.activeElement?.id === 'campaign-body');
     // If that validation focus is delayed, it must not steal a newly chosen field.
-    await open(); await page.getByRole('button', { name: '내용 작성', exact: true }).click(); await page.waitForFunction(() => document.activeElement?.id === 'campaign-title'); await page.locator('#campaign-title').fill('합성 제목');
+    await open(); await page.locator('#campaign-title').fill('합성 제목');
     await page.evaluate(() => {
       const original = window.setTimeout.bind(window); window.__heldErrorFocus = [];
       window.setTimeout = function (fn, delay, ...args) {
-        if (typeof fn === 'function' && delay === 0 && String(fn).includes('campaign-body') && String(fn).includes('recipient-status-filter') && !String(fn).includes('campaign-heading')) {
+        if (typeof fn === 'function' && delay === 0 && String(fn).includes('campaign-body') && String(fn).includes('recipient-status-filter') && !String(fn).includes('campaign-review-heading')) {
           window.__heldErrorFocus.push(() => fn(...args)); return 999998;
         }
         return original(fn, delay, ...args);
       };
     });
-    await page.getByRole('button', { name: '발송 검토로', exact: true }).click();
+    await page.locator('#campaign-submit').click();
     await page.waitForFunction(() => window.__heldErrorFocus.length === 1);
     await page.locator('#campaign-title').focus(); await page.evaluate(() => window.__heldErrorFocus.shift()());
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'campaign-title');

@@ -68,10 +68,13 @@ async function main() {
       await page.locator('#campaign-title').fill(`합성 예약 ${timezoneId}`);
       await page.locator('#campaign-body').fill('실제로 전달하지 않는 합성 안내입니다.');
       await messageStep(page, 3);
-      const details = page.locator('details').filter({ has: page.locator('#campaign-scheduled') });
-      await details.locator('summary').focus();
-      await page.keyboard.press('Enter');
-      assert.equal(await details.evaluate(node => node.open), true, 'keyboard opens reservation');
+      // Reopened 2026-11-23: the 예약 details wrapper is a 보낼 때 radio group; the datetime
+      // field exists only after 날짜·시각 지정 is chosen, here by keyboard.
+      assert.equal(await page.locator('#campaign-scheduled').count(), 0, 'no reservation field while sending now');
+      await page.locator('#campaign-schedule-choice-2').focus();
+      await page.keyboard.press('Space');
+      await page.locator('#campaign-scheduled').waitFor({ state: 'visible' });
+      assert.equal(await page.locator('#campaign-schedule-choice-2').isChecked(), true, 'keyboard opens reservation');
       assert.match(await page.locator('label[for="campaign-scheduled"]').innerText(), /한국 시간/);
       const input = page.locator('#campaign-scheduled');
       await input.focus();
@@ -95,7 +98,7 @@ async function main() {
       await input.fill('2030-11-12T09:00');
       const mock = page.getByRole('checkbox', { name: /^모의 발송으로 기록/ });
       if (!await mock.isChecked()) await mock.check();
-      assert.match(await details.innerText(), /2030\. 11\. 12\. 오전 9:00 \(한국 시간\)/);
+      assert.match(await page.locator('section[aria-labelledby="campaign-review-heading"]').innerText(), /예약 · 2030\. 11\. 12\. 오전 9:00 \(한국 시간\)/);
       await page.screenshot({ path: path.join(out, `compose-${width}.png`), fullPage: true });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'no page overflow');
       await page.evaluate(axeSource);
