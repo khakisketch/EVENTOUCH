@@ -33,7 +33,7 @@ export default function EventBanner({
     <div className={`${styles.banner} ${className}`} style={style} data-tone={tone} data-compact={compact || undefined} data-fill={fill ? "color" : source ? "image" : "neutral"}>
       {source ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img className={styles.artwork} src={source} alt="" onError={onImageError} />
+        <img className={styles.artwork} src={source} alt="" decoding="async" fetchPriority="high" onError={onImageError} />
       ) : null}
       {kicker ? <div className={styles.kicker}>{kicker}</div> : null}
       <Title className={styles.title}>{title}</Title>

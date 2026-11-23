@@ -222,7 +222,7 @@ function FeedCard({ photo }: { photo: HomePhoto }) {
         <span className={L.feedBroken} role="status">사진을 불러오지 못했습니다.</span>
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
-        <img className={L.feedImage} src={photo.src} alt={photo.caption || `${photo.name || "참가자"}님이 공유한 사진`} loading="lazy" onError={() => setFailed(true)} />
+        <img className={L.feedImage} src={photo.src} alt={photo.caption || `${photo.name || "참가자"}님이 공유한 사진`} loading="lazy" decoding="async" onError={() => setFailed(true)} />
       )}
       {photo.caption || meta ? (
         <p className={L.feedCaption}>{photo.caption}{meta ? <small>{meta}</small> : null}</p>

@@ -46,7 +46,7 @@ export default function GuideVenueCard({
       {map ? (
         <figure className={styles.venueMap}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={map.src} alt={map.alt} />
+          <img src={map.src} alt={map.alt} loading="lazy" decoding="async" />
           {map.caption ? <figcaption>{map.caption}</figcaption> : null}
         </figure>
       ) : null}

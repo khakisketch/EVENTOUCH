@@ -343,7 +343,7 @@ export default async function EventPage({
               <div className={styles.card}>
                 <div className={styles.mapWrap}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img className={styles.mapImage} src={photoUrl(boothMap.fileId)} alt="행사장 부스 배치도" loading="lazy" />
+                  <img className={styles.mapImage} src={photoUrl(boothMap.fileId)} alt="행사장 부스 배치도" loading="lazy" decoding="async" />
                   {boothMap.points.map((point) => {
                     const booth = boothMap.booths.find((item) => item.id === point.boothId);
                     if (!booth) return null;

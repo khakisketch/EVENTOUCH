@@ -1512,6 +1512,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                                       src={`/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(fileId)}`}
                                       alt={caption || "승인된 행사 사진"}
                                       loading="lazy"
+                                      decoding="async"
                                     />
                                   ) : null}
                                   <p>{caption || "설명 없음"}</p>

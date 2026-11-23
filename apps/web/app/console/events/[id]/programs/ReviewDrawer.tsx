@@ -223,6 +223,7 @@ export default function ReviewDrawer(props: {
                           src={`/api/events/${encodeURIComponent(props.eventId)}/files/${encodeURIComponent(photo.fileId)}`}
                           alt={photo.caption || "참가자가 공유한 사진"}
                           loading="lazy"
+                          decoding="async"
                         />
                       ) : <span aria-hidden="true" />}
                       <span className={styles.drawerItemMain}>

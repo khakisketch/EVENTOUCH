@@ -55,7 +55,7 @@ export default function ConsoleAvatar({ name, tone = "neutral", size = "md", lab
     >
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img className={styles.logo} src={src} alt="" />
+        <img className={styles.logo} src={src} alt="" decoding="async" />
       ) : firstGrapheme(name)}
     </span>
   );

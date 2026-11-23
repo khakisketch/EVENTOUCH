@@ -95,7 +95,8 @@ test('the renderer builds elements from data only: raw HTML is text, links are g
   assert.match(html, /<strong>굵게<\/strong>/);
   assert.match(html, /<a href="https:\/\/example\.com" target="_blank" rel="noopener noreferrer">링크<\/a>/);
   assert.match(html, /<ul><li>가<\/li><li>나<\/li><\/ul>/);
-  assert.match(html, /<img class="image" src="\/api\/public\/events\/seoul\/files\/abc" alt="현장" loading="lazy"\/>/);
+  // Reopened 2026-11-23: pictures also decode off the main thread (decoding="async").
+  assert.match(html, /<img class="image" src="\/api\/public\/events\/seoul\/files\/abc" alt="현장" loading="lazy" decoding="async"\/>/);
 });
 
 test('the server reads the same picture references the web does, and caps them', () => {

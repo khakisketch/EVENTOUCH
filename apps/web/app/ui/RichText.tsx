@@ -25,7 +25,7 @@ function renderInline(nodes: Inline[], imageSrc: Props["imageSrc"]): ReactNode[]
       case "link": return <a key={index} href={node.href} target="_blank" rel="noopener noreferrer">{renderInline(node.c, imageSrc)}</a>;
       case "image":
         // eslint-disable-next-line @next/next/no-img-element
-        return <img key={index} className={styles.image} src={imageSrc(node.fileId)} alt={node.alt} loading="lazy" />;
+        return <img key={index} className={styles.image} src={imageSrc(node.fileId)} alt={node.alt} loading="lazy" decoding="async" />;
     }
   });
 }

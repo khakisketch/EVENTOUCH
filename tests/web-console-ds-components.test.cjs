@@ -465,7 +465,8 @@ test('StatCard hero size and ConsoleAvatar logo are opt-in', () => {
 
   const logo = render(Avatar, { name: '한울', size: 'lg', src: '/api/clients/c1/files/f1' });
   assert.match(logo, /data-logo="true"/);
-  assert.match(logo, /<img class="logo" src="\/api\/clients\/c1\/files\/f1" alt=""\/>/);
+  // Reopened 2026-11-23: logos decode off the main thread, so the markup carries decoding="async".
+  assert.match(logo, /<img class="logo" src="\/api\/clients\/c1\/files\/f1" alt="" decoding="async"\/>/);
   assert.match(logo, /aria-hidden="true"/, 'still decorative unless labelled');
   assert.doesNotMatch(logo, />한<\/span>/, 'the logo replaces the initial');
   assert.doesNotMatch(render(Avatar, { name: '한울' }), /data-logo|<img/);

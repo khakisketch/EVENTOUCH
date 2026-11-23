@@ -510,7 +510,7 @@ export default function ClientsList() {
       <div className={styles.fileRow} role="group" aria-label={`${client.name} ${noun} 관리`}>
         {kind === "logo" && fileId ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img className={styles.fileThumb} src={url} alt={`${client.name} 로고`} />
+          <img className={styles.fileThumb} src={url} alt={`${client.name} 로고`} loading="lazy" decoding="async" />
         ) : null}
         <div className={styles.fileText}>
           <strong>{noun} <StatusPill tone={fileId ? "ok" : "neutral"} size="sm">{fileId ? "등록됨" : "등록 안 됨"}</StatusPill></strong>

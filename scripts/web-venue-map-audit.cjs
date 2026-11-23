@@ -131,6 +131,8 @@ async function main() {
     await image.waitFor();
     await attendee.waitForFunction(alt => [...document.images].some(item => item.alt === alt && item.complete && item.naturalWidth > 0), finalAlt);
     assert.equal(await image.evaluate(el => el.complete && el.naturalWidth > 0), true);
+    // 2026-11-23: the guide map is below the facts, so it loads lazily and decodes off the main thread.
+    assert.equal(await image.evaluate(el => `${el.loading},${el.decoding}`), 'lazy,async');
     assert.equal(await attendee.getByRole('link', { name: '안내도 크게 보기 (새 탭)' }).getAttribute('target'), '_blank');
     for (const width of [320, 390]) {
       await attendee.setViewportSize({ width, height: 844 });

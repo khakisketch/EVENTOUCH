@@ -2878,6 +2878,7 @@ function PhotoList(props: {
                 alt={photo.caption || "참가자가 공유한 사진"}
                 className={styles.photoThumb}
                 loading="lazy"
+                decoding="async"
               />
             ) : null}
             <p className={styles.itemText}><strong>{photo.name}</strong> · {photo.caption || "설명 없음"}</p>

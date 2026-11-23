@@ -1880,6 +1880,7 @@ function ModuleSection(props: {
                       src={`/api/public/events/${encodeURIComponent(props.slug)}/files/${encodeURIComponent(photo.fileId)}`}
                       alt={photo.caption || "참가자가 공유한 사진"}
                       loading="lazy"
+                      decoding="async"
                     />
                   ) : null}
                   <p><strong>{photo.name}</strong> · {photo.caption}</p>

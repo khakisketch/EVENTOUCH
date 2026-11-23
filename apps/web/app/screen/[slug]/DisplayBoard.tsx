@@ -738,7 +738,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
           {data.photos.slice(0, 6).map((photo) => (
             <figure key={photo.id}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={photo.fileId || photo.data} alt={photo.caption} />
+              <img src={photo.fileId || photo.data} alt={photo.caption} decoding="async" />
               <figcaption>{photo.caption}</figcaption>
             </figure>
           ))}
