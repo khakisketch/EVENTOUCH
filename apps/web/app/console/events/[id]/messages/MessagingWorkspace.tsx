@@ -2080,7 +2080,18 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   // the submit is disabled (zero recipients, or the locked compose) the
   // button focus is a silent no-op, so land on the review summary instead:
   // the blocker reason already reads there and is announced on focus.
-  function jumpToCampaignSubmit() { goComposeStep(3); }
+  // Reopened 2026-11-23: on one screen the jump lands on the real submit
+  // (or on the review summary that names why it is disabled).
+  function jumpToCampaignSubmit() {
+    if (inFlightRef.current || uncertainCreateRef.current || uncertainMmsUpload) return;
+    setComposeStep(3);
+    window.setTimeout(() => {
+      const submit = document.getElementById("campaign-submit") as HTMLButtonElement | null;
+      const target = submit && !submit.disabled ? submit : document.getElementById("campaign-submit-warning");
+      target?.scrollIntoView({ block: "center" });
+      target?.focus({ preventScroll: true });
+    }, 0);
+  }
 
   // Forward exit from the recipient picker into the draft: from the first
   // checkboxes Tab would otherwise walk every remaining recipient before
@@ -3212,7 +3223,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                       type="button"
                       className={styles.textButton} variant="ghost"
                       disabled={recipientReviewRequired}
-                      data-skip-to="campaign-title"
+                      data-skip-to="campaign-body"
                       onClick={jumpToCampaignTitle} icon={<PencilIcon />}
                     >
 
@@ -3310,7 +3321,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     {showSelectedOnly ? <p className={styles.help} id="recipient-selected-help">상태·그룹·검색 조건에 관계없이 선택한 {selectedCount}명 전체를 표시합니다. 조건으로 찾으려면 선택 대상만 보기를 끄세요.</p> : null}
                     {charsetCandidatesOnly ? <p className={styles.help} role="status">현재 선택한 참가자 중 이름에 확인이 필요한 {charsetCandidateIds.size}명을 표시합니다. <ProductButton id="recipient-charset-reset" type="button" className={styles.textButton} variant="ghost" onClick={() => setCharsetCandidatesOnly(false)}>전체 명단으로</ProductButton></p> : null}
                     {visibleRecipients.length ? (
-                      <ul className={styles.recipientList} aria-label="참가자 선택">
+                      <ul className={styles.recipientList} aria-label="참가자 선택" tabIndex={messagesLocked || compositionPending ? 0 : undefined}>
                         {visibleRecipients.map((person) => (
                           <li key={person.id}>
                             <label className={styles.recipientRow}>

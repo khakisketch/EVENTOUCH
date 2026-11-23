@@ -44,7 +44,11 @@ test('in-form move to the send request exists inside the compose form', () => {
 });
 
 test('the move reveals review and focuses its heading without sending', () => {
-  assert.match(SOURCE, /function jumpToCampaignSubmit\(\) \{ goComposeStep\(3\); \}/u);
+  // Reopened 2026-11-23: the jump lands on the submit itself, or on the
+  // review summary when the submit is disabled.
+  const jump = SOURCE.slice(SOURCE.indexOf('function jumpToCampaignSubmit()'), SOURCE.indexOf('function jumpToCampaignTitle()'));
+  assert.match(jump, /submit && !submit\.disabled \? submit : document\.getElementById\("campaign-submit-warning"\)/u);
+  assert.doesNotMatch(jump, /postCommand|executeCampaignCreate|requestSubmit|\.click\(/u);
   const fn = SOURCE.slice(SOURCE.indexOf('function goComposeStep'), SOURCE.indexOf('const focusComposerOnOpenRef'));
   assert.match(fn, /campaign-review-heading/u);
   assert.match(fn, /target\?\.focus/u);
