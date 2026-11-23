@@ -23,19 +23,30 @@ test('workbench and overview backgrounds cannot accidentally inherit stage black
   }
 });
 
+// Reopened 2026-11-24 (owner: 시안 A): the preview is now a side/bottom-sheet pane with a phone
+// frame (aside.previewPane) and substituted example values are marked by previewMessageParts,
+// which splits the body into React text nodes plus <mark> elements (escaped by React).
 test('message preview is escaped and clearly identifies synthetic substitutions', () => {
   const source = read('console/events/[id]/messages/MessagingWorkspace.tsx');
-  const start = source.indexOf('<section className={styles.draftPreview}');
-  const end = source.indexOf('</section>', start);
+  const start = source.indexOf('<aside className={styles.previewPane}');
+  const end = source.indexOf('</aside>', start);
   assert.ok(start >= 0 && end > start, 'the actual preview region must exist');
-  const preview = source.slice(start, end + '</section>'.length);
+  const preview = source.slice(start, end + '</aside>'.length);
   assert.match(preview, /aria-labelledby="message-preview-heading"/u);
+  assert.match(preview, /id="message-preview-heading"/u);
   assert.match(preview, /id="message-draft-preview"/u);
-  assert.match(preview, /previewMessageExample\(campaignDraft\.body, state\.eventName, state\.eventDate\)/u);
-  assert.match(preview, /이름·티켓 링크·번호는 예시입니다/u);
-  assert.match(preview, /실제 내용과 길이, 문자 유형은 수신자별로 달라질 수 있습니다/u);
+  assert.match(preview, /previewMessageParts\(campaignDraft\.body, state\.eventName, state\.eventDate\)/u);
+  assert.match(preview, /이름·티켓 링크·번호는 예시이고 받는 사람마다 달라집니다/u);
   assert.doesNotMatch(preview, /아직 저장·발송하지 않았습니다/u, 'a committed response may be lost; the preview cannot assert non-delivery');
   assert.doesNotMatch(preview, /dangerouslySetInnerHTML|replaceAll|ticket\}|ticket\.|fetch\(|postCommand|executeCampaignCreate/u);
+  // Substituted values are visibly marked and the helper builds React nodes only.
+  const helper = source.slice(source.indexOf('function previewMessageParts('), source.indexOf('// Reopened 2026-11-23 (owner decision): one-screen checklist composer.'));
+  assert.match(helper, /<mark key=\{index\} className=\{styles\.bubbleVar\}>/u, 'substituted values are marked');
+  assert.doesNotMatch(helper, /dangerouslySetInnerHTML|innerHTML|fetch\(|postCommand/u);
+  assert.match(read('console/events/[id]/messages/MessagingWorkspace.module.css'), /\.bubbleVar \{[^}]*background: var\(--brand-tint\)/u, 'the mark is a token-coloured highlight');
+  // The preview never reveals the real ticket link or a real lucky number: placeholders only.
+  assert.match(helper, /티켓링크: "\[개별 티켓 링크\]"/u);
+  assert.match(helper, /럭키번호: "\[배정된 번호\]"/u);
 });
 
 test('invitation states use the same open auth frame without heading eyebrows', () => {

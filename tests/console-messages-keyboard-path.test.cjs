@@ -1,12 +1,13 @@
 'use strict';
 
-// Keyboard path from confirmed recipients to the send request button: after
-// picking recipients the composer still holds N checkbox stops, a
-// 6-segment datetime-local and the option row before the submit. An
-// in-form move ("발송 검토로 이동") must jump focus straight onto the
-// real submit button so the next Tab leaves it and Enter/Space activates
-// it — no re-finding the button by Tab. Source-only assertions; rendering
-// and browser exercise belong to main.
+// Keyboard path from confirmed recipients to the send request button.
+// Reopened 2026-11-24 (owner: 시안 A): the recipient list, schedule inputs and
+// channel options now live in folded panels under the sentence pills, so the
+// composer holds only the three pills, the purpose chips, the body, the
+// personalization chips and 더 보기 ahead of the submit. The old in-form
+// "발송 검토로 이동" move (and its step heading focus) left with the steps;
+// the submit itself is a few Tab stops away and sits in a sticky dock. Source-only
+// assertions; rendering and browser exercise belong to main.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -23,43 +24,38 @@ const CSS = fs.readFileSync(
   'utf8'
 );
 
-test('in-form move to the send request exists inside the compose form', () => {
-  // Named access point with a self-explanatory screen-reader name.
-  assert.match(SOURCE, /id="campaign-send-skip"/u);
-  assert.match(SOURCE, /발송 검토로 이동/u);
-  // It must be a plain button (no submit, no navigation): it only moves
-  // focus, it never sends anything itself.
-  const skipAt = SOURCE.indexOf('id="campaign-send-skip"');
-  assert.ok(skipAt !== -1, 'expected the send skip control');
-  const skipWindow = SOURCE.slice(Math.max(0, skipAt - 400), skipAt + 400);
-  assert.match(skipWindow, /type="button"/u);
-  assert.match(skipWindow, /onClick=\{jumpToCampaignSubmit\}/u);
-  assert.doesNotMatch(skipWindow, /type="submit"/u);
-  // Placement: with the recipient summary at the top of the form, so the
-  // shortcut is reachable before the long recipient list is walked.
-  assert.ok(skipAt > SOURCE.indexOf('id="campaign-recipients"') && skipAt < SOURCE.indexOf('id="recipient-list-summary"'), 'skip sits in the recipient section above the long list');
-  assert.ok(skipAt < SOURCE.indexOf('id="campaign-submit"'), 'skip must sit before the submit button');
-  assert.ok(skipAt < SOURCE.indexOf('id="campaign-scheduled"'), 'skip must sit before the schedule input');
-  assert.ok(skipAt < SOURCE.indexOf('id="campaign-submit"'), 'skip must sit before the submit button');
+test('no step jump remains: panels are folded and the submit is reachable without a jump control', () => {
+  assert.doesNotMatch(SOURCE, /campaign-send-skip|jumpToCampaignSubmit|jumpToCampaignTitle|goComposeStep|발송 검토로 이동/u, 'the step-era jumps are gone');
+  // Folded panels use the hidden attribute so their controls leave the tab order and the a11y tree.
+  assert.match(SOURCE, /id="campaign-recipients"[^>]*hidden=\{openPanel !== "who"\}/u);
+  assert.match(SOURCE, /id="campaign-how-panel"[^>]*hidden=\{openPanel !== "how"\}/u);
+  assert.match(SOURCE, /id="campaign-schedule"[^>]*hidden=\{openPanel !== "when"\}/u);
+  assert.match(CSS, /\.panel\[hidden\] \{ display: none; \}/u, 'a hidden panel is never drawn or tabbed');
+  // The recipient list is closed by default; it opens from 직접 고르기 or a flow that needs review.
+  assert.match(SOURCE, /const \[recipientListOpen, setRecipientListOpen\] = useState\(false\)/u, 'the long list starts folded');
+  // The submit follows every panel, the body and the 더 보기 block in DOM order.
+  const submitAt = SOURCE.indexOf('id="campaign-submit"');
+  for (const id of ['id="campaign-recipients"', 'id="campaign-schedule"', 'id="campaign-body"', 'id="campaign-title"']) {
+    assert.ok(SOURCE.indexOf(id) < submitAt, `${id} precedes the submit`);
+  }
+  assert.equal((SOURCE.match(/id="campaign-submit"/gu) ?? []).length, 1, 'one submit remains');
 });
 
-test('the move reveals review and focuses its heading without sending', () => {
-  // Reopened 2026-11-23: the jump lands on the submit itself, or on the
-  // review summary when the submit is disabled.
-  const jump = SOURCE.slice(SOURCE.indexOf('function jumpToCampaignSubmit()'), SOURCE.indexOf('function jumpToCampaignTitle()'));
-  assert.match(jump, /submit && !submit\.disabled \? submit : document\.getElementById\("campaign-submit-warning"\)/u);
-  assert.doesNotMatch(jump, /postCommand|executeCampaignCreate|requestSubmit|\.click\(/u);
-  const fn = SOURCE.slice(SOURCE.indexOf('function goComposeStep'), SOURCE.indexOf('const focusComposerOnOpenRef'));
-  assert.match(fn, /campaign-review-heading/u);
-  assert.match(fn, /target\?\.focus/u);
-  assert.match(fn, /scrollIntoView/u);
-  // Reopened 2026-11-23: one-screen checklist. Moving between zones never
-  // gates; the recipient and body checks live in the submit (발송 검토).
-  assert.doesNotMatch(fn, /setCampaignFieldError/u, 'zone moves never raise field errors');
+test('the dock lands on the review summary or the submit without sending', () => {
+  // The review summary stays a programmatic focus landing (tabIndex -1) for flows that must
+  // surface the blocking reason; the submit validates only when pressed.
+  assert.match(SOURCE, /<h3 className="sr-only" id="campaign-review-heading" tabIndex=\{-1\}>/u);
+  assert.match(SOURCE, /id="campaign-submit-warning" tabIndex=\{-1\}/u);
   const submit = SOURCE.slice(SOURCE.indexOf('function requestCampaignCreate'), SOURCE.indexOf('const fingerprint = fingerprintFor("message.create-charset-reviewed"'));
   assert.match(submit, /!selectedIds\.length/u);
   assert.match(submit, /!campaignDraft\.body\.trim\(\)/u);
-  assert.doesNotMatch(fn, /postCommand|executeCampaignCreate|requestSubmit|\.submit\(/u);
+  assert.match(submit, /event\.preventDefault\(\)/u);
+  // Field errors open the folded panel that owns the field, then focus it.
+  const reveal = SOURCE.slice(SOURCE.indexOf('The field lives in a folded panel'), SOURCE.indexOf('if (recipientReviewRequired) return;'));
+  assert.match(reveal, /field === "ids"\) setOpenPanel\("who"\)/u);
+  assert.match(reveal, /field === "scheduled"\) setOpenPanel\("when"\)/u);
+  assert.match(reveal, /setMoreOpen\(true\)/u);
+  assert.doesNotMatch(reveal, /postCommand|executeCampaignCreate|requestSubmit|\.click\(/u);
 });
 
 test('submit button id and labelling are preserved', () => {
@@ -70,7 +66,9 @@ test('submit button id and labelling are preserved', () => {
   const submitWindow = SOURCE.slice(submitAt, submitEnd);
   assert.match(submitWindow, /type="submit"/u);
   assert.match(submitWindow, /발송 검토/u);
-  assert.match(SOURCE, /className=\{styles\.reviewBar\}/u);
+  // The submit lives in a sticky dock beside the preview opener (시안 A).
+  assert.match(SOURCE, /<div className=\{styles\.sendDock\}>[\s\S]*?id="message-preview-open"[\s\S]*?id="campaign-submit"/u);
+  assert.match(CSS, /\.sendDock \{[^}]*position: sticky;[^}]*bottom: 0/u);
   // Scroll target stays reachable for sighted operators.
   assert.match(CSS, /#campaign-submit/u);
   assert.match(CSS, /scroll-margin-top/u);
@@ -91,24 +89,26 @@ test('existing send, mock and cancel wording plus API surface are intact', () =>
 });
 
 test('touch target and token-only styling hold', () => {
-  // The top shortcut and bottom review bar reuse 44px/token-only controls.
-  assert.match(CSS, /\.reviewBar/u);
-  assert.match(CSS, /\.recipientTopBar/u);
+  // The sentence pills, the preview opener and the text buttons reuse 44px/token-only controls.
+  assert.match(CSS, /\.pill \{[^}]*min-height: var\(--control-min-size\)/u);
+  assert.match(CSS, /\.previewOpen \{[^}]*min-height: var\(--control-min-size\)/u);
   assert.match(CSS, /\.textButton \{[^}]*min-height: 44px/u);
   assert.doesNotMatch(CSS, /#[0-9a-fA-F]{3,8}\b/u);
-  // Phone keeps the send checklist in normal flow: a sticky bar covered the
-  // recipient fields at first paint (measured at 390×844).
+  // Reopened 2026-11-24 (시안 A): the send dock is deliberately sticky so 발송 검토 stays in reach;
+  // on a phone it clears the home indicator and keeps a top rule instead of covering fields blindly.
+  assert.match(CSS, /\.sendDock \{[^}]*env\(safe-area-inset-bottom/u, 'the dock clears the device inset');
   assert.match(
     CSS,
-    /@media \(max-width: 768px\) \{[\s\S]*?\.reviewBar \{[^}]*position: static;/u,
-    'the review bar must not float over the recipient fields on a phone'
+    /@media \(max-width: 1024px\) \{[\s\S]*?\.sendDock \{ border-top: 1px solid var\(--line\); \}/u,
+    'the phone dock is separated from the fields it floats over'
   );
 });
 
 test("the skip control carries the product-wide hook the audit measures", () => {
   // The usability audit recognises an in-form skip by this hook, so the
   // shortest keyboard path stays measurable instead of being counted as a
-  // long tab walk.
-  assert.match(SOURCE, /data-skip-to="campaign-submit"/u);
+  // long tab walk. Reopened 2026-11-24: the skip lands on the message body
+  // (the review button is a few Tab stops later, no jump to it is needed).
+  assert.match(SOURCE, /data-skip-to="campaign-body"/u);
   assert.match(SOURCE, /id="campaign-submit"/u);
 });

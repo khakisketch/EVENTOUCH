@@ -186,8 +186,11 @@ test('event context is centralized while domain actions retain their meaning and
 
   const messages = read(targets[4]);
   assert.equal((messages.match(/id="campaign-submit"/gu) ?? []).length, 1, 'one final submit remains');
-  // Reopened 2026-11-23: one-screen checklist, no step-only navigation actions.
-  assert.match(messages, /aria-label="메시지 작성 항목"/u, 'the checklist names every zone');
+  // Reopened 2026-11-24 (owner: 시안 A): one sentence names who/how/when with three pill buttons;
+  // no checklist and no step-only navigation actions remain.
+  assert.match(messages, /<p className=\{styles\.sentence\} id="campaign-sentence">/u, 'one sentence names every choice');
+  for (const pill of ['campaign-who-pill', 'campaign-how-pill', 'campaign-when-pill']) assert.match(messages, new RegExp(`id="${pill}"`, 'u'), `${pill} opens its inline panel`);
+  assert.doesNotMatch(messages, /aria-label="메시지 작성 항목"|composeChecklist|goComposeStep/u, 'no checklist or step navigation remains');
   assert.equal((messages.match(/variant="primary"/gu) ?? []).length >= 1, true);
   assert.doesNotMatch(content, />\s*운영 현황\s*<\/Link>/u);
   assert.doesNotMatch(participants, />\s*운영 현황으로\s*<\/Link>/u);

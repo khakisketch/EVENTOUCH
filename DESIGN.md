@@ -435,6 +435,13 @@ Reopened 2026-11-23 (owner: "A로 하고, 내용은 목적 템플릿으로 불�
 - 보낼 때 is 지금 / 행사 기준 / 날짜·시각 지정. 행사 기준 computes one Korea-time reservation from the event date and says so: a later change to the event date does not move it. The server still stores an absolute time.
 - The preview sits beside the content on wide screens. The send review is the only orange action in the composer.
 
+Reopened 2026-11-24 (owner: 시안 A — "시각적으로 쓰기 좋고 직관적이게, 불필요한 기능이나 과정은 단순화·제거"; mockup artifact "메시지 작성 2차 시안"). This replaces the four-zone checklist above; the audience presets, purpose templates, 행사 기준 scheduling and automatic title stay. `tests/web-messages-composer-contract.test.cjs` and `tests/web-message-checklist-2026-11-23.test.cjs` guard it.
+
+- One sentence names who, how and when: "[참가 확정 8명]에게 [문자]로 [지금 바로] 보냅니다". Each bracket is a pill that opens one inline panel at a time (누구에게: audience presets then 직접 고르기; 어떻게: 문자 / 카카오 알림톡 and the 문자 대체 choice; 언제: 지금 / 행사 기준 / 날짜·시각, 예약 실행 방식). Empty pills are dashed. Warnings about recipients stay visible under the sentence even when the panel is folded.
+- Below the sentence: purpose chips, then the message body with the personalization chips. 더 보기 folds the photo attachment, the record title and the saved-template picker (for 알림톡 the saved template lives in the 어떻게 panel because it is required).
+- The phone preview is always visible: a sticky phone frame beside the writing on wide screens, a bottom sheet opened by 미리보기 on phones (Esc or 닫기 closes it). Substituted values are marked so the operator sees what changes per person.
+- The 4-item checklist, the separate review card and its duplicate summary list are gone. The send area is a short summary line, the 모의 발송 choice and one orange 발송 검토 button in a bottom dock; the confirmation, receipts and every check still run on that button.
+
 ## 현장 운영 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/operations/OperationsWorkspace.tsx`, mockup scene A3). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-operations-composition.test.cjs` ("approved operations design stays locked") guards it.

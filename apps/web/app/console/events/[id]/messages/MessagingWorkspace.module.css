@@ -1308,38 +1308,29 @@
 }
 
 
-/* ---- Reopened 2026-11-23 (owner decision): one-screen checklist ----
-   Four numbered zones on one screen: 받는 사람 → 내용 → 보낼 때 → 발송 전 검토.
-   The checklist at the top says what is filled; nothing is hidden or gated.
-   Tokens only. The preview sits beside the content on wide screens. */
-.composeChecklist ol { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s2); margin: 0; padding: 0; list-style: none; }
-.composeChecklist a { display: flex; align-items: center; gap: var(--s3); min-height: var(--control-min-size); height: 100%; padding: var(--s2) var(--s3); border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--paper); color: var(--ink); text-decoration: none; }
-.composeChecklist a:hover { background: var(--surface-muted); }
-.composeChecklist a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.composeChecklist a > span:last-child { display: grid; min-width: 0; }
-.composeChecklist strong { font-size: var(--text-sm); font-weight: var(--fw-strong); }
-.composeChecklist small { overflow: hidden; color: var(--muted); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
-.checkMark { display: inline-grid; flex: none; place-items: center; width: 24px; height: 24px; border-radius: var(--r-pill); background: var(--surface-sunken); color: var(--muted); font-size: var(--text-xs); font-weight: var(--fw-strong); font-variant-numeric: tabular-nums; }
-.composeChecklist li[data-done="true"] .checkMark { background: var(--success-soft); color: var(--success); }
-.composeChecklist li[data-done="true"] a { border-color: var(--success-line); }
+/* ---- Reopened 2026-11-24 (owner: 시안 A) ----
+   One sentence names who / how / when; purpose chips load the text; the phone preview stays beside the
+   writing; photo, record title and saved templates fold into 더 보기. Tokens only. */
+.composeGrid[data-layout="simple"] { display: grid; grid-template-areas: none; grid-template-columns: minmax(0, 1fr) minmax(260px, 320px); gap: var(--s6); align-items: start; }
+.composeMain { display: grid; gap: var(--s5); min-width: 0; }
+.sentenceBlock { display: grid; gap: var(--s2); min-width: 0; }
+.sentence { margin: 0; font-size: var(--text-lg); font-weight: var(--fw-regular); line-height: 2.3; letter-spacing: var(--ls-heading); word-break: keep-all; }
+.pill { display: inline-flex; align-items: center; gap: var(--s1); min-height: var(--control-min-size); margin: 2px var(--s1); padding: 0 var(--s4); border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: var(--surface-sunken); color: var(--ink); font: inherit; font-size: var(--text-lg); font-weight: var(--fw-strong); vertical-align: middle; cursor: pointer; }
+.pill::after { content: "▾"; color: var(--muted); font-size: var(--text-xs); }
+.pill[aria-expanded="true"] { border-color: var(--ink); background: var(--surface-accent-soft); }
+.pill[aria-expanded="true"]::after { content: "▴"; }
+.pill[data-empty="true"] { border-style: dashed; color: var(--muted); }
+.pill:hover { border-color: var(--ink); }
+.pill:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.panel { display: grid; gap: var(--s3); margin: 0; padding: var(--s4); border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface-sunken); min-width: 0; }
+.panel[hidden] { display: none; }
+.panelTitle { margin: 0; padding: 0; font-size: var(--text-sm); font-weight: var(--fw-strong); color: var(--muted); }
+.panelFoot { display: flex; justify-content: flex-end; }
+.panel .recipientDetails { background: var(--paper); border-radius: var(--r-ctl); }
 .composeNotice { margin: 0; padding: var(--s2) var(--s3); border-radius: var(--r-ctl); background: var(--info-soft); color: var(--info); font-size: var(--text-sm); }
 
-.zoneHead { display: flex; align-items: center; gap: var(--s2); margin: 0 0 var(--s3); font-size: var(--text-lg); font-weight: var(--fw-strong); letter-spacing: var(--ls-heading); scroll-margin-top: 120px; }
-.zoneHead > span { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: var(--r-pill); background: var(--ink); color: var(--paper); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
-.zoneHead:focus { outline: none; }
-.zoneHead:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-
-.composeGrid[data-layout="checklist"] { display: grid; grid-template-areas: none; grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); gap: var(--s6) var(--s6); align-items: start; }
-.composeGrid[data-layout="checklist"] > fieldset { grid-area: auto; grid-column: 1 / -1; max-width: none; padding: 0; border: 0; background: transparent; }
-.composeGrid[data-layout="checklist"] .composeDraft { display: contents; }
-.composeGrid[data-layout="checklist"] .contentFields { grid-column: 1; margin: 0; padding: var(--s6) 0 0; border-top: 1px solid var(--line); border-bottom: 0; }
-.composeGrid[data-layout="checklist"] .draftPreview { grid-column: 2; grid-row: span 2; align-self: start; margin-top: var(--s6); border: 1px solid var(--line); background: var(--surface-sunken); }
-.composeGrid[data-layout="checklist"] [data-message-attachment] { grid-column: 1; }
-.composeGrid[data-layout="checklist"] .sendCard { grid-column: 1 / -1; padding: var(--s6) 0 0; border-top: 1px solid var(--line); }
-.composeGrid[data-layout="checklist"] textarea[id="campaign-body"] { min-height: 160px; }
-.reviewCard { margin-top: var(--s6); padding-top: var(--s6); }
-
-.audiencePresets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2); margin-bottom: var(--s3); }
+.audiencePresets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2); }
 .audienceCard { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 64px; padding: var(--s3) var(--s4); border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--paper); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .audienceCard > span { display: grid; gap: 2px; min-width: 0; }
 .audienceCard strong { font-size: var(--text-md); font-weight: var(--fw-strong); word-break: keep-all; }
@@ -1350,34 +1341,81 @@
 .audienceCard:disabled { cursor: default; background: var(--surface-sunken); color: var(--muted); }
 .audienceCard:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
+.composeContent { display: grid; gap: var(--s3); min-width: 0; }
+.fieldLabel { display: block; margin: 0; font-size: var(--text-sm); font-weight: var(--fw-strong); color: var(--muted); }
+.fieldLabel:focus { outline: none; }
 .purposeLoader { display: grid; gap: var(--s2); }
-.purposeLabel { margin: 0; font-size: var(--text-sm); font-weight: var(--fw-strong); }
+.purposeLabel { margin: 0; font-size: var(--text-xs); color: var(--muted); }
 .purposeChips { display: flex; flex-wrap: wrap; gap: var(--s2); }
-.purposeChip { display: grid; gap: 0; min-height: var(--control-min-size); padding: var(--s1) var(--s3); border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--paper); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
-.purposeChip strong { font-size: var(--text-sm); font-weight: var(--fw-strong); }
-.purposeChip small { color: var(--muted); font-size: var(--text-xs); }
+.purposeChip { display: inline-flex; align-items: center; min-height: var(--control-min-size); padding: 0 var(--s4); border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--paper); color: var(--ink); font: inherit; font-size: var(--text-sm); font-weight: var(--fw-strong); cursor: pointer; }
+.purposeChip small { display: none; }
 .purposeChip:enabled:hover { border-color: var(--line-strong); background: var(--surface-muted); }
 .purposeChip[aria-pressed="true"] { border-color: var(--ink); background: var(--surface-accent-soft); }
 .purposeChip:disabled { cursor: default; color: var(--muted); }
 .purposeChip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-
-.titleField { margin-top: var(--s4); }
+.composeContent textarea[id="campaign-body"] { min-height: 168px; }
 .eventOffsetRow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s2) var(--s3); }
 .eventOffsetRow > p { grid-column: 1 / -1; margin: 0; }
 .eventOffsetResult { color: var(--ink); font-size: var(--text-md); font-weight: var(--fw-strong); }
 
+.moreDetails { border-top: 1px solid var(--line); padding-top: var(--s2); }
+.moreDetails > summary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); min-height: var(--control-min-size); color: var(--ink); font-size: var(--text-sm); font-weight: var(--fw-strong); cursor: pointer; }
+.moreDetails > summary > span { color: var(--muted); font-weight: var(--fw-regular); }
+.moreBody { display: grid; gap: var(--s4); padding-block: var(--s2) var(--s3); }
+.moreBody > div { min-width: 0; }
+
+.previewPane { position: sticky; top: var(--s4); display: grid; gap: var(--s2); min-width: 0; }
+.previewHead { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
+.previewHead h3 { margin: 0; font-size: var(--text-sm); font-weight: var(--fw-strong); }
+.previewClose { display: none; min-height: var(--control-min-size); padding: 0 var(--s3); border: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--text-sm); font-weight: var(--fw-strong); cursor: pointer; }
+.phone { display: flex; flex-direction: column; width: 100%; max-width: 268px; aspect-ratio: 9 / 18; margin-inline: auto; border: 8px solid var(--stage); border-radius: calc(var(--radius-card) * 1.6); background: var(--paper); overflow: hidden; }
+.phone > * { flex: none; }
+.phoneBar { display: flex; justify-content: space-between; padding: var(--s2) var(--s4) var(--s1); color: var(--ink); font-size: var(--text-xs); font-weight: var(--fw-strong); }
+.phoneWho { display: grid; justify-items: center; padding: var(--s1) 0 var(--s2); border-bottom: 1px solid var(--line); color: var(--muted); font-size: var(--text-xs); }
+.phoneWho b { color: var(--ink); font-size: var(--text-sm); }
+.phone .kakaoExampleHeader { margin: 0; border-radius: 0; }
+.thread { display: grid; flex: 1 1 0; align-content: start; gap: var(--s2); min-height: 0; padding: var(--s3); overflow: auto; }
+.thread > small { justify-self: center; color: var(--muted); font-size: var(--text-xs); }
+.bubble { max-width: 92%; margin: 0; padding: var(--s3); border-radius: var(--r-card) var(--r-card) var(--r-card) var(--s1); background: var(--surface-sunken); color: var(--ink); font-size: var(--text-sm); line-height: var(--lh-body); white-space: pre-wrap; overflow-wrap: anywhere; }
+.kakaoBubble { max-width: none; border-radius: 0 0 var(--r-ctl) var(--r-ctl); border: 1px solid var(--line); background: var(--paper); }
+.bubbleEmpty { color: var(--muted); }
+.bubbleVar { padding: 0 2px; border-radius: var(--radius-small); background: var(--brand-tint); color: inherit; }
+
+.sendArea { display: grid; gap: var(--s3); margin-top: var(--s5); padding-top: var(--s4); border-top: 1px solid var(--line); }
+.sendArea .simulateOption { margin: 0; }
+.sendMeta { display: grid; gap: var(--s2); min-width: 0; }
+.sendDock { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; justify-content: flex-end; gap: var(--s2); padding: var(--s3) 0 max(var(--s3), env(safe-area-inset-bottom, 0px)); background: var(--paper); }
+.previewOpen { display: none; min-height: var(--control-min-size); padding: 0 var(--s4); border: 1px solid var(--line-strong); border-radius: var(--r-ctl); background: var(--paper); color: var(--ink); font: inherit; font-size: var(--text-md); font-weight: var(--fw-strong); cursor: pointer; }
+.previewOpen:focus-visible, .previewClose:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
 @media (max-width: 1024px) {
-  .composeGrid[data-layout="checklist"] { grid-template-columns: minmax(0, 1fr); gap: var(--s5); }
-  .composeGrid[data-layout="checklist"] .contentFields,
-  .composeGrid[data-layout="checklist"] .draftPreview,
-  .composeGrid[data-layout="checklist"] [data-message-attachment],
-  .composeGrid[data-layout="checklist"] .sendCard { grid-column: 1; grid-row: auto; }
-  .composeGrid[data-layout="checklist"] .draftPreview { margin-top: 0; }
+  .composeGrid[data-layout="simple"] { grid-template-columns: minmax(0, 1fr); gap: var(--s5); }
+  .previewPane { display: none; position: static; }
+  .previewPane[data-open="true"] { display: grid; position: fixed; inset: auto 0 0 0; z-index: 40; max-height: 85dvh; overflow: auto; padding: var(--s4) max(var(--s4), env(safe-area-inset-right, 0px)) max(var(--s4), env(safe-area-inset-bottom, 0px)); border-radius: var(--r-card) var(--r-card) 0 0; background: var(--paper); box-shadow: 0 0 0 100vmax var(--scrim), var(--shadow-raised); }
+  .previewClose, .previewOpen { display: inline-flex; align-items: center; }
+  .sendDock { border-top: 1px solid var(--line); }
+  .sendDock > :last-child { flex: 1 1 auto; }
 }
 @media (max-width: 768px) {
-  .composeChecklist ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sentence { font-size: var(--body); line-height: 2.2; }
+  .pill { font-size: var(--small); padding: 0 var(--s3); }
   .audiencePresets { grid-template-columns: minmax(0, 1fr); }
   .audienceCard { min-height: 56px; }
   .eventOffsetRow { grid-template-columns: minmax(0, 1fr); }
+  .panel { padding: var(--s3); }
 }
-.composeGrid[data-layout="checklist"] .sendCard > div { grid-template-columns: minmax(0, 1fr); max-width: var(--web-form-max); }
+
+/* Reopened 2026-11-24 (final UX pass) */
+.keepTogether { white-space: nowrap; }
+.panel #campaign-channel > legend,
+.panel #campaign-schedule-choice > legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.panel .help { font-size: var(--text-xs); }
+.panel .selectionSummary { padding: var(--s2) var(--s3); }
+.recipientList[data-locked="true"] { max-height: none; }
+@media (min-width: 769px) {
+  .sendMeta { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--s2) var(--s5); }
+}
+@media (max-width: 400px) {
+  .keepTogether { white-space: normal; }
+  .pill { max-width: 100%; text-align: left; line-height: var(--lh-tight); padding-block: var(--s2); }
+}

@@ -149,7 +149,10 @@ test('reload requires no acceptance trace and a proven safe charset cancellation
   assert.match(SOURCE, /\{reloadable \? <ProductButton[^\n]+내용·대상 불러오기/u);
 });
 
-test('reload preloads content, reveals any retained selection, and focuses the active step', () => {
+// Reopened 2026-11-24 (owner: 시안 A): there is no active step any more. The reload opens the
+// who panel when the set needs a second look (or the list is revealed for review), and lands
+// focus on the recipient search in that case, otherwise on the message body.
+test('reload preloads content, reveals any retained selection, and focuses the relevant field', () => {
   assert.match(SOURCE, /setCampaignDraft\(\{/u);
   assert.match(SOURCE, /body: source\.body/u);
   assert.match(SOURCE, /simulate: source\.simulate === true/u);
@@ -162,8 +165,10 @@ test('reload preloads content, reveals any retained selection, and focuses the a
   // Context lands on the in-form summary, then focuses the title without
   // moving the viewport again (title focus contract preserved).
   assert.match(SOURCE, /getElementById\("campaign-reload-summary"\)\?\.scrollIntoView/u);
-  assert.match(SOURCE, /getElementById\(nextStep === 1 \? "recipient-search" : "campaign-title"\)\?\.focus/u);
-  assert.doesNotMatch(SOURCE, /getElementById\("campaign-title"\)\?\.scrollIntoView/u);
+  assert.match(SOURCE, /const nextStep = eligible\.length && !excluded && !source\.recipientChangeCount \? 2 : 1;\s*if \(nextStep === 1\) setOpenPanel\("who"\);/u, 'a set needing review opens the who panel');
+  assert.match(SOURCE, /setRecipientListOpen\(true\);\s*setSendPending\(null\)/u, 'the reloaded set is revealed in the picker list');
+  assert.match(SOURCE, /getElementById\(nextStep === 1 \? "recipient-search" : "campaign-body"\)\?\.focus/u);
+  assert.doesNotMatch(SOURCE, /getElementById\("campaign-(?:title|body)"\)\?\.scrollIntoView/u);
   // Image references survive only for MMS; other channels drop them.
   assert.match(SOURCE, /imageFileId: isMms \? source\.imageFileId : ""/u);
   assert.match(SOURCE, /imageName: isMms \? source\.imageName : ""/u);
@@ -206,17 +211,19 @@ test('overwrite confirm stays disabled while any action or upload runs', () => {
   assert.doesNotMatch(failedBlock, /busy=\{false\}/u);
 });
 
-test('reloaded-source summary renders as info before the title, never as global success', () => {
+test('reloaded-source summary renders as info above the sentence panels, never as global success', () => {
   assert.match(SOURCE, /const \[reloadSummary, setReloadSummary\]/u);
-  // In-form placement immediately before the title field.
+  // In-form placement directly under the sentence, ahead of every panel and field.
   const summaryRender = SOURCE.indexOf('id="campaign-reload-summary"');
   const titleField = SOURCE.indexOf('id="campaign-title"');
   assert.ok(summaryRender !== -1, 'expected the reload summary element');
   assert.ok(titleField !== -1, 'expected the campaign title field');
   assert.ok(summaryRender < titleField, 'summary must precede the title field');
+  assert.ok(summaryRender > SOURCE.indexOf('id="campaign-sentence"'), 'summary sits under the sentence');
+  assert.ok(summaryRender < SOURCE.indexOf('id="campaign-recipients"'), 'summary precedes the folded panels');
   assert.match(SOURCE, /<ConsoleFeedback kind="info" id="campaign-reload-summary">\{reloadSummary\}<\/ConsoleFeedback>/u);
-  // Reopened 2026-11-23: one screen, so the summary renders once at the top of
-  // the 받는 사람 zone (no per-step copy) and is read before every field.
+  // Reopened 2026-11-24 (시안 A): the summary renders once directly under the sentence
+  // (no per-step copy, never inside a foldable panel) and is read before every field.
   assert.equal(SOURCE.split('id="campaign-reload-summary"').length - 1, 1, 'one summary render');
   assert.ok(summaryRender < SOURCE.indexOf('id="campaign-body"'), 'summary precedes the body field');
   // No duplicate global notice: reload clears it and sets the summary.
@@ -250,9 +257,9 @@ test('reload summary clears on proven send and on event change only', () => {
   assert.doesNotMatch(SOURCE.slice(applyStart, applyEnd), /setTemplateDraft/u);
 });
 
-test('summary scroll uses the margin for navigation and moves focus to the active step', () => {
+test('summary scroll uses the margin for navigation and moves focus to the relevant field', () => {
   assert.match(SOURCE, /getElementById\("campaign-reload-summary"\)\?\.scrollIntoView\(\{ behavior: "instant" as ScrollBehavior, block: "start" \}\)/u);
-  assert.match(SOURCE, /getElementById\(nextStep === 1 \? "recipient-search" : "campaign-title"\)\?\.focus\(\{ preventScroll: true \}\)/u);
+  assert.match(SOURCE, /getElementById\(nextStep === 1 \? "recipient-search" : "campaign-body"\)\?\.focus\(\{ preventScroll: true \}\)/u);
   assert.match(CSS, /#campaign-reload-summary/u);
   // New spacing is tokens-only: s8 + s7 + s5 = 120, no px literal.
   assert.match(CSS, /scroll-margin-top: calc\(var\(--s8\) \+ var\(--s7\) \+ var\(--s5\)\)/u);

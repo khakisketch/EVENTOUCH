@@ -20,27 +20,29 @@ const CSS = fs.readFileSync(
   'utf8'
 );
 
-test('recipient state heads the compose form with a return path from review', () => {
-  assert.match(SOURCE, /recipientTopBar/u);
-  assert.match(SOURCE, /수신자 다시 확인/u);
-  assert.match(SOURCE, /onClick=\{jumpToRecipientFilter\}/u);
+// Reopened 2026-11-24 (owner: 시안 A): the recipient state heads the compose form as the first
+// pill of one sentence; the picker is an inline panel that opens from that pill. The
+// recipientTopBar and its 수신자 다시 확인 / 내용 작성으로 계속 jumps left with the steps.
+test('recipient state heads the compose form as the sentence\'s first pill with a folded picker', () => {
+  assert.doesNotMatch(SOURCE, /recipientTopBar|수신자 다시 확인|recipient-heading/u);
+  assert.match(SOURCE, /id="campaign-who-pill"[^>]*aria-expanded=\{openPanel === "who"\}[^>]*aria-controls="campaign-recipients"/u);
   assert.match(SOURCE, /id="campaign-recipients"/u);
   assert.match(SOURCE, /getElementById\("campaign-recipients"\)\?\.scrollIntoView/u);
   assert.match(SOURCE, /getElementById\("recipient-status-filter"\)\?\.focus/u);
-  // Head bar precedes the long form: title, body, and the folded picker.
-  const head = SOURCE.indexOf('recipientTopBar');
-  assert.ok(head !== -1, 'expected the recipient head bar');
-  assert.ok(head < SOURCE.indexOf('id="campaign-title"'), 'head bar must precede the title field');
-  assert.ok(head < SOURCE.indexOf('id="campaign-body"'), 'head bar must precede the body field');
-  assert.ok(head > SOURCE.indexOf('id="campaign-recipients"') && head < SOURCE.indexOf('id="recipient-list-summary"'), 'jumps sit within the recipient section before its long list');
-  // The picker section keeps its title and detailed summary.
-  // Reopened 2026-11-23: the zone is named 받는 사람 (screen-reader legend +
-  // numbered visible heading) and starts with the audience presets.
-  assert.match(SOURCE, /<legend className="sr-only">받는 사람<\/legend>/u);
-  assert.match(SOURCE, /id="recipient-heading" tabIndex=\{-1\}/u);
+  // The sentence precedes the long form: title, body, and the folded picker's list.
+  const head = SOURCE.indexOf('id="campaign-sentence"');
+  assert.ok(head !== -1, 'expected the sentence');
+  assert.ok(head < SOURCE.indexOf('id="campaign-title"'), 'sentence must precede the title field');
+  assert.ok(head < SOURCE.indexOf('id="campaign-body"'), 'sentence must precede the body field');
+  assert.ok(SOURCE.indexOf('id="campaign-who-pill"') > head && SOURCE.indexOf('id="campaign-who-pill"') < SOURCE.indexOf('id="campaign-recipients"'), 'the pill leads the panel it opens');
+  assert.ok(SOURCE.indexOf('id="campaign-recipients"') < SOURCE.indexOf('id="recipient-list-summary"'), 'the long list lives inside the picker panel');
+  // The picker keeps its title and detailed summary, and starts with the audience presets.
+  assert.match(SOURCE, /<legend className=\{styles\.panelTitle\}>누구에게 보낼까요<\/legend>/u);
+  assert.match(SOURCE, /className=\{styles\.audiencePresets\} role="group" aria-label="받는 사람 묶음"/u);
   assert.match(SOURCE, /id="recipient-summary"/u);
   assert.match(SOURCE, /확정 \{selectedApproved\}명/u);
-  assert.match(CSS, /\.recipientTopBar/u);
+  assert.match(CSS, /\.sentence \{/u);
+  assert.match(CSS, /\.pill \{/u);
 });
 
 test('zero-recipient block is stated next to the submit button, UI-only', () => {

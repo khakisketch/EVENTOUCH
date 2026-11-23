@@ -1,11 +1,13 @@
 'use strict';
 
-// Message review jumps: forward/back navigation between the recipient
-// picker, the draft and the review bar must stay operable by keyboard with
-// many recipients, including the empty/disabled case. A jump onto a
-// disabled submit is a silent no-op that strands focus, so the jump lands
-// on the review summary where the blocker reason reads. Source-only
-// assertions; rendered keyboard behavior belongs to main's browser audit.
+// Message review: the field-level prerequisites, the review reason surface and the
+// recipient-list keyboard escape must stay operable by keyboard with many recipients,
+// including the empty/disabled case. Source-only assertions; rendered keyboard behavior
+// belongs to main's browser audit.
+// Reopened 2026-11-24 (owner: 시안 A): the step-era forward/back/review jump buttons
+// (내용 작성으로 계속, 수신자 다시 확인, 발송 검토로 이동) are gone with the steps. What
+// they guaranteed is now carried by 발송 검토 itself: it names the missing prerequisite,
+// opens the folded panel that owns the field and focuses the field.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -22,26 +24,33 @@ const CSS = fs.readFileSync(
   'utf8'
 );
 
-// Reopened 2026-11-23: one-screen checklist. The jump only moves; the
-// submit (발송 검토) names a missing prerequisite and focuses its field. An
+// The submit (발송 검토) names a missing prerequisite and focuses its field. An
 // empty record title is filled automatically instead of being asked for.
-test('review navigation shows the relevant input stage when prerequisites are missing', () => {
+test('review navigation shows the relevant input panel when prerequisites are missing', () => {
   const fn = SOURCE.slice(SOURCE.indexOf('function requestCampaignCreate'), SOURCE.indexOf('const fingerprint = fingerprintFor("message.create-charset-reviewed"'));
   assert.match(fn, /!selectedIds\.length/u);
   assert.match(fn, /field: "ids"/u);
   assert.match(fn, /autoCampaignTitle\(/u);
   assert.match(fn, /field: campaignDraft\.channel === "ALIMTALK" \? "templateId" : "body"/u);
   assert.match(fn, /messageContentIssue\(campaignDraft, boundTemplate\)/u);
-  assert.match(SOURCE, /campaignFieldError\.field === "ids" \? 1/u);
-  assert.match(SOURCE, /document\.getElementById\(ids\[campaignFieldError\.field\]/u);
   assert.doesNotMatch(fn, /postCommand|executeCampaignCreate|requestSubmit|\.submit\(/u);
+  // Each field error opens its folded panel first, then focuses the field.
+  assert.match(SOURCE, /campaignFieldError\.field === "ids"\) setOpenPanel\("who"\)/u);
+  assert.match(SOURCE, /field === "channel" \|\| campaignFieldError\.field === "smsFallback"\) setOpenPanel\("how"\)/u);
+  assert.match(SOURCE, /campaignFieldError\.field === "scheduled"\) setOpenPanel\("when"\)/u);
+  assert.match(SOURCE, /field === "templateId"\) \{ if \(campaignDraft\.channel === "ALIMTALK"\) setOpenPanel\("how"\); else setMoreOpen\(true\); \}/u);
+  assert.match(SOURCE, /field === "imageFileId" \|\| campaignFieldError\.field === "title"\) setMoreOpen\(true\)/u);
+  assert.match(SOURCE, /ids: "recipient-status-filter", title: "campaign-title", body: "campaign-body", smsFallback: "campaign-sms-fallback", templateId: "campaign-template", imageFileId: "campaign-image", scheduled: "campaign-scheduled"/u);
+  assert.match(SOURCE, /document\.getElementById\(ids\[campaignFieldError\.field\]/u);
 });
 
-test('the review jump announces its requirement before activation', () => {
-  const skipAt = SOURCE.indexOf('id="campaign-send-skip"');
-  assert.ok(skipAt !== -1, 'expected the review jump control');
-  const skipWindow = SOURCE.slice(Math.max(0, skipAt - 200), skipAt + 400);
-  assert.match(skipWindow, /aria-describedby="campaign-submit-warning"/u, 'jump describes the blocking reason');
+test('the disabled submit still describes its blocking reason before activation', () => {
+  const submitAt = SOURCE.indexOf('id="campaign-submit"');
+  assert.ok(submitAt !== -1, 'expected the submit control');
+  const submitWindow = SOURCE.slice(submitAt, submitAt + 700);
+  assert.match(submitWindow, /aria-describedby=\{[^}]*"campaign-submit-warning/u, 'the submit describes the blocking reason');
+  assert.match(submitWindow, /disabled=\{selectedCount === 0 \|\|/u);
+  assert.match(submitWindow, /title=\{messagesLocked \? messagesLockReason : selectedCount === 0 \? "수신자를 먼저 고르세요\." : undefined\}/u);
 });
 
 test('review summary is a focusable reason surface, never a tab stop', () => {
@@ -54,38 +63,24 @@ test('review summary is a focusable reason surface, never a tab stop', () => {
   assert.match(CSS, /#campaign-submit-warning\)?:focus/u, 'programmatic landing draws visible focus');
 });
 
-test('a forward exit brackets the recipient list into the draft', () => {
-  assert.match(SOURCE, /내용 작성으로 계속/u, 'exit names the forward action');
-  const exitAt = SOURCE.indexOf('내용 작성으로 계속');
-  assert.ok(exitAt > SOURCE.indexOf('id="recipient-summary"'), 'exit sits after the selection summary');
-  assert.ok(exitAt < SOURCE.indexOf('className={styles.recipientDetails}'), 'exit precedes the long checkbox list');
-  const exitWindow = SOURCE.slice(Math.max(0, exitAt - 500), exitAt + 200);
-  assert.match(exitWindow, /type="button"/u, 'exit is a plain button, never a submit');
-  assert.match(exitWindow, /onClick=\{jumpToCampaignTitle\}/u, 'exit runs the title jump');
-  const fnAt = SOURCE.indexOf('function jumpToCampaignTitle()');
-  assert.ok(fnAt !== -1, 'expected the title jump handler');
-  const fnWindow = SOURCE.slice(fnAt, fnAt + 400);
-  assert.match(fnWindow, /goComposeStep\(2\)/u, 'exit reveals the content step before focusing');
-  assert.match(SOURCE, /target\?\.focus/u, 'step changes move focus');
-  assert.match(SOURCE, /scrollIntoView/u, 'sighted operators follow the exit');
-  assert.doesNotMatch(fnWindow, /postCommand|executeCampaignCreate|requestSubmit|\.submit\(|message\.create/u, 'the exit never sends');
-});
-
-test('a back link brackets the review bar to the picker', () => {
-  assert.match(SOURCE, /수신자 다시 확인/u, 'back link names the return action');
-  const backAt = SOURCE.indexOf('수신자 다시 확인');
-  assert.ok(backAt > SOURCE.indexOf('id="campaign-submit-warning"'), 'back link sits with the review summary');
-  assert.ok(backAt < SOURCE.indexOf('id="campaign-submit"'), 'back link precedes the submit, one Shift+Tab away');
-  const backWindow = SOURCE.slice(Math.max(0, backAt - 500), backAt + 200);
-  assert.match(backWindow, /type="button"/u, 'back link is a plain button, never a submit');
-  assert.match(backWindow, /onClick=\{jumpToRecipientFilter\}/u, 'back link runs the picker jump');
+test('the who pill and the 이름 확인 link reach the picker, never send', () => {
+  // Replaces the forward/back jump brackets: the pill toggles the panel; the name-review link
+  // opens the panel and list, then focuses the status filter.
+  assert.match(SOURCE, /function togglePanel\(panel: "who" \| "how" \| "when"\) \{ setOpenPanel\(current => current === panel \? null : panel\); \}/u);
   const fnAt = SOURCE.indexOf('function jumpToRecipientFilter()');
   assert.ok(fnAt !== -1, 'expected the picker jump handler');
-  const fnWindow = SOURCE.slice(fnAt, fnAt + 400);
-  assert.match(fnWindow, /getElementById\("recipient-status-filter"\)/u, 'back landing returns to the picker');
-  assert.match(fnWindow, /\.focus\(/u, 'back landing moves focus');
+  const fnWindow = SOURCE.slice(fnAt, fnAt + 600);
+  assert.match(fnWindow, /setOpenPanel\("who"\)/u, 'the jump opens the folded panel before focusing');
+  assert.match(fnWindow, /setRecipientListOpen\(true\)/u, 'the jump opens the list');
+  assert.match(fnWindow, /getElementById\("recipient-status-filter"\)/u, 'landing returns to the picker');
+  assert.match(fnWindow, /\.focus\(/u, 'the jump moves focus');
   assert.match(fnWindow, /scrollIntoView/u, 'sighted operators follow the return');
   assert.doesNotMatch(fnWindow, /postCommand|executeCampaignCreate|requestSubmit|\.submit\(|message\.create/u, 'the return never sends');
+  // 완료 closes a panel and returns focus to its pill; no panel button submits.
+  assert.match(SOURCE, /function closePanel\(returnFocusId: string\) \{\s*setOpenPanel\(null\);/u);
+  for (const pill of ['campaign-who-pill', 'campaign-how-pill', 'campaign-when-pill']) assert.match(SOURCE, new RegExp(`closePanel\\("${pill}"\\)`, 'u'));
+  assert.match(SOURCE, /id="campaign-who-pill" className=\{styles\.pill\}/u);
+  assert.equal((SOURCE.match(/<button type="button" id="campaign-(?:who|how|when)-pill"/gu) ?? []).length, 3, 'pills are plain buttons');
 });
 
 test('new jump controls keep native semantics and the 44px floor', () => {

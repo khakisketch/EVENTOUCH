@@ -100,7 +100,11 @@ test('preparation feedback and editing-unit actions use the shared components', 
     assert.match(source, /<ConsoleFormActions/u, `${pageId} closes editing units with shared actions`);
   }
   assert.match(PAGES.messages, /<ConsoleFormActions/u);
-  assert.match(PAGES.messages, /className=\{styles\.reviewBar\}/u, 'compose keeps its target/mode safeguard beside the submit');
+  // Reopened 2026-11-24 (owner: 시안 A): the review bar became the send area + dock; the target/mode
+  // summary still sits directly above the one submit.
+  assert.match(PAGES.messages, /className=\{styles\.sendArea\}/u, 'compose keeps its target/mode safeguard beside the submit');
+  assert.match(PAGES.messages, /className=\{styles\.reviewSummary\} id="campaign-submit-warning"/u);
+  assert.ok(PAGES.messages.indexOf('id="campaign-submit-warning"') < PAGES.messages.indexOf('id="campaign-submit"'), 'summary precedes the submit');
   assert.match(PAGES.messages, /id="campaign-submit-warning"/u);
 });
 

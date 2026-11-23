@@ -1,10 +1,11 @@
 'use strict';
 
-// Message compose skip: recipients lead the compose DOM on every viewport,
-// so desktop's default-open list puts ~100 checkboxes ahead of the draft. A
-// focus-only skip link at the form front bypasses the list straight into the
-// draft without adding visible guidance. Source-only assertions; rendered
-// keyboard behavior belongs to main's browser audit.
+// Message compose skip: the sentence panels (받는 사람 list, 보내는 방법, 시점)
+// are folded by default, but the recipient list can still be opened ahead of
+// the draft. A focus-only skip link at the form front bypasses everything
+// straight into the message body without adding visible guidance.
+// Source-only assertions; rendered keyboard behavior belongs to main's
+// browser audit.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -27,24 +28,28 @@ test('a focus-only skip leads into the draft before the recipient list', () => {
   const skipAt = SOURCE.indexOf('data-skip-to="campaign-body"');
   assert.ok(skipAt !== -1, 'expected the compose skip');
   const skipWindow = SOURCE.slice(Math.max(0, skipAt - 600), skipAt + 600);
-  assert.match(skipWindow, /goComposeStep\(2\)/u, 'skip reveals the content stage');
-  assert.match(SOURCE, /target\?\.focus\(\{ preventScroll: true \}\)/u, 'step navigation transfers focus after rendering');
-  assert.match(SOURCE, /scrollIntoView/u, 'the viewport follows');
+  // Reopened 2026-11-24 (owner: 시안 A): there are no steps to reveal any more; the body is always
+  // mounted, so the skip only has to move focus onto it.
+  assert.doesNotMatch(SOURCE, /goComposeStep|composeStep/u, 'no step navigation remains');
+  assert.match(skipWindow, /document\.getElementById\("campaign-body"\)\?\.focus\(\)/u, 'skip focuses the always-mounted body');
   assert.match(skipWindow, /event\.preventDefault\(\)/u, 'no navigation side effects');
-  assert.doesNotMatch(skipWindow, /postCommand|message\.create/u, 'the skip never sends');
-  // Order: form front, ahead of the jumps and the recipient block, so one
-  // Tab from the form start reaches the bypass before the long list.
+  assert.doesNotMatch(skipWindow, /postCommand|message\.create|requestSubmit/u, 'the skip never sends');
+  // Order: form front, ahead of the sentence pills and the recipient picker,
+  // so one Tab from the form start reaches the bypass before any panel.
   const formAt = SOURCE.indexOf('<ValidatedForm className={uiStyles.formStack} onSubmit=');
   assert.ok(formAt >= 0 && formAt < skipAt, 'skip sits at the form front');
-  assert.ok(skipAt < SOURCE.indexOf('recipientTopBar'), 'skip precedes the two visible jumps');
+  assert.ok(skipAt < SOURCE.indexOf('id="campaign-sentence"'), 'skip precedes the sentence pills');
   assert.ok(skipAt < SOURCE.indexOf('id="campaign-recipients"'), 'skip precedes the recipient picker');
+  // The body it targets exists and sits after the folded panels.
+  assert.ok(SOURCE.indexOf('id="campaign-body"') > SOURCE.indexOf('id="campaign-schedule"'), 'the body follows the panels');
 });
 
-test('compose and review keep their visible return paths while selected-only avoids a duplicate count', () => {
-  assert.match(SOURCE, /내용 작성으로 계속/u, 'draft jump stays beside recipient selection');
-  assert.match(SOURCE, /수신자 다시 확인/u, 'review returns to the recipient picker');
-  assert.match(SOURCE, /onClick=\{jumpToRecipientFilter\}/u, 'the return opens and focuses the picker');
-  assert.match(SOURCE, /발송 검토로 이동/u, 'review jump stays');
+// Reopened 2026-11-24 (owner: 시안 A): the visible 내용 작성으로 계속 / 발송 검토로 이동 / 수신자 다시 확인
+// buttons left with the steps. The sentence pills are the return path to the pickers.
+test('the sentence pills are the return paths while selected-only avoids a duplicate count', () => {
+  assert.doesNotMatch(SOURCE, /내용 작성으로 계속|수신자 다시 확인|발송 검토로 이동|campaign-send-skip|recipientTopBar/u, 'no step-only jump buttons remain');
+  assert.match(SOURCE, /id="campaign-who-pill"[^>]*aria-controls="campaign-recipients"/u, 'the who pill opens the picker');
+  assert.match(SOURCE, /onClick=\{jumpToRecipientFilter\}|jumpToRecipientFilter\(\)/u, 'the 이름 확인 return still opens and focuses the picker');
   assert.match(SOURCE, /id="recipient-selected-only"/u, 'selected-only toggle stays');
   assert.match(SOURCE, /선택 대상만 보기/u);
   assert.doesNotMatch(SOURCE, /선택 대상만 보기\(/u, 'no duplicated count on the toggle');
