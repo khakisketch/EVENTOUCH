@@ -16,7 +16,7 @@ import EventMenuSearch from "./console-ui/EventMenuSearch";
 import EventSwitcher from "./console-ui/EventSwitcher";
 import { ConsolePageSkeleton } from "./console-ui/ConsoleSkeleton";
 import { useConsoleLeaveConfirmation } from "./console-draft-guard";
-import { consoleFetch, invalidateConsoleReads, subscribeConsoleFreshness } from "../../lib/console-api";
+import { consoleFetch, invalidateConsoleReads, subscribeConsoleFreshness, warmConsoleRead } from "../../lib/console-api";
 import freshnessStyles from "./console-ui/freshness.module.css";
 import OrganizationSwitcher, { OrganizationContextNotice } from "../OrganizationSwitcher";
 import { ensureOperatorContext, getOperatorContextSnapshot, isOrganizationContextBlock, isOrganizationSelectionRequired, resetOperatorContext } from "../../lib/operator-context";
@@ -125,6 +125,27 @@ function TeamIcon() {
       <path d="M3 20.25c0-3.15 2.7-5.25 6-5.25s6 2.1 6 5.25M16 5.5a3 3 0 0 1 0 5.8M18 20.25c0-2.4-1-4.2-3-5" />
     </svg>
   );
+}
+
+// Menu intent (2026-11-23): the data read of the screen a link opens can start
+// as soon as the pointer rests on the link, or a finger touches it, so it runs
+// alongside the route payload instead of after it. Only event screens read
+// event bootstrap data; the overview and message screens read the variant with
+// recipient review, every other event screen the plain one.
+const WARM_HOVER_DELAY_MS = 80;
+
+function warmUrlForHref(href: string | null): string | null {
+  if (!href) return null;
+  const match = /^\/console\/events\/([^/?#]+)(?:\/([^/?#]+))?/.exec(href);
+  if (!match) return null;
+  const page = match[2];
+  return `/api/events/${match[1]}/bootstrap${!page || page === "messages" ? "?messageRecipientReview=1" : ""}`;
+}
+
+function menuLinkHref(target: EventTarget | null): string | null {
+  if (!(target instanceof Element)) return null;
+  const anchor = target.closest("a[href]");
+  return anchor ? anchor.getAttribute("href") : null;
 }
 
 export default function ConsoleShell({ children }: { children: React.ReactNode }) {
@@ -1046,6 +1067,20 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       ].filter((label): label is string => label !== null).join(" · ") || "조직 메뉴 권한 없음"
     : "확인 중";
 
+  const warmTimerRef = useRef<number | null>(null);
+  const cancelWarm = () => {
+    if (warmTimerRef.current !== null) window.clearTimeout(warmTimerRef.current);
+    warmTimerRef.current = null;
+  };
+  const warmFor = (target: EventTarget | null, delay: number) => {
+    const url = warmUrlForHref(menuLinkHref(target));
+    cancelWarm();
+    if (!url) return;
+    if (delay <= 0) warmConsoleRead(url);
+    else warmTimerRef.current = window.setTimeout(() => warmConsoleRead(url), delay);
+  };
+  useEffect(() => cancelWarm, []);
+
   const menuItems = portalReady
     ? createPortal(
         <div
@@ -1107,7 +1142,14 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
 
   return (
     <div className="console-shell">
-      <aside className="console-sidebar" aria-label="운영 콘솔">
+      <aside
+        className="console-sidebar"
+        aria-label="운영 콘솔"
+        onPointerOver={(event) => warmFor(event.target, event.pointerType === "mouse" ? WARM_HOVER_DELAY_MS : 0)}
+        onPointerOut={cancelWarm}
+        onFocus={(event) => warmFor(event.target, 0)}
+        onTouchStart={(event) => warmFor(event.target, 0)}
+      >
         {showGlobalTrigger ? (
           <div className="console-global-nav">
             <ProductButton

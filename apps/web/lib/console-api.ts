@@ -10,6 +10,8 @@ import {
 
 // One browser-tab read coordinator. No persistent cache, no shared SSR state,
 // no automatic write retries: receipt and recovery remain with the workspace.
+// The only thing held beyond an in-flight read is a single-use "warm read"
+// (see below): a read started a moment early by menu intent.
 // Transport runs through the operator adapter, so org headers, drift
 // blocking and /auth/me seeding apply; the shared-read dedupe, epoch and
 // freshness behavior below are preserved exactly.
@@ -52,9 +54,63 @@ function orgKeyOf(snapshot: {
   return `${context?.organizationId ?? ""}|${context?.contextVersion ?? ""}|${context?.role ?? ""}|${snapshot.changed ? 1 : 0}`;
 }
 
+// Warm reads (2026-11-23). Moving between screens used to wait for the route
+// payload and only then start the screen's data read, two round trips in a
+// row. Pointing at (or touching) a menu link now starts that read a moment
+// early and parks it here. It is NOT a cache: the first reader within the
+// window takes it (it is removed on use), it only exists for a few seconds,
+// and every invalidation below (a write, a freshness signal, an org change)
+// drops it, exactly like an in-flight read.
+const WARM_WINDOW_MS = 5000;
+const warmReads = new Map<string, { request: Promise<Response>; epoch: number; at: number }>();
+
 export function invalidateConsoleReads(): void {
   epoch += 1;
   pendingReads.clear();
+  warmReads.clear();
+}
+
+function takeWarmRead(input: string): Promise<Response> | null {
+  const entry = warmReads.get(input);
+  if (!entry) return null;
+  warmReads.delete(input);
+  if (entry.epoch !== epoch || Date.now() - entry.at > WARM_WINDOW_MS) return null;
+  return entry.request;
+}
+
+/** Start a shared read early. Only event bootstrap reads qualify; anything else is ignored. */
+export function warmConsoleRead(input: string): void {
+  if (typeof window === "undefined" || !/^\/api\/events\/[^/]+\/bootstrap(?:\?messageRecipientReview=1)?$/.test(input)) return;
+  ensureOrgSubscribed();
+  const current = warmReads.get(input);
+  if (current && current.epoch === epoch && Date.now() - current.at <= WARM_WINDOW_MS) return;
+  if (pendingReads.has(input)) return;
+  const entry = { request: consoleFetch(input), epoch, at: Date.now() };
+  warmReads.set(input, entry);
+  // A failed or unreadable warm read is dropped so the screen reads for itself.
+  entry.request.then(
+    (response) => { if (!response.ok && warmReads.get(input) === entry) warmReads.delete(input); },
+    () => { if (warmReads.get(input) === entry) warmReads.delete(input); },
+  );
+}
+
+function honorSignal<T>(promise: Promise<T>, signal?: AbortSignal | null): Promise<T> {
+  if (!signal) return promise;
+  const aborted = () => signal.reason ?? new DOMException("The operation was aborted.", "AbortError");
+  if (signal.aborted) {
+    // The read still settles later; swallow its outcome so an abandoned
+    // reader cannot raise an unhandled rejection.
+    promise.catch(() => {});
+    return Promise.reject(aborted());
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(aborted());
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => { signal.removeEventListener("abort", onAbort); resolve(value); },
+      (error) => { signal.removeEventListener("abort", onAbort); reject(error); },
+    );
+  });
 }
 
 function notify(source: FreshnessSource): void {
@@ -153,6 +209,8 @@ export async function consoleFetch(input: string, init?: RequestInit): Promise<R
       }
     }
   }
+  const warm = takeWarmRead(input);
+  if (warm) return honorSignal(warm.then((response) => response.clone()), init?.signal);
   if (!isSharedRead(input) || init?.signal) return operatorFetch(input, init);
   let request = pendingReads.get(input);
   if (!request) {
