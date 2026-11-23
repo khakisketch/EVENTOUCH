@@ -53,7 +53,7 @@ export default function HomeHero({
     <section className={heroClass} style={style} aria-label={label} data-neutral={neutralBanner || undefined}>
       {imageSource ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img className={L.artwork} src={imageSource} alt="" onError={onImageError} />
+        <img className={L.artwork} src={imageSource} alt="" decoding="async" fetchPriority="high" onError={onImageError} />
       ) : imageMode && imageFailed ? (
         <div className={styles.bannerImageFailure} role="status">배너 이미지를 불러오지 못했습니다.</div>
       ) : null}

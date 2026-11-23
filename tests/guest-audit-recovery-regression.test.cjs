@@ -79,6 +79,8 @@ function engageWorld(settlement) {
   const sandbox = {
     console, URLSearchParams, AbortController, DOMException,
     slug: 'synthetic', liveSlugRef: { current: 'synthetic' }, ticketSlugRef: { current: 'synthetic' }, ticketRef: { current: '' },
+    // Reopened 2026-11-23: the load effect now reads the background-refresh flag; these races are user-triggered reads.
+    silentReloadRef: { current: false },
     ticketStorageAvailable: () => true, getAllowedTicketForTab: () => '', isTicketRejected: () => false,
     clearSessionForTab() {}, clearTicketRejected() {}, allowSessionForTab() {}, markTicketRejected: () => writes.push('rejected'), REJECTED_TICKET_BEARER: 'rejected',
     // The page reads the event's home color for its ground; these races do not care which.

@@ -156,6 +156,7 @@
 .summary:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 .summary::-webkit-details-marker { display: none; }
 details[open] > .summary .chevron { transform: rotate(90deg); }
+.summary .chevron { transition: transform var(--exit) var(--ease-out); }
 
 /* timeline: a time column, then a rail dot joined to the next row by a line. */
 .row[data-list-row-variant="timeline"] { border-bottom: 0; }

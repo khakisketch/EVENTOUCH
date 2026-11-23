@@ -32,7 +32,15 @@ import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 import { normalizeHomeMenus } from "../../../../../lib/attendee-home-menus";
 import { normalizeVenue } from "../../../../../lib/attendee-screen-status";
 import { normalizeHomeImage, normalizeHomeStyle } from "../../../../../lib/attendee-home";
-import RichEditor from "./RichEditor";
+import dynamic from "next/dynamic";
+import ConsoleSkeleton from "../../../console-ui/ConsoleSkeleton";
+// The editor brings the whole tiptap stack. Only the notice dialog needs it, so
+// it loads on demand instead of weighing down every visit to this screen
+// (2026-11-23). The skeleton holds its place while it arrives.
+const RichEditor = dynamic(() => import("./RichEditor"), {
+  ssr: false,
+  loading: () => <ConsoleSkeleton shape="form" />,
+});
 import { richSummary } from "../../../../../lib/rich-text";
 import ContentPhonePreview, { type PreviewDesign, type PreviewNotice, type PreviewProgram, type PreviewScreen, type PreviewVenue } from "./ContentPhonePreview";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";

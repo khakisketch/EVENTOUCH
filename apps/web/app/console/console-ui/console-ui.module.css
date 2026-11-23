@@ -1149,3 +1149,30 @@
 @media (min-width: 769px) {
   .contextLink { min-height: 44px; }
 }
+
+/* Entrances (2026-11-23). The drawer slides in from its own edge, the stage
+   only fades (its content brings its own motion). Backward fill leaves no
+   transform behind once the panel has arrived. */
+@keyframes drawer-in-right {
+  from { opacity: 0; transform: translateX(var(--s5)); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes drawer-in-bottom {
+  from { opacity: 0; transform: translateY(var(--s5)); }
+  to { opacity: 1; transform: none; }
+}
+
+:global(.dialog).drawerPanel {
+  animation: drawer-in-right var(--enter) var(--ease-out) backwards;
+}
+
+:global(.dialog).stagePanel {
+  animation: surface-fade var(--enter) var(--ease-out) backwards;
+}
+
+@media (max-width: 768px) {
+  :global(.dialog).drawerPanel {
+    animation-name: drawer-in-bottom;
+  }
+}

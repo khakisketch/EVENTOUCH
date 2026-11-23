@@ -5,8 +5,11 @@
     max-inline-size: 100%;
     font-family: var(--body-font);
     /* Enabled controls regain their authored contrast without a translucent fade. */
-    transition-property: transform;
+    transition: transform var(--exit) var(--ease-out);
   }
+  /* Press feedback (2026-11-23): a 1px settle so a click feels received. Colour
+     stays instant on purpose (see the contrast note above). */
+  .product-action:not([aria-disabled="true"]):not(:disabled):active { transform: translateY(1px); }
   /* Link's typography slot must not replace the caller's flex/grid child boxes. */
   .product-link > .astryx-text { display: contents; }
   .product-action[aria-disabled="true"] { cursor: not-allowed; }

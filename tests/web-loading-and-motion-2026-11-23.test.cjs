@@ -73,3 +73,47 @@ test('motion curves and skeleton colours are tokens', () => {
     assert.match(tokens, new RegExp(`${name}:`), `${name} is defined`);
   }
 });
+
+test('dialogs, drawers, menus and popovers ease in; buttons settle on press', () => {
+  const globals = read('globals.css');
+  assert.match(globals, /@keyframes surface-rise/u);
+  assert.match(globals, /\.dialog\s*\{\s*animation:\s*surface-rise var\(--enter\) var\(--ease-out\) backwards/u);
+  assert.match(globals, /\.dialog-backdrop\s*\{\s*animation:\s*surface-fade/u);
+  assert.match(globals, /\.operator-menu,\s*\.console-global-menu\s*\{\s*animation:\s*surface-drop/u);
+  assert.match(globals, /\.console-nav-item:active[\s\S]*?background:\s*var\(--nav-active\)/u, 'tap highlight is off, so pressed state is drawn');
+  const ui = read('console/console-ui/console-ui.module.css');
+  assert.match(ui, /:global\(\.dialog\)\.drawerPanel\s*\{\s*animation:\s*drawer-in-right/u);
+  assert.match(ui, /animation-name:\s*drawer-in-bottom/u, 'phones get a bottom sheet entrance');
+  assert.match(read('console/console-ui/event-switcher.module.css'), /animation:\s*panel-in var\(--enter\) var\(--ease-out\)/u);
+  assert.match(read('console/console-ui/event-switcher.module.css'), /\.chevron\s*\{[^}]*transition:\s*transform var\(--exit\)/su);
+  assert.match(read('console/console-ui/list-row.module.css'), /\.summary \.chevron\s*\{\s*transition:\s*transform var\(--exit\)/u);
+  const product = read('product-ui.css');
+  assert.match(product, /transition:\s*transform var\(--exit\) var\(--ease-out\)/u);
+  assert.match(product, /:active\s*\{\s*transform:\s*translateY\(1px\)/u);
+});
+
+test('participation screen refreshes quietly and only while idle', () => {
+  const engage = read('event/[slug]/engage/EngageClient.tsx');
+  assert.match(engage, /ENGAGE_REFRESH_INTERVAL_MS = 15000/u);
+  // Same condition as the leave warning: typed input, drafts, conflicts, pending requests, submitting.
+  assert.match(engage, /refreshBlockedRef\.current = hasInput \|\| Object\.keys\(previousResponseDrafts\)\.length > 0 \|\| Object\.keys\(contentConflicts\)\.length > 0 \|\| hasMemoryRequest \|\| submitting !== null/u);
+  assert.match(engage, /document\.visibilityState !== "visible"/u);
+  assert.match(engage, /if \(refreshBlockedRef\.current \|\| inFlightRef\.current\) return;/u);
+  // A silent refresh never swaps a readable screen for an error.
+  assert.match(engage, /const fail = \(next: EngageState\) => \{ if \(!silent\) setState\(next\); \}/u);
+  assert.doesNotMatch(engage, /setState\(\{ kind: "failed"/u, 'every failure in the load goes through fail()');
+});
+
+test('home keeps quiet tabs fresh on a slow beat and keeps what is on screen if a refresh fails', () => {
+  const home = read('event/[slug]/home/HomeShell.tsx');
+  assert.match(home, /HOME_IDLE_REFRESH_INTERVAL_MS = 20000/u);
+  assert.match(home, /live \? HOME_REFRESH_INTERVAL_MS : HOME_IDLE_REFRESH_INTERVAL_MS/u);
+  assert.match(home, /if \(sameContext\) return current;/u);
+});
+
+test('the notice editor loads on demand with a placeholder', () => {
+  const content = read('console/events/[id]/content/ContentWorkspace.tsx');
+  assert.match(content, /dynamic\(\(\) => import\("\.\/RichEditor"\), \{\s*ssr: false/u);
+  assert.doesNotMatch(content, /import RichEditor from/u);
+  assert.match(read('event/[slug]/home/HomeHero.tsx'), /decoding="async" fetchPriority="high"/u);
+});

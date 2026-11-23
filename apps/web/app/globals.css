@@ -3052,3 +3052,54 @@ textarea[data-resize-none] { resize: none; min-height: 96px; max-width: 100%; }
 .account-history > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 
 }
+
+/* ------------------------------------------------------------------
+   Motion pass (2026-11-23). Things that arrive ease in (--enter,
+   --ease-out); nothing animates on the way out because nothing blocks the
+   next action. Reduced motion is handled by the global rule near the end of
+   this file, which switches every animation and transition off.
+   ------------------------------------------------------------------ */
+@keyframes surface-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes surface-rise {
+  from { opacity: 0; transform: translateY(var(--s2)) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes surface-drop {
+  from { opacity: 0; transform: translateY(calc(var(--s1) * -1)); }
+  to { opacity: 1; transform: none; }
+}
+
+.dialog-backdrop {
+  animation: surface-fade var(--enter) var(--ease-out) backwards;
+}
+
+.dialog {
+  animation: surface-rise var(--enter) var(--ease-out) backwards;
+}
+
+/* Menus that toggle [hidden] replay their entrance each time they open. */
+.operator-menu,
+.console-global-menu {
+  animation: surface-drop var(--enter) var(--ease-out) backwards;
+}
+
+.operator-menu-item {
+  transition: background-color var(--exit) var(--ease-out);
+}
+
+/* Touch and click feedback: the tap highlight is off globally, so the
+   pressed state has to be drawn. */
+.console-nav-item:active,
+.console-menu-subitem:active,
+.operator-menu-item:not(:disabled):active {
+  background: var(--nav-active);
+}
+
+.skip-link {
+  transition: transform var(--exit) var(--ease-out);
+}

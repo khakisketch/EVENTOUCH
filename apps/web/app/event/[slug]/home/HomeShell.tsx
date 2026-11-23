@@ -57,6 +57,9 @@ type PublicEvent = {
 
 const HOME_READ_TIMEOUT_MS = 8000;
 const HOME_REFRESH_INTERVAL_MS = 4500;
+// Notices, draw numbers and booth info change rarely and nobody is watching a
+// counter there, so those tabs refresh on a slower beat (2026-11-23).
+const HOME_IDLE_REFRESH_INTERVAL_MS = 20000;
 
 type Notice = { id: string; title: string; body: string; pinned?: boolean };
 
@@ -515,6 +518,9 @@ export default function HomeShell({ slug }: { slug: string }) {
             context?.slug === slug && context.eventId === current.eventId && current.ticketToken === ticket;
           if (sameContext && activeTab === "stamp") return { ...current, stampStatus: "stale" };
           if (sameContext && (activeTab === "vote" || activeTab === "roulette")) return { ...current, refreshFailed: true };
+          // A background refresh that fails on a quiet tab keeps what the
+          // attendee is already reading; the next beat tries again.
+          if (sameContext) return current;
           return { kind: "failed", reason, message, eventName, hasTicket };
         });
       }
@@ -862,8 +868,9 @@ export default function HomeShell({ slug }: { slug: string }) {
         window.clearTimeout(readTimeout);
         // Schedule after the read settles: a fixed interval can continually
         // discard valid responses on a connection slower than the interval.
-        if (!cancelled && (activeTab === "vote" || activeTab === "roulette" || activeTab === "stamp")) {
-          refreshTimer = window.setTimeout(() => setReloadTick((tick) => tick + 1), HOME_REFRESH_INTERVAL_MS);
+        if (!cancelled) {
+          const live = activeTab === "vote" || activeTab === "roulette" || activeTab === "stamp";
+          refreshTimer = window.setTimeout(() => setReloadTick((tick) => tick + 1), live ? HOME_REFRESH_INTERVAL_MS : HOME_IDLE_REFRESH_INTERVAL_MS);
         }
       }
     }

@@ -166,6 +166,8 @@ function engageReadWorld(fetch) {
   const world = runtime({
     fetch, slug: 'synthetic', reloadTick: 0,
     liveSlugRef: { current: 'synthetic' }, ticketSlugRef: { current: 'synthetic' }, ticketRef: { current: 'bearer-original' },
+    // Reopened 2026-11-23: the load effect now reads the background-refresh flag; these deadline tests are user-triggered reads.
+    silentReloadRef: { current: false },
     ticketStorageAvailable: () => true, getAllowedTicketForTab: () => '', readStoredTicket: () => '', isTicketRejected: () => false,
     clearSessionForTab() {}, clearTicketRejected() {}, storeTicket: () => true, markTicketRejected() {}, clearStoredTicket() {}, allowSessionForTab() {},
     REJECTED_TICKET_BEARER: 'rejected', state: { kind: 'loading' },

@@ -188,6 +188,10 @@ function parseModule(value: unknown, responses: Array<{ moduleId: string }>): Pu
   };
 }
 
+// How often an idle, open participation screen quietly re-reads the event so
+// votes, questions and posts from other attendees appear (2026-11-23).
+const ENGAGE_REFRESH_INTERVAL_MS = 15000;
+
 export default function EngageClient({ slug }: { slug: string }) {
   const [state, setState] = useState<EngageState>({ kind: "loading" });
   const [contentConflicts, setContentConflicts] = useState<Record<string, ContentConflict>>({});
@@ -245,6 +249,11 @@ export default function EngageClient({ slug }: { slug: string }) {
   const [receiptStorageAvailable, setReceiptStorageAvailable] = useState(true);
   const [receiptMessage, setReceiptMessage] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
+  // A background refresh (2026-11-23) must never disturb work in progress and
+  // must never replace a readable screen with an error. It is set by the timer
+  // below and consumed by the next load.
+  const silentReloadRef = useRef(false);
+  const refreshBlockedRef = useRef(false);
   const [requestedProgram, setRequestedProgram] = useState("");
   const [activeType, setActiveType] = useState("");
   // Which programs were already finished when the page first rendered them (folded below the ones to do).
@@ -303,6 +312,7 @@ export default function EngageClient({ slug }: { slug: string }) {
     Object.values(ratings).some((values) => Object.keys(values).length > 0) ||
     Object.values(photoSelected).some(Boolean) || Object.values(editDirty).some(Boolean);
   const hasMemoryRequest = Object.keys(pendingCommandsRef.current).length > 0 || Object.keys(pendingPhotosRef.current).length > 0;
+  refreshBlockedRef.current = hasInput || Object.keys(previousResponseDrafts).length > 0 || Object.keys(contentConflicts).length > 0 || hasMemoryRequest || submitting !== null;
   useUnsavedNavigationGuard(hasInput || Object.keys(previousResponseDrafts).length > 0 || Object.keys(contentConflicts).length > 0 || hasMemoryRequest || submitting !== null,
     hasMemoryRequest || submitting !== null
       ? "확인 중인 요청과 작성한 입력이 있습니다. 이동하면 이 화면에서 원래 내용을 다시 보낼 수 없습니다. 서버 처리는 취소되지 않습니다."
@@ -452,6 +462,11 @@ export default function EngageClient({ slug }: { slug: string }) {
     let cancelled = false;
     const controller = new AbortController();
     const live = () => !cancelled && !controller.signal.aborted && liveSlugRef.current === slug;
+    const silent = silentReloadRef.current;
+    silentReloadRef.current = false;
+    // A silent refresh keeps the screen the attendee is reading when the
+    // network blips. Real answers (a revoked ticket) still show.
+    const fail = (next: EngageState) => { if (!silent) setState(next); };
     async function load() {
       if (ticketSlugRef.current !== slug) {
         ticketSlugRef.current = slug;
@@ -487,7 +502,7 @@ export default function EngageClient({ slug }: { slug: string }) {
         if (!live()) return;
         const eventName = text(publicData?.event?.name);
         if (!publicRes.ok || !publicData?.event) {
-          if (!cancelled) setState({ kind: "failed", message: "행사 정보를 불러오지 못했습니다.", eventName, hasTicket: Boolean(ticket) });
+          if (!cancelled) fail({ kind: "failed", message: "행사 정보를 불러오지 못했습니다.", eventName, hasTicket: Boolean(ticket) });
           return;
         }
         const ticketRes = await fetch(`/api/public/events/${encodeURIComponent(slug)}/ticket`, {
@@ -514,7 +529,7 @@ export default function EngageClient({ slug }: { slug: string }) {
               setState({ kind: "missing", eventName });
               return;
             }
-            setState({
+            fail({
               kind: "failed",
               message:
                 typeof ticketData?.error === "string"
@@ -632,12 +647,12 @@ export default function EngageClient({ slug }: { slug: string }) {
           });
         }
       } catch {
-        if (live()) setState({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요.", eventName: "", hasTicket: Boolean(ticketRef.current) });
+        if (live()) fail({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요.", eventName: "", hasTicket: Boolean(ticketRef.current) });
       }
     }
     void withRequestDeadline(() => load(), controller).catch(() => {
       if (!cancelled && liveSlugRef.current === slug) {
-        setState({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요.", eventName: "", hasTicket: Boolean(ticketRef.current) });
+        fail({ kind: "failed", message: "연결하지 못했습니다. 다시 시도하세요.", eventName: "", hasTicket: Boolean(ticketRef.current) });
       }
     });
     return () => {
@@ -645,6 +660,27 @@ export default function EngageClient({ slug }: { slug: string }) {
       controller.abort();
     };
   }, [slug, reloadTick]);
+
+  // Background refresh: other people vote, ask and post while this screen is
+  // open. Refresh on a slow beat and when the tab returns to the foreground,
+  // but only while the attendee has nothing typed, nothing in flight and no
+  // content conflict to resolve (the same condition as the leave warning).
+  const readyKind = state.kind === "ready";
+  useEffect(() => {
+    if (!readyKind) return;
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      if (refreshBlockedRef.current || inFlightRef.current) return;
+      silentReloadRef.current = true;
+      setReloadTick((tick) => tick + 1);
+    };
+    const timer = window.setInterval(refresh, ENGAGE_REFRESH_INTERVAL_MS);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [readyKind]);
 
   async function postGuestCommand(
     eventId: string,
