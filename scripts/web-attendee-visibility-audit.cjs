@@ -38,7 +38,7 @@ async function main() {
         if (!enabled) for (const view of ['lucky', 'roulette', 'vote', 'stamp']) {
           await page.goto(`${f.baseUrl}/event/${f.slug}/home?view=${view}`, { waitUntil: 'networkidle' });
           await page.getByText('현재 이 행사에서 제공하지 않습니다.', { exact: false }).waitFor();
-          await page.getByRole('button', { name: '참가 메뉴' }).click();
+          await page.getByRole('button', { name: '참가자 홈' }).click();
           await page.getByRole('button', { name: '모바일 티켓' }).waitFor();
           assert.equal(await page.getByRole('button', { name: '모바일 티켓' }).evaluate(el => el === document.activeElement), true);
         }

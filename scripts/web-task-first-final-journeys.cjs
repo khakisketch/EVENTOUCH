@@ -394,14 +394,14 @@ async function main() {
       await reportTab.waitFor({ timeout: 15000 });
       await act(() => reportTab.click());
       // The checklist names itself with an aria-label, not visible text.
-      await page.locator('[aria-label="보관 전제 · 조회 시점"]').first().waitFor({ timeout: 10000 });
+      await page.locator('[aria-label="보관 조건 · 조회 시점"]').first().waitFor({ timeout: 10000 });
       await page.getByText('생성 시점 그대로 유지', { exact: false }).filter({ visible: true }).first().waitFor({ timeout: 10000 });
       // The current prerequisites (registration, stage, open programs) live in the 행사 마감 map now,
       // not under the report; open it and read them there.
       await page.goto(`${baseUrl}/console/events/${createdEventId}/reports#event-close`, { waitUntil: 'networkidle' });
       const closeTab = page.getByRole('tab', { name: '행사 마감', exact: true });
       if ((await closeTab.getAttribute('aria-selected')) !== 'true') await act(() => closeTab.click());
-      const closeDetails = page.locator('details').filter({ has: page.locator('summary', { hasText: '전체 마감 단계와 전제 확인' }) });
+      const closeDetails = page.locator('details').filter({ has: page.locator('summary', { hasText: '전체 마감 단계와 조건 확인' }) });
       await closeDetails.waitFor({ timeout: 15000 });
       if (!await closeDetails.evaluate((el) => el.open)) await act(() => closeDetails.locator(':scope > summary').click());
       await page.getByText('참가 접수 열림', { exact: false }).filter({ visible: true }).first().waitFor({ timeout: 10000 });

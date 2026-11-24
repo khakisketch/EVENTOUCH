@@ -51,15 +51,15 @@ async function main() {
     const select = async (name) => {
       const [chooser] = await Promise.all([
         page.waitForEvent('filechooser'),
-        page.getByRole('button', { name: before ? '파일 찾아보기' : '사진 올리기', exact: true }).click(),
+        page.getByRole('button', { name: before ? '파일 찾아보기' : '사진 선택', exact: true }).click(),
       ]);
       await chooser.setFiles({ name, mimeType: 'image/png', buffer: png });
-      await page.getByRole('button', { name: '선택한 사진 올리기 (1장)' }).click();
+      await page.getByRole('button', { name: '1장 올리기', exact: true }).click();
     };
     phase = 'malformed record response';
     await select('synthetic-evidence-one.png');
     if (before) {
-      await page.getByText(/업로드 처리 내역/).click();
+      await page.locator('summary').filter({ hasText: /사진 \d+장/ }).click();
       await page.getByText('보관함에 등록됨', { exact: true }).waitFor();
       await page.screenshot({ path: path.join(out, 'before-uncertain-1280.png'), fullPage: true });
       console.log('Evidence recovery before capture passed'); return;
@@ -90,10 +90,10 @@ async function main() {
     const shared = page.getByRole('region', { name: '처리 결과 확인' });
     await shared.waitFor();
     assert.equal(await page.locator('#evidence-photo-files').isDisabled(), true);
-    assert.equal(await page.getByRole('button', { name: '사진 올리기', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('button', { name: '사진 선택', exact: true }).count(), 0);
     const beforeCheck = ids['evidence.photo.add'].length;
     await shared.getByRole('button', { name: '서버 처리 확인' }).click();
-    await page.getByRole('button', { name: '사진 올리기', exact: true }).waitFor();
+    await page.getByRole('button', { name: '사진 선택', exact: true }).waitFor();
     assert.equal(await page.locator('#evidence-photo-files').isEnabled(), true);
     assert.equal(ids['evidence.photo.add'].length, beforeCheck);
     assert.equal((await workspace()).evidencePhotos.filter((item) => item.image.name === 'synthetic-evidence-two.png').length, 1);
@@ -111,7 +111,7 @@ async function main() {
     await viewer.waitFor({ state: 'hidden' });
     await shared.waitFor();
     await shared.getByRole('button', { name: '서버 처리 확인' }).click();
-    await page.getByRole('button', { name: '사진 올리기', exact: true }).waitFor();
+    await page.getByRole('button', { name: '사진 선택', exact: true }).waitFor();
     assert.equal(await page.locator('#evidence-photo-files').isEnabled(), true);
     assert.equal((await workspace()).evidencePhotos.find((item) => item.id === photo.id).section, 'STAGE');
     await page.getByRole('group', { name: '촬영 구간' }).getByRole('button', { name: /무대연출/ }).click();

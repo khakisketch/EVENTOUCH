@@ -235,7 +235,7 @@ async function main() {
         counts.states += 1;
         await shot('states-photos-empty', width);
         await act(() => photoInput.setInputFiles({ name: '현장-공간.png', mimeType: 'image/png', buffer: Buffer.from(TINY_PNG_BASE64, 'base64') }));
-        await act(() => page.getByRole('button', { name: /선택한 사진 올리기 \(1장\)/ }).click());
+        await act(() => page.getByRole('button', { name: /1장 올리기/ }).click());
         await act(() => page.getByText(/사진을 등록했습니다\./).waitFor({ timeout: UI_TIMEOUT }));
         const storedPhotos = (await f.harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [f.eventId])).rows[0].payload.evidencePhotos;
         assert.equal(storedPhotos.length, 1, 'uploaded photo persists in the fixture workspace');

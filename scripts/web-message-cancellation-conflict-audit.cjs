@@ -85,7 +85,7 @@ const { messageStep, openRecipientList, openMessageMore } = require('./ui-journe
     await messageStep(page, 3);
     await page.getByRole('checkbox', { name: /^모의 발송으로 기록/ }).check();
     await page.locator('#campaign-submit').click();
-    const confirm = page.getByRole('group', { name: '실행 확인', exact: true }).getByRole('button', { name: '모의 발송을 기록한다', exact: true });
+    const confirm = page.getByRole('group', { name: '실행 확인', exact: true }).getByRole('button', { name: '모의 발송 기록', exact: true });
     await confirm.waitFor();
     const changed = (await f.harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [f.eventId])).rows[0].payload;
     changed.participants.find(person => person.id === valid.id).cancelled = true;

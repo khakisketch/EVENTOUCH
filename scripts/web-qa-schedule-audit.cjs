@@ -118,7 +118,7 @@ const snapshot = async (page, name) => {
       await dialog.dismiss();
       return message;
     });
-    await guest.getByRole('link', { name: '← 참가 메뉴로' }).click({ noWaitAfter: true });
+    await guest.getByRole('link', { name: '← 참가자 홈으로' }).click({ noWaitAfter: true });
     assert.match(await leaveWarning, /작성 중인 입력/);
     assert.equal(await approvedRow.getByLabel('수정할 질문').inputValue(), '공개 후 수정안');
     const guestAttempts = [];
@@ -293,6 +293,8 @@ const snapshot = async (page, name) => {
     await db.query('UPDATE event_workspaces SET payload=$2 WHERE event_id=$1', [f.eventId, latest]);
     await manager.goto(`${f.baseUrl}/console/events/${f.eventId}/messages`, { waitUntil: 'networkidle' });
     await manager.getByText(/발송 연결 ·/).first().click();
+    // Reopened 2026-11-24: 서버 예약 실행 설정 문구는 발송 연결 안의 '자세히'로 한 단계 더 접혀 있다.
+    await manager.locator('details').filter({ has: manager.locator('summary', { hasText: /^발송 연결 ·/ }) }).first().locator('summary', { hasText: '자세히' }).click();
     await manager.getByText('이 서버의 예약 자동 실행 설정이 꺼져 있습니다.', { exact: false }).first().waitFor();
     await manager.getByRole('button', { name: '예약 점검 상세', exact: true }).click();
     await manager.getByText(/수신자 1명의 럭키번호가 배정되지 않았습니다/).waitFor();
@@ -323,7 +325,7 @@ const snapshot = async (page, name) => {
       const box = await radio.locator('xpath=..').boundingBox();
       assert.ok(box && box.width >= 44 && box.height >= 44, 'schedule choice has a 44px touch target');
     }
-    await manager.getByRole('button', { name: '예약 등록한다', exact: true }).click();
+    await manager.getByRole('button', { name: '예약 등록', exact: true }).click();
     await manager.getByText('새 자동 예약 검증', { exact: true }).first().waitFor();
     const stored = (await db.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [f.eventId])).rows[0].payload;
     assert.equal(stored.messages.find(item => item.title === '새 자동 예약 검증').scheduleMode, 'AUTO');

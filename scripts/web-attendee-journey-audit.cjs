@@ -135,7 +135,7 @@ async function main() {
       const poll = await openProgram(page, '공개 투표');
       await poll.getByRole('radio', { name: /^예/ }).check();
       await poll.getByRole('button', { name: '투표하기' }).click();
-      await poll.getByText('이미 제출했습니다.', { exact: false }).waitFor();
+      await poll.getByText('제출을 마쳤습니다.', { exact: false }).waitFor();
       assert.equal(await page.getByRole('heading', { name: '티켓이 확인되지 않습니다', exact: true }).count(), 0);
       assert.equal(submits, 1);
       const current = (await db.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [f.eventId])).rows[0].payload;
@@ -218,7 +218,7 @@ async function main() {
         await openProgram(page, title('three'));
         await form('three').getByRole('radio', { name: /^예/ }).check();
         await form('three').getByRole('button', { name: '투표하기' }).click();
-        await form('three').getByText('이미 제출했습니다.', { exact: false }).waitFor();
+        await form('three').getByText('제출을 마쳤습니다.', { exact: false }).waitFor();
         const current = (await db.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [f.eventId])).rows[0].payload;
         for (const step of ['one', 'two', 'three']) {
           const saved = current.responses.filter(item => item.moduleId === moduleId(step));
@@ -317,7 +317,7 @@ async function main() {
       await page.screenshot({ path: path.join(out, `home-${width}.png`), fullPage: false });
       await page.getByRole('button', { name: '내 신청 정보' }).click();
       await page.getByRole('heading', { name: '티켓이 확인되지 않습니다', exact: true }).waitFor();
-      await page.getByRole('button', { name: '참가 메뉴' }).click();
+      await page.getByRole('button', { name: '참가자 홈', exact: true }).click();
       await page.getByRole('button', { name: '모바일 티켓' }).focus();
       await page.keyboard.press('Enter');
       await page.getByRole('heading', { name: '티켓이 확인되지 않습니다', exact: true }).waitFor();
@@ -327,7 +327,7 @@ async function main() {
       await page.goBack();
       await page.getByRole('link', { name: /참여 콘텐츠 보기/ }).click();
       await page.getByRole('heading', { name: '티켓이 확인되지 않습니다', exact: true }).waitFor();
-      await page.getByRole('link', { name: '참가 메뉴로' }).first().click();
+      await page.getByRole('link', { name: '참가자 홈으로' }).first().click();
       await page.getByRole('button', { name: '모바일 티켓' }).waitFor();
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
       await page.close();
@@ -339,7 +339,7 @@ async function main() {
       const page = await context.newPage();
       await page.goto(`${f.baseUrl}/event/${f.slug}/home?view=application`, { waitUntil: 'networkidle' });
       await page.getByRole('heading', { name: '내 신청 정보' }).waitFor();
-      assert.equal(await page.getByRole('button', { name: '참가 메뉴' }).evaluate(el => el === document.activeElement), true);
+      assert.equal(await page.getByRole('button', { name: '참가자 홈', exact: true }).evaluate(el => el === document.activeElement), true);
       await page.getByText(state, { exact: true }).waitFor();
       await page.getByText('합성 공개 답변', { exact: true }).waitFor();
       assert.equal(await page.getByText('비공개 답변 표식').count(), 0);
@@ -353,19 +353,19 @@ async function main() {
         await page.screenshot({ path: path.join(out, 'application-320.png'), mask: [page.locator('dd')] });
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
       }
-      await page.getByRole('button', { name: '참가 메뉴' }).click();
+      await page.getByRole('button', { name: '참가자 홈', exact: true }).click();
       await page.getByRole('button', { name: '모바일 티켓' }).click();
       if (state === '참가 확정') await page.locator('[aria-label*="입장 및 퇴장용 QR"]').waitFor();
       else assert.equal(await page.locator('[aria-label*="입장 및 퇴장용 QR"]').count(), 0);
       if (state === '참가 확정') {
-        await page.getByRole('button', { name: '참가 메뉴' }).click();
+        await page.getByRole('button', { name: '참가자 홈', exact: true }).click();
         await page.getByRole('link', { name: /참여 콘텐츠 보기/ }).click();
         // Reopened 2026-11-20: a poll this participant answered sits in the folded "완료한 참여" list (in the page, not visible).
         await page.getByRole('heading', { name: '공개 투표', includeHidden: true }).waitFor({ state: 'attached' });
         assert.equal(await page.getByText('초안 표식').count(), 0);
         assert.equal(await page.getByText('꺼진 기능 표식').count(), 0);
         await page.screenshot({ path: path.join(out, 'engage-320.png'), fullPage: true });
-        await page.getByRole('link', { name: '참가 메뉴로' }).first().click();
+        await page.getByRole('link', { name: '참가자 홈으로' }).first().click();
         await page.getByRole('button', { name: '모바일 티켓' }).waitFor();
       }
       await context.close();
@@ -383,7 +383,7 @@ async function main() {
       assert.equal(new URL(page.url()).searchParams.has('ticket'), false);
       await page.getByRole('button', { name: '내 신청 정보' }).click();
       await page.getByRole('heading', { name: '내 신청 정보' }).waitFor();
-      await page.getByRole('button', { name: '참가 메뉴' }).click();
+      await page.getByRole('button', { name: '참가자 홈', exact: true }).click();
       await page.getByRole('button', { name: '모바일 티켓' }).click();
       await page.locator('[aria-label*="입장 및 퇴장용 QR"]').waitFor();
       await context.close();
@@ -406,10 +406,10 @@ async function main() {
       await page.goto(`${f.baseUrl}/event/${f.slug}/ticket`, { waitUntil: 'networkidle' });
       await page.getByRole('link', { name: '이 브라우저에서 인증된 티켓 확인' }).click();
       await page.locator('[aria-label*="입장 및 퇴장용 QR"]').waitFor();
-      await page.getByRole('link', { name: '← 참가 메뉴로' }).click();
+      await page.getByRole('link', { name: '← 참가자 홈으로' }).click();
       await page.getByRole('button', { name: '내 신청 정보' }).click();
       await page.getByText('합성 공개 답변', { exact: true }).waitFor();
-      await page.getByRole('button', { name: '참가 메뉴' }).click();
+      await page.getByRole('button', { name: '참가자 홈', exact: true }).click();
       await page.getByRole('link', { name: /참여 콘텐츠 보기/ }).click();
       await page.getByRole('heading', { name: '공개 투표', includeHidden: true }).waitFor({ state: 'attached' });
       // Full reload cannot safely bind the shared cookie to the chosen
@@ -431,7 +431,7 @@ async function main() {
       const page = await browser.newPage();
       await page.goto(`${f.baseUrl}/event/${f.slug}/home?view=notice`, { waitUntil: 'networkidle' });
       await page.getByText('현재 이 행사에서 제공하지 않습니다.', { exact: false }).waitFor();
-      await page.getByRole('button', { name: '참가 메뉴' }).click();
+      await page.getByRole('button', { name: '참가자 홈', exact: true }).click();
       await page.getByRole('heading', { name: '게시된 제목' }).waitFor();
       assert.equal(await page.getByText('초안 제목').count(), 0);
       await page.getByRole('link', { name: /참여 콘텐츠 보기/ }).waitFor();
@@ -450,7 +450,7 @@ async function main() {
       const publishedPage = await browser.newPage();
       await publishedPage.goto(`${f.baseUrl}/event/${f.slug}/home?view=notice`, { waitUntil: 'networkidle' });
       await publishedPage.getByText('감사 안내', { exact: true }).waitFor();
-      await publishedPage.getByRole('button', { name: '참가 메뉴' }).click();
+      await publishedPage.getByRole('button', { name: '참가자 홈', exact: true }).click();
       await publishedPage.getByRole('link', { name: '행사 안내 보기' }).click();
       await publishedPage.getByText('게시된 일정 표식', { exact: true }).waitFor();
       await publishedPage.getByText('게시된 장소 표식', { exact: true }).first().waitFor();
@@ -485,7 +485,7 @@ async function main() {
     const page = await browser.newPage({ viewport: { width: 320, height: 568 } });
     await page.goto(`${f.baseUrl}/event/${f.slug}/home?view=stamp`, { waitUntil: 'networkidle' });
     await page.getByText('현재 이 행사에서 제공하지 않습니다.', { exact: false }).waitFor();
-    await page.getByRole('button', { name: '참가 메뉴' }).click();
+    await page.getByRole('button', { name: '참가자 홈', exact: true }).click();
     await page.getByRole('link', { name: /참여 콘텐츠 보기/ }).click();
     await page.getByRole('heading', { name: '티켓이 확인되지 않습니다', exact: true }).waitFor();
     await page.close();

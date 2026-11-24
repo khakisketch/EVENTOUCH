@@ -243,7 +243,7 @@ async function main() {
     await overwrite.getByRole('button', { name: '취소', exact: true }).click();
     check('failed reload cancel preserves draft', await page.locator('#campaign-title').inputValue() === '보존할 안내');
     await failedRow.getByRole('button', { name: '내용·대상 불러오기', exact: true }).click();
-    await overwrite.getByRole('button', { name: '불러온다', exact: true }).click();
+    await overwrite.getByRole('button', { name: '불러오기', exact: true }).click();
     await page.locator('#campaign-body').waitFor();
     check('failed reload reveals exact saved content without sending', await page.locator('#campaign-body').inputValue() === failed.body && await page.locator('#campaign-scheduled').count() === 0 && await page.locator('#campaign-schedule-choice input[value="NOW"]').isChecked() && f.gateway.commands.length === 0);
     await messageStep(page, 3);
@@ -260,7 +260,7 @@ async function main() {
     });
     await page.locator('#campaign-submit').click();
     check('review does not send', (await workspace()).messages.length === countBefore);
-    await page.getByRole('button', { name: '모의 발송을 기록한다', exact: true }).click();
+    await page.getByRole('button', { name: '모의 발송 기록', exact: true }).click();
     const recovery = page.getByRole('region', { name: '발송 요청 확인 필요', exact: true });
     await recovery.waitFor();
     check('lost response freezes the original draft and send request',
@@ -293,7 +293,7 @@ async function main() {
     await page.unroute('**/api/events/*/commands');
     const reservation = page.locator(`#campaign-${scheduled.id}`);
     await reservation.getByRole('button', { name: '예약 취소', exact: true }).click();
-    await page.getByRole('button', { name: '예약을 취소한다', exact: true }).click();
+    await page.getByRole('button', { name: '예약 취소하기', exact: true }).click();
     await reservation.getByText('취소', { exact: true }).waitFor();
     check('reservation cancel persists', (await workspace()).messages.find(m => m.id === scheduled.id).status === 'CANCELLED');
     // Proven send already returned to history. Exercise a fresh explicit

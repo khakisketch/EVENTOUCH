@@ -212,7 +212,7 @@ async function main() {
           }
           check(`${name}@${width}: actual destination`, new URL(page.url()).pathname === target.split('?')[0]);
           if (role === 'public' && name === 'engage' && await page.getByText('게시된 프로그램이 없습니다.', { exact: true }).isVisible()) {
-            check(`engage@${width}: empty state has one return to the menu`, await page.getByRole('link', { name: /참가 메뉴로/ }).count() === 1);
+            check(`engage@${width}: empty state has one return to the menu`, await page.getByRole('link', { name: /참가자 홈으로/ }).count() === 1);
             check(`engage@${width}: empty state retains ticket and event guidance`, await page.getByRole('link', { name: '내 티켓으로 이동', exact: true }).isVisible() && await page.getByRole('link', { name: '행사 안내로', exact: true }).isVisible());
           }
           if (name === 'account-email') {
@@ -374,7 +374,7 @@ async function main() {
           await messageStep(page, 3);
           await page.getByLabel('모의 발송으로 기록', { exact: false }).check();
           await page.locator('#campaign-submit').click();
-          await page.getByRole('button', { name: '모의 발송을 기록한다', exact: true }).waitFor();
+          await page.getByRole('button', { name: '모의 발송 기록', exact: true }).waitFor();
           await render(page, 'message-review', width);
           check(`review@${width}: preview and review do not dispatch`, f.gateway.commands.length === 0);
           await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '취소', exact: true }).click();
@@ -465,7 +465,7 @@ async function main() {
     await uncertainPage.getByLabel('모의 발송으로 기록', { exact: false }).check();
     const confirmMessage = async () => {
       await uncertainPage.locator('#campaign-submit').click();
-      await uncertainPage.getByRole('button', { name: '모의 발송을 기록한다', exact: true }).click();
+      await uncertainPage.getByRole('button', { name: '모의 발송 기록', exact: true }).click();
     };
     const lostResponse = uncertainPage.waitForResponse(response => response.url().endsWith(`/api/events/${f.eventId}/commands`) &&
       response.request().method() === 'POST' && response.request().postDataJSON().command === 'message.create-charset-reviewed');

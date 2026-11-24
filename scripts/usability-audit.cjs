@@ -848,8 +848,8 @@ async function main() {
         await messageStep(page, 3);
         await probeKeyboard(page, task, page.locator('#campaign-submit'), '발송 요청 버튼');
         await act(task, () => page.locator('#campaign-submit').click());
-        await page.getByRole('button', { name: '발송 요청한다', exact: true }).waitFor({ state: 'visible', timeout: 10000 });
-        await act(task, () => page.getByRole('button', { name: '발송 요청한다', exact: true }).click());
+        await page.getByRole('button', { name: '발송 요청', exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+        await act(task, () => page.getByRole('button', { name: '발송 요청', exact: true }).click());
         await page.getByText('발송 요청을 기록했습니다').first().waitFor({ timeout: 15000 });
         // Read the status off the new history table row itself: the page also
         // carries a static "모의 발송도 전달되지 않습니다" warning, so a
@@ -1291,8 +1291,8 @@ async function main() {
         await act(task, () => page.locator('#campaign-scheduled').fill(scheduled));
         await probeKeyboard(page, task, page.locator('#campaign-submit'), '예약 등록 버튼');
         await act(task, () => page.locator('#campaign-submit').click());
-        await page.getByRole('button', { name: '예약 등록한다', exact: true }).waitFor({ state: 'visible', timeout: 10000 });
-        await act(task, () => page.getByRole('button', { name: '예약 등록한다', exact: true }).click());
+        await page.getByRole('button', { name: '예약 등록', exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+        await act(task, () => page.getByRole('button', { name: '예약 등록', exact: true }).click());
         await page.getByText('예약 등록했습니다').first().waitFor({ timeout: 15000 });
         const historyItem = page.locator('tr[data-history-row]').filter({ hasText: title }).first();
         const historyTitle = await settledVisible(historyItem);
@@ -1354,9 +1354,11 @@ async function main() {
         await probeKeyboard(page, task, submit, '초안 저장 버튼');
         await act(task, () => submit.click());
         await page.getByText('초안을 저장했습니다').first().waitFor({ timeout: 15000 });
-        const versionText = await page.getByText(/초안 \d+/).first().innerText().catch(() => '');
-        task.resultVisible = versionText.includes('초안');
-        task.resultNote = `저장 안내 + 버전 표시 "${versionText.replace(/\s+/g, ' ').slice(0, 50)}"`;
+        // The status line no longer prints version numbers (2026-11-24); it states how the saved draft
+        // relates to the published page. The version bump itself is still checked via bootstrap below.
+        const versionText = await page.getByText(/아직 게시하지 않았습니다|게시한 뒤 저장한 변경이 있습니다|게시된 내용과 저장한 초안이 같습니다/).first().innerText().catch(() => '');
+        task.resultVisible = versionText.length > 0;
+        task.resultNote = `저장 안내 + 게시 상태 표시 "${versionText.replace(/\s+/g, ' ').slice(0, 50)}"`;
         try {
           const state = await readBootstrap(helpers, baseUrl, fixture.manager.cookie);
           const after = Number(state.workspaces[eventId].pageExperience?.draftVersion) || 0;
@@ -1526,11 +1528,11 @@ async function main() {
         await page.locator('#evidence-photo-sections').waitFor({ state: 'visible', timeout: 15000 });
         await verifySkipLink(page, task);
         await installScrollCounter(page);
-        await act(task, () => page.getByRole('button', { name: '사진 올리기', exact: true }).first().click());
+        await act(task, () => page.getByRole('button', { name: '사진 선택', exact: true }).first().click());
         await act(task, () => page.locator('#evidence-photo-files').setInputFiles({
           name: photoName, mimeType: 'image/png', buffer: Buffer.from(TINY_PNG_BASE64, 'base64'),
         }));
-        const uploadButton = page.getByRole('button', { name: '선택한 사진 올리기 (1장)', exact: true });
+        const uploadButton = page.getByRole('button', { name: '1장 올리기', exact: true });
         await uploadButton.waitFor({ state: 'visible', timeout: 10000 });
         await probeKeyboard(page, task, uploadButton, '사진 올리기 버튼');
         await act(task, () => uploadButton.click());

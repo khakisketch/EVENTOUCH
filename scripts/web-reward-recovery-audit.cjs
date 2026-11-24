@@ -54,7 +54,7 @@ async function main() {
         if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
         await row(n).getByRole('button', { name: '경품 취소', exact: true }).click();
       }
-      await row(n).getByRole('group', { name: '실행 확인' }).getByRole('button', { name: action === 'fulfill' ? '처리한다' : '취소한다', exact: true }).click();
+      await row(n).getByRole('group', { name: '실행 확인' }).getByRole('button', { name: action === 'fulfill' ? '처리하기' : '경품 취소하기', exact: true }).click();
     };
     stage = 'lost fulfill';
     await execute(1, 'fulfill');

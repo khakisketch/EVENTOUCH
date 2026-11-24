@@ -119,7 +119,11 @@ async function main() {
       assert.equal((await response).status(), 409);
       await page.waitForFunction(() => document.activeElement?.id === 'field-phone');
       const recovery = page.locator('#field-phone').locator('xpath=..').getByRole('status');
-      assert.match(await recovery.innerText(), /이미 신청/);
+      // Reopened 2026-11-24: 중복 안내가 한 번만 나오도록 바뀌었다. 거절 사유('이미 등록된 연락처')는 필드 오류가,
+      // 복구 길(내 티켓 열기)은 그 옆의 상태 영역이 맡는다. 두 사실을 각각 확인한다.
+      assert.match(await page.locator('#field-phone-error').innerText(), /이미 (등록|신청)/);
+      assert.match(await recovery.innerText(), /내 티켓 열기/);
+      assert.equal(await recovery.getByRole('link', { name: '내 티켓 열기' }).count(), 1);
       await page.screenshot({ path: path.join(out, 'duplicate-390.png') });
       await page.locator('#field-phone').fill('01098761234');
       assert.equal(await recovery.count(), 0, 'editing the phone clears the duplicate recovery notice');

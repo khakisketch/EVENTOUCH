@@ -71,7 +71,7 @@ async function main() {
       await dialog.dismiss();
       return message;
     });
-    await page.getByRole('button', { name: '참가 메뉴', exact: true }).click({ noWaitAfter: true });
+    await page.getByRole('button', { name: '참가자 홈', exact: true }).click({ noWaitAfter: true });
     assert.match(await stayWarning, /입력한 내용이 사라집니다/);
     assert.equal(await codeInput.inputValue(), boothCode, 'cancelled menu navigation retains the code');
     await page.getByRole('button', { name: '인증하기', exact: true }).click();

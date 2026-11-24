@@ -141,7 +141,7 @@ async function main() {
     await approveRow.getByRole('button', { name: '승인', exact: true }).click();
     await f.gateway.waitForResponseLoss('participant.status');
     await page.getByRole('button', { name: '같은 요청으로 다시 시도', exact: true }).click();
-    await page.getByText(`${pending[0].name} 상태를 참가 확정`, { exact: false }).first().waitFor();
+    await page.getByText(`${pending[0].name} 상태를 ‘참가 확정’`, { exact: false }).first().waitFor();
     const statusRequests = f.gateway.commands.filter(c => c.command === 'participant.status');
     check('single approval reuses lost-response receipt', statusRequests.length === 2 && statusRequests[0].commandId === statusRequests[1].commandId);
     check('approval persisted', (await workspace()).participants.find(p => p.id === pending[0].id).status === 'APPROVED');
@@ -152,7 +152,7 @@ async function main() {
     await shot('detail', 1280);
     await dialog.getByLabel(`${pending[1].name} 상태 변경`, { exact: true }).selectOption('CANCELLED');
     check('cancellation requires explicit confirm', (await workspace()).participants.find(p => p.id === pending[1].id).status === 'PENDING');
-    await dialog.getByRole('button', { name: '취소', exact: true }).click();
+    await dialog.getByRole('button', { name: '돌아가기', exact: true }).click();
     const desktopStatus = dialog.getByLabel(`${pending[1].name} 상태 변경`, { exact: true });
     await page.waitForFunction(el => el === document.activeElement, await desktopStatus.elementHandle());
     check('cancelling the confirmation restores focus to participant status', await desktopStatus.evaluate(el => el === document.activeElement));
@@ -165,7 +165,7 @@ async function main() {
     await mobileDetailButton.click();
     const mobileStatus = dialog.getByLabel(`${pending[1].name} 상태 변경`, { exact: true });
     await mobileStatus.selectOption('CANCELLED');
-    await dialog.getByRole('button', { name: '취소', exact: true }).click();
+    await dialog.getByRole('button', { name: '돌아가기', exact: true }).click();
     const mobileRestoredStatus = dialog.getByLabel(`${pending[1].name} 상태 변경`, { exact: true });
     await page.waitForFunction(el => el === document.activeElement, await mobileRestoredStatus.elementHandle());
     check('mobile cancellation restores focus to participant status', await mobileRestoredStatus.evaluate(el => el === document.activeElement));
@@ -177,7 +177,9 @@ async function main() {
     check('table sort reports ascending', await page.locator('th[aria-sort="ascending"]').count() === 1);
     await page.locator('summary[aria-label="내보내기·가져오기"]').click();
     const download = page.waitForEvent('download'); await page.getByRole('button', { name: /CSV 내보내기/ }).click();
-    check('CSV download remains real', (await download).suggestedFilename() === 'EVENTOUCH_participants.csv');
+    const csvName = (await download).suggestedFilename();
+    // Reopened 2026-11-24: 내보내기 파일명이 `{행사명}_참가자명단_{YYYYMMDD}.csv`로 바뀌었다. 여전히 실제 CSV 다운로드인지 확인한다.
+    check('CSV download remains real', /^.+_참가자명단_\d{8}\.csv$/.test(csvName), csvName);
 
     // Initial failure and slow loading are transport faults, not fake API
     // success. Retrying reads the same real fixture and keeps route readiness.

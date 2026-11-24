@@ -204,8 +204,8 @@ async function main() {
       await confirm.getByRole('button', { name: '취소', exact: true }).click();
       assert.equal(await page.locator('#campaign-title').inputValue(), '덮어쓰지 말아야 할 초안');
       await failedRowAction(old.id);
-      await confirm.getByRole('button', { name: '불러온다', exact: true }).waitFor();
-      assert.equal(await confirm.getByRole('button', { name: '불러온다', exact: true }).evaluate(el => el === document.activeElement), true);
+      await confirm.getByRole('button', { name: '불러오기', exact: true }).waitFor();
+      assert.equal(await confirm.getByRole('button', { name: '불러오기', exact: true }).evaluate(el => el === document.activeElement), true);
       await page.keyboard.press('Enter');
       await messageStep(page, 2);
       await page.locator('#campaign-body').waitFor();
@@ -217,11 +217,11 @@ async function main() {
       await messageStep(page, 3);
       await page.locator('#campaign-submit').click();
       await failedRowAction(old.id);
-      await confirm.getByRole('button', { name: '불러온다', exact: true }).waitFor();
+      await confirm.getByRole('button', { name: '불러오기', exact: true }).waitFor();
       await confirm.getByRole('button', { name: '취소', exact: true }).click();
       assert.equal(f.gateway.commands.length, writes, 'staged send has not posted');
       await failedRowAction(old.id);
-      await confirm.getByRole('button', { name: '불러온다', exact: true }).click();
+      await confirm.getByRole('button', { name: '불러오기', exact: true }).click();
       assert.equal(f.gateway.commands.length, writes);
       // Commit one real create, then lose only its transport response. Loading
       // another draft must now block; retry must use that very same receipt.
@@ -240,7 +240,7 @@ async function main() {
       });
       await messageStep(page, 3);
       await page.locator('#campaign-submit').click();
-      await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '모의 발송을 기록한다', exact: true }).click();
+      await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '모의 발송 기록', exact: true }).click();
       const sendRecovery = page.getByRole('region', { name: '발송 요청 확인 필요', exact: true });
       await sendRecovery.getByRole('alert').filter({ hasText: '발송 요청 결과를 확인하지 못했습니다.' }).waitFor();
       await failedRowAction(old.id);

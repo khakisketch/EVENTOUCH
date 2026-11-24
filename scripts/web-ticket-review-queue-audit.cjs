@@ -115,7 +115,7 @@ async function main() {
         return route.continue();
       });
       await dialog.getByRole('button', { name: '기존 티켓 무효화 및 재발급' }).click();
-      await dialog.getByText('현재 서버에서는 티켓 상태를 확인해 재발급할 수 없습니다. 시스템 관리자에게 업데이트를 문의하세요.').waitFor();
+      await dialog.getByText('현재 서버에서는 티켓 상태를 확인해 재발급할 수 없습니다. 조직 관리자에게 업데이트를 문의하세요.').waitFor();
       assert.equal((await read()).participants[0].ticket, w.participants[0].ticket, 'an old server rejects before reissue');
       await dialog.getByRole('button', { name: '기존 티켓 무효화 및 재발급' }).click();
       await dialog.getByText('새 티켓을 발급했습니다. 링크를 복사해 해당 참가자에게 전달하세요.').waitFor();

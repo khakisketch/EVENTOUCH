@@ -200,7 +200,7 @@ async function main() {
     assert.equal(await attendee.getByRole('main').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(232, 239, 233)');
     await attendee.getByRole('button', { name: /^공지사항/u }).click();
     assert.equal(await attendee.getByRole('main').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(232, 239, 233)');
-    await attendee.getByRole('button', { name: '참가 메뉴', exact: true }).click();
+    await attendee.getByRole('button', { name: '참가자 홈', exact: true }).click();
     await attendee.getByRole('heading', { name: '우리의 새로운 행사', exact: true }).waitFor();
     await second.goto(`${gateway.baseUrl}/event/${eventB}/home`, { waitUntil: 'networkidle' });
     await second.getByRole('heading', { name: '변경하지 않은 행사 B', exact: true }).waitFor();

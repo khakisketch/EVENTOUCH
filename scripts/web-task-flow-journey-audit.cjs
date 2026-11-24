@@ -27,7 +27,7 @@ const { openCreateSettings, openSettingsBasics } = require('./ui-journey-helpers
 //                        event (desk select, ticket fill, 입장 처리)
 //   9. booth-visit       staff booth certification in STAFF mode with the
 //                        same ticket (switch, booth select, ticket, 부스 인증)
-//  10. reward-fulfill    owner on-site reward fulfil (수령 처리 + 처리한다)
+//  10. reward-fulfill    owner on-site reward fulfil (수령 처리 + 처리하기)
 //
 // Tasks 2-5 run on the event created in task 1. Tasks 8-10 run on the
 // fixture seed event BEFORE stage-end, while it is still LIVE (check.scan
@@ -340,17 +340,19 @@ async function main() {
     let publishedBefore = null;
     await measure('intake-publish', '동의 안내 입력·양식 게시·접수 열기', async (act, task) => {
       task.screens = [`/console/events/${createdEventId}/settings (참가 접수 구역)`];
-      task.fields = ['참가 접수 구역', '#set-consent', 'button 양식 게시·접수 열기'];
+      task.fields = ['참가 접수 구역', '#set-consent', 'button 양식 게시'];
       // Consent and publishing sit on the settings board itself; waiting on #set-name would open the
       // basics drawer, which covers the board.
       await go(`/console/events/${createdEventId}/settings`, '#set-consent');
       publishedBefore = (await readBootstrap(helpers, harness.baseUrl, ownerCookie))
         .workspaces[createdEventId].publishedVersion;
       await act(() => page.locator('#set-consent').fill(CONSENT_TEXT));
-      await act(() => page.getByRole('button', { name: '양식 게시·접수 열기', exact: true }).click());
-      // Reopened 2026-11-20: 설정 화면 왼쪽 목차에도 같은 '접수 중' 힌트가 있어(좁은 폭에서는 숨김) 첫 일치가 보이지 않는 요소일 수 있다.
+      // Reopened 2026-11-24: 새 행사는 기획(DRAFT) 단계라 버튼은 '양식 게시'이고, 게시 뒤 접수 구역은
+      // '접수 중' 대신 '접수 대기'(행사 단계를 운영 준비로 바꾸면 열림)로 말한다. 접수 플래그(registrationOpen)는 아래에서 그대로 확인한다.
+      await act(() => page.getByRole('button', { name: '양식 게시', exact: true }).click());
+      // Reopened 2026-11-20: 설정 화면 왼쪽 목차에도 같은 힌트가 있어(좁은 폭에서는 숨김) 첫 일치가 보이지 않는 요소일 수 있다.
       // 접수 상태는 참가 접수 구역 안의 표시로 확인한다.
-      await page.locator('#panel-settings-intake').getByText('접수 중', { exact: false }).first().waitFor({ timeout: 15000 });
+      await page.locator('#panel-settings-intake').getByText('접수 대기', { exact: false }).first().waitFor({ timeout: 15000 });
       const workspace = (await readBootstrap(helpers, harness.baseUrl, ownerCookie)).workspaces[createdEventId];
       assert.equal(workspace.registrationOpen, true);
       assert.ok(Number(workspace.publishedVersion) > Number(publishedBefore || 0),
@@ -490,14 +492,14 @@ async function main() {
     // ---- Task 10: owner on-site reward fulfil ----
     await measure('reward-fulfill', '현장 경품 수령 처리 (owner)', async (act, task) => {
       task.screens = [`/console/events/${fixture.eventId}/rewards (경품 목록)`];
-      task.fields = ['button 수령 처리', 'group 실행 확인 button 처리한다'];
+      task.fields = ['button 수령 처리', 'group 실행 확인 button 처리하기'];
       await go(`/console/events/${fixture.eventId}/rewards`, 'ul[aria-label^="경품 목록"]');
       const row = page.locator('ul[aria-label^="경품 목록"] li').filter({ hasText: REWARD_NAME }).first();
       await row.getByRole('button', { name: '수령 처리', exact: true }).waitFor({ timeout: 10000 });
       await act(() => row.getByRole('button', { name: '수령 처리', exact: true }).click());
       await row.getByRole('group', { name: '실행 확인' }).waitFor({ timeout: 10000 });
       const submitted = commandsResponse();
-      await act(() => row.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '처리한다', exact: true }).click());
+      await act(() => row.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '처리하기', exact: true }).click());
       await submitted;
       await page.getByText('경품 처리를 확인하고 최신 목록을 불러왔습니다.', { exact: true }).first().waitFor({ timeout: 15000 });
       // Reopened 2026-11-20: 경품 지급 화면은 지급 대기를 먼저 두고 완료·취소를 접힌 묶음(details)으로 옮긴다. 처리한 경품은 그 묶음으로 이동하므로

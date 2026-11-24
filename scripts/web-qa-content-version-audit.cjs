@@ -113,7 +113,7 @@ async function main() {
     section = (await programSection(page, '합성 새 투표'));
     assert.equal(await section.getByLabel('이전에 작성한 질문').inputValue(), '질문: 이전 질문은 여기에 남아야 합니다');
     await page.screenshot({ path: path.join(out, 'qa-type-change-390.png'), fullPage: true });
-    const before = page.url(); await page.getByRole('link', { name: '참가 메뉴로', exact: true }).click();
+    const before = page.url(); await page.getByRole('link', { name: '참가자 홈으로', exact: true }).click();
     assert.equal(page.url(), before); assert.equal(await section.getByLabel('이전에 작성한 질문').inputValue(), '질문: 이전 질문은 여기에 남아야 합니다');
     await section.getByRole('button', { name: '이전 질문 지우기' }).click();
     await section.getByRole('group', { name: '이전 질문 삭제 확인' }).getByText('이전 질문을 지울까요?', { exact: false }).waitFor();

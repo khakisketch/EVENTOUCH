@@ -110,10 +110,10 @@ async function main() {
       await page.locator('#campaign-submit').click();
       const confirmation = page.getByRole('group', { name: '실행 확인', exact: true });
       await confirmation.waitFor();
-      assert.match(await confirmation.innerText(), /예약 시각: 2030\. 11\. 12\. 오전 9:00 \(한국 시간\)/);
+      assert.match(await confirmation.innerText(), /예약 시각: 2030년 11월 12일 \(화\) 오전 9:00/);
       assert.match(await confirmation.innerText(), /전달되지 않습니다/);
       await page.screenshot({ path: path.join(out, `review-${width}.png`), fullPage: true });
-      await confirmation.getByRole('button', { name: '예약 등록한다', exact: true }).click();
+      await confirmation.getByRole('button', { name: '예약 등록', exact: true }).click();
       if (timezoneId === 'UTC') {
         phase = 'lost response and permission denial';
         const recovery = page.getByRole('region', { name: '발송 요청 확인 필요' });
@@ -159,9 +159,9 @@ async function main() {
     if (await page.locator('#campaign-history-more').count()) await page.locator('#campaign-history-more').click();
     for (const id of ['tz-zoned-z', 'tz-zoned-offset']) {
       const row = page.locator(`#campaign-${id}`);
-      assert.match(await row.innerText(), /예약 2030\. 11\. 12\. 오전 9:00 \(한국 시간\)/);
+      assert.match(await row.innerText(), /예약 2030년 11월 12일 \(화\) 오전 9:00/);
       await row.getByRole('button', { name: /상세$/ }).click();
-      assert.match(await page.locator(`#campaign-detail-${id}`).innerText(), /2030\. 11\. 12\. 오전 9:00 \(한국 시간\)/);
+      assert.match(await page.locator(`#campaign-detail-${id}`).innerText(), /2030년 11월 12일 \(화\) 오전 9:00/);
     }
     const unzoned = page.locator('#campaign-tz-unzoned');
     assert.match(await unzoned.innerText(), /시간대 미기록 · 원본 2030-11-12T09:00:00/);

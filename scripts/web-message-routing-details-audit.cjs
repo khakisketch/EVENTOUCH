@@ -149,7 +149,7 @@ const { launchBrowser } = require('./audit-browser.cjs');
     await statusRow.getByText('수신자 변경 · 발송 보류').waitFor();
     await statusRow.getByRole('button', { name: '예약 취소' }).click();
     const confirm = page.getByRole('group', { name: '실행 확인' });
-    await confirm.getByRole('button', { name: '예약을 취소한다' }).click();
+    await confirm.getByRole('button', { name: '예약 취소하기' }).click();
     await statusRow.getByRole('button', { name: '내용·대상 불러오기' }).waitFor();
     await statusRow.getByRole('button', { name: '내용·대상 불러오기' }).click();
     await page.locator('#campaign-reload-summary').getByText(/선택 1명/).waitFor();

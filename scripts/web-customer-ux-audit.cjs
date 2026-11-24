@@ -146,7 +146,8 @@ async function main() {
     await page.goto(`${base}/participants`);
     const pendingRow = page.getByRole('row').filter({ has: page.getByRole('checkbox', { name: `${people[0].name} 선택`, exact: true }) });
     await pendingRow.getByRole('button', { name: '승인', exact: true }).click();
-    await page.getByText(`${people[0].name} 상태를 참가 확정`, { exact: false }).first().waitFor();
+    // Reopened 2026-11-24: 상태 안내는 값을 ‘참가 확정’처럼 따옴표로 묶는다.
+    await page.getByText(`${people[0].name} 상태를 ‘참가 확정’`, { exact: false }).first().waitFor();
     check('participants: explicit approval persisted', (await bootstrap()).workspaces[f.eventId].participants.find(p => p.id === people[0].id).status === 'APPROVED');
     await page.reload();
     await page.locator('#roster-search').waitFor();
@@ -179,9 +180,9 @@ async function main() {
     await page.getByLabel('모의 발송으로 기록', { exact: false }).check();
     const beforeMessages = (await bootstrap()).workspaces[f.eventId].messages.length;
     await page.locator('#campaign-submit').click();
-    await page.getByRole('button', { name: '모의 발송을 기록한다', exact: true }).waitFor();
+    await page.getByRole('button', { name: '모의 발송 기록', exact: true }).waitFor();
     check('messages: review alone never sends', (await bootstrap()).workspaces[f.eventId].messages.length === beforeMessages);
-    await page.getByRole('button', { name: '모의 발송을 기록한다', exact: true }).click();
+    await page.getByRole('button', { name: '모의 발송 기록', exact: true }).click();
     await page.getByText('모의 발송을 기록했습니다', { exact: false }).first().waitFor();
     const messages = (await bootstrap()).workspaces[f.eventId].messages;
     check('messages: confirmed simulation is recorded once', messages.length === beforeMessages + 1 && messages.some(m => m.title === '검수 안내' && m.simulate === true));

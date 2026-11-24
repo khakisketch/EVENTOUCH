@@ -44,7 +44,7 @@ async function main() {
       await dialog.dismiss();
       return message;
     });
-    await page.getByRole('link', { name: '← 참가 메뉴로' }).click({ noWaitAfter: true });
+    await page.getByRole('link', { name: '← 참가자 홈으로' }).click({ noWaitAfter: true });
     assert.match(await warning, /작성 중인 입력/);
     assert.equal(await input.inputValue(), '잃어버리면 안 되는 합성 질문');
     assert.match(new URL(page.url()).pathname, /\/engage$/);
@@ -82,7 +82,7 @@ async function main() {
     await page.reload({ waitUntil: 'networkidle' });
     await page.getByText('게시된 프로그램이 없습니다.', { exact: true }).waitFor();
     await saved.getByRole('button', { name: '서버 처리 확인' }).waitFor();
-    assert.equal(await page.getByRole('link', { name: '참가 메뉴로', exact: true }).count(), 1, 'a long recovery state retains its footer return');
+    assert.equal(await page.getByRole('link', { name: '참가자 홈으로', exact: true }).count(), 1, 'a long recovery state retains its footer return');
     let lookups = 0;
     const routePattern = '**/command-receipts/*';
     await page.route(routePattern, route => { lookups += 1; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'UNCONFIRMED' }) }); });

@@ -71,7 +71,7 @@ const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
     // list as complete; the link's job here is to land on the ticket-review roster, not to render rows.
     assert.equal(new URL(reviewPage.url()).searchParams.get('ticket'), 'review', 'the link opens the ticket-review roster');
     await row('race').getByRole('button', { name: '수령 처리' }).click();
-    const confirm = row('race').getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '처리한다' });
+    const confirm = row('race').getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '처리하기' });
     await confirm.waitFor();
     const latest = await read(); latest.participants[2].cancelled = true;
     await f.harness.database.query('UPDATE event_workspaces SET payload=$2::jsonb WHERE event_id=$1', [f.eventId, JSON.stringify(latest)]);
@@ -92,7 +92,7 @@ const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
     await row('valid').getByRole('button', { name: '수령 처리' }).click();
     const [completed] = await Promise.all([
       page.waitForResponse(r => r.url().endsWith('/commands') && r.request().method() === 'POST'),
-      row('valid').getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '처리한다' }).click(),
+      row('valid').getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '처리하기' }).click(),
     ]);
     assert.equal(completed.status(), 200);
     // 2026-11-20: a received prize moves into the folded 완료·취소 group; open it to see the row.

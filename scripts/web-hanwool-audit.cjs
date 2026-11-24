@@ -268,7 +268,7 @@ async function main() {
     await operator.locator('#campaign-body').fill('{{이름}}님, 럭키번호 {{럭키번호}} / {{티켓링크}}');
     await messageStep(operator, 3);
     await operator.getByRole('checkbox', { name: /모의 발송으로 기록/ }).check();
-    await clickCommandConfirm(operator, operator.getByRole('button', { name: '발송 검토', exact: true }), '모의 발송을 기록한다', 'message.create-charset-reviewed');
+    await clickCommandConfirm(operator, operator.getByRole('button', { name: '발송 검토', exact: true }), '모의 발송 기록', 'message.create-charset-reviewed');
     workspace = await read();
     const invitation = workspace.messages.find((message) => message.title === '검증 초대');
     assert.equal(invitation.status, 'SIMULATED'); assert.equal(invitation.simulate, true);
@@ -298,7 +298,7 @@ async function main() {
     assert.ok(workspace.checks.find((check) => check.participantId === people[0].id && check.action === 'IN' && check.at));
 
     phase = 'live exact 5-of-20 ballot and retained choices';
-    await mobile.getByRole('button', { name: '참가 메뉴', exact: true }).click();
+    await mobile.getByRole('button', { name: '참가자 홈', exact: true }).click();
     await mobile.getByRole('button', { name: '순위 투표', exact: true }).click();
     await operator.goto(`${gateway.baseUrl}/console/events/${eventId}/draws`, { waitUntil: 'networkidle' });
     await operator.evaluate(() => { document.querySelectorAll('details:not([open])').forEach((el) => { el.open = true; }); });
@@ -344,7 +344,7 @@ async function main() {
     await operator.getByLabel('경품 이름', { exact: true }).nth(1).fill('검증 기념품 B');
     await operator.getByLabel('유한 재고 수량', { exact: true }).nth(1).fill('4');
     await clickCommand(operator, operator.getByRole('button', { name: '룰렛 설정 저장', exact: true }), 'roulette.config.save-reviewed');
-    await mobile.getByRole('button', { name: '참가 메뉴', exact: true }).click();
+    await mobile.getByRole('button', { name: '참가자 홈', exact: true }).click();
     await mobile.getByRole('button', { name: '룰렛 이벤트', exact: true }).click();
     assert.equal(await spinControl.count(), 0);
     await openRouletteSettings(operator);
@@ -438,7 +438,7 @@ async function main() {
       await clickCommand(operator, dialog.getByRole('button', { name: /저장|만들기/, exact: false }).last(), 'module.save');
       const module = (await read()).modules.find((item) => item.title === title);
       const card = operator.locator('li').filter({ has: operator.getByText(title, { exact: true }) }).first();
-      await clickCommandConfirm(operator, card.getByRole('button', { name: '시작', exact: true }), '시작한다', 'module.status');
+      await clickCommandConfirm(operator, card.getByRole('button', { name: '시작', exact: true }), '시작하기', 'module.status');
       return module;
     }
     const personModule = await createModule('개인 검증 무대');

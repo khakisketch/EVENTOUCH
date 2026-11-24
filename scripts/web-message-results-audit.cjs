@@ -117,7 +117,7 @@ async function main() {
       await changed.scrollIntoViewIfNeeded();
       await page.screenshot({ path: path.join(out, 'recipient-hold-390.png') });
       await changed.getByRole('button', { name: '예약 취소', exact: true }).press('Enter');
-      await changedDetail.getByRole('button', { name: '예약을 취소한다', exact: true }).press('Enter');
+      await changedDetail.getByRole('button', { name: '예약 취소하기', exact: true }).press('Enter');
       await changed.getByRole('button', { name: '내용·대상 불러오기', exact: true }).press('Enter');
       await page.locator('#campaign-reload-summary').waitFor();
       assert.match(await page.locator('#campaign-reload-summary').innerText(), /선택 1명 · 제외 1명/);
@@ -150,7 +150,7 @@ async function main() {
       assert.match(await newReview.innerText(), /1명/);
       const [created] = await Promise.all([
         page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/commands')),
-        newReview.getByRole('button', { name: '모의 발송을 기록한다', exact: true }).click(),
+        newReview.getByRole('button', { name: '모의 발송 기록', exact: true }).click(),
       ]);
       assert.equal(created.status(), 201);
       const result = (await database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [fixture.eventId])).rows[0].payload;

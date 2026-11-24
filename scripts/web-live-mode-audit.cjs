@@ -172,7 +172,10 @@ async function main() {
       await page.getByRole('button', { name: '실행한다', exact: true }).click();
       await notice(page, '1명을 추첨했습니다.');
       assert.equal((await readWorkspace(f)).drawPrograms.find((p) => p.id === seed.program.id).winners.length, 1);
-      await page.getByRole('button', { name: /지급$/ }).first().click();
+      await page.getByRole('button', { name: /지급 처리$/ }).first().click();
+      // 지급은 되돌릴 수 없어 그 줄에서 먼저 확인한다 (경품 지급 화면과 같은 방식).
+      await page.getByText(/님께 .+을\(를\) 지급할까요\? 처리한 뒤에는 취소할 수 없습니다/).waitFor();
+      await page.getByRole('button', { name: '지급 처리하기', exact: true }).click();
       await page.locator('[aria-live="polite"]').getByText(/지급을 기록했습니다/).waitFor();
       assert.equal((await readWorkspace(f)).rewards.filter((reward) => reward.status === 'RECEIVED').length, 1);
       await page.waitForFunction(() => document.querySelectorAll('[data-live-rewards] li').length === 3); // 남은 2건 + 방금 추첨으로 생긴 경품 1건

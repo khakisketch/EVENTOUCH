@@ -109,7 +109,7 @@ async function main() {
     await transition.goto(`${fixture.baseUrl}/event/${second}/ticket?ticket=${encodeURIComponent(oldPerson.ticket)}`);
     await transition.getByRole('img', { name: /기존 두 번째 행사 참가자님의/ }).waitFor();
     await transition.evaluate(blocked => { window.__fixtureStorageMode = blocked ? 'ticket-blocked' : 'available'; }, writesBlocked);
-    await transition.getByRole('link', { name: '← 참가 메뉴로' }).click();
+    await transition.getByRole('link', { name: '← 참가자 홈으로' }).click();
     await transition.getByRole('link', { name: '행사 안내 보기' }).click();
     // The guide renders the no-ticket state on the server and swaps to the ticket
     // state once the browser has checked this tab's storage; a click that lands
@@ -123,7 +123,7 @@ async function main() {
     await transition.getByLabel('인증번호 6자리').fill(codes.get(phone));
     await transition.getByRole('button', { name: '내 티켓 열기' }).click();
     await transition.getByRole('img', { name: `${name}님의 행사 입장 및 퇴장용 QR` }).waitFor();
-    await transition.getByRole('link', { name: '← 참가 메뉴로' }).click();
+    await transition.getByRole('link', { name: '← 참가자 홈으로' }).click();
     await transition.getByRole('button', { name: '내 신청 정보' }).click();
     await transition.getByRole('heading', { name: '내 신청 정보' }).waitFor();
     await transition.screenshot({ path: path.join(out, screenshot), fullPage: true });
@@ -135,7 +135,7 @@ async function main() {
       assert.equal(await transition.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
       assert.deepEqual(await transition.evaluate(async () => (await window.axe.run()).violations.filter(item => ['serious', 'critical'].includes(item.impact)).map(item => item.id)), []);
     }
-    await transition.getByRole('button', { name: '참가 메뉴' }).click();
+    await transition.getByRole('button', { name: '참가자 홈' }).click();
     await transition.getByRole('button', { name: '모바일 티켓' }).click();
     await transition.getByRole('img', { name: `${name}님의 행사 입장 및 퇴장용 QR` }).waitFor();
     assert.ok((await decodedTicket(transition)) === recoveredPerson.ticket, 'the displayed QR belongs to the recovered participant');

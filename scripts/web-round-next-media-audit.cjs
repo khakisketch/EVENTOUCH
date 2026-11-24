@@ -140,7 +140,7 @@ async function main() {
       const tokens = await page.evaluate(() => {
         // Reopened 2026-11-20: 빈 구간에는 더 이상 uploadIcon 상자가 없다. 같은 쪽의 '사진 올리기' 기본 버튼이
         // 화면 토큰의 바탕색(brand)과 글자색(on-brand) 쌍을 그대로 가지므로 그 쌍을 읽는다(새 hex 없이 토큰만 사용).
-        const icon = [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === '사진 올리기');
+        const icon = [...document.querySelectorAll('button')].find((button) => button.textContent.trim() === '사진 선택');
         const guidance = document.getElementById('evidence-photo-file-guidance');
         const cap = (el) => {
           const cs = getComputedStyle(el);
@@ -230,7 +230,7 @@ async function main() {
       await shot('round-next-photos-preview', width);
 
       // Real upload -> bootstrap evidencePhotos + byte-identical files.
-      await page.getByRole('button', { name: /선택한 사진 올리기 \(2장\)/ }).click();
+      await page.getByRole('button', { name: /2장 올리기/ }).click();
       await page.getByText(/사진을 등록했습니다\./).first().waitFor({ timeout: UI_TIMEOUT });
       // Both queued jobs finish on their own cadence: poll the server copy
       // until both land instead of asserting on the first notice.
@@ -338,7 +338,7 @@ async function main() {
       // Reopened 2026-11-20: 명단 가져오기 단순안 확정(드롭 → 결과 확인)으로 '가져오기는 선택적인 도구입니다.' 안내 문장이 없어졌다.
       // 같은 자리의 안내(어떤 파일을 어디에 놓는지)가 파일 선택 전에 보이는지로 확인한다.
       assert.equal(await page.getByText('엑셀이나 CSV 파일을 여기에 끌어 놓으세요', { exact: true }).count() >= 1, true, `import/${width}: drop-area guidance present`);
-      assert.equal(await page.getByText(/CSV·TXT·(?:XLS·)?XLSX · 최대 1MB, 1,000행/, { exact: false }).count() >= 1, true, `import/${width}: format limits guidance present`);
+      assert.equal(await page.getByText(/(?:XLS·)?XLSX.*CSV.*최대 1MB, 1,000행/, { exact: false }).count() >= 1, true, `import/${width}: format limits guidance present`);
       judge(`import/${width} guidance`, { optionalTool: true, limitsNote: true });
 
       // One drop area; the template is one quiet action beside the format line.

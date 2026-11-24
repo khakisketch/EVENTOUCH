@@ -66,7 +66,7 @@ const SCREENS = [
   { key: 'draws', path: '/console/events/:id/draws', title: '추첨·투표', scope: 'event', marker: { css: 'section[aria-label="무대"]' } },
   { key: 'photos', path: '/console/events/:id/photos', title: '현장 사진', scope: 'event', marker: { css: '#evidence-photo-sections' } },
   { key: 'content', path: '/console/events/:id/content', title: '공지·안내', scope: 'event', marker: { css: '#content-panel' } },
-  { key: 'attendeePage', path: '/console/events/:id/page', title: '참가자 페이지', scope: 'event', marker: { css: '#theme-save-draft' } },
+  { key: 'attendeePage', path: '/console/events/:id/page', title: '참가자 화면', scope: 'event', marker: { css: '#theme-save-draft' } },
   { key: 'rewards', path: '/console/events/:id/rewards', title: '경품 지급', scope: 'event', marker: { role: 'region', name: '경품 지급 목록' } },
   { key: 'settings', path: '/console/events/:id/settings', title: '행사 설정', scope: 'event', marker: { css: '#settings-basics' } },
   { key: 'reports', path: '/console/events/:id/reports', title: '결과 보고서', scope: 'event', marker: { role: 'tab', name: '보고서' } },
@@ -2036,11 +2036,11 @@ async function main() {
       try {
         await page.goto(`${baseUrl}/event/${encodeURIComponent(fixture.slug)}/home`, { waitUntil: 'networkidle', timeout: 30000 });
         await page.getByRole('button', { name: /^부스 인증/ }).first().click();
-        await page.getByText('티켓이 확인되지 않습니다.').first().waitFor({ timeout: 10000 });
+        await page.getByText('이 브라우저에서 티켓을 찾지 못했습니다.').first().waitFor({ timeout: 10000 });
         // The fixture forces SMS mock, so no recovery code can arrive and the
         // recover screen itself refuses: the dead-end link must stay hidden
         // while device + operator guidance reads on screen.
-        await page.getByText('신청을 완료한 브라우저 탭', { exact: false }).first().waitFor({ timeout: 10000 });
+        await page.getByText('신청을 완료한 기기의 같은 브라우저에서 열어 주세요', { exact: false }).first().waitFor({ timeout: 10000 });
         if (await page.getByRole('link', { name: '내 티켓 찾기' }).count()) {
           throw new Error('recovery link shown where no code can arrive');
         }

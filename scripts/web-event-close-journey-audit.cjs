@@ -490,7 +490,7 @@ async function main() {
           }
           await page.locator(HUB.nextAction).waitFor({ state: 'visible', timeout: 15000 });
           await shotBoth('paired-hub-start');
-          const disclosure = page.locator('details').filter({ has: page.locator('summary').filter({ hasText: '전체 마감 단계와 전제 확인' }) });
+          const disclosure = page.locator('details').filter({ has: page.locator('summary').filter({ hasText: '전체 마감 단계와 조건 확인' }) });
           assert.equal(await disclosure.evaluate(el => el.open), false, 'full journey starts folded');
           await followNext(act, 'input[placeholder*="이름·소속·연락처 검색"]', /승인 대기/);
         }
@@ -523,9 +523,9 @@ async function main() {
       });
 
       // ---- Phase 2: close the running participation program ----
-      await measure('program-close', '진행 프로그램 종료 (참여 콘텐츠 → 종료 → 종료한다)', async (act, task, { touchOk }) => {
+      await measure('program-close', '진행 프로그램 종료 (참여 콘텐츠 → 종료 → 종료하기)', async (act, task, { touchOk }) => {
         task.screens = [eventPath('/programs')];
-        task.fields = ['module 종료 button', 'ConsoleConfirm 종료한다'];
+        task.fields = ['module 종료 button', 'ConsoleConfirm 종료하기'];
         if (before) await menuTo('/programs', 'button:has-text("이벤트 만들기")', act);
         else {
           await page.getByText('승인 대기 없음', { exact: true }).waitFor();
@@ -541,10 +541,10 @@ async function main() {
         const closeButton = card.getByRole('button', { name: '종료', exact: true });
         await touchOk(closeButton, '프로그램 종료');
         await act('click', () => closeButton.click());
-        const confirm = page.getByRole('button', { name: '종료한다', exact: true });
+        const confirm = page.getByRole('button', { name: '종료하기', exact: true });
         await touchOk(confirm, '종료 확정');
         await act('click', () => confirm.click());
-        await page.getByText(/콘텐츠를 종료했습니다/, { exact: false }).first().waitFor({ timeout: 15000 });
+        await page.getByText(/이벤트를 종료했습니다/, { exact: false }).first().waitFor({ timeout: 15000 });
         const state = await readBootstrap(helpers, harness.baseUrl, ownerCookie);
         const module = (state.workspaces[eventId].modules || []).find((item) => item.id === openModuleId);
         assert.ok(module, 'setup module missing from workspace.modules');
@@ -617,11 +617,13 @@ async function main() {
           await touchOk(open, '보고서 만들기 열기');
           await act('click', () => open.click());
         } else {
-          await followLinear(act, HUB.nextAction, /보고서 만들기\/동결/);
+          await followLinear(act, HUB.nextAction, /보고서 만들기·확정/);
           await followNext(act, '#report-title', /마감 보고서 만들기/);
         }
         await page.locator('#report-title').waitFor({ state: 'visible', timeout: 10000 });
         await act('fill', () => page.locator('#report-title').fill(REPORT_TITLE));
+        // 운영 요약이 비어 있으면 '공유 완료로 표시'가 잠기므로 요약을 함께 적는다.
+        await act('fill', () => page.locator('#report-summary').fill('마감 시점 결과 요약'));
         const submit = page.getByRole('dialog').getByRole('button', { name: '보고서 만들기', exact: true });
         await touchOk(submit, '보고서 만들기 제출');
         await act('click', () => submit.click());
@@ -674,7 +676,7 @@ async function main() {
       // ---- Phase 7: result notice as a SIMULATED campaign (never a send) ----
       await measure('result-notify', '결과 안내 모의 발송 (메시지 작성 → 모의 기록 → 확정)', async (act, task, { touchOk }) => {
         task.screens = [eventPath('/messages')];
-        task.fields = ['#campaign-title', '#campaign-body', '모의 발송으로 기록 checkbox', '직접 고르기 목록 열기/닫기', '표시 N명 모두 선택 checkbox', '발송 검토', '모의 발송을 기록한다'];
+        task.fields = ['#campaign-title', '#campaign-body', '모의 발송으로 기록 checkbox', '직접 고르기 목록 열기/닫기', '표시 N명 모두 선택 checkbox', '발송 검토', '모의 발송 기록'];
         if (before) await menuTo('/messages', '#campaign-title', act);
         else {
           await act('click', () => page.locator('[data-close-report-next]').click());
@@ -698,7 +700,7 @@ async function main() {
         const submit = page.locator('#campaign-submit');
         await touchOk(submit, '발송 검토');
         await act('click', () => submit.click());
-        const confirm = page.getByRole('button', { name: '모의 발송을 기록한다', exact: true });
+        const confirm = page.getByRole('button', { name: '모의 발송 기록', exact: true });
         await act('click', () => confirm.click());
         await page.getByText(/모의 발송을 기록했습니다/, { exact: false }).first().waitFor({ timeout: 15000 });
         const workspace = (await readBootstrap(helpers, harness.baseUrl, ownerCookie)).workspaces[eventId];
@@ -819,7 +821,7 @@ async function main() {
       await go(`/console/events/${staleId}/reports#event-close`, HUB.nextAction);
       await page.getByText(/승인 대기 1명이 남아 있지만 종료 이후에는 참가자를 변경할 수 없습니다/).waitFor();
       assert.equal(await page.locator(HUB.nextAction).innerText(), '마감 보고서 만들기', 'a previous PUBLISHED report is not silently chosen for this close');
-      const summary = page.locator('summary').filter({ hasText: '전체 마감 단계와 전제 확인' });
+      const summary = page.locator('summary').filter({ hasText: '전체 마감 단계와 조건 확인' });
       await summary.focus(); await page.keyboard.press('Enter');
       assert.equal(await summary.locator('..').evaluate(el => el.open), true);
       await page.keyboard.press('Space');
@@ -862,7 +864,7 @@ async function main() {
       await shotBoth('states-close-report-attendance-comparison');
       stateChecks.push('late entry differs from the selected frozen report; comparison stays outside its printable document');
       await go(`/console/events/${staleId}/programs?closeReturn=${encodeURIComponent(`/console/events/${staleId}/reports?closeReport=${old.report.id}#event-close`)}`, '[data-close-linear-next]');
-      await page.getByText(/미충족 전제: 승인 대기 1명 미처리/).waitFor();
+      await page.getByText(/미충족 조건: 승인 대기 1명 미처리/).waitFor();
       assert.match(await page.locator('[data-close-linear-next]').getAttribute('href'), /\/messages\?/);
       assert.equal(await page.locator('[data-close-linear-next]').isEnabled(), true, 'out-of-order progression is warned, not blocked');
       await shotBoth('linear-out-of-order-warning');
@@ -961,7 +963,7 @@ async function main() {
       const refreshGuard = async dialog => { refreshGuardBlocked = true; await dialog.dismiss(); };
       page.on('dialog', refreshGuard);
       await page.locator(HUB.backLink).click();
-      await page.getByText('분석과 동결 보고서는 읽기 전용이며, 메시지 작성·발송과 행사 변경은 잠겨 있습니다.', { exact: true }).waitFor();
+      await page.getByText('분석과 확정된 보고서는 읽기 전용이며, 메시지 작성·발송과 행사 변경은 잠겨 있습니다.', { exact: true }).waitFor();
       page.off('dialog', refreshGuard);
       assert.equal(refreshGuardBlocked, false, 'verified ARCHIVED refresh resolves the obsolete unconfirmed-write guard');
       await page.unroute(`**/api/events/${refreshArchiveId}/commands`, refreshLossRoute);
@@ -1019,8 +1021,8 @@ async function main() {
       await page.getByRole('button', { name: '종료', exact: true }).waitFor();
       stateChecks.push('OPEN+feature OFF routes to settings; keyboard entry; unsaved linear-next cancellation; real event.features then direct programs handoff');
       await page.getByRole('button', { name: '종료', exact: true }).click();
-      await page.getByRole('button', { name: '종료한다', exact: true }).click();
-      await page.getByText(/콘텐츠를 종료했습니다/).first().waitFor();
+      await page.getByRole('button', { name: '종료하기', exact: true }).click();
+      await page.getByText(/이벤트를 종료했습니다/).first().waitFor();
       await page.getByText('진행 중 프로그램 없음', { exact: true }).waitFor();
       assert.match(await page.locator('[data-close-linear-next]').getAttribute('href'), /closeStep=end/, 'already-closed intake is skipped');
       stateChecks.push('already-closed intake skips straight from program completion to the existing ENDED control');

@@ -314,7 +314,7 @@ async function main() {
     await act(messaging, () => page.getByLabel('모의 발송으로 기록', { exact: false }).check());
     await act(messaging, () => page.locator('#campaign-submit').click());
     check('review does not send automatically', (await bootstrap()).workspaces[f.eventId].messages.length === 0);
-    await act(messaging, () => page.getByRole('button', { name: '모의 발송을 기록한다', exact: true }).click());
+    await act(messaging, () => page.getByRole('button', { name: '모의 발송 기록', exact: true }).click());
     await page.getByText('모의 발송을 기록했습니다', { exact: false }).first().waitFor();
     const messages = (await bootstrap()).workspaces[f.eventId].messages;
     check('simulated send persisted once with exact selection', messages.length === 1 && messages[0].simulate === true && JSON.stringify([...messages[0].recipientIds].sort()) === JSON.stringify([first.id, later.id].sort()));
@@ -654,7 +654,7 @@ async function main() {
     await page.locator('#campaign-scheduled').fill('2020-01-16T10:00');
     await page.locator('#campaign-submit').click();
     // The form now refuses a past time before any confirmation; a server refusal would still arrive after one.
-    if (await sendConfirmation.isVisible().catch(() => false)) await sendConfirmation.getByRole('button', { name: '예약 등록한다', exact: true }).click();
+    if (await sendConfirmation.isVisible().catch(() => false)) await sendConfirmation.getByRole('button', { name: '예약 등록', exact: true }).click();
     await page.locator('#campaign-scheduled-error').waitFor({ state: 'visible' });
     await page.waitForFunction(() => document.activeElement?.id === 'campaign-scheduled');
     check('schedule error shows and focuses the original value without creating a message',
@@ -665,7 +665,7 @@ async function main() {
     check('editing the invalid schedule clears its field error', await page.locator('#campaign-scheduled-error').count() === 0);
     await page.locator('#campaign-submit').click();
     const countBeforeFreshReview = (await bootstrap()).workspaces[f.eventId].messages.length;
-    await sendConfirmation.getByRole('button', { name: '모의 발송을 기록한다', exact: true }).click();
+    await sendConfirmation.getByRole('button', { name: '모의 발송 기록', exact: true }).click();
     await page.getByText('모의 발송을 기록했습니다', { exact: false }).first().waitFor();
     const afterFreshReview = (await bootstrap()).workspaces[f.eventId].messages;
     const freshReviewMessage = afterFreshReview.find(message => message.title === '검토할 안내');

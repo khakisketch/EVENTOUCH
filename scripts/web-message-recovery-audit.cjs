@@ -87,7 +87,7 @@ async function main() {
       if (!(await mock.isChecked())) await mock.check();
       await page.locator('#campaign-submit').click();
       const confirm = page.getByRole('group', { name: '실행 확인' });
-      await confirm.getByRole('button', { name: '모의 발송을 기록한다' }).click();
+      await confirm.getByRole('button', { name: '모의 발송 기록' }).click();
     }
     const recovery = page.getByRole('region', { name: '발송 요청 확인 필요' });
     const first = '합성 발송 복구 원래 요청';
@@ -174,7 +174,7 @@ async function main() {
     const row = page.locator('[data-history-row]').filter({ hasText: '합성 예약 실행 복구' });
     async function executeFromRow(label) {
       await row.getByRole('button', { name: label, exact: true }).click();
-      await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '실행한다', exact: true }).click();
+      await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '실행하기', exact: true }).click();
     }
     await executeFromRow('발송 실행');
     await row.getByRole('button', { name: '같은 요청 다시 시도' }).waitFor();
@@ -197,7 +197,7 @@ async function main() {
     await page.reload({ waitUntil: 'networkidle' });
     const secondRow = page.locator('[data-history-row]').filter({ hasText: '합성 예약 상태 조회' });
     await secondRow.getByRole('button', { name: '발송 실행', exact: true }).click();
-    await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '실행한다', exact: true }).click();
+    await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '실행하기', exact: true }).click();
     await secondRow.getByRole('button', { name: '같은 요청 다시 시도' }).waitFor();
     const historyShared = page.getByRole('region', { name: '처리 결과 확인' });
     await historyShared.getByRole('button', { name: '서버 처리 확인' }).click();
@@ -205,7 +205,7 @@ async function main() {
     assert.equal(historyStatusRequests.length, 1, 'history status check sends no command');
     assert.equal((await readWorkspace()).messages.find((item) => item.id === 'audit-simulated-status').attempts, 1);
     await secondRow.getByRole('button', { name: '같은 요청 다시 시도', exact: true }).click();
-    await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '재시도한다', exact: true }).click();
+    await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '재시도하기', exact: true }).click();
     await secondRow.getByRole('button', { name: '같은 요청 다시 시도', exact: true }).waitFor({ state: 'hidden' });
     assert.equal(historyStatusRequests.length, 2, 'explicit replay uses one original request');
     assert.equal(historyStatusRequests[0].commandId, historyStatusRequests[1].commandId);

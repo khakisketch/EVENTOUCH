@@ -49,7 +49,7 @@ async function main() {
     const xlsxDownload = page.waitForEvent('download');
     await page.getByRole('button', { name: /엑셀 내보내기 · 검색·필터 결과 2명/ }).click();
     const xlsx = await xlsxDownload;
-    assert.equal(xlsx.suggestedFilename(), 'EVENTOUCH_participants.xlsx');
+    assert.match(xlsx.suggestedFilename(), /^감사 검증 행사_참가자명단_\d{8}\.xlsx$/); // Reopened 2026-11-24: 파일명이 {행사명}_참가자명단_{YYYYMMDD}로 바뀜
     const book = XLSX.read(fs.readFileSync(await xlsx.path()), { type: 'buffer' });
     assert.deepEqual(book.SheetNames, ['참가자']);
     const sheet = book.Sheets['참가자'];
@@ -74,7 +74,7 @@ async function main() {
     const csvDownload = page.waitForEvent('download');
     await page.getByRole('button', { name: /CSV 내보내기 · 검색·필터 결과 2명/ }).click();
     const csv = await csvDownload;
-    assert.equal(csv.suggestedFilename(), 'EVENTOUCH_participants.csv');
+    assert.match(csv.suggestedFilename(), /^감사 검증 행사_참가자명단_\d{8}\.csv$/); // Reopened 2026-11-24: 파일명이 {행사명}_참가자명단_{YYYYMMDD}로 바뀜
     const csvText = fs.readFileSync(await csv.path(), 'utf8');
     assert.match(csvText, /사번,추가 응답,추가 동의/);
     assert.match(csvText, /'  \+1\+1/);

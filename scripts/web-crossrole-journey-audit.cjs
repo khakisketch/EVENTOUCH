@@ -247,14 +247,14 @@ async function main() {
     await axePage(roster, 'roster 1280');
     await roster.locator('input[placeholder*="이름·소속·연락처 검색"]').fill('여정 참가자 갑');
     await roster.getByRole('button', { name: '승인', exact: true }).first().click();
-    await roster.getByText('여정 참가자 갑 상태를 참가 확정(으)로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
+    await roster.getByText('여정 참가자 갑 상태를 ‘참가 확정’으로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
     check('operator approval notice names the action', true);
     await roster.screenshot({ path: path.join(OUT, 'op-roster-approved-1280.png'), fullPage: true });
     const afterApproveA = (await snapshot()).participants.find((p) => p.phone === '01055500101');
     check('approval persists APPROVED for A', afterApproveA && afterApproveA.status === 'APPROVED');
     await roster.locator('input[placeholder*="이름·소속·연락처 검색"]').fill('여정 참가자 을');
     await roster.getByRole('button', { name: '승인', exact: true }).first().click();
-    await roster.getByText('여정 참가자 을 상태를 참가 확정(으)로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
+    await roster.getByText('여정 참가자 을 상태를 ‘참가 확정’으로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
     const afterApproveB = (await snapshot()).participants.find((p) => p.phone === '01055500102');
     check('approval persists APPROVED for B', afterApproveB && afterApproveB.status === 'APPROVED');
 
@@ -271,7 +271,7 @@ async function main() {
     await regB.keyboard.press('Enter');
     await regB.getByRole('img', { name: /님의 행사 입장 및 퇴장용 QR/ }).waitFor({ timeout: 15000 });
     check('keyboard re-check reaches the approved QR', true);
-    check('ticket recovery guidance keeps Korean words intact at 320', (await splitKoreanWords(regB.getByText('이 탭에서 티켓을 확인할 수 있습니다.', { exact: false }))).length === 0);
+    check('ticket recovery guidance keeps Korean words intact at 320', (await splitKoreanWords(regB.getByText('이 브라우저에서는 티켓을 다시 열 수 있습니다.', { exact: false }))).length === 0);
     await regB.screenshot({ path: path.join(OUT, 'b-ticket-approved-320.png'), fullPage: true });
 
     // ---- Participant A reloads: approved ticket with QR ----
@@ -281,7 +281,7 @@ async function main() {
     await reg.getByRole('img', { name: /님의 행사 입장 및 퇴장용 QR/ }).waitFor({ timeout: 15000 });
     check('approved ticket presents the entry QR', true);
     await reg.getByText('참가 확정').first().waitFor();
-    check('ticket recovery guidance keeps Korean words intact at 390', (await splitKoreanWords(reg.getByText('이 탭에서 티켓을 확인할 수 있습니다.', { exact: false }))).length === 0);
+    check('ticket recovery guidance keeps Korean words intact at 390', (await splitKoreanWords(reg.getByText('이 브라우저에서는 티켓을 다시 열 수 있습니다.', { exact: false }))).length === 0);
     await reg.screenshot({ path: path.join(OUT, 'a-ticket-approved-390.png'), fullPage: true });
     await geometry(reg, 'approved ticket 390', null);
 
@@ -833,7 +833,7 @@ async function main() {
       await roster.getByRole('button', { name: /새로고침( 중…)?/, exact: true }).click();
       await roster.locator('input[placeholder*="이름·소속·연락처 검색"]').fill('저장 거부 참가자');
       await roster.getByRole('button', { name: '승인', exact: true }).first().click();
-      await roster.getByText('저장 거부 참가자 상태를 참가 확정(으)로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
+      await roster.getByText('저장 거부 참가자 상태를 ‘참가 확정’으로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
       await regD.getByRole('button', { name: '상태 다시 확인', exact: true }).click();
       await regD.getByRole('img', { name: /님의 행사 입장 및 퇴장용 QR/ }).waitFor({ timeout: 15000 });
       check('denied-storage re-check reaches the approved QR', true);
@@ -871,8 +871,8 @@ async function main() {
       await roster.locator('input[placeholder*="이름·소속·연락처 검색"]').fill('무효 검증 참가자');
       await roster.getByRole('button', { name: '무효 검증 참가자 참가자 상세', exact: true }).click();
       await roster.getByLabel('무효 검증 참가자 상태 변경').selectOption('CANCELLED');
-      await roster.getByRole('button', { name: '신청 취소', exact: true }).click();
-      await roster.getByText('무효 검증 참가자 상태를 신청 취소(으)로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
+      await roster.getByRole('button', { name: '신청 취소하기', exact: true }).click();
+      await roster.getByText('무효 검증 참가자 상태를 ‘신청 취소’로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
       await closeParticipantDetails(roster, '무효 검증 참가자');
       await regE.getByRole('button', { name: '상태 다시 확인', exact: true }).click();
       await regE.getByText('티켓을 사용할 수 없습니다').waitFor({ timeout: 15000 });
@@ -958,7 +958,10 @@ async function main() {
       await page.locator('#field-name').fill(name);
       await page.locator('#field-phone').fill(phone);
       if (await page.locator('#consent').count()) await page.locator('#consent').check();
-      await page.getByRole('button', { name: '신청하기', exact: true }).click();
+      // Reopened 2026-11-24: 정원이 찼고 승인제인 행사는 제출 버튼이 '대기 신청하기'로 바뀐다(같은 제출 동작).
+      await page.getByRole('button', { name: /^(대기 )?신청하기$/ }).click();
+      // 신청서에도 '대기 명단' 안내가 미리 보이므로, 티켓 화면으로 넘어간 뒤에 영수증 문구를 검사한다.
+      await page.waitForURL(/\/ticket/, { timeout: 30000 });
       return { ctx, page };
     };
 
@@ -982,8 +985,8 @@ async function main() {
       await roster.locator('input[placeholder*="이름·소속·연락처 검색"]').fill('감사 참가자 1');
       await roster.getByRole('button', { name: /참가자 상세/, exact: false }).first().click();
       await roster.getByLabel('감사 참가자 1 상태 변경').selectOption('CANCELLED');
-      await roster.getByRole('button', { name: '신청 취소', exact: true }).click();
-      await roster.getByText('감사 참가자 1 상태를 신청 취소(으)로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
+      await roster.getByRole('button', { name: '신청 취소하기', exact: true }).click();
+      await roster.getByText('감사 참가자 1 상태를 ‘신청 취소’로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
       await closeParticipantDetails(roster, '감사 참가자 1');
       const refreshed = page.waitForResponse((response) =>
         response.url().includes(`/api/public/events/${fixture.slug}/ticket`) && response.status() === 200);
@@ -1021,7 +1024,7 @@ async function main() {
       try {
         await roster.getByLabel('여정 참가자 병 상태 변경').selectOption('APPROVED');
         check('waitlist approval reload reaches the real API', await bounded(bootstrapReady, 'held roster refresh') === 200);
-        await roster.getByText('여정 참가자 병 상태를 참가 확정(으)로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
+        await roster.getByText('여정 참가자 병 상태를 ‘참가 확정’으로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
         check('waitlist details remain busy while the real refresh response is delayed',
           await waitlistDetails.getByRole('button', { name: '닫기', exact: true }).isDisabled());
         await roster.keyboard.press('Escape');
@@ -1118,7 +1121,7 @@ async function main() {
     await roster.getByRole('button', { name: /새로고침( 중…)?/, exact: true }).click();
     await roster.locator('input[placeholder*="이름·소속·연락처 검색"]').fill('복합 조건 참가자');
     await roster.getByRole('button', { name: '승인', exact: true }).first().click();
-    await roster.getByText('복합 조건 참가자 상태를 참가 확정(으)로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
+    await roster.getByText('복합 조건 참가자 상태를 ‘참가 확정’으로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
     await regK.getByRole('button', { name: '상태 다시 확인', exact: true }).click();
     await regK.getByText('결제 확인 필요').first().waitFor({ timeout: 15000 });
     check('approval alone does not yield the QR on a combined event',
@@ -1134,8 +1137,8 @@ async function main() {
     await roster.locator('input[placeholder*="이름·소속·연락처 검색"]').fill('여정 참가자 무');
     await roster.getByRole('button', { name: '여정 참가자 무 참가자 상세', exact: true }).click();
     await roster.getByLabel('여정 참가자 무 상태 변경').selectOption('CANCELLED');
-    await roster.getByRole('button', { name: '신청 취소', exact: true }).click();
-    await roster.getByText('여정 참가자 무 상태를 신청 취소(으)로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
+    await roster.getByRole('button', { name: '신청 취소하기', exact: true }).click();
+    await roster.getByText('여정 참가자 무 상태를 ‘신청 취소’로 바꿨습니다.', { exact: true }).waitFor({ timeout: 15000 });
     await closeParticipantDetails(roster, '여정 참가자 무');
     check('operator cancel persists CANCELLED', ((await snapshot()).participants.find((p) => p.phone === '01055500105') || {}).status === 'CANCELLED');
     await regU.getByRole('button', { name: '상태 다시 확인', exact: true }).click();

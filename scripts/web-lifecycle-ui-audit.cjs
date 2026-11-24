@@ -224,15 +224,16 @@ async function main() {
     await login.getByText('기본 정보를 저장했습니다').first().waitFor({ timeout: 15000 });
     check('approval gate saved through settings UI', true);
     await login.locator('#panel-settings-intake').scrollIntoViewIfNeeded();
-    await login.getByRole('button', { name: '양식 게시·접수 열기', exact: true }).waitFor({ timeout: 15000 });
+    // 기획 단계의 게시 버튼은 '접수 열기'를 약속하지 않는다(공개 접수는 운영 준비 단계에서 열린다).
+    await login.getByRole('button', { name: '양식 게시', exact: true }).waitFor({ timeout: 15000 });
     await login.screenshot({ path: path.join(OUT, '05b-settings-intake-closed-draft-1280.png') });
     // Closed DRAFT names BOTH remaining steps (publish + stage), not just one.
     await login.locator('#panel-settings-intake p[role="note"]', { hasText: '접수를 열려면 양식을 게시하고' }).first().waitFor({ timeout: 15000 });
     check('closed DRAFT intake names publish plus stage', true);
     check('closed DRAFT note labels the public acceptance',
       (await login.locator('#panel-settings-intake p[role="note"]', { hasText: '공개 접수: 닫힘' }).count()) >= 1);
-    check('closed DRAFT stored line names itself a setting',
-      (await login.getByText(/현재 접수 닫힘 \(설정\)/).count()) === 1);
+    check('closed DRAFT stored line says nothing is published yet',
+      (await login.getByText(/현재 접수 닫힘 · 아직 게시한 양식이 없습니다/).count()) === 1);
     // Unsaved draft + keyboard-driven stage link: the in-note link sits
     // immediately before the consent field in tab order, so Shift+Tab from
     // the field reaches it through real keyboard navigation (not a
@@ -285,7 +286,7 @@ async function main() {
     await pubClosed.close();
 
     // ---- 4. Publish while still DRAFT: open-DRAFT variant + mouse link ----
-    await login.getByRole('button', { name: '양식 게시·접수 열기', exact: true }).click();
+    await login.getByRole('button', { name: '양식 게시', exact: true }).click();
     await login.getByText('양식을 게시했습니다. 진행 단계에서 운영 준비 단계로 전환하면 접수가 열립니다.').first().waitFor({ timeout: 15000 });
     check('DRAFT publish success names the remaining stage step', true);
     check('registration published through settings UI', (await snapshot()).registrationOpen === true);
@@ -294,8 +295,8 @@ async function main() {
     check('open DRAFT intake names the stage step only', true);
     check('open DRAFT note labels the public acceptance',
       (await login.locator('#panel-settings-intake p[role="note"]', { hasText: '공개 접수: 닫힘' }).count()) >= 1);
-    check('open DRAFT stored line names itself a setting',
-      (await login.getByText(/현재 접수 중 \(설정\)/).count()) >= 1);
+    check('open DRAFT stored line says intake is waiting for the stage change',
+      (await login.getByText(/양식 게시됨 · 접수 대기/).count()) >= 1);
     await login.screenshot({ path: path.join(OUT, '07c-intake-open-note-1280.png') });
     await login390.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/settings`);
     await login390.locator('#panel-settings-intake').scrollIntoViewIfNeeded();
@@ -619,7 +620,7 @@ async function main() {
     await roster.locator('input[placeholder*="이름·소속·연락처 검색"]').fill(participantBName);
     await roster.getByRole('button', { name: `${participantBName} 참가자 상세`, exact: true }).click();
     await roster.getByLabel(`${participantBName} 상태 변경`).selectOption('CANCELLED');
-    await roster.getByRole('button', { name: '신청 취소', exact: true }).click();
+    await roster.getByRole('button', { name: '신청 취소하기', exact: true }).click();
     await roster.getByText(/바꿨습니다/).first().waitFor({ timeout: 15000 });
     check('operator cancel persists CANCELLED for B',
       ((await snapshot()).participants.find((p) => p.phone === participantBPhone) || {}).status === 'CANCELLED');
@@ -723,7 +724,7 @@ async function main() {
     check('ENDED-open note labels the public acceptance',
       (await login.locator('#panel-settings-intake p[role="note"]', { hasText: '공개 접수: 닫힘' }).count()) >= 1);
     check('ENDED-open publish action is honestly disabled',
-      await login.getByRole('button', { name: '양식 게시·접수 열기', exact: true }).isDisabled());
+      await login.getByRole('button', { name: '양식 다시 게시', exact: true }).isDisabled());
     check('ENDED-open names the impossible publish inline',
       (await login.getByText('종료된 행사에서는 양식을 게시할 수 없습니다. 접수를 닫은 뒤 보관하세요.').count()) === 1);
     await login.screenshot({ path: path.join(OUT, '30b-intake-ended-note-1280.png') });
@@ -731,13 +732,13 @@ async function main() {
     const pubEnded = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const pubEndedEntry = await pubEnded.newPage();
     await pubEndedEntry.goto(`${baseUrl}/event/${encodeURIComponent(eventSlug)}`);
-    await pubEndedEntry.getByText('현재 신청을 받지 않습니다').first().waitFor({ timeout: 15000 });
+    await pubEndedEntry.getByText('종료된 행사입니다.', { exact: true }).first().waitFor({ timeout: 15000 });
     check('ENDED-open entry no longer offers a signup link',
       (await pubEndedEntry.getByRole('link', { name: '참가 신청하기' }).count()) === 0);
     await pubEndedEntry.screenshot({ path: path.join(OUT, '30c-entry-ended-closed-390-first.png') });
     const pubEndedReg = await pubEnded.newPage();
     await pubEndedReg.goto(`${baseUrl}/event/${encodeURIComponent(eventSlug)}/register`);
-    await pubEndedReg.getByText('현재 신청을 받지 않습니다').first().waitFor({ timeout: 15000 });
+    await pubEndedReg.getByText('종료된 행사입니다.', { exact: true }).first().waitFor({ timeout: 15000 });
     check('ENDED-open register renders the closed state, not a live form',
       (await pubEndedReg.locator('form.registration-form').count()) === 0);
     await pubEndedReg.screenshot({ path: path.join(OUT, '30d-register-ended-closed-390.png') });

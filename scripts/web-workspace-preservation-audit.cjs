@@ -30,7 +30,7 @@ async function main() {
     damaged.participants = { original: '복구할 명단' };
     await write(damaged);
     await form.locator('button[form="participant-add-form"]').click();
-    await form.getByText('참가자 명단을 확인할 수 없어 저장하지 못했습니다. 시스템 관리자에게 문의하세요.').waitFor();
+    await form.getByText('참가자 명단을 확인할 수 없어 저장하지 못했습니다. 화면을 새로 고친 뒤에도 같으면 조직 관리자에게 문의하세요.').waitFor();
     assert.equal(await form.locator('#participant-add-name').inputValue(), '합성 보존 참가자');
     assert.equal(await form.locator('#participant-add-phone').inputValue(), '01076543210');
     assert.deepEqual(await read(), damaged, 'failed create leaves all original data intact');

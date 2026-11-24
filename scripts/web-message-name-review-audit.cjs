@@ -76,7 +76,7 @@ const { launchBrowser } = require('./audit-browser.cjs');
     await legacyRow.getByRole('button', { name: '합성 이전 수신자 기록 없음 상세' }).click();
     await page.locator('#campaign-detail-synthetic-legacy-no-snapshot').getByText('변경된 수신자 상세를 확인할 수 없습니다. 참가자 명단을 다시 확인하세요.', { exact: true }).waitFor();
     await row.getByRole('button', { name: '예약 취소' }).click();
-    await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '예약을 취소한다' }).click();
+    await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '예약 취소하기' }).click();
     await row.getByRole('button', { name: '내용·대상 불러오기' }).click();
     await page.locator('#campaign-reload-summary').getByText(/선택 1명/).waitFor();
     assert.equal(await page.locator('#campaign-body').inputValue(), '{{이름}}님, 안내드립니다.');

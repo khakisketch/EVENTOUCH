@@ -91,7 +91,7 @@ async function main() {
     assert.equal((await workspace()).responses.filter((item) => item.moduleId === id).length, 0, 'review never submits');
     section = (await programSection(page, '합성 질문: 오후가 편한가요?'));
     await section.getByRole('button', { name: '투표하기' }).click();
-    await section.getByText('이미 제출했습니다.', { exact: false }).waitFor();
+    await section.getByText('제출을 마쳤습니다.', { exact: false }).waitFor();
     const accepted = (await workspace()).responses.filter((item) => item.moduleId === id);
     assert.equal(accepted.length, 1); assert.equal(accepted[0].contentVersion, 2); assert.equal(accepted[0].answer, '예');
     await context.close();
@@ -132,7 +132,7 @@ async function main() {
     await changedSection.getByRole('button', { name: '최신 내용으로 답변 검토' }).click();
     assert.equal((await workspace()).responses.filter((item) => item.moduleId === pollId).length, 0);
     await changedSection.getByRole('button', { name: '투표하기' }).click();
-    await changedSection.getByText('이미 제출했습니다.', { exact: false }).waitFor();
+    await changedSection.getByText('제출을 마쳤습니다.', { exact: false }).waitFor();
     assert.equal((await workspace()).responses.filter((item) => item.moduleId === pollId).length, 1);
     await context.close();
 
@@ -148,7 +148,7 @@ async function main() {
     await section.getByText('이전에 고른 ‘예’ 선택지가 없습니다.', { exact: false }).waitFor();
     assert.equal(await section.getByRole('button', { name: '투표하기' }).isDisabled(), true);
     await section.getByLabel(/^다른 선택/).check(); await section.getByRole('button', { name: '투표하기' }).click();
-    await section.getByText('이미 제출했습니다.', { exact: false }).waitFor();
+    await section.getByText('제출을 마쳤습니다.', { exact: false }).waitFor();
     assert.equal((await workspace()).responses.find((item) => item.moduleId === removedId).answer, '다른 선택');
     await context.close();
 
@@ -170,7 +170,7 @@ async function main() {
     assert.equal(await section.getByRole('group', { name: '전반 만족' }).getByLabel('4점').isChecked(), true);
     await section.getByRole('group', { name: '식사 만족' }).getByLabel('3점').check();
     await section.getByRole('button', { name: '만족도 제출' }).click();
-    await section.getByText('이미 제출했습니다.', { exact: false }).waitFor();
+    await section.getByText('제출을 마쳤습니다.', { exact: false }).waitFor();
     const surveyResponse = (await workspace()).responses.find((item) => item.moduleId === survey.json.module.id);
     assert.deepEqual(surveyResponse.ratings, { '전반 만족': 4, '식사 만족': 3 });
     assert.equal(surveyResponse.comment, '유지할 합성 의견');
@@ -200,7 +200,7 @@ async function main() {
     assert.equal(await section.getByLabel('이전에 작성한 답변').inputValue(), '선택: 예');
     await page.screenshot({ path: path.join(out, 'type-change-preserved-390.png'), fullPage: true });
     const beforeNavigation = page.url();
-    await page.getByRole('link', { name: '참가 메뉴로', exact: true }).click();
+    await page.getByRole('link', { name: '참가자 홈으로', exact: true }).click();
     assert.equal(page.url(), beforeNavigation, 'cancelling navigation keeps the current page');
     assert.equal(await section.getByLabel('이전에 작성한 답변').inputValue(), '선택: 예', 'the preserved answer survives cancelling navigation');
     await section.getByRole('button', { name: '이전 답변 지우기' }).click();
@@ -286,7 +286,7 @@ async function main() {
     await page.getByRole('heading', { name: '요청 결과 확인' }).waitFor();
     assert.equal((await manager('module.status', { id: committedId, status: 'CLOSED' })).status, 200);
     await page.getByRole('button', { name: '원래 요청 다시 보내기' }).click();
-    await page.getByText('요청 결과를 확인했습니다.', { exact: false }).waitFor();
+    await page.getByText('제출을 마쳤습니다.', { exact: false }).first().waitFor(); // Reopened 2026-11-24: confirmed once on the card, no page-top notice
     assert.equal(new Set(committedIds).size, 1);
     assert.equal((await workspace()).responses.filter((item) => item.moduleId === committedId).length, 1);
     await context.close();

@@ -132,7 +132,7 @@ async function main() {
     await page.waitForFunction(() => [...document.querySelectorAll('button')].some((button) => button.getAttribute('aria-label') === '급식 선택 위로 이동' && !button.disabled));
     phase = 'publish and public form';
     await page.getByRole('link', { name: '참가 접수로' }).click();
-    await page.getByRole('button', { name: '양식 게시·접수 열기' }).click();
+    await page.getByRole('button', { name: /^(양식 게시·접수 열기|양식 다시 게시|변경 게시)$/ }).click();
     await page.getByText('양식을 게시하고 접수를 열었습니다.', { exact: false }).first().waitFor();
     const guest = await browser.newContext(); const guestPage = await guest.newPage();
     await guestPage.goto(`${fixture.baseUrl}/event/${fixture.slug}/register`, { waitUntil: 'networkidle' });

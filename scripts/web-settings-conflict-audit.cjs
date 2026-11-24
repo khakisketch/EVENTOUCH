@@ -35,8 +35,8 @@ const axeSource = require('axe-core').source;
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'ko-KR' });
     await context.addCookies([{ ...cookieForContext(fixture, 'manager'), url: fixture.baseUrl }]);
     const page = await context.newPage();
-    // Reopened 2026-11-20: 접수가 열려 있고 작성 중인 변경이 있으면 게시 버튼은 '변경 게시', 그 밖에는 '양식 게시·접수 열기'로 불린다.
-    const publishButton = () => page.getByRole('button', { name: /^(양식 게시·접수 열기|변경 게시)$/ });
+    // Reopened 2026-11-20: 접수가 열려 있고 작성 중인 변경이 있으면 게시 버튼은 '변경 게시', 그 밖에는 '양식 게시·접수 열기'로 불린다. 기획 단계(새 행사)에서는 접수가 열리지 않으므로 '양식 게시'로, 접수가 열린 뒤 변경이 없으면 '양식 다시 게시'로 불린다.
+    const publishButton = () => page.getByRole('button', { name: /^(양식 게시|양식 게시·접수 열기|양식 다시 게시|변경 게시)$/ });
     const posts = [];
     page.on('request', (req) => {
       if (req.url().endsWith('/commands') && req.method() === 'POST') posts.push(req.postDataJSON());
@@ -75,6 +75,9 @@ const axeSource = require('axe-core').source;
       await page.evaluate(axeSource);
       for (const width of [320, 390, 1280]) {
         await page.setViewportSize({ width, height: 900 });
+        // 너비를 바꾸면 드로어가 오른쪽 패널에서 아래 시트로 바뀌며 입장 애니메이션이 다시 시작된다.
+        // 투명도가 절반인 채로 대비를 재면 실제 색이 아닌 값이 나오므로, 진행 중인 CSS 애니메이션이 끝난 뒤에 검사한다.
+        await page.evaluate(() => Promise.all(document.getAnimations().filter((item) => item.constructor.name === 'CSSAnimation').map((item) => item.finished.catch(() => {}))));
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
         assert.equal(overflow, false, `${label}: overflow at ${width}`);
         const violations = await page.evaluate(async () => (await window.axe.run()).violations.filter((item) => ['serious', 'critical'].includes(item.impact)).map((item) => item.id));
@@ -235,7 +238,7 @@ const axeSource = require('axe-core').source;
     await fresh.getByText('운영 기능 설정을 저장했습니다.', { exact: false }).first().waitFor();
     const [fieldConflict] = await Promise.all([
       fresh.waitForResponse((response) => response.url().endsWith('/commands') && response.request().postDataJSON()?.command === 'form.publish'),
-      fresh.getByRole('button', { name: '양식 게시·접수 열기' }).click(),
+      fresh.getByRole('button', { name: /^(양식 게시|양식 게시·접수 열기|양식 다시 게시|변경 게시)$/ }).click(),
     ]);
     assert.equal(fieldConflict.status(), 409);
     let conflictGuard = '';

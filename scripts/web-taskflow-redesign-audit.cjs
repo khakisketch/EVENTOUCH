@@ -148,7 +148,7 @@ let stage = 'setup';
       return route.continue();
     });
     await page.locator('#campaign-submit').click();
-    await page.getByRole('group',{name:'실행 확인'}).getByRole('button',{name:'예약 등록한다',exact:true}).click();
+    await page.getByRole('group',{name:'실행 확인'}).getByRole('button',{name:'예약 등록',exact:true}).click();
     const recovery=page.getByRole('region',{name:'발송 요청 확인 필요'});
     await recovery.waitFor();
     assert.equal(await page.locator('#campaign-title').isDisabled(),true);

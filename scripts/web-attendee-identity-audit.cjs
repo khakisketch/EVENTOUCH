@@ -160,7 +160,7 @@ async function main() {
     });
     await blocked.addCookies([{ name: attendeeCookieName('tab-identity-a'), value: aSession.token,
       url: gateway.baseUrl, httpOnly: true, sameSite: 'Lax' }]);
-    await restricted.getByRole('link', { name: '← 참가 메뉴로' }).click();
+    await restricted.getByRole('link', { name: '← 참가자 홈으로' }).click();
     await restricted.getByRole('button', { name: '내 신청 정보' }).click();
     await restricted.getByText(people[1].name, { exact: true }).waitFor();
     await restricted.reload({ waitUntil: 'networkidle' });
@@ -213,7 +213,7 @@ async function main() {
     const staleStored = await partial.newPage();
     await staleStored.goto(`${gateway.baseUrl}/event/tab-identity-a/ticket?session=1`);
     await staleStored.getByRole('heading', { name: people[1].name, exact: true }).waitFor();
-    await staleStored.getByRole('link', { name: '← 참가 메뉴로' }).click();
+    await staleStored.getByRole('link', { name: '← 참가자 홈으로' }).click();
     await staleStored.getByRole('button', { name: '내 신청 정보' }).click();
     await staleStored.getByText(people[1].name, { exact: true }).waitFor();
     assert.equal(await staleStored.getByText(people[0].name, { exact: true }).count(), 0);

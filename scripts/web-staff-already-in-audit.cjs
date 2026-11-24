@@ -61,7 +61,7 @@ async function main() {
     assert.ok(entry, 'the first scan was recorded');
 
     // 2) the same ticket again: the notice names the person and the entry time.
-    const when = await staff.evaluate((at) => new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(new Date(at)), entry.at);
+    const when = await staff.evaluate((at) => new Intl.DateTimeFormat('ko-KR', { hour: 'numeric', minute: '2-digit' }).format(new Date(at)), entry.at);
     await typeTicket(staff, person.ticket);
     await staff.getByRole('button', { name: '입장 처리', exact: true }).click();
     const refused = staff.getByRole('region', { name: '스캔 실패', exact: true });
