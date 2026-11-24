@@ -111,7 +111,7 @@ test('staff-account-menu-shows-account-and-expands-the-parent-switcher', () => {
   // Authenticated-but-unselected is a selection prompt, never a failure.
   assert.match(menu, /refreshOperatorContext/);
   assert.match(menu, /다시 확인/);
-  assert.match(menu, /운영사 선택 필요/);
+  assert.match(menu, /조직 선택 필요/);
   assert.match(menu, /isSelectionRequiredError\(snapshot\.error\)/);
   // Disclosure quality: 44px target, Escape, outside press, focus return
   // and focus-into-panel — without hijacking the primary scan flow.
@@ -316,8 +316,8 @@ test('staff-org-guard-executes-at-runtime', async () => {
     describeWorkingOrg(null, false, false),
     '현재 작업 조직을 불러오지 못했습니다. 계정 메뉴에서 다시 확인하세요.'
   );
-  assert.strictEqual(describeWorkingOrg(null, false, true), '운영사 선택 필요');
-  assert.strictEqual(describeWorkingOrg(null, true, true), '운영사 선택 필요');
+  assert.strictEqual(describeWorkingOrg(null, false, true), '조직 선택 필요');
+  assert.strictEqual(describeWorkingOrg(null, true, true), '조직 선택 필요');
   // Selection-required signal mirrors the shared adapter contract.
   const { isSelectionRequiredError } = mod;
   assert.strictEqual(isSelectionRequiredError('조직을 선택하세요'), true);

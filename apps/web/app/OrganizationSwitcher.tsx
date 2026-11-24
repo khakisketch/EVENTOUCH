@@ -75,7 +75,7 @@ export default function OrganizationSwitcher({ confirmLeave, suggestedOrganizati
         const data = asRecord(await response.json().catch(() => null));
         if (cancelled) return;
         if (!response.ok || !Array.isArray(data?.organizations)) {
-          setState({ kind: "failed", loginRequired: response.status === 401, message: response.status === 401 ? "로그인이 필요합니다. 로그인한 뒤 소속을 확인하세요." : "운영사 소속을 불러오지 못했습니다. 다시 확인하세요." });
+          setState({ kind: "failed", loginRequired: response.status === 401, message: response.status === 401 ? "로그인이 필요합니다. 로그인한 뒤 소속을 확인하세요." : "조직 소속을 불러오지 못했습니다. 다시 확인하세요." });
           return;
         }
         if (typeof data.contextVersion !== "number" || !Number.isSafeInteger(data.contextVersion) || data.contextVersion < 0) {
@@ -97,7 +97,7 @@ export default function OrganizationSwitcher({ confirmLeave, suggestedOrganizati
           void refreshOperatorContext();
         }
       } catch {
-        if (!cancelled) setState({ kind: "failed", message: "운영사 소속을 확인하지 못했습니다. 연결을 확인하고 다시 시도하세요." });
+        if (!cancelled) setState({ kind: "failed", message: "조직 소속을 확인하지 못했습니다. 연결을 확인하고 다시 시도하세요." });
       } finally { window.clearTimeout(timeout); }
     })();
     return () => { cancelled = true; window.clearTimeout(timeout); controller.abort(); };
@@ -115,7 +115,7 @@ export default function OrganizationSwitcher({ confirmLeave, suggestedOrganizati
     const restoring = target.id === live.context?.organizationId;
     const roleTransition = restoring && target.role !== live.context?.role;
     if ((!restoring || roleTransition) && confirmLeave && !confirmLeave()) return;
-    if ((!restoring || roleTransition) && formDirty && !consoleGuardAvailable && !window.confirm("작성 중인 운영사 이름이 사라집니다. 이동할까요?")) return;
+    if ((!restoring || roleTransition) && formDirty && !consoleGuardAvailable && !window.confirm("작성 중인 조직 이름이 사라집니다. 이동할까요?")) return;
     if (roleTransition && !window.confirm(`${target.name}에서 역할이 ${roleLabel(target.role)}로 바뀌었습니다. 현재 입력을 떠나 변경된 역할의 홈으로 이동할까요?`)) return;
     await selectOrganization({ organizationId: target.id, organizationName: target.name, commandId: commandId(),
       mode: restoring ? "restore" : "switch", expectedContextVersion: state.contextVersion });
@@ -142,51 +142,51 @@ export default function OrganizationSwitcher({ confirmLeave, suggestedOrganizati
         const uncertain = response.status >= 500 || response.status === 408 || response.ok || (contextChanged && wasUncertain);
         setCreateUnknown(uncertain);
         if (!uncertain) createAttempt.current = null;
-        setCreateError(uncertain ? "등록 결과를 확인하지 못했습니다. 원래 운영사에 다시 연결한 뒤 같은 요청으로 확인하세요." : contextChanged ? "운영사 문맥이 바뀌어 등록하지 않았습니다. 소속을 다시 확인하세요." : "운영사를 추가할 권한 또는 이름을 확인하세요.");
+        setCreateError(uncertain ? "등록 결과를 확인하지 못했습니다. 원래 조직에 다시 연결한 뒤 같은 요청으로 확인하세요." : contextChanged ? "조직 문맥이 바뀌어 등록하지 않았습니다. 소속을 다시 확인하세요." : "조직을 추가할 권한 또는 이름을 확인하세요.");
         return;
       }
       createAttempt.current = null;
       setCreateUnknown(false); setCreateOpen(false); setName("");
       setSelected(organization.id); setTick((value) => value + 1);
-      setCreateNotice("운영사를 추가했습니다. 새 운영사는 발송 미연동 상태입니다. 전환 버튼을 눌러 명시적으로 이동하세요.");
+      setCreateNotice("조직을 추가했습니다. 새 조직은 발송 미연동 상태입니다. 전환 버튼을 눌러 명시적으로 이동하세요.");
     } catch (error) {
       if (isOrganizationContextBlock(error) && !wasUncertain) {
         createAttempt.current = null;
         setCreateUnknown(false);
-        setCreateError("운영사 문맥이 바뀌어 등록을 보내지 않았습니다. 소속을 다시 확인하세요.");
+        setCreateError("조직 문맥이 바뀌어 등록을 보내지 않았습니다. 소속을 다시 확인하세요.");
       } else {
         setCreateUnknown(true);
-        setCreateError("등록 결과를 확인하지 못했습니다. 원래 운영사에 다시 연결한 뒤 같은 요청으로 확인하세요.");
+        setCreateError("등록 결과를 확인하지 못했습니다. 원래 조직에 다시 연결한 뒤 같은 요청으로 확인하세요.");
       }
     } finally { createGate.current = false; setCreateBusy(false); window.clearTimeout(timeout); }
   }
 
-  return <section className={styles.switcher} aria-label="운영사 선택">
-    <p className={styles.current}><span>현재 작업 운영사</span><strong>{context.context?.organizationName || (context.loading ? "확인 중" : "선택 필요")}</strong>
+  return <section className={styles.switcher} aria-label="조직 선택">
+    <p className={styles.current}><span>현재 작업 조직</span><strong>{context.context?.organizationName || (context.loading ? "확인 중" : "선택 필요")}</strong>
       {context.context ? <span>{roleLabel(context.context.role)}</span> : null}</p>
-    {state.kind === "loading" ? <p className={styles.help} role="status">소속 운영사를 확인하고 있습니다.</p> : null}
+    {state.kind === "loading" ? <p className={styles.help} role="status">소속 조직을 확인하고 있습니다.</p> : null}
     {state.kind === "failed" ? <><p className={styles.error} role="alert">{state.message}</p>{state.loginRequired ? <a href="/login">로그인으로</a> : null}</> : null}
     {context.error && context.error !== "조직을 선택하세요" && state.kind !== "failed" ? <p className={styles.error} role="alert">{context.error}</p> : null}
-    {state.kind === "ready" && !state.organizations.length ? <p className={styles.help} role="status">활성 운영사 소속이 없습니다. 초대한 운영사 담당자에게 소속 상태를 확인하세요.</p> : null}
+    {state.kind === "ready" && !state.organizations.length ? <p className={styles.help} role="status">활성 조직 소속이 없습니다. 초대한 조직 담당자에게 소속 상태를 확인하세요.</p> : null}
     {state.kind === "ready" && (state.organizations.length > 1 || (!state.activeOrganizationId && state.organizations.length > 0)) ? <div className={styles.controls}>
-      <label htmlFor={`${id}-organization`}>전환할 운영사</label>
+      <label htmlFor={`${id}-organization`}>전환할 조직</label>
       <select id={`${id}-organization`} value={selected} disabled={pending || blockedWrites} onChange={(event) => setSelected(event.target.value)}>
         <option value="">선택하세요</option>{state.organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name} · {roleLabel(organization.role)}</option>)}
       </select>
-      <ProductButton type="button" className="button button-secondary" disabled={pending || blockedWrites || !selected || (selected === context.context?.organizationId && !context.changed)} onClick={() => void switchNow()}>이 운영사로 이동</ProductButton>
-      {blockedWrites ? <p className={styles.help}>진행 중이거나 결과를 확인하지 못한 작업이 있습니다. 원래 운영사에서 결과를 확인한 뒤 전환하세요.</p> : <p className={styles.help}>운영사마다 역할과 자료가 다릅니다. 이동하면 현재 선택과 화면은 초기화됩니다.</p>}
+      <ProductButton type="button" className="button button-secondary" disabled={pending || blockedWrites || !selected || (selected === context.context?.organizationId && !context.changed)} onClick={() => void switchNow()}>이 조직으로 이동</ProductButton>
+      {blockedWrites ? <p className={styles.help}>진행 중이거나 결과를 확인하지 못한 작업이 있습니다. 원래 조직에서 결과를 확인한 뒤 전환하세요.</p> : <p className={styles.help}>조직마다 역할과 자료가 다릅니다. 이동하면 현재 선택과 화면은 초기화됩니다.</p>}
     </div> : null}
-    {!context.changed ? <SelectionStatus /> : <p className={styles.help}>운영사 문맥이 바뀌었습니다. 본문의 문맥 안내 또는 소속 목록에서 계속할 운영사를 명시적으로 선택하세요.</p>}
+    {!context.changed ? <SelectionStatus /> : <p className={styles.help}>조직 문맥이 바뀌었습니다. 본문의 문맥 안내 또는 소속 목록에서 계속할 조직을 명시적으로 선택하세요.</p>}
     {state.kind !== "loading" ? <ProductButton type="button" className="button button-secondary" disabled={pending} onClick={() => { setTick((value) => value + 1); void refreshOperatorContext(); }}>소속 다시 확인</ProductButton> : null}
     {createNotice ? <p className={styles.help} role="status">{createNotice}</p> : null}
     {context.context?.role === "AGENCY" && !context.changed ? <div className={styles.create}>
-      {!createOpen ? <ProductButton type="button" className="button button-secondary" disabled={pending || blockedWrites} onClick={() => setCreateOpen(true)}>운영사 추가</ProductButton> : <ValidatedForm onSubmit={(event) => void createOrganization(event)}>
-        <label htmlFor={`${id}-org-name`}>새 운영사 이름</label>
+      {!createOpen ? <ProductButton type="button" className="button button-secondary" disabled={pending || blockedWrites} onClick={() => setCreateOpen(true)}>조직 추가</ProductButton> : <ValidatedForm onSubmit={(event) => void createOrganization(event)}>
+        <label htmlFor={`${id}-org-name`}>새 조직 이름</label>
         <input id={`${id}-org-name`} value={name} onChange={(event) => setName(event.target.value)} disabled={createBusy || createUnknown} maxLength={80} autoComplete="organization" required />
-        <p className={styles.help}>다른 운영사의 자료·발송 설정을 가져오지 않습니다. 새 운영사는 발송 미연동 상태로 시작합니다.</p>
+        <p className={styles.help}>다른 조직의 자료·발송 설정을 가져오지 않습니다. 새 조직은 발송 미연동 상태로 시작합니다.</p>
         {createError ? <p className={styles.error} role="alert">{createError}</p> : null}
-        <div className={styles.actions}><ProductButton type="submit" className="button button-primary" disabled={createBusy || !name.trim()}>{createBusy ? "등록 중…" : createUnknown ? "같은 등록 요청 다시 확인" : "운영사 등록"}</ProductButton>
-          <ProductButton type="button" className="button button-secondary" disabled={createBusy || createUnknown} onClick={() => { if (formDirty && !window.confirm("작성한 운영사 이름을 버릴까요?")) return; setCreateOpen(false); setName(""); createAttempt.current = null; }}>취소</ProductButton></div>
+        <div className={styles.actions}><ProductButton type="submit" className="button button-primary" disabled={createBusy || !name.trim()}>{createBusy ? "등록 중…" : createUnknown ? "같은 등록 요청 다시 확인" : "조직 등록"}</ProductButton>
+          <ProductButton type="button" className="button button-secondary" disabled={createBusy || createUnknown} onClick={() => { if (formDirty && !window.confirm("작성한 조직 이름을 버릴까요?")) return; setCreateOpen(false); setName(""); createAttempt.current = null; }}>취소</ProductButton></div>
       </ValidatedForm>}
     </div> : null}
   </section>;
@@ -202,6 +202,8 @@ function uncertainCommandLabel(command: string | null, path: string): string {
     case "venue.publish":
     case "venue.publish-reviewed": return "장소 안내 게시";
     case "venue.save": return "장소 저장";
+    case "contact.save": return "참가자 문의처 저장";
+    case "participant.erase": return "참가자 개인정보 삭제";
     case "program.publish":
     case "program.publish-reviewed": return "일정 게시";
     case "program.save": return "프로그램 저장";
@@ -258,7 +260,7 @@ function uncertainCommandLabel(command: string | null, path: string): string {
   }
   if (path.indexOf("/invitations") >= 0) return "초대 관련 요청";
   if (path.indexOf("/members") >= 0) return "권한 변경";
-  if (path.indexOf("/auth/organizations") >= 0 && path.indexOf("/members") < 0) return "운영사 등록";
+  if (path.indexOf("/auth/organizations") >= 0 && path.indexOf("/members") < 0) return "조직 등록";
   if (path.indexOf("/files") >= 0) return "파일 업로드";
   if (path.indexOf("/commands") >= 0) return "저장 요청";
   return "미확인 요청";
@@ -321,7 +323,7 @@ export function OrganizationContextNotice({ confirmLeave }: { confirmLeave?: () 
       }
       const membership = data.organizations.map(asRecord).find((value) => value?.id === original.organizationId);
       if (!membership) {
-        setRestoreError("이 운영사의 활성 소속이 없습니다. 계정 메뉴에서 다른 소속을 명시적으로 선택하세요.");
+        setRestoreError("이 조직의 활성 소속이 없습니다. 계정 메뉴에서 다른 소속을 명시적으로 선택하세요.");
         return;
       }
       if (membership.role !== original.role) {
@@ -501,10 +503,10 @@ export function OrganizationContextNotice({ confirmLeave }: { confirmLeave?: () 
     if (!selection.attempt && !selection.uncertain && !selection.error && !selection.notice) return null;
     return <div className={styles.plain}><SelectionStatus /></div>;
   }
-  return <section className={styles.notice} role="region" aria-label="운영사 문맥 변경">
-    <h2>운영사 문맥이 바뀌었습니다</h2>
-    <p>이 화면의 작업 운영사: <strong>{original?.organizationName || "확인 필요"}</strong>. 입력과 미확인 요청은 그대로 두고 쓰기를 잠갔습니다.</p>
-    <p>{roleChanged ? `이 운영사의 역할이 ${roleLabel(observed!.role)}로 바뀌었습니다. 변경된 역할의 홈에서 계속해야 합니다.` : observed && observed.organizationId !== original?.organizationId ? `다른 탭에서 선택한 운영사: ${observed.organizationName}.` : "현재 소속과 접속 상태를 다시 확인하세요."} 원래 운영사의 요청을 다른 운영사로 보내지 않습니다.</p>
+  return <section className={styles.notice} role="region" aria-label="조직 문맥 변경">
+    <h2>조직 문맥이 바뀌었습니다</h2>
+    <p>이 화면의 작업 조직: <strong>{original?.organizationName || "확인 필요"}</strong>. 입력과 미확인 요청은 그대로 두고 쓰기를 잠갔습니다.</p>
+    <p>{roleChanged ? `이 조직의 역할이 ${roleLabel(observed!.role)}로 바뀌었습니다. 변경된 역할의 홈에서 계속해야 합니다.` : observed && observed.organizationId !== original?.organizationId ? `다른 탭에서 선택한 조직: ${observed.organizationName}.` : "현재 소속과 접속 상태를 다시 확인하세요."} 원래 조직의 요청을 다른 조직으로 보내지 않습니다.</p>
     <div className={styles.actions}>
       {original && !selection.attempt ? <ProductButton type="button" className="button button-secondary" disabled={busy} onClick={() => void restore()}>{checkingRestore ? "소속 확인 중…" : roleChanged ? (hasPendingSameOrg ? "미확인 요청 복구 연결" : "변경된 역할의 홈으로 이동") : `${original.organizationName}에 다시 연결`}</ProductButton> : null}
       {canGoNew ? <ProductButton type="button" className="button button-secondary" disabled={busy || selection.uncertain || context.uncertainWrites > 0} onClick={goToObserved}>{observed?.organizationName}의 홈으로 이동</ProductButton> : null}
@@ -514,7 +516,7 @@ export function OrganizationContextNotice({ confirmLeave }: { confirmLeave?: () 
     {roleError ? <p className={styles.error} role="alert">{roleError}</p> : null}
     {context.uncertainWrites > 0 ? <p className={styles.help}>결과 미확인 작업이 있습니다. 위의 복구 버튼으로 같은 요청으로 결과를 확인하세요. 복구해도 현재 화면은 유지되며 이동하지 않습니다.</p> : null}
     {uncertainList.length > 0 ? <div className={styles.controls}>
-      <p className={styles.help} role="status">미확인 요청 {uncertainList.length}건: 원래 운영사의 같은 요청으로 결과를 확인합니다. 새로운 저장은 보내지 않습니다.</p>
+      <p className={styles.help} role="status">미확인 요청 {uncertainList.length}건: 원래 조직의 같은 요청으로 결과를 확인합니다. 새로운 저장은 보내지 않습니다.</p>
       {uncertainList.map((item) => {
         const checking = checkingKeys.includes(item.key);
         return <div key={item.key} className={styles.actions}>

@@ -161,7 +161,7 @@ test('web-attendee-verification-precedes-signup-and-recovery-without-accounts', 
   assert.match(view, /연락처 인증으로 티켓 다시 찾기/);
   assert.match(view, /신청 연락처 인증으로 다시 연결/);
   // Reopened 2026-11-24: the boundary is the browser that registered, not the tab (see attendee-guidance.ts).
-  assert.match(view, /noTicketHereNote\(\)/);
+  assert.match(view, /noTicketHereNote\(organizerContact\)/);
   assert.match(read('app/event/[slug]/attendee-guidance.ts'), /같은 브라우저에서 열어 주세요/);
   // The recovery note stays a quiet footnote; the wording changed with it.
   assert.match(view, /이 브라우저에서는 티켓을 다시 열 수 있습니다/);
@@ -597,7 +597,7 @@ test('web-participant-status-goes-through-the-operator-command-path', () => {
   assert.doesNotMatch(list, /sessionStorage/);
   // Long lists stay findable; unknown server statuses never read as pending.
   assert.match(list, /이름·소속·연락처 검색/);
-  assert.match(list, /전체 상태/);
+  assert.doesNotMatch(list, /전체 상태/, "the status select left the filter (2026-11-24); status tabs carry every status");
   assert.match(list, /상태 확인 필요/);
   assert.match(list, /다시 불러오기/);
   // Approval is explicit on pending rows, with identity on the row; only

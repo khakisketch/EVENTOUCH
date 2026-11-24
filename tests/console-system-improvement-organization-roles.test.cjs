@@ -101,7 +101,7 @@ test('a committed self change locks drift immediately and defers to the central 
   assert.match(role, /void refreshOperatorContext\(\)/, 'the lock engages immediately on the known commit');
   assert.match(
     role,
-    /위의 운영사 문맥 안내에서 현재 역할을 확인/,
+    /위의 조직 문맥 안내에서 현재 역할을 확인/,
     'the departed panel points above at the central banner instead of its own button'
   );
   assert.doesNotMatch(role, /현재 역할 다시 확인/, 'no in-panel retry button that a lock could strand');
@@ -114,7 +114,7 @@ test('a committed self change locks drift immediately and defers to the central 
 
 test('role confirmation names target, from/to, and org scope without global effects', () => {
   const role = roleOf();
-  assert.match(role, /이 운영사\(\$\{orgName \|\| orgId\}\)에만 적용/, 'org scope is explicit, not global');
+  assert.match(role, /이 조직\(\$\{orgName \|\| orgId\}\)에만 적용/, 'org scope is explicit, not global');
   assert.match(role, /다른 조직·로그인·비밀번호에는 영향이 없습니다/, 'no cross-org effect is promised');
   assert.match(role, /본인 계정입니다/, 'self changes warn explicitly');
   assert.match(role, /\["AGENCY", "MANAGER", "STAFF"\]/, 'all three roles are selectable, including inactive rows');
@@ -126,13 +126,13 @@ test('role confirmation names target, from/to, and org scope without global effe
 
 test('reactivation is active-only, scoped, and frozen like deactivation', () => {
   const reactivate = reactivateOf();
-  assert.match(reactivate, /이 운영사 소속 다시 활성화/, 'explicit row action for the inactive case');
+  assert.match(reactivate, /이 조직 소속 다시 활성화/, 'explicit row action for the inactive case');
   assert.match(reactivate, /const freshBody: Record<string, unknown> = \{ active: true, commandId \};/, 'active-only body carries no role');
   assert.doesNotMatch(reactivate, /\brole\b/, 'reactivation cannot change the role');
   assert.match(reactivate, /membership\.active !== true/, 'proven success echoes an active membership');
   assert.match(reactivate, /ORGANIZATION_CONTEXT_CHANGED/, 'same frozen stale handling as deactivation');
   assert.match(reactivate, /isOrganizationContextBlock\(error\)/, 'same pre-transmit drift handling as deactivation');
-  assert.match(reactivate, /이 운영사에만 적용됩니다/, 'org scope is explicit, never global');
+  assert.match(reactivate, /이 조직에만 적용됩니다/, 'org scope is explicit, never global');
   assert.match(team(), /memberRow\.id !== state\.userId && !memberRow\.active/, 'reactivation shows only for inactive others');
 });
 
@@ -143,7 +143,7 @@ test('known shared accounts get no password reset affordance', () => {
   assert.match(panels, /memberRow\.sharedAccount \?/, 'shared rows diverge before any reset affordance');
   assert.match(
     panels,
-    /여러 조직에서 함께 사용 중이라 이 운영사에서 비밀번호를 재설정할 수 없습니다/,
+    /여러 조직에서 함께 사용 중이라 이 조직에서 비밀번호를 재설정할 수 없습니다/,
     'the upfront note explains the boundary instead of offering a reset'
   );
   assert.match(panels, /SHARED_ACCOUNT_GLOBAL_EFFECT/, 'the authoritative 403 fallback stays for races');
@@ -172,7 +172,7 @@ test('shared org directory is the projection of record', () => {
 test('invite dialog confirms org-wide grants before sending', () => {
   const panels = team();
   assert.match(panels, /<option value="AGENCY">조직 소유자<\/option>/, 'AGENCY is invitable by the owner');
-  assert.match(panels, /조직 소유자는 이 운영사의 모든 행사·팀·설정을 관리할 수 있습니다/, 'org-wide scope is warned up front');
+  assert.match(panels, /조직 소유자는 이 조직의 모든 행사·팀·설정을 관리할 수 있습니다/, 'org-wide scope is warned up front');
   assert.match(panels, /setAgencyStaged\(/, 'AGENCY invites stage a confirm instead of sending');
   assert.match(panels, /초대한다/, 'the staged confirm names the send');
 });

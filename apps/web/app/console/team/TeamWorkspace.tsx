@@ -743,7 +743,7 @@ export default function TeamWorkspace() {
           <div className={teamStyles.drawerBody} role="group" aria-label="상세 내용" tabIndex={0}>
             {memberRow.sharedAccount ? (
               <p className={teamStyles.assignLead} role="note">
-                여러 조직에서 함께 사용 중이라 이 운영사에서 비밀번호를 재설정할 수 없습니다.
+                여러 조직에서 함께 사용 중이라 이 조직에서 비밀번호를 재설정할 수 없습니다.
               </p>
             ) : null}
             <section className={teamStyles.drawerSection} aria-labelledby="member-role-heading">
@@ -1460,7 +1460,7 @@ function OrgMembershipDisableButton({
       pendingRef.current = null;
       setRetryable(false);
       setConfirming(false);
-      onDone(`${account.name}님을 이 운영사에서 사용 중지했습니다. 다른 조직의 소속과 로그인에는 영향이 없습니다.`);
+      onDone(`${account.name}님을 이 조직에서 사용 중지했습니다. 다른 조직의 소속과 로그인에는 영향이 없습니다.`);
     } catch (error) {
       if (isOrganizationContextBlock(error)) {
         if (!hadUncertainAttempt) {
@@ -1492,7 +1492,7 @@ function OrgMembershipDisableButton({
         disabled
         title="현재 조직 정보를 확인할 수 없어 소속을 바꿀 수 없습니다."
       >
-        이 운영사 소속 사용 중지
+        이 조직 소속 사용 중지
       </ProductButton>
     );
   }
@@ -1500,12 +1500,12 @@ function OrgMembershipDisableButton({
     <>
       {!confirming ? (
         <ProductButton type="button" className="button button-danger" disabled={frozen} onClick={open}>
-          {retryable ? "같은 요청으로 다시 시도" : "이 운영사 소속 사용 중지"}
+          {retryable ? "같은 요청으로 다시 시도" : "이 조직 소속 사용 중지"}
         </ProductButton>
       ) : null}
       {confirming ? (
         <ConsoleConfirm
-          summary={confirmLines(`${account.name}님을 이 운영사에서 사용 중지할까요?\n\n역할은 바뀌지 않으며, 다른 조직의 소속과 로그인에는 영향이 없습니다.`)}
+          summary={confirmLines(`${account.name}님을 이 조직에서 사용 중지할까요?\n\n역할은 바뀌지 않으며, 다른 조직의 소속과 로그인에는 영향이 없습니다.`)}
           confirmLabel={retryable ? "같은 요청으로 다시 시도" : "사용 중지한다"}
           busy={busy}
           onConfirm={() => void run()}
@@ -1632,7 +1632,7 @@ function OrgMembershipReactivateButton({
       pendingRef.current = null;
       setRetryable(false);
       setConfirming(false);
-      onDone(`${account.name}님을 이 운영사에서 다시 활성화했습니다. 다른 조직의 소속과 로그인에는 영향이 없습니다.`);
+      onDone(`${account.name}님을 이 조직에서 다시 활성화했습니다. 다른 조직의 소속과 로그인에는 영향이 없습니다.`);
     } catch (error) {
       if (isOrganizationContextBlock(error)) {
         if (!hadUncertainAttempt) {
@@ -1664,7 +1664,7 @@ function OrgMembershipReactivateButton({
         disabled
         title="현재 조직 정보를 확인할 수 없어 소속을 바꿀 수 없습니다."
       >
-        이 운영사 소속 다시 활성화
+        이 조직 소속 다시 활성화
       </ProductButton>
     );
   }
@@ -1672,12 +1672,12 @@ function OrgMembershipReactivateButton({
     <>
       {!confirming ? (
         <ProductButton type="button" className="button button-danger" disabled={frozen} onClick={open}>
-          {retryable ? "같은 요청으로 다시 시도" : "이 운영사 소속 다시 활성화"}
+          {retryable ? "같은 요청으로 다시 시도" : "이 조직 소속 다시 활성화"}
         </ProductButton>
       ) : null}
       {confirming ? (
         <ConsoleConfirm
-          summary={confirmLines(`${account.name}님을 이 운영사에서 다시 활성화할까요?\n\n역할은 바뀌지 않으며, 이 운영사에만 적용됩니다. 다른 조직·로그인·비밀번호에는 영향이 없습니다.`)}
+          summary={confirmLines(`${account.name}님을 이 조직에서 다시 활성화할까요?\n\n역할은 바뀌지 않으며, 이 조직에만 적용됩니다. 다른 조직·로그인·비밀번호에는 영향이 없습니다.`)}
           confirmLabel={retryable ? "같은 요청으로 다시 시도" : "다시 활성화한다"}
           busy={busy}
           onConfirm={() => void run()}
@@ -1915,7 +1915,7 @@ const OrgRoleEditorPanel = forwardRef<RoleEditorHandle, {
     return (
       <div className={teamStyles.assignPanel} id={`org-role-panel-${account.id}`}>
         <p className={teamStyles.assignLead} role="status">
-          {account.name}님의 운영사 역할을 ‘{roleLabel(roleDraft)}’{roParticle(roleLabel(roleDraft))} 바꿨습니다. 계속하려면 위의 운영사 문맥 안내에서 현재 역할을 확인하세요.
+          {account.name}님의 조직 역할을 ‘{roleLabel(roleDraft)}’{roParticle(roleLabel(roleDraft))} 바꿨습니다. 계속하려면 위의 조직 문맥 안내에서 현재 역할을 확인하세요.
         </p>
         {failure ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
       </div>
@@ -1986,7 +1986,7 @@ const OrgRoleEditorPanel = forwardRef<RoleEditorHandle, {
       </ConsoleFormActions>
       {confirming ? (
         <ConsoleConfirm
-          summary={confirmLines(`${account.name}님의 조직 역할을 ‘${roleLabel(account.role)}’에서 ‘${roleLabel(roleDraft)}’${roParticle(roleLabel(roleDraft))} 바꿉니다.\n\n이 운영사(${orgName || orgId})에만 적용되며, 다른 조직·로그인·비밀번호에는 영향이 없습니다.${isSelf ? `\n본인 계정입니다. 계속하면 이 화면의 권한도 함께 바뀝니다.${confirmForeignRef.current > 0 ? ` 현재 진행 중이거나 결과 미확인인 작업 ${confirmForeignRef.current}건이 있습니다.` : ""}` : ""}`)}
+          summary={confirmLines(`${account.name}님의 조직 역할을 ‘${roleLabel(account.role)}’에서 ‘${roleLabel(roleDraft)}’${roParticle(roleLabel(roleDraft))} 바꿉니다.\n\n이 조직(${orgName || orgId})에만 적용되며, 다른 조직·로그인·비밀번호에는 영향이 없습니다.${isSelf ? `\n본인 계정입니다. 계속하면 이 화면의 권한도 함께 바뀝니다.${confirmForeignRef.current > 0 ? ` 현재 진행 중이거나 결과 미확인인 작업 ${confirmForeignRef.current}건이 있습니다.` : ""}` : ""}`)}
           confirmLabel={retryable ? "같은 요청으로 다시 시도" : "역할을 바꾼다"}
           busy={busy}
           onConfirm={() => void run()}
@@ -2108,7 +2108,7 @@ function ResetDialog({
             `${serverMessage} 이 계정은 여러 조직에서 함께 사용 중이라 여기서 비밀번호를 바꿀 수 없습니다. ` +
             "사전에 이메일 인증을 마친 계정은 로그인 화면의 '이메일로 직접 재설정'으로 본인이 바꿀 수 있습니다. " +
             "인증하지 않은 채 잠긴 계정은 별도 본인확인 절차가 정해질 때까지 재설정을 약속할 수 없습니다. " +
-            "접근을 막아야 한다면 팀 목록의 '이 운영사 소속 사용 중지'로 이 운영사에서만 사용 중지하세요."
+            "접근을 막아야 한다면 팀 목록의 '이 조직 소속 사용 중지'로 이 조직에서만 사용 중지하세요."
           );
           return;
         }
@@ -2476,7 +2476,7 @@ function InviteDialog({
         </div>
         {role === "AGENCY" ? (
           <p className={teamStyles.assignLead} role="note">
-            조직 소유자는 이 운영사의 모든 행사·팀·설정을 관리할 수 있습니다. 행사 지정 없이 조직 전체 권한으로 초대됩니다.
+            조직 소유자는 이 조직의 모든 행사·팀·설정을 관리할 수 있습니다. 행사 지정 없이 조직 전체 권한으로 초대됩니다.
           </p>
         ) : null}
         {role === "MANAGER" ? (
@@ -2509,7 +2509,7 @@ function InviteDialog({
       </ValidatedForm>
       {agencyStaged ? (
         <ConsoleConfirm
-          summary={confirmLines(`${agencyStaged.name}(${agencyStaged.email})님을 조직 소유자로 초대합니다.\n\n조직 소유자는 이 운영사의 모든 행사·팀·설정을 관리할 수 있으며, 이 초대에는 행사를 지정하지 않았습니다.`)}
+          summary={confirmLines(`${agencyStaged.name}(${agencyStaged.email})님을 조직 소유자로 초대합니다.\n\n조직 소유자는 이 조직의 모든 행사·팀·설정을 관리할 수 있으며, 이 초대에는 행사를 지정하지 않았습니다.`)}
           confirmLabel="초대한다"
           busy={submitting}
           onConfirm={() => {

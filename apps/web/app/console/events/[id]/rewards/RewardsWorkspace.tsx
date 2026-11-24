@@ -443,7 +443,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
         acknowledgeOperatorReceipt(attempt.commandId);
         forgetOperatorReceipt(attempt.commandId);
         keepAttempt(null);
-        setFailure("현재 운영사와 행사 권한을 확인한 뒤 다시 시도하세요.");
+        setFailure("현재 조직과 행사 권한을 확인한 뒤 다시 시도하세요.");
       } else {
         keepAttempt({ ...attempt, uncertain: true });
         setFailure("경품 처리 결과를 확인하지 못했습니다. 원래 요청의 서버 처리 여부를 확인하세요.");

@@ -12,7 +12,7 @@ vm.runInNewContext(compile('apps/web/app/auth-redirect.ts'), { exports: redirect
 function harness(fetcher, options = {}) {
   const exports = {}, requests = [], accepted = [], observed = [], renewed = [], navigations = [], events = [];
   let invalidations = 0;
-  const context = options.context === null ? null : { organizationId: 'A', organizationName: '운영사 A', contextVersion: 1, role: 'AGENCY', userId: 'same-account', userName: '검증 사용자' };
+  const context = options.context === null ? null : { organizationId: 'A', organizationName: '조직 A', contextVersion: 1, role: 'AGENCY', userId: 'same-account', userName: '검증 사용자' };
   const fake = {
     exports, Response, AbortController, Event, URLSearchParams,
     window: { setTimeout, clearTimeout, addEventListener() {}, removeEventListener() {}, dispatchEvent(event) { events.push(event.type); }, location: { search: options.search ?? '', assign(value) { navigations.push(value); } } },
@@ -34,8 +34,8 @@ function harness(fetcher, options = {}) {
   vm.runInNewContext(compile('apps/web/lib/organization-selection.ts'), fake);
   return { api: exports, requests, accepted, observed, renewed, navigations, events, invalidations: () => invalidations };
 }
-const attempt = { organizationId: 'B', organizationName: '운영사 B', commandId: 'same-selection-receipt', expectedContextVersion: 1, mode: 'switch' };
-const switched = { user: { id: 'same-account', organizationId: 'B', organizationName: '운영사 B', role: 'STAFF', contextVersion: 2 } };
+const attempt = { organizationId: 'B', organizationName: '조직 B', commandId: 'same-selection-receipt', expectedContextVersion: 1, mode: 'switch' };
+const switched = { user: { id: 'same-account', organizationId: 'B', organizationName: '조직 B', role: 'STAFF', contextVersion: 2 } };
 
 test('lost organization selection retries the same nonce, target, and expected version', async () => {
   let count = 0;
@@ -54,8 +54,8 @@ test('lost organization selection retries the same nonce, target, and expected v
 });
 
 test('explicit original-org recovery preserves the working view and only accepts that organization', async () => {
-  const h = harness(async () => Response.json({ user: { organizationId: 'A', organizationName: '운영사 A', role: 'AGENCY', contextVersion: 3 } }));
-  await h.api.selectOrganization({ ...attempt, organizationId: 'A', organizationName: '운영사 A', mode: 'restore', expectedContextVersion: 2 });
+  const h = harness(async () => Response.json({ user: { organizationId: 'A', organizationName: '조직 A', role: 'AGENCY', contextVersion: 3 } }));
+  await h.api.selectOrganization({ ...attempt, organizationId: 'A', organizationName: '조직 A', mode: 'restore', expectedContextVersion: 2 });
   assert.equal(h.accepted[0].organizationId, 'A');
   assert.equal(h.accepted[0].contextVersion, 3);
   assert.deepEqual(h.navigations, []);
@@ -64,9 +64,9 @@ test('explicit original-org recovery preserves the working view and only accepts
 });
 
 test('restore with a changed actual role renews only the version and never navigates', async () => {
-  const changed = { user: { id: 'same-account', organizationId: 'A', organizationName: '운영사 A', role: 'STAFF', contextVersion: 4 } };
+  const changed = { user: { id: 'same-account', organizationId: 'A', organizationName: '조직 A', role: 'STAFF', contextVersion: 4 } };
   const h = harness(async () => Response.json(changed), { uncertain: [{ key: 'cmd-role', organizationId: 'A' }] });
-  await h.api.selectOrganization({ ...attempt, organizationId: 'A', organizationName: '운영사 A', mode: 'restore', expectedContextVersion: 2 });
+  await h.api.selectOrganization({ ...attempt, organizationId: 'A', organizationName: '조직 A', mode: 'restore', expectedContextVersion: 2 });
   assert.equal(h.accepted.length, 0, 'a changed role never accepts the old view');
   assert.equal(h.observed.length, 0, 'a changed role never installs a new view before the explicit move');
   assert.equal(h.renewed.length, 1, 'only the header version renews');
@@ -78,9 +78,9 @@ test('restore with a changed actual role renews only the version and never navig
 });
 
 test('restore with a changed actual role and no pending receipts still never navigates', async () => {
-  const changed = { user: { id: 'same-account', organizationId: 'A', organizationName: '운영사 A', role: 'MANAGER', contextVersion: 5 } };
+  const changed = { user: { id: 'same-account', organizationId: 'A', organizationName: '조직 A', role: 'MANAGER', contextVersion: 5 } };
   const h = harness(async () => Response.json(changed));
-  await h.api.selectOrganization({ ...attempt, organizationId: 'A', organizationName: '운영사 A', mode: 'restore', expectedContextVersion: 2 });
+  await h.api.selectOrganization({ ...attempt, organizationId: 'A', organizationName: '조직 A', mode: 'restore', expectedContextVersion: 2 });
   assert.equal(h.accepted.length, 0);
   assert.equal(h.observed.length, 0);
   assert.equal(h.renewed.length, 1);
@@ -147,9 +147,9 @@ test('selector exposes only real membership choices and freezes unknown selectio
   assert.match(source, /\(!restoring \|\| roleTransition\) && confirmLeave && !confirmLeave\(\)/);
   assert.match(source, /createAttempt\.current \?\?/);
   assert.match(source, /disabled=\{createBusy \|\| createUnknown\}/);
-  assert.match(source, /소속 운영사를 확인하고 있습니다/);
-  assert.match(source, /활성 운영사 소속이 없습니다/);
-  assert.match(source, /새 운영사는 발송 미연동 상태/);
+  assert.match(source, /소속 조직을 확인하고 있습니다/);
+  assert.match(source, /활성 조직 소속이 없습니다/);
+  assert.match(source, /새 조직은 발송 미연동 상태/);
   assert.doesNotMatch(source, /setInterval|router\.replace|router\.push/);
 });
 
@@ -199,7 +199,7 @@ function renderNotice({ contextSnapshot, selectionSnapshot, uncertain = [] }) {
   return renderToStaticMarkup(RealReact.createElement(module.exports.OrganizationContextNotice, {}));
 }
 
-const pinnedA = { organizationId: 'A', organizationName: '운영사 A', contextVersion: 2, role: 'AGENCY', userId: 'u-1', userName: '검증 사용자' };
+const pinnedA = { organizationId: 'A', organizationName: '조직 A', contextVersion: 2, role: 'AGENCY', userId: 'u-1', userName: '검증 사용자' };
 const observedAStaff = { ...pinnedA, role: 'STAFF', contextVersion: 3 };
 const calmContext = { context: pinnedA, observed: pinnedA, changed: false, loading: false, error: null, inFlightWrites: 0, uncertainWrites: 0 };
 const emptySelection = { attempt: null, busy: false, uncertain: false, error: null, notice: null };
@@ -207,28 +207,28 @@ const emptySelection = { attempt: null, busy: false, uncertain: false, error: nu
 test('notice renders no warning region once drift clears, plain restored notice stays', () => {
   const html = renderNotice({
     contextSnapshot: calmContext,
-    selectionSnapshot: { ...emptySelection, notice: '운영사 A에 다시 연결했습니다. 남아 있는 요청은 같은 요청으로 결과를 확인하세요.' },
+    selectionSnapshot: { ...emptySelection, notice: '조직 A에 다시 연결했습니다. 남아 있는 요청은 같은 요청으로 결과를 확인하세요.' },
   });
-  assert.match(html, /운영사 A에 다시 연결했습니다/);
+  assert.match(html, /조직 A에 다시 연결했습니다/);
   assert.doesNotMatch(html, /role="region"/);
-  assert.doesNotMatch(html, /운영사 문맥이 바뀌었습니다/);
+  assert.doesNotMatch(html, /조직 문맥이 바뀌었습니다/);
   assert.doesNotMatch(html, /<button/);
 });
 
 test('notice renders nothing when clean and quiet', () => {
   const html = renderNotice({ contextSnapshot: calmContext, selectionSnapshot: emptySelection });
   assert.equal(html, '');
-  assert.doesNotMatch(html, /role="region"|운영사 문맥/);
+  assert.doesNotMatch(html, /role="region"|조직 문맥/);
 });
 
 test('drifted same-org role change with pending receipts keeps the lock and names recovery', () => {
   const html = renderNotice({
     contextSnapshot: { ...calmContext, observed: observedAStaff, changed: true, uncertainWrites: 1 },
     selectionSnapshot: emptySelection,
-    uncertain: [{ key: 'cmd-secret-9', organizationId: 'A', organizationName: '운영사 A', command: 'notice.save', method: 'POST', path: '/api/events/e1/commands', replayable: true }],
+    uncertain: [{ key: 'cmd-secret-9', organizationId: 'A', organizationName: '조직 A', command: 'notice.save', method: 'POST', path: '/api/events/e1/commands', replayable: true }],
   });
   assert.match(html, /role="region"/);
-  assert.match(html, /운영사 문맥이 바뀌었습니다/);
+  assert.match(html, /조직 문맥이 바뀌었습니다/);
   assert.match(html, /미확인 요청 복구 연결/);
   assert.doesNotMatch(html, /변경된 역할의 홈으로 이동/);
   assert.match(html, /현재 역할 다시 확인/);
@@ -241,7 +241,7 @@ test('unreplayable entries name the reason instead of an active retry control', 
   const html = renderNotice({
     contextSnapshot: { ...calmContext, observed: observedAStaff, changed: true, uncertainWrites: 1 },
     selectionSnapshot: emptySelection,
-    uncertain: [{ key: 'cmd-secret-9', organizationId: 'A', organizationName: '운영사 A', command: 'notice.save', method: 'POST', path: '/api/events/e1/commands', replayable: false }],
+    uncertain: [{ key: 'cmd-secret-9', organizationId: 'A', organizationName: '조직 A', command: 'notice.save', method: 'POST', path: '/api/events/e1/commands', replayable: false }],
   });
   assert.match(html, /role="region"/);
   assert.doesNotMatch(html, /같은 요청으로 결과 확인/);

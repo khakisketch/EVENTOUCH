@@ -325,7 +325,7 @@ export default function InviteAccept({ token, invitation }: { token: string; inv
         {acceptFailure ? <p role="alert" ref={acceptFailureRef} tabIndex={-1}>{acceptFailure}</p> : null}
         {uncertain || offerOrgCheck ? (
           <>
-            <p>아래에서 현재 계정의 운영사 소속을 확인하세요. 이동할 운영사는 직접 선택합니다.</p>
+            <p>아래에서 현재 계정의 조직 소속을 확인하세요. 이동할 조직은 직접 선택합니다.</p>
             <OrganizationSwitcher />
           </>
         ) : null}

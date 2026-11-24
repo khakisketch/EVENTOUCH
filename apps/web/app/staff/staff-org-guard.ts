@@ -64,7 +64,7 @@ export function describeWorkingOrg(
   if (context) {
     return `현재 작업 조직: ${context.organizationName} · ${staffRoleLabel(context.role)}`;
   }
-  if (selectionRequired) return "운영사 선택 필요";
+  if (selectionRequired) return "조직 선택 필요";
   return loading
     ? "현재 작업 조직을 확인하고 있습니다."
     : "현재 작업 조직을 불러오지 못했습니다. 계정 메뉴에서 다시 확인하세요.";

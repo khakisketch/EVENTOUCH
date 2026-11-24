@@ -421,7 +421,7 @@ function scheduleModeNotice(mode: "MANUAL" | "AUTO"): string {
 function scheduleServerStatus(value: MessageSchedule | null): string {
   if (!value) return "이 서버의 예약 실행 설정을 확인할 수 없습니다.";
   const checked = value.observedAt ? ` (${formatDate(value.observedAt)} 조회)` : "";
-  if (!value.eligibleForAuto) return `이 운영사는 현재 자동 예약 실행 대상이 아닙니다.${checked}`;
+  if (!value.eligibleForAuto) return `이 조직은 현재 자동 예약 실행 대상이 아닙니다.${checked}`;
   if (!value.autoConfigured) return `이 서버의 예약 자동 실행 설정이 꺼져 있습니다.${checked}`;
   if (!value.workerStarted) return `이 서버에서 자동 실행 설정은 켜져 있으나 작업자 시작을 확인하지 못했습니다.${checked}`;
   const result = value.lastResult === "ok" ? "최근 점검 완료"
@@ -902,6 +902,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [templateDraft, setTemplateDraft] = useState<TemplateDraft>(EMPTY_TEMPLATE);
   const [campaignDraft, setCampaignDraft] = useState<CampaignDraft>(EMPTY_CAMPAIGN);
+  // 모의 발송 기본값은 연결 상태를 따른다(미연동=켜짐, 연결=꺼짐). 사용자가 체크
+  // 상자를 직접 바꾸거나 이전 발송을 다시 쓴 뒤에는 그 값을 존중한다.
+  const simulateTouchedRef = useRef(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [pendingTemplateUse, setPendingTemplateUse] = useState<Template | null>(null);
   const [templateQuery, setTemplateQuery] = useState("");
@@ -1179,6 +1182,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     templateSaveRef.current = null; setTemplateDraft(EMPTY_TEMPLATE); setTemplateError(null);
     setTemplateFieldError(null); setTemplateNotice(null);
     setTemplateQuery(""); setTemplateScope("ACTIVE"); setTemplateArchiveConfirm(null); setTemplateResetConfirm(false); setTemplateEditConfirm(null);
+    simulateTouchedRef.current = false;
     setCampaignDraft(EMPTY_CAMPAIGN); setSelectedIds([]); setSelectedTemplateId("");
     setRecipientReviewRequired(false);
     setCampaignError(null); setCampaignFieldError(null); setCampaignNotice(null);
@@ -1485,6 +1489,10 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
         ? { eventId: requestEventId, serverMs, receivedAt: performance.now() } : null;
       if (isNewOrgSimOnly(scopedIntegrations)) {
         setCampaignDraft((current) => (current.simulate && current.scheduleMode === "MANUAL" ? current : { ...current, simulate: true, scheduleMode: "MANUAL" }));
+      } else if (!simulateTouchedRef.current) {
+        // 사용자가 건드리지 않은 초안만 연결 상태의 기본값을 따른다.
+        const simulateByDefault = scopedIntegrations.connected !== true;
+        setCampaignDraft((current) => current.simulate === simulateByDefault ? current : { ...current, simulate: simulateByDefault, scheduleMode: simulateByDefault ? "MANUAL" : current.scheduleMode });
       }
       // A deliberate refresh may prove the intended terminal state even
       // when the original receipt response was lost. Resolve only from the
@@ -1731,7 +1739,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     campaignDraft.body !== "" ||
     campaignDraft.scheduled !== "" ||
     campaignDraft.imageFileId !== "" ||
-    campaignDraft.simulate ||
+    campaignDraft.simulate !== (state.kind === "ready" && state.integrations.connected !== true) ||
     campaignDraft.channel !== EMPTY_CAMPAIGN.channel ||
     selectedIds.length > 0 ||
     selectedTemplateId !== "";
@@ -2406,7 +2414,10 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
             ? "모의 발송을 기록했습니다. 수신자에게 전달되지 않았습니다."
             : "발송 요청을 기록했습니다. 결과는 아래 발송 기록에서 확인하세요."
       );
+      // 보낸 뒤의 새 초안은 다시 연결 상태의 기본값에서 시작한다.
+      simulateTouchedRef.current = false;
       setCampaignDraft(EMPTY_CAMPAIGN);
+      if (state.kind === "ready" && state.integrations.connected !== true) setCampaignDraft((current) => ({ ...current, simulate: true }));
       setSelectedTemplateId("");
       setPendingTemplateUse(null);
       setSelectedIds([]);
@@ -2828,6 +2839,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       boundTemplate && !boundTemplate.archived && (channel !== "ALIMTALK" || (boundTemplate.channel === "ALIMTALK" && boundTemplate.solapiTemplateId && source.body.trim() === boundTemplate.body.trim()))
     );
     const isMms = channel === "MMS";
+    simulateTouchedRef.current = true;
     setCampaignDraft({
       title: source.title === "제목 없는 발송" ? "" : source.title,
       channel,
@@ -3267,7 +3279,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 {state.integrations.connected
                   ? `현재 조직 발송 연결: 발신 ${state.integrations.sender || "설정됨"}${state.integrations.provider ? ` (${state.integrations.provider})` : ""}. 모의 발송은 전달되지 않습니다.`
                   : newOrgSimOnly
-                    ? "현재 조직 발송 연결: 새 운영사에는 발송 수단이 없으므로 모의 기록만 남습니다. 실제 발송으로 자동 전환되지 않습니다."
+                    ? "현재 조직 발송 연결: 새 조직에는 발송 수단이 없으므로 모의 기록만 남습니다. 발송이 연결되면 모의 발송 선택은 기본으로 꺼지고, 실제 발송은 확인 창에서 한 번 더 확인합니다."
                     : "현재 조직 발송 연결: 공급사가 연결되지 않았습니다. 요청은 연결 필요 상태로 기록됩니다(모의 기록이 아닙니다). 실제로 전달되지 않습니다."}
               </p>
               <p className={styles.help}>{scheduleServerStatus(state.messageSchedule)} 이 상태는 지금 시점의 설정이며, 점검이 끝났다고 해서 실제 발송이나 수신이 됐다는 뜻은 아닙니다.</p>
@@ -3742,10 +3754,10 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                       type="checkbox"
                       checked={campaignDraft.simulate}
                       disabled={newOrgSimOnly}
-                      title={newOrgSimOnly ? "새 운영사에는 발송 수단이 없으므로 모의 기록만 가능합니다. 연결돼도 자동으로 바뀌지 않습니다." : undefined}
-                      onChange={(event) => setCampaignDraft({ ...campaignDraft, simulate: event.target.checked, scheduleMode: event.target.checked ? "MANUAL" : campaignDraft.scheduleMode })}
+                      title={newOrgSimOnly ? "새 조직에는 발송 수단이 없으므로 모의 기록만 가능합니다. 발송이 연결되면 이 선택은 기본으로 꺼집니다." : undefined}
+                      onChange={(event) => { simulateTouchedRef.current = true; setCampaignDraft({ ...campaignDraft, simulate: event.target.checked, scheduleMode: event.target.checked ? "MANUAL" : campaignDraft.scheduleMode }); }}
                     />
-                    <span><strong>모의 발송으로 기록</strong><small>{newOrgSimOnly ? "새 운영사는 미연동이라 모의 기록만 가능합니다. 연결돼도 자동으로 실제 발송으로 바뀌지 않습니다." : "실제 수신자에게 전달되지 않습니다."}</small></span>
+                    <span><strong>모의 발송으로 기록</strong><small>{newOrgSimOnly ? "새 조직은 미연동이라 모의 기록만 가능합니다. 발송이 연결되면 이 선택은 기본으로 꺼지고, 실제 발송은 확인 창에서 한 번 더 확인합니다." : !state.integrations.connected ? "발송이 연결되지 않아 기본으로 켜져 있습니다. 끄면 ‘연결 필요’로 기록되고 실제로 전달되지 않습니다." : "실제 수신자에게 전달되지 않습니다."}</small></span>
                   </label>
                       <h3 className="sr-only" id="campaign-review-heading" tabIndex={-1}>발송 전 검토</h3>
                       <p className={styles.reviewSummary} id="campaign-submit-warning" tabIndex={-1}>

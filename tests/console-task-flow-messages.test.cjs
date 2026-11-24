@@ -247,7 +247,7 @@ test('reload summary clears on proven send and on event change only', () => {
   const createAt = SOURCE.indexOf('async function executeCampaignCreate(');
   const successAt = SOURCE.indexOf('setCampaignDraft(EMPTY_CAMPAIGN)', createAt);
   assert.ok(successAt !== -1, 'expected the proven-create reset');
-  assert.match(SOURCE.slice(successAt, successAt + 400), /setReloadSummary\(null\)/u);
+  assert.match(SOURCE.slice(successAt, successAt + 600), /setReloadSummary\(null\)/u);
   // Event switch resets the workspace slice including the summary.
   const eventReset = SOURCE.slice(SOURCE.indexOf('handoffAppliedRef.current = null;'), SOURCE.indexOf('setHistoryLimit(10);'));
   assert.match(eventReset, /setReloadSummary\(null\)/u);

@@ -132,7 +132,7 @@ test('existing-account invitations join with their own login, never a password',
 
 test('org membership disable is owner-only, idempotent, and role-free', () => {
   const team = read('apps/web/app/console/team/TeamWorkspace.tsx');
-  assert.match(team, /이 운영사 소속 사용 중지/, 'explicit row action names the org scope');
+  assert.match(team, /이 조직 소속 사용 중지/, 'explicit row action names the org scope');
   assert.match(
     team,
     /\/api\/auth\/organizations\/\$\{encodeURIComponent\(orgId\)\}\/members\/\$\{encodeURIComponent\(account\.id\)\}/,
@@ -185,8 +185,8 @@ test('shared-account resets fail closed and point at verified-email self-service
   // unverified locked accounts instead of promising a reset.
   assert.match(reset, /로그인 화면의 '이메일로 직접 재설정'으로 본인이 바꿀 수 있습니다/, 'verified-email self-service is pointed at');
   assert.match(reset, /별도 본인확인 절차가 정해질 때까지 재설정을 약속할 수 없습니다/, 'unverified locked accounts get the limitation, not a promise');
-  assert.match(reset, /이 운영사에서만 사용 중지/, 'org-only disable names its scope');
-  assert.match(reset, /팀 목록의 .이 운영사 소속 사용 중지./, 'the existing row action is pointed at, not duplicated');
+  assert.match(reset, /이 조직에서만 사용 중지/, 'org-only disable names its scope');
+  assert.match(reset, /팀 목록의 .이 조직 소속 사용 중지./, 'the existing row action is pointed at, not duplicated');
   assert.doesNotMatch(reset, /재설정해 드립니다/, 'no owner reset on their behalf is promised');
   assert.match(team, /const isOwner = role === "AGENCY" \|\| mine\?\.orgOwner === true;/u, 'reset stays owner-only');
 });

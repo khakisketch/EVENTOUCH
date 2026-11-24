@@ -78,10 +78,10 @@ export async function selectOrganization(attempt?: SelectionAttempt): Promise<vo
       update({ attempt: ambiguous ? chosen : null, busy: false, uncertain: ambiguous,
         error: ambiguous ? "전환 결과를 확인하지 못했습니다. 이미 전환되었을 수 있으므로 같은 요청으로 다시 확인하세요."
           : response.status === 401 ? "로그인이 필요합니다. 로그인한 뒤 소속을 다시 확인하세요."
-          : response.status === 403 || response.status === 404 ? "이 운영사에 접근할 수 없습니다. 활성 소속 여부를 확인하세요."
-          : response.status === 409 ? "다른 탭에서 운영사 선택이 바뀌었습니다. 소속을 다시 확인하고 명시적으로 선택하세요."
+          : response.status === 403 || response.status === 404 ? "이 조직에 접근할 수 없습니다. 활성 소속 여부를 확인하세요."
+          : response.status === 409 ? "다른 탭에서 조직 선택이 바뀌었습니다. 소속을 다시 확인하고 명시적으로 선택하세요."
           : response.status === 429 ? "요청이 많습니다. 잠시 후 소속을 다시 확인하세요."
-          : "전환할 운영사를 다시 선택하세요.", notice: null });
+          : "전환할 조직을 다시 선택하세요.", notice: null });
       void refreshOperatorContext();
       return;
     }

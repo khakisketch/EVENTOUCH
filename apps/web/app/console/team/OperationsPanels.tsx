@@ -313,10 +313,10 @@ export default function OperationsPanels() {
             </div>
             <div>
               <dt>문자·알림톡(현재 조직)</dt>
-              <dd>{directory.connected ? `연결됨${directory.provider ? ` (${directory.provider})` : ""}${directory.sender ? ` · 발신 ${directory.sender}` : ""}` : directory.orgIsolated ? "미연동 · 새 운영사는 모의 기록만 사용합니다" : "미연동 · 발송 수단이 연결될 때까지 메시지는 ‘연결 필요’로 기록됩니다"}</dd>
+              <dd>{directory.connected ? `연결됨${directory.provider ? ` (${directory.provider})` : ""}${directory.sender ? ` · 발신 ${directory.sender}` : ""}` : directory.orgIsolated ? "미연동 · 새 조직은 모의 기록만 사용합니다" : "미연동 · 발송 수단이 연결될 때까지 메시지는 ‘연결 필요’로 기록됩니다"}</dd>
             </div>
             <div>
-              <dt>현재 운영사 발송 대기</dt>
+              <dt>현재 조직 발송 대기</dt>
               <dd>{outbox ? outbox.kind === "ready" ? `${outbox.pending}건` : outbox.reason === "미제공" ? "소유자에게만 제공됩니다" : "확인할 수 없습니다" : "불러오고 있습니다"}</dd>
             </div>
           </dl>

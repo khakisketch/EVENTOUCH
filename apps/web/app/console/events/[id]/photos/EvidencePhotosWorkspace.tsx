@@ -728,7 +728,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
       <ConsolePage pageId="photos" eventId={eventId}>
         <ConsoleStatePanel
           kind="failed"
-          message="현장 사진은 조직 소유자 또는 이 행사의 운영사 구성원만 관리할 수 있습니다."
+          message="현장 사진은 조직 소유자 또는 이 행사의 조직 구성원만 관리할 수 있습니다."
           onRetry={() => setReloadTick((tick) => tick + 1)}
           actions={<ProductLink variant="secondary" href={`/console/events/${encodeURIComponent(eventId)}`}>운영 현황으로</ProductLink>}
         />

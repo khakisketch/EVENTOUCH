@@ -100,7 +100,7 @@ test('own-org send queue comes from owner-only diagnostics, never the global hea
   assert.match(PANELS, /await fetch\("\/api\/diagnostics", \{ cache: "no-store" \}\)/, 'diagnostics uses a fenced plain fetch, never the drift-marking guarded transport');
   assert.doesNotMatch(PANELS, /consoleFetch\("\/api\/diagnostics"/, 'diagnostics denials cannot lock the screen as context drift');
   assert.match(PANELS, /diagData\?\.outboxPending/, 'only the own-org pending count renders');
-  assert.match(PANELS, /현재 운영사 발송 대기/, 'queue row names its own-org scope');
+  assert.match(PANELS, /현재 조직 발송 대기/, 'queue row names its own-org scope');
   assert.match(PANELS, /소유자에게만 제공됩니다/, 'non-owners get an explicit unprovided state, not a global substitute');
   assert.match(PANELS, /확인할 수 없습니다/, 'owner-side denial or failure stays explicitly unknown');
 });
@@ -127,8 +127,9 @@ test('new orgs compose simulation-only; legacy disconnects keep NEEDS_CONNECTION
   assert.match(MESSAGES, /\{ \.\.\.current, simulate: true, scheduleMode: "MANUAL" \}/, 'the lock forces simulation and clears any prior automatic choice');
   assert.equal((MESSAGES.match(/simulate: false/g) ?? []).length, 1, 'no other write ever clears the flag (single EMPTY_CAMPAIGN default)');
   assert.match(MESSAGES, /disabled=\{newOrgSimOnly\}/, 'the simulate toggle locks with the gate');
-  assert.match(MESSAGES, /연결돼도 자동으로 바뀌지 않습니다/, 'no auto-enable on later connection');
-  assert.match(MESSAGES, /새 운영사에는 발송 수단이 없으므로 모의 기록만 남습니다/, 'new-org mock-only copy is explicit');
+  assert.match(MESSAGES, /발송이 연결되면 이 선택은 기본으로 꺼집니다/, 'connecting turns the simulation default off, never the real send on');
+  assert.match(MESSAGES, /실제 발송은 확인 창에서 한 번 더 확인합니다/, 'a real send still needs the confirmation step');
+  assert.match(MESSAGES, /새 조직에는 발송 수단이 없으므로 모의 기록만 남습니다/, 'new-org mock-only copy is explicit');
   assert.match(MESSAGES, /연결 필요 상태로 기록됩니다\(모의 기록이 아닙니다\)/, 'legacy disconnects stay honest NEEDS_CONNECTION, not mock-only');
   const retry = MESSAGES.slice(MESSAGES.indexOf('async function executeRetry'), MESSAGES.indexOf('async function syncCampaign'));
   assert.match(retry, /storedSimulate = campaign\.simulate/, 'retries key off the stored campaign mode');
