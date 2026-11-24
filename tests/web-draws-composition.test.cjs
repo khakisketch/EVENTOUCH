@@ -52,11 +52,13 @@ test('every safety rule of the old sections survives inside the stage card', () 
 });
 
 test('phone widths keep rows on one line and targets at 44px', () => {
-  // Reopened 2026-11-20 (디자인 시스템 적용): the layered overrides are folded into one rule set; the picker cards
-  // stay at least 68px tall (96px on phones) and keep their meter slot (.pickSpacer) so the two-up grid lines up.
-  assert.match(css, /\.pickRow\s*\{[^}]*min-height:\s*(?:6[89]|[7-9]\d|1\d\d)px/su);
-  assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.pickRow \{ min-height: 96px;/u);
-  assert.match(css, /\.pickSpacer \{ display: block; \}/u);
+  // Reopened 2026-11-20 (디자인 시스템 적용): the layered overrides are folded into one rule set.
+  // Reopened 2026-11-24 (owner: 다음 할 일 카드): the picker card stretches to its row (the foot sits at the bottom, so a
+  // two-up grid lines up without a meter spacer) and on phones the pill and the next-step button stack, button full width.
+  assert.match(css, /\.pickCard \{[^}]*grid-template-rows: 1fr auto[^}]*height: 100%/su);
+  assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.pickFoot \{ flex-direction: column; align-items: stretch; \}/u);
+  assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.pickNext \{ margin-left: 0; width: 100%; \}/u);
+  assert.doesNotMatch(css, /\.pickSpacer/u, 'the meter spacer is gone with the old card');
   // Reopened 2026-11-20 (shared gaps): the 44px action floor is the one shared `.product-action` rule (product-ui.css);
   // per-screen `min-height: 44px` repeats were no-ops and are gone.
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'apps', 'web', 'app', 'product-ui.css'), 'utf8'), /\.product-action \{[^}]*min-block-size: var\(--control-min-size\)/su, 'every action keeps a 44px target');
@@ -71,7 +73,8 @@ test("the phone preview's event line inherits its white ink instead of the globa
 
 // Reopened 2026-11-19
 test('Reopened 2026-11-19: picker cards lead, wide screens put the preview beside the actions', () => {
-  assert.match(css, /\.pickRow \{[^}]*grid-template-areas: "icon name name" "meter meter count"/su);
+  // Reopened 2026-11-24: the card's button row is icon, name, count over an optional meter (the pill and next step sit in .pickFoot).
+  assert.match(css, /\.pickRow \{[^}]*grid-template-areas: "icon name count" "meter meter meter"/su);
   assert.match(css, /@media \(min-width: 1200px\) \{\s*\.stageCard \{ grid-template-columns: minmax\(0, 1\.08fr\) minmax\(0, 1fr\);/u);
   assert.match(css, /\.winnerItem::before \{\s*content: counter\(winner\);/u, 'winners carry a rank mark');
   assert.match(css, /\.runBlocker \{[^}]*border: 1px solid var\(--warning-line\)[^}]*background: var\(--warning-soft\)/su, 'run limits read as amber notes, not white buttons');
@@ -97,7 +100,7 @@ test('Reopened 2026-11-20: the stage links back to 참여 이벤트 and opens �
 // Reopened 2026-11-20 (디자인 시스템 적용): stage state is a StatusPill, empty blocks are ConsoleEmptyState, the run
 // action and the winner cards come before everything else (settings stay folded), and the stylesheet speaks tokens.
 test('Reopened 2026-11-20: shared parts and tokens, run action and winners first, no element-selector overrides', () => {
-  assert.match(workspace, /import StatusPill from "\.\.\/\.\.\/\.\.\/console-ui\/StatusPill"/u);
+  assert.match(workspace, /import StatusPill(?:, \{ type StatusPillTone \})? from "\.\.\/\.\.\/\.\.\/console-ui\/StatusPill"/u);
   assert.match(workspace, /import ConsoleEmptyState from "\.\.\/\.\.\/\.\.\/console-ui\/ConsoleEmptyState"/u);
   assert.doesNotMatch(workspace, /styles\.stageKicker|styles\.empty\b|styles\.programWinners/u, 'hand-made kicker and empty blocks are gone');
   assert.match(workspace, /<ConsoleEmptyState title="아직 추첨 결과가 없습니다\."/u, 'the empty winners state keeps its text');
@@ -107,4 +110,69 @@ test('Reopened 2026-11-20: shared parts and tokens, run action and winners first
   assert.doesNotMatch(css, /^\.(?:drawRecovery|luckyProgress|rouletteConflict) h[1-6]/mu, 'headings carry a class instead of an element-selector override');
   assert.doesNotMatch(css, /font-weight:\s*(?:5\d\d|6[0-4]\d|65\d|7\d\d)\b/u, 'weights are 400/600/800 only');
   assert.doesNotMatch(css, /border-radius:\s*\d+px/u, 'radii are tokens');
+});
+
+// Reopened 2026-11-24 (owner: 다음 할 일 카드). Approved proposal G (card shape H) in the 2026-11-24 review: every tool card
+// says its state and offers at most one white next-step button; a tool with nothing to show the audience swaps the preview
+// for a dashed empty phone and puts that next step in the page's one orange button.
+const stripComments = (source) => source.replace(/\/\*[\s\S]*?\*\//gu, '');
+
+test('Reopened 2026-11-24: tool cards carry a state pill and one white next-step button', () => {
+  assert.match(workspace, /<div className=\{styles\.pickCard\} data-selected=\{activeKey === row\.key\}>/u);
+  assert.match(workspace, /<StatusPill tone=\{row\.pill\.tone\} dot=\{row\.pill\.dot\}>\{row\.pill\.label\}<\/StatusPill>/u);
+  const nextButtons = workspace.match(/<ProductButton[^>]*className=\{styles\.pickNext\}[^>]*>/gu) || [];
+  assert.equal(nextButtons.length, 1, 'one JSX site: each card has at most one next step');
+  assert.match(nextButtons[0], /variant="secondary"/u, 'a card button is white, never orange');
+  // The next-step mapping (DESIGN.md table): label per tool state.
+  for (const label of ['팀 등록하기', '투표 열기', '경품 설정하기', '공개하기', '번호 배정하기', '운영 시작하기', '결과 공개하기']) {
+    assert.ok(workspace.includes(`label: "${label}"`), `${label} is a next step`);
+  }
+  for (const label of ['팀 등록 필요', '설정 전', '준비됨', '진행 중', '마감', '공개 필요', '배정 전', '일부 배정', '배정 완료', '승인 참가자 없음']) {
+    assert.ok(workspace.includes(`label: "${label}"`), `${label} is a state pill`);
+  }
+  // A vote with no teams says what it needs, not "마감"; the stored status values are untouched.
+  const votePill = workspace.slice(workspace.indexOf('const votePill'), workspace.indexOf('const voteNext'));
+  assert.ok(votePill.indexOf('voteNeedsTeams ? { label: "팀 등록 필요"') > votePill.indexOf('state.voteTotal > 0 ? { label: "마감"'), 'closed with votes stays 마감; closed without votes asks for teams');
+  assert.match(workspace, /state\.voteConfig\.status === "CLOSED" && state\.voteTotal === 0/u, 'team and open steps only before the first vote locks the setup');
+  // Steps reuse the existing setup and confirmations: they select the card and point at the folded form or dialog.
+  for (const id of ['id="draws-vote-setup"', 'id="draws-team-setup"', 'id="draws-roulette-setup"', 'id="lucky-preassign-all"']) assert.ok(workspace.includes(id), `${id} is a focus target`);
+  assert.match(workspace, /startStep\("vote", \["draws-vote-setup", "draws-team-setup"\], "draws-team-name"\)/u);
+  assert.match(workspace, /requestProgramStatus\(item, "OPEN"\)/u, 'a draft program starts through its existing confirmation');
+  assert.match(workspace, /togglePublishProgram\(item\)/u, 'publishing shares the switch path (an empty program asks first)');
+  // The default card is the one that needs the operator most.
+  assert.match(workspace, /rows\.find\(\(row\) => row\.key === `program:\$\{runningProgram\.id\}`\)[\s\S]*rows\.find\(\(row\) => row\.next\) \?\? rows\[0\]/u);
+  assert.doesNotMatch(workspace, /defaultProgram/u, 'no default of "the first program or the closed vote"');
+  // Anchors and the premise lines stay as they were.
+  for (const kept of ['`draw-program-${program.id}`', '`draws-${kind}`', '실행 전제: {runBlockers.join(" · ")}', '무대 터치 실행 전제: {stageOnlyBlockers.join(" · ")}', 'id="stage-screen-prerequisite"']) {
+    assert.ok(workspace.includes(kept), `${kept} stays`);
+  }
+});
+
+test('Reopened 2026-11-24: an empty tool shows a dashed phone and the page\'s one orange next step', () => {
+  assert.match(workspace, /className=\{styles\.emptyPhone\} aria-hidden="true"><span>고른 카드의 객석 화면이 여기에 나와요<\/span>/u);
+  assert.match(workspace, /data-empty=\{emptyMode \? "true" : undefined\}/u);
+  assert.match(workspace, /empty: state\.pollEnabled && state\.teams\.length === 0/u, 'no teams: nothing to preview');
+  assert.match(workspace, /empty: state\.drawEnabled && savedPrizeCount === 0/u, 'no saved prize: nothing to preview');
+  assert.match(workspace, /empty: state\.drawEnabled && state\.luckyIssued === 0/u, 'no number issued: nothing to preview');
+  // The orange: exactly one hero button, and the folded settings forms step down to white while it shows.
+  const heroes = workspace.match(/<ProductButton[^>]*className=\{styles\.emptyAction\}[^>]*>/gu) || [];
+  assert.equal(heroes.length, 1);
+  assert.match(heroes[0], /variant="primary"/u);
+  assert.equal((workspace.match(/variant=\{heroPrimary \? "secondary" : "primary"\}/gu) || []).length, 2, 'roulette save and the lucky batch button yield to the hero');
+  assert.match(workspace, /const heroPrimary = emptyMode && activeRow\.next !== null;/u);
+  // Header: the back link is ghost and 추첨 프로그램 만들기 is white; neither is the page's main action.
+  assert.match(workspace, /<ProductLink variant="ghost"[^>]*>참여 이벤트<\/ProductLink>/u);
+  assert.match(workspace, /<ProductButton type="button" variant="secondary"[^>]*onClick=\{openCreateProgram\}>추첨 프로그램 만들기<\/ProductButton>/u);
+  // The blue "공개 상태로 전환한 무대만…" line is gone; the same hand-off is a quiet line beside the empty phone.
+  assert.doesNotMatch(workspace, /공개 상태로 전환한 무대만|stagePrerequisiteActions/u);
+  assert.match(workspace, /<div className=\{styles\.drawHint\}>/u);
+  assert.match(workspace, /참여 이벤트에서 추첨 무대를 만들고 공개하세요\./u, 'the link keeps its text and destination for the audits');
+  assert.match(workspace, /\{drawHint\}\s*<\/div>\s*\{stageNotesNode\}/u, 'in the empty stage the hint sits in the info column');
+  // CSS: dashed phone, tablet keeps two columns, phone stacks with a full-width button.
+  const sheet = stripComments(css);
+  assert.match(sheet, /\.emptyPhone \{[^}]*border: 2px dashed var\(--line-strong\)/su);
+  assert.match(sheet, /@media \(min-width: 769px\) and \(max-width: 1199px\) \{\s*\.stageCard\[data-empty="true"\] \{ grid-template-columns:/u);
+  assert.match(sheet, /\.emptyAction \{ justify-self: stretch; width: 100%; \}/u);
+  assert.match(sheet, /\.emptyAction \{[^}]*min-height: 56px/su);
+  assert.doesNotMatch(sheet, /#[0-9a-fA-F]{3,8}\b/u);
 });

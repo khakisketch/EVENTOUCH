@@ -20,7 +20,7 @@ import ProgramTypeIcon from "../programs/ProgramIcons";
 import StagePreview, { type StageScene } from "./StagePreview";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import ConsoleEmptyState from "../../../console-ui/ConsoleEmptyState";
-import StatusPill from "../../../console-ui/StatusPill";
+import StatusPill, { type StatusPillTone } from "../../../console-ui/StatusPill";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import styles from "./draws.module.css";
 import { consoleFetch } from "../../../../../lib/console-api";
@@ -226,6 +226,25 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
   // The stage card shows one item at a time: a draw program, the ranked vote,
   // the mobile roulette or the lucky numbers. null means "the sensible default".
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  // A card's next-step button selects its card, then moves focus into the folded setup it points at
+  // (the settings stay the existing forms; no new write path).
+  const [focusRequest, setFocusRequest] = useState<{ detailsIds: string[]; fieldId: string } | null>(null);
+  useEffect(() => {
+    if (!focusRequest) return;
+    const frame = window.requestAnimationFrame(() => {
+      for (const id of focusRequest.detailsIds) {
+        const details = document.getElementById(id);
+        if (details instanceof HTMLDetailsElement) details.open = true;
+      }
+      const field = document.getElementById(focusRequest.fieldId);
+      if (field instanceof HTMLElement) {
+        field.scrollIntoView({ block: "center", behavior: "instant" as ScrollBehavior });
+        field.focus({ preventScroll: true });
+      }
+      setFocusRequest(null);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusRequest]);
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -949,6 +968,22 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
       setFailure(error instanceof Error ? error.message : "공개 상태를 바꾸지 못했습니다.");
     } finally {
       setBusy(null);
+    }
+  }
+
+  function startStep(key: string, detailsIds: string[], fieldId: string, prepare?: () => void) {
+    prepare?.();
+    setSelectedKey(key);
+    setFocusRequest({ detailsIds, fieldId });
+  }
+
+  // The result-publish switch and the card's "결과 공개하기" share one path: an empty program asks first.
+  function togglePublishProgram(program: DrawProgram) {
+    if (writeLocked) return;
+    if (!program.winners.length && !program.published) {
+      setPendingConfirm({ kind: "publishEmptyProgram", program, summary: `“${program.name}”의 결과 공개를 허용할까요? 추첨을 실행하면 당첨 결과가 참가자에게 공개될 수 있습니다. 지금 추첨이 실행되지는 않습니다.` });
+    } else {
+      void setProgramPublished(program, !program.published);
     }
   }
 
@@ -1703,35 +1738,105 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
 
       {(() => {
         const programs = state.drawPrograms;
-        const defaultProgram = programs.find((program) => program.status === "OPEN") ?? programs[0] ?? null;
-        const selectedProgram = selectedKey?.startsWith("program:") ? programs.find((program) => `program:${program.id}` === selectedKey) ?? null : null;
-        const kind: "program" | "vote" | "roulette" | "lucky" =
-          selectedProgram ? "program"
-          : selectedKey === "vote" || selectedKey === "roulette" || selectedKey === "lucky" ? selectedKey
-          : defaultProgram ? "program" : state.pollEnabled ? "vote" : "roulette";
-        const program = kind === "program" ? selectedProgram ?? defaultProgram : null;
         const eventLabel = state.eventName;
+        // Archived events reject every write, and a read-only member has no setup to continue.
+        const canAct = canWriteDraws && !state.archived;
+        const actLocked = busy !== null || writeLocked;
         const prizeRows = roulettePrizes.map((prize) => {
           const used = state.rouletteUsedById[prize.id] ?? 0;
           const left = prize.unlimited ? null : Math.max(0, (Number(prize.quantity) || 0) - used);
           return { prize, used, left };
         });
-        const rows: Array<{ key: string; type: string; dot: "live" | "prep" | "done"; name: string; line: string; warn?: string; count: number; unit: string; meter: number | null }> = [
-          ...programs.map((item) => ({
-            key: `program:${item.id}`, type: "draw", dot: item.status === "OPEN" ? "live" as const : item.status === "DRAFT" ? "prep" as const : "done" as const,
-            name: item.name, line: `${item.eligibility === "COMPANY" ? "업체" : "개인"} 추첨 · ${item.quota}명`,
-            warn: item.winners.length && !item.published ? "결과 비공개" : undefined,
-            count: item.winners.length, unit: `/ ${item.quota}명`, meter: item.quota ? Math.round((item.winners.length / item.quota) * 100) : 0,
-          })),
-          { key: "vote", type: "vote", dot: state.voteConfig.status === "OPEN" ? "live" : "done", name: "순위 투표", line: `팀 ${state.teams.length} · 참가자당 ${state.voteConfig.pickCount}명 선택`, count: state.voteTotal, unit: "표", meter: null },
-          { key: "roulette", type: "roulette", dot: state.rouletteConfig.status === "OPEN" ? "live" : state.rouletteConfig.status === "DRAFT" ? "prep" : "done", name: "모바일 룰렛", line: `경품 ${roulettePrizes.length}종`, count: state.rouletteSpun, unit: "회 참여", meter: null },
-          { key: "lucky", type: "lucky", dot: selectedLucky.eligible.length > 0 && missingLuckyCount === 0 ? "done" : "prep", name: "럭키번호 사전 배정", line: `범위 ${state.luckyMin}–${state.luckyMax} · 승인 참가자 ${selectedLucky.eligible.length}명`, count: state.luckyIssued, unit: "명", meter: selectedLucky.eligible.length ? Math.round((state.luckyIssued / selectedLucky.eligible.length) * 100) : 0 },
+        type NextStep = { label: string; run: () => void };
+        type PillInfo = { label: string; tone: StatusPillTone; dot?: boolean };
+        const off: PillInfo = { label: "사용 안 함", tone: "neutral" };
+        const live: PillInfo = { label: "진행 중", tone: "live", dot: true };
+
+        // 다음 한 걸음 (Reopened 2026-11-24): every card states its own state and offers at most one next step.
+        // A step only selects its card and points at the existing setup, dialog or confirmation.
+        const voteNeedsTeams = state.teams.length < state.voteConfig.pickCount;
+        const votePill: PillInfo = !state.pollEnabled ? off
+          : state.voteConfig.status === "OPEN" ? live
+          : state.voteTotal > 0 ? { label: "마감", tone: "neutral" }
+          : voteNeedsTeams ? { label: "팀 등록 필요", tone: "wait" }
+          : { label: "준비됨", tone: "info" };
+        const voteNext: NextStep | null = canAct && state.pollEnabled && state.voteConfig.status === "CLOSED" && state.voteTotal === 0
+          ? voteNeedsTeams
+            ? { label: "팀 등록하기", run: () => startStep("vote", ["draws-vote-setup", "draws-team-setup"], "draws-team-name") }
+            : { label: "투표 열기", run: () => startStep("vote", ["draws-vote-setup"], "vote-status", () => setVoteStatus("OPEN")) }
+          : null;
+
+        const savedPrizeCount = state.rouletteConfig.prizes.length;
+        const roulettePill: PillInfo = !state.drawEnabled ? off
+          : state.rouletteConfig.status === "OPEN" ? live
+          : state.rouletteConfig.status === "CLOSED" ? { label: "마감", tone: "neutral" }
+          : savedPrizeCount === 0 ? { label: "설정 전", tone: "neutral" }
+          : { label: "준비됨", tone: "info" };
+        const rouletteNext: NextStep | null = canAct && state.drawEnabled && state.rouletteConfig.status === "DRAFT"
+          ? savedPrizeCount === 0
+            ? { label: "경품 설정하기", run: () => startStep("roulette", ["draws-roulette-setup"], `roulette-name-${roulettePrizes[0]?.id ?? ""}`) }
+            : { label: "공개하기", run: () => startStep("roulette", ["draws-roulette-setup"], "roulette-status", () => setRouletteStatus("OPEN")) }
+          : null;
+
+        const luckyPill: PillInfo = !state.drawEnabled ? off
+          : selectedLucky.eligible.length === 0 ? { label: "승인 참가자 없음", tone: "neutral" }
+          : missingLuckyCount === 0 ? { label: "배정 완료", tone: "ok" }
+          : state.luckyIssued === 0 ? { label: "배정 전", tone: "wait" }
+          : { label: "일부 배정", tone: "wait" };
+        const luckyNext: NextStep | null = canAct && state.drawEnabled && selectedLucky.eligible.length > 0 && missingLuckyCount > 0
+          ? { label: "번호 배정하기", run: () => startStep("lucky", [], "lucky-preassign-all") }
+          : null;
+
+        const programStep = (item: DrawProgram): { pill: PillInfo; next: NextStep | null } => {
+          const left = item.quota - item.winners.length;
+          const key = `program:${item.id}`;
+          if (!state.drawEnabled) return { pill: off, next: null };
+          if (left <= 0) return { pill: { label: "완료", tone: "ok" }, next: null };
+          if (item.status === "CLOSED") return { pill: { label: "마감", tone: "neutral" }, next: null };
+          if (item.status === "DRAFT") {
+            const canStart = canAct && !(!item.published && item.winners.length > 0);
+            return { pill: { label: "준비됨", tone: "info" }, next: canStart ? { label: "운영 시작하기", run: () => { setSelectedKey(key); requestProgramStatus(item, "OPEN"); } } : null };
+          }
+          if (!item.published) {
+            return { pill: { label: "공개 필요", tone: "wait" }, next: canAct ? { label: "결과 공개하기", run: () => { setSelectedKey(key); togglePublishProgram(item); } } : null };
+          }
+          return { pill: live, next: null };
+        };
+
+        type PickRow = { key: string; type: string; dot: "live" | "prep" | "done"; name: string; line: string; warn?: string; count: number; unit: string; meter: number | null; pill: PillInfo; next: NextStep | null; empty: boolean };
+        const rows: PickRow[] = [
+          ...programs.map((item) => {
+            const step = programStep(item);
+            return {
+              key: `program:${item.id}`, type: "draw", dot: item.status === "OPEN" ? "live" as const : item.status === "DRAFT" ? "prep" as const : "done" as const,
+              name: item.name, line: `${item.eligibility === "COMPANY" ? "업체" : "개인"} 추첨 · ${item.quota}명`,
+              warn: item.winners.length && !item.published ? "결과 비공개" : undefined,
+              count: item.winners.length, unit: `/ ${item.quota}명`, meter: item.quota ? Math.round((item.winners.length / item.quota) * 100) : 0,
+              pill: step.pill, next: step.next, empty: false,
+            };
+          }),
+          { key: "vote", type: "vote", dot: state.voteConfig.status === "OPEN" ? "live" : "done", name: "순위 투표", line: `팀 ${state.teams.length} · 참가자당 ${state.voteConfig.pickCount}명 선택`, count: state.voteTotal, unit: "표", meter: null, pill: votePill, next: voteNext, empty: state.pollEnabled && state.teams.length === 0 },
+          { key: "roulette", type: "roulette", dot: state.rouletteConfig.status === "OPEN" ? "live" : state.rouletteConfig.status === "DRAFT" ? "prep" : "done", name: "모바일 룰렛", line: `경품 ${savedPrizeCount}종 · ${state.rouletteConfig.status === "OPEN" ? "공개 중" : state.rouletteConfig.status === "DRAFT" ? "비공개" : "마감"}`, count: state.rouletteSpun, unit: "회 참여", meter: null, pill: roulettePill, next: rouletteNext, empty: state.drawEnabled && savedPrizeCount === 0 },
+          { key: "lucky", type: "lucky", dot: selectedLucky.eligible.length > 0 && missingLuckyCount === 0 ? "done" : "prep", name: "럭키번호 사전 배정", line: `승인 참가자 ${selectedLucky.eligible.length}명 · 번호 ${state.luckyIssued}명`, count: state.luckyIssued, unit: "명", meter: selectedLucky.eligible.length ? Math.round((state.luckyIssued / selectedLucky.eligible.length) * 100) : 0, pill: luckyPill, next: luckyNext, empty: state.drawEnabled && state.luckyIssued === 0 },
         ];
-        const activeKey = kind === "program" && program ? `program:${program.id}` : kind;
+        // The default card is the one that needs the operator most: a running draw first, then the first
+        // card with a next step, then the first card. A closed, unset vote is never picked just by position.
+        const runningProgram = programs.find((item) => item.status === "OPEN");
+        const defaultRow = (runningProgram ? rows.find((row) => row.key === `program:${runningProgram.id}`) : undefined) ?? rows.find((row) => row.next) ?? rows[0];
+        const activeKey = selectedKey && rows.some((row) => row.key === selectedKey) ? selectedKey : defaultRow.key;
+        const activeRow = rows.find((row) => row.key === activeKey) ?? defaultRow;
+        const selectedProgram = activeKey.startsWith("program:") ? programs.find((item) => `program:${item.id}` === activeKey) ?? null : null;
+        const kind: "program" | "vote" | "roulette" | "lucky" =
+          selectedProgram ? "program" : activeKey === "roulette" || activeKey === "lucky" ? activeKey : "vote";
+        const program = selectedProgram;
+        // Nothing to show the audience yet: a dashed empty phone and the next step take the preview's place.
+        const emptyMode = activeRow.empty;
+        const heroPrimary = emptyMode && activeRow.next !== null;
 
         let scene: StageScene;
         let sceneLabel: string;
-        let stageBody: React.ReactNode = null;
+        let stageInfoNode: React.ReactNode = null;
+        let stageNotesNode: React.ReactNode = null;
         if (kind === "program" && program) {
           const last = program.winners[program.winners.length - 1];
           scene = {
@@ -1781,17 +1886,10 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
             ? "결과를 공개하면"
             : `실행 인원을 1~${countLimit}명 범위로 입력하면`;
 
-          const togglePublish = () => {
-            if (!program.winners.length && !program.published) {
-              setPendingConfirm({ kind: "publishEmptyProgram", program, summary: `“${program.name}”의 결과 공개를 허용할까요? 추첨을 실행하면 당첨 결과가 참가자에게 공개될 수 있습니다. 지금 추첨이 실행되지는 않습니다.` });
-            } else {
-              void setProgramPublished(program, !program.published);
-            }
-          };
+          const togglePublish = () => togglePublishProgram(program);
           const showPublish = program.winners.length > 0 || (program.status === "OPEN" && !program.published);
           const countStep = (delta: number) => setRunCounts((values) => ({ ...values, [program.id]: String(Math.min(Math.max(1, (Number(values[program.id] ?? "1") || 1) + delta), Math.max(1, countLimit))) }));
-          stageBody = (
-            <>
+          stageInfoNode = (
               <div className={styles.stageInfo}>
                 <div className={styles.stageMain}>
                   <StatusPill tone={program.status === "OPEN" ? "live" : program.status === "DRAFT" ? "wait" : "neutral"} dot className={styles.stageStatus}>{program.status === "OPEN" ? "지금 무대에서" : program.status === "DRAFT" ? "준비 중" : "종료"}</StatusPill>
@@ -1835,6 +1933,8 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                   </div>
                 ) : null}
               </div>
+          );
+          stageNotesNode = (
               <div className={styles.stageNotes}>
                 {conflictedProgram?.id === program.id ? (
                   <div ref={conflictPanelRef} tabIndex={-1}>
@@ -1907,19 +2007,19 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                   </>
                 ) : null}
               </div>
-            </>
           );
         } else if (kind === "vote") {
-          stageBody = (
-            <>
+          stageInfoNode = (
               <div className={styles.stageInfo}>
                 <div className={styles.stageMain}>
-                  <StatusPill tone={state.voteConfig.status === "OPEN" ? "live" : "neutral"} dot className={styles.stageStatus}>{state.voteConfig.status === "OPEN" ? "투표 받는 중" : "마감"}</StatusPill>
+                  <StatusPill tone={state.voteConfig.status === "OPEN" ? "live" : votePill.tone} dot className={styles.stageStatus}>{state.voteConfig.status === "OPEN" ? "투표 받는 중" : votePill.label}</StatusPill>
                   <h2 className={styles.stageTitle}>순위 투표</h2>
                   <p className={styles.stageMeta}>팀 {state.teams.length} · 참가자당 {state.voteConfig.pickCount}명 선택 · 참가자 결과 {state.voteConfig.resultsPublished ? "공개" : "비공개"}</p>
                   <div className={styles.stageBig}><b>{state.voteTotal}</b><span>표 접수</span></div>
                 </div>
               </div>
+          );
+          stageNotesNode = (
               <div className={styles.stageNotes}>
             <p className={styles.hint}>{state.voteTotal > 0 ? "집계는 서버 순위와 동률을 그대로 표시하며 임의 순위를 만들지 않습니다." : "선택 수는 1~20개로 설정합니다. 첫 투표 접수 뒤에는 선택 수와 팀 구성이 잠깁니다. 집계는 서버 순위와 동률을 그대로 표시하며 임의 순위를 만들지 않습니다."}</p>
             {state.voteTotal > 0 ? <p className={styles.lockNote}>첫 투표가 접수되어 팀 구성과 선택 수는 잠겼습니다.</p> : null}
@@ -1935,7 +2035,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                   );
                 })}
               </ul>
-            ) : <ConsoleEmptyState title="등록된 투표 팀이 없습니다." description={canWriteDraws ? "아래 ‘투표 팀 등록’에서 팀을 추가하면 참가자 폰에 투표 후보로 나타납니다." : undefined} />}
+            ) : emptyMode ? null : <ConsoleEmptyState title="등록된 투표 팀이 없습니다." description={canWriteDraws ? "아래 ‘투표 팀 등록’에서 팀을 추가하면 참가자 폰에 투표 후보로 나타납니다." : undefined} />}
             {canWriteDraws ? (
               <div className={styles.tallyActions}>
                 <ProductButton type="button" variant="secondary" onClick={refreshVoteTally} disabled={tallyLoading || writeLocked || state.teams.length === 0}>
@@ -1950,7 +2050,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
             ) : null}
 
                 {canWriteDraws ? (
-                  <details className={styles.setupDetails}>
+                  <details className={styles.setupDetails} id="draws-vote-setup">
                     <summary className={styles.setupSummary} data-disclosure-indicator="">투표 설정 · {state.voteConfig.status === "OPEN" ? "운영 중" : "마감"}</summary>
             {canWriteDraws ? (
               <ValidatedForm className={styles.configForm} onSubmit={saveVoteConfig}>
@@ -1982,7 +2082,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
             {canWriteDraws ? (
               // Team registration is setup work; the roster and the tally are
               // what the operator reads during the event.
-              <details className={styles.setupDetails}>
+              <details className={styles.setupDetails} id="draws-team-setup">
                 <summary className={styles.setupSummary} data-disclosure-indicator="">투표 팀 등록 · {state.teams.length}팀</summary>
                 <ValidatedForm className={styles.inlineForm} onSubmit={addTeam}>
                   <label className={styles.inlineLabel} htmlFor="draws-team-name">투표 팀</label>
@@ -2005,11 +2105,9 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                   </details>
                 ) : null}
               </div>
-            </>
           );
         } else if (kind === "roulette") {
-          stageBody = (
-            <>
+          stageInfoNode = (
               <div className={styles.stageInfo}>
                 <div className={styles.stageMain}>
                   <StatusPill tone={state.rouletteConfig.status === "OPEN" ? "live" : state.rouletteConfig.status === "DRAFT" ? "wait" : "neutral"} dot className={styles.stageStatus}>{state.rouletteConfig.status === "OPEN" ? "운영 중" : state.rouletteConfig.status === "DRAFT" ? "준비" : "마감"}</StatusPill>
@@ -2029,10 +2127,12 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                   </ul>
                 </div>
               </div>
+          );
+          stageNotesNode = (
               <div className={styles.stageNotes}>
             <p className={styles.hint}>모바일 룰렛은 무대 추첨과 별도로 운영됩니다. 유한 재고는 남은 수량이 기본 가중치이며, 무제한 경품은 명시한 양의 가중치로 반영됩니다.</p>
             {canWriteDraws ? (
-                    <details className={styles.setupDetails} >
+                    <details className={styles.setupDetails} id="draws-roulette-setup">
         <summary className={styles.setupSummary} data-disclosure-indicator="">룰렛 운영 설정 · {rouletteConflict ? "변경 내용 확인 필요" : rouletteScheduleNeedsReview && rouletteStatus === "OPEN" ? "시간 확인 필요 · 참여 보류" : `${rouletteStatus === "OPEN" ? "운영 중" : rouletteStatus === "DRAFT" ? "준비" : "마감"}${rouletteScheduleNeedsReview ? " · 시간 확인 필요" : ""}`}</summary>
 <ValidatedForm className={styles.programForm} onSubmit={saveRouletteConfig}>
                 {rouletteConflict ? <section className={styles.rouletteConflict} aria-labelledby="roulette-conflict-heading">
@@ -2131,7 +2231,7 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                 {rouletteFrozen ? <p className={styles.lockNote}>결과가 발생해 경품 이름·목록 순서는 고정되었습니다. 재고 수량, 운영 시간·상태, 가중치는 계속 조정할 수 있습니다.</p> : null}
                 <ConsoleFormActions>
                   <ProductButton type="button" variant="secondary" disabled={rouletteFrozen || roulettePrizes.length >= 20} onClick={() => setRoulettePrizes((items) => [...items, { id: randomId("prize"), label: "", quantity: "", unlimited: false, weight: "" }])}>경품 추가</ProductButton>
-                  <ProductButton type="submit" variant="primary" disabled={busy === "roulette:save" || writeLocked}>{busy === "roulette:save" ? "저장 중입니다" : "룰렛 설정 저장"}</ProductButton>
+                  <ProductButton type="submit" variant={heroPrimary ? "secondary" : "primary"} disabled={busy === "roulette:save" || writeLocked}>{busy === "roulette:save" ? "저장 중입니다" : "룰렛 설정 저장"}</ProductButton>
                 </ConsoleFormActions>
                 <p className={styles.hint}>운영 중에는 설정한 시간에 참가할 수 있습니다. 각 티켓의 결과는 한 번만 저장되며, 수량은 이미 나온 결과보다 줄일 수 없습니다.</p>
                 </fieldset>
@@ -2141,11 +2241,9 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
             {!roulettePrizes.length ? <ConsoleEmptyState title="등록된 경품이 없습니다." /> : null}
 
               </div>
-            </>
           );
         } else {
-          stageBody = (
-            <>
+          stageInfoNode = (
               <div className={styles.stageInfo}>
                 <div className={styles.stageMain}>
                   <StatusPill tone={selectedLucky.eligible.length > 0 && missingLuckyCount === 0 ? "ok" : "wait"} dot className={styles.stageStatus}>사전 배정</StatusPill>
@@ -2155,10 +2253,12 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
                   <div className={styles.stageGauge} aria-hidden="true"><i style={{ width: `${selectedLucky.eligible.length ? Math.round((state.luckyIssued / selectedLucky.eligible.length) * 100) : 0}%` }} /></div>
                 </div>
               </div>
+          );
+          stageNotesNode = (
               <div className={styles.stageNotes}>
             <p className={styles.hint}>알림 캠페인을 보내기 전에 승인 참가자에게 번호를 미리 배정할 수 있습니다. 번호는 범위 내에서 고유하며 기존 발급 번호는 유지됩니다.</p>
             {canWriteDraws ? (
-                    <details className={styles.setupDetails} >
+                    <details className={styles.setupDetails} id="draws-lucky-range-setup">
         <summary className={styles.setupSummary} data-disclosure-indicator="">럭키번호 범위 설정 · {state.luckyMin}–{state.luckyMax}</summary>
 <ValidatedForm className={styles.configForm} onSubmit={saveLuckyConfig}>
                 <div className={styles.configGrid}>
@@ -2187,21 +2287,20 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
             {canWriteDraws ? (
               <div className={styles.preassignBox}>
                 <label className={styles.checkLine}>
-                  <input type="checkbox" checked={preassignAllApproved} disabled={selectedLucky.eligible.length === 0 || missingLuckyCount === 0 || writeLocked || Boolean(luckyRangeConflict) || busy === "lucky:preassign"} onChange={(event) => setPreassignAllApproved(event.target.checked)} />
+                  <input id="lucky-preassign-all" type="checkbox" checked={preassignAllApproved} disabled={selectedLucky.eligible.length === 0 || missingLuckyCount === 0 || writeLocked || Boolean(luckyRangeConflict) || busy === "lucky:preassign"} onChange={(event) => setPreassignAllApproved(event.target.checked)} />
                   승인 참가자 전체 {selectedLucky.eligible.length}명 선택 (기존 번호 유지)
                 </label>
                 {selectedLucky.excluded > 0 ? <p role="note">취소·티켓 상태나 참가자 식별을 확인해야 하는 기록 {selectedLucky.excluded}건은 배정에서 제외됩니다. 참가자 명단에서 확인하세요.</p> : null}
                 {selectedLucky.eligible.length > 0 && missingLuckyCount === 0 ? <p role="status">승인 참가자에게 번호가 모두 배정되었습니다.</p> : null}
                 {missingLuckyCount > LUCKY_BATCH_SIZE ? <p className={styles.hint}>최대 5,000명씩 순차 처리합니다. 중간에 멈춰도 이미 처리된 배정은 유지됩니다.</p> : null}
                 {missingLuckyCount > luckyAvailable ? <p className={styles.fieldError}>전체 배정에 번호가 {missingLuckyCount - luckyAvailable}개 부족합니다. 범위를 먼저 넓히세요.</p> : null}
-                <ProductButton type="button" variant="primary" disabled={!preassignAllApproved || writeLocked || Boolean(luckyRangeConflict) || busy === "lucky:preassign" || selectedLucky.eligible.length === 0 || missingLuckyCount === 0 || missingLuckyCount > luckyAvailable} onClick={preassignLuckyNumbers}>
+                <ProductButton type="button" variant={heroPrimary ? "secondary" : "primary"} disabled={!preassignAllApproved || writeLocked || Boolean(luckyRangeConflict) || busy === "lucky:preassign" || selectedLucky.eligible.length === 0 || missingLuckyCount === 0 || missingLuckyCount > luckyAvailable} onClick={preassignLuckyNumbers}>
                   {busy === "lucky:preassign" ? "번호 배정 중입니다" : selectedLucky.eligible.length === 0 ? "배정할 참가자 없음" : missingLuckyCount === 0 ? "번호 배정 완료" : `${missingLuckyCount}명 번호 일괄 배정`}
                 </ProductButton>
               </div>
             ) : null}
 
               </div>
-            </>
           );
         }
 
@@ -2210,6 +2309,28 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
           : kind === "roulette" && !state.drawEnabled ? "이 행사에서 룰렛 기능이 꺼져 있습니다."
           : kind === "lucky" && !state.drawEnabled ? "이 행사에서 럭키번호 기능이 꺼져 있습니다." : null;
 
+        const programsHref = closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`);
+        // Stage draws are made and published under 참여 이벤트; until one exists this is the one place that says so.
+        const drawHint = canWriteDraws && !state.drawPrograms.length && !state.drawModules.some((module) => module.published) ? (
+          <div className={styles.drawHint}>
+            {state.drawModules.length ? (
+              <>
+                <p>무대 터치 실행에는 공개된 추첨 무대가 필요합니다. 기존 비공개 결과는 자동 공개하지 않습니다.</p>
+                <ProductLink href={programsHref}>참여 이벤트에서 무대 운영을 시작해 공개하세요.</ProductLink>
+              </>
+            ) : (
+              <>
+                <p>공개한 추첨 무대만 여기서 실행할 수 있어요.</p>
+                <ProductLink href={programsHref}>참여 이벤트에서 추첨 무대를 만들고 공개하세요.</ProductLink>
+              </>
+            )}
+          </div>
+        ) : null;
+        const emptyCopy = kind === "vote" ? "팀을 등록하면 객석 폰에 투표 후보로 나타납니다. 첫 투표가 들어오면 선택 수와 팀 구성이 잠겨요."
+          : kind === "roulette" ? "경품을 등록하면 객석 폰에 룰렛이 나타납니다. 첫 결과가 나오면 경품 이름과 순서가 고정돼요."
+          : selectedLucky.eligible.length > 0 ? `알림을 보내기 전에 승인 참가자 ${selectedLucky.eligible.length}명에게 번호를 미리 나눠 줄 수 있어요. 번호는 ${state.luckyMin}–${state.luckyMax} 범위에서 겹치지 않게 배정됩니다.`
+          : "승인된 참가자가 생기면 입장 전에 럭키번호를 미리 나눠 줄 수 있어요.";
+
         return (
           <>
         {!screenEnabled && canWriteDraws ? (
@@ -2217,42 +2338,57 @@ export default function DrawsWorkspace({ eventId }: { eventId: string }) {
             무대 터치 실행은 당첨 결과와 경품을 저장하고 이번 결과를 전광판에 올립니다. 사용 전 <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/settings#settings-features`)}>행사 설정에서 행사장 출력을 켜세요.</ProductLink>
           </p>
         ) : null}
-        {!state.drawModules.some((module) => module.published) && !state.drawPrograms.length && canWriteDraws ? (
-          <div className={`${styles.stagePrerequisite} ${styles.stagePrerequisiteActions}`}>
-            {state.drawModules.length ? (
-              <>
-                <p>무대 터치 실행에는 공개된 추첨 무대가 필요합니다. 기존 비공개 결과는 자동 공개하지 않습니다.</p>
-                <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 이벤트에서 무대 운영을 시작해 공개하세요.</ProductLink>
-              </>
-            ) : (
-              <>
-                <p>공개 상태로 전환한 무대만 여기에 연결할 수 있습니다.</p>
-                <ProductLink href={closeHref(`/console/events/${encodeURIComponent(eventId)}/programs`)}>참여 이벤트에서 추첨 무대를 만들고 공개하세요.</ProductLink>
-              </>
-            )}
-          </div>
-        ) : null}
 
             <h2 className={styles.pickerTitle}>무대 선택</h2>
             <ul className={styles.picker}>
-              {rows.map((row) => (
-                <li key={row.key}>
-                  <button type="button" className={styles.pickRow} aria-pressed={activeKey === row.key} onClick={() => setSelectedKey(row.key)}>
-                    <ProgramTypeIcon type={row.type} state={row.dot} />
-                    <span className={styles.pickName}><b>{row.name}</b><span>{row.line}{row.warn ? <> · <b className={styles.pickWarn}>{row.warn}</b></> : null}</span></span>
-                    {row.meter !== null ? <span className={styles.pickMeter} aria-hidden="true"><i style={{ width: `${row.meter}%` }} /></span> : <span className={styles.pickSpacer} aria-hidden="true" />}
-                    <span className={styles.pickCount}><b>{row.count}</b>{row.unit}</span>
-                  </button>
-                </li>
-              ))}
+              {rows.map((row) => {
+                const nameId = `draw-pick-${row.key.replace(/[^A-Za-z0-9_-]/gu, "-")}`;
+                return (
+                  <li key={row.key}>
+                    <div className={styles.pickCard} data-selected={activeKey === row.key}>
+                      <button type="button" className={styles.pickRow} aria-pressed={activeKey === row.key} onClick={() => setSelectedKey(row.key)}>
+                        <ProgramTypeIcon type={row.type} state={row.dot} />
+                        <span className={styles.pickName}><b id={nameId}>{row.name}</b><span>{row.line}{row.warn ? <> · <b className={styles.pickWarn}>{row.warn}</b></> : null}</span></span>
+                        <span className={styles.pickCount}>{row.count > 0 || row.meter !== null ? <><b>{row.count}</b>{row.unit}</> : null}</span>
+                        {row.meter !== null ? <span className={styles.pickMeter} aria-hidden="true"><i style={{ width: `${row.meter}%` }} /></span> : null}
+                      </button>
+                      <div className={styles.pickFoot}>
+                        <StatusPill tone={row.pill.tone} dot={row.pill.dot}>{row.pill.label}</StatusPill>
+                        {row.next ? <ProductButton type="button" variant="secondary" className={styles.pickNext} aria-describedby={nameId} disabled={actLocked} onClick={row.next.run}>{row.next.label}</ProductButton> : null}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
+            {emptyMode ? null : drawHint}
 
-            <section className={styles.stageCard} id={kind === "program" && program ? `draw-program-${program.id}` : `draws-${kind}`} aria-label="무대">
-              <div className={styles.stagePreview}>
-                <div className={styles.previewCap}><span>청중 화면 · {scene.kind === "board" ? "전광판" : "참가자 폰"}</span></div>
-                <StagePreview scene={scene} label={sceneLabel} event={eventLabel} />
-              </div>
-              {featureOffNote ? <p className={styles.featureOff}>{featureOffNote}</p> : stageBody}
+            <section className={styles.stageCard} data-empty={emptyMode ? "true" : undefined} id={kind === "program" && program ? `draw-program-${program.id}` : `draws-${kind}`} aria-label="무대">
+              {emptyMode && !featureOffNote ? (
+                <div className={styles.stagePreview}>
+                  <div className={styles.previewCap}><span>청중 화면 · 참가자 폰</span></div>
+                  <div className={styles.stageBox}>
+                    <div className={styles.emptyPhone} aria-hidden="true"><span>고른 카드의 객석 화면이 여기에 나와요</span></div>
+                  </div>
+                </div>
+              ) : (
+                <div className={styles.stagePreview}>
+                  <div className={styles.previewCap}><span>청중 화면 · {scene.kind === "board" ? "전광판" : "참가자 폰"}</span></div>
+                  <StagePreview scene={scene} label={sceneLabel} event={eventLabel} />
+                </div>
+              )}
+              {featureOffNote ? <p className={styles.featureOff}>{featureOffNote}</p> : emptyMode ? (
+                <>
+                  <div className={styles.emptyInfo}>
+                    <StatusPill tone={activeRow.pill.tone} dot={activeRow.pill.dot} className={styles.stageStatus}>{activeRow.pill.label}</StatusPill>
+                    <h2 className={styles.stageTitle}>{activeRow.name}</h2>
+                    <p className={styles.stageMeta}>{emptyCopy}</p>
+                    {activeRow.next ? <ProductButton type="button" variant="primary" className={styles.emptyAction} disabled={actLocked} onClick={activeRow.next.run}>{activeRow.next.label}</ProductButton> : null}
+                    {drawHint}
+                  </div>
+                  {stageNotesNode}
+                </>
+              ) : <>{stageInfoNode}{stageNotesNode}</>}
             </section>
 
             {programFormOpen && canWriteDraws ? (
