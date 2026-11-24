@@ -508,6 +508,18 @@
   .flowCaption { min-height: 12rem; }
 }
 
+/* Reopened 2026-11-25 (owner: 모바일에서도 제품 프리뷰가 읽히게): a phone drawn at 0.46~0.5 is
+   unreadable, so on phones the stage shows ONE phone at a readable scale. The console window
+   (already shown in the hero) and the staff phone (named in the caption) step aside. */
+@media (max-width: 560px) {
+  .flow { --flow-stage-h: 520px; --k-duo: 0.82; --k-pair: 0.82; }
+  .stageDuo { place-items: center; padding-bottom: 0; }
+  .stageDuo .window { display: none; }
+  .stageDuo .phoneCrop { position: relative; right: auto; bottom: auto; }
+  .stagePair .phoneCrop:last-child { display: none; }
+  .stagePair { gap: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .section [data-reveal],
   .contact [data-reveal] { transition: none; }

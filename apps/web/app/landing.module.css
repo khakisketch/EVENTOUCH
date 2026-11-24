@@ -618,12 +618,13 @@
     font-size: var(--body);
   }
 
+  /* Reopened 2026-11-25 (owner: 모바일 제품 프리뷰 가독성): the offset stack shadow ran past the
+     page gutter and read as a clipped edge, and the fixed 520px stage cut the last roster rows. */
   .consoleEvidence {
-    box-shadow:
-      0 10px 30px var(--shadow-color),
-      6px 6px 0 -2px var(--paper),
-      6px 6px 0 -1px var(--line);
+    box-shadow: 0 10px 30px var(--shadow-color);
   }
+
+  .heroMedia { --hero-stage-h: 600px; }
 
   .consoleEvidence .consoleCaption {
     padding: var(--s2) var(--s3);

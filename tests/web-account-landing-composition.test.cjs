@@ -88,3 +88,12 @@ test('the landing below the hero is interactive, honest and keeps the hero\'s in
   // A phone does not keep a 160px sticky header over every screen.
   assert.match(landing, /@media \(max-width: 768px\) \{\s*\.header \{ position: static; \}/u);
 });
+
+test('phone landing previews stay readable: tall hero stage, no clipped offset shadow, one legible phone in the flow stage', () => {
+  // Reopened 2026-11-25 (owner: 랜딩 가독성·모바일 제품 프리뷰). The dark hero identity and the three-tab preview are unchanged.
+  const sections = fs.readFileSync(path.join(app, 'landing-sections.module.css'), 'utf8');
+  assert.match(landing, /@media \(max-width: 768px\)[\s\S]*?\.consoleEvidence \{\s*box-shadow: 0 10px 30px var\(--shadow-color\);\s*\}[\s\S]*?\.heroMedia \{ --hero-stage-h: 600px; \}/u);
+  assert.match(sections, /@media \(max-width: 560px\) \{\s*\.flow \{ --flow-stage-h: 520px; --k-duo: 0\.82; --k-pair: 0\.82; \}/u);
+  assert.match(sections, /\.stageDuo \.window \{ display: none; \}/u);
+  assert.match(sections, /\.stagePair \.phoneCrop:last-child \{ display: none; \}/u);
+});
