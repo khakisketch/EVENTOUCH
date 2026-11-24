@@ -32,6 +32,13 @@ test('the row is appended after every other task so it cannot become the primary
   assert.match(row, /action: "경품 지급 현황"/);
 });
 
+// Reopened 2026-11-24 (owner: 경품 대기 한 줄, 링 필수 기준): a 경품 지급 대기 row joins the same list while live.
+test('the 경품 지급 대기 row precedes the 확인 필요 row and is built from the same shared count', () => {
+  const waitingAt = overview.indexOf('key: "reward-waiting"');
+  assert.ok(waitingAt > 0 && waitingAt < overview.indexOf('key: "reward-attention"'));
+  assert.match(overview, /countRewardAttention\(workspace\)\?\.waiting \?\? null/);
+});
+
 test('the queue still gives only its first row the primary role', () => {
   // The four readiness links stay pinned by web-event-overview-priority.test.cjs.
   const queue = fs.readFileSync(path.join(root, 'apps/web/app/console/console-ui/ConsoleTaskQueue.tsx'), 'utf8');

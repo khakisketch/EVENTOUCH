@@ -57,6 +57,13 @@ async function main() {
     // LIVE overview already spends its one orange action on 현장 운영 열기: the queue adds none.
     assert.equal(await link.getAttribute('data-action-variant'), 'ghost', 'the reward row is a quiet link, not the orange action');
     assert.equal(await page.locator('[data-action-variant="primary"]:visible').count(), 1, 'exactly one orange action on the live overview');
+    // Reopened 2026-11-24: the one clean READY prize is counted as 경품 지급 대기 with the rewards screen's number, as a ghost link in the same list.
+    const waitingRow = page.locator('[data-task="reward-waiting"]');
+    await waitingRow.getByText('경품 지급 대기', { exact: true }).waitFor();
+    await waitingRow.getByText('1건', { exact: true }).waitFor();
+    const waitingLink = waitingRow.getByRole('link', { name: '경품 지급', exact: true });
+    assert.equal(await waitingLink.getAttribute('href'), `/console/events/${f.eventId}/rewards`);
+    assert.equal(await waitingLink.getAttribute('data-action-variant'), 'ghost', 'the waiting row adds no orange action');
     await page.screenshot({ path: path.join(out, 'overview-1280.png'), fullPage: true });
 
     // 2) the same prizes are counted on the destination screen.
@@ -84,6 +91,7 @@ async function main() {
     await page.goto(overview);
     await page.getByRole('heading', { name: '지금 할 일' }).waitFor();
     assert.equal(await row.count(), 0, 'no prize needs a look, so no row');
+    assert.equal(await waitingRow.count(), 0, 'no prize waits, so no 경품 지급 대기 row');
 
     // 5) feature off: even with prizes needing a look the row stays away.
     await write(workspace);

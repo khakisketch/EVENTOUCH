@@ -106,3 +106,39 @@ test('stage decks split the lower overview by event stage', () => {
   assert.match(css, /\.cardDeck\[data-stage="live"\] > \.regionRecent \{ grid-column: 2; grid-row: span 3; \}/u, 'live feed sits beside the schedule on desktop');
   assert.match(css, /@media \(min-width: 1101px\) \{\s*\.cardDeck\[data-stage="prep"\] > \.regionRunbook/u, 'two-column placement is desktop-only');
 });
+
+// Reopened 2026-11-24 (owner: 경품 대기 한 줄, 링 필수 기준). See DESIGN.md "운영 현황 확정 구성".
+test('live "지금 할 일" counts 경품 지급 대기 with the same definition as 현장 모드', () => {
+  const rewardStatus = fs.readFileSync(path.join(__dirname, '..', 'apps/web/lib/reward-status.ts'), 'utf8');
+  const liveModel = fs.readFileSync(path.join(__dirname, '..', 'apps/web/app/console/events/[id]/live/live-model.ts'), 'utf8');
+  // One bucket definition feeds both screens: 현장 모드 buckets rewards with rewardBucket === "waiting".
+  assert.match(liveModel, /rewardBucket\(text\(reward\.status\), rewardParticipantIssue\(owner\)\)/u);
+  assert.match(liveModel, /if \(bucket !== "waiting"\) continue;/u);
+  assert.match(rewardStatus, /else if \(bucket === "waiting"\) counts\.waiting \+= 1;/u);
+  assert.match(source, /rewardWaiting: Array\.isArray\(event\.features\) && event\.features\.includes\("reward"\)\s*\? countRewardAttention\(workspace\)\?\.waiting \?\? null : null,/u, 'off or unreadable 경품 stays null');
+  // Only while live, only above zero, and as a ghost link row, never a new primary.
+  assert.match(source, /if \(live && overview\.rewardWaiting !== null && overview\.rewardWaiting > 0\) \{\s*nowItems\.push\(\{\s*key: "reward-waiting",\s*title: "경품 지급 대기",\s*count: `\$\{overview\.rewardWaiting\}건`,/u);
+  const rowAt = source.indexOf('key: "reward-waiting"');
+  const row = source.slice(rowAt, source.indexOf('});', rowAt));
+  assert.match(row, /action: "경품 지급"/u);
+  assert.match(row, /href: `\$\{base\}\/rewards`/u);
+  assert.ok(source.indexOf('key: "approval"') < rowAt && source.indexOf('key: "message-attention"') < rowAt, 'it joins the same list after the existing 확인 필요 rows');
+  // A lone waiting row reads as one amber line "지금 할 일 N"; otherwise the existing list and green idle line stay.
+  assert.match(source, /const nowWarnLine = live && nowItems\.length === 1 && nowItems\[0\]\.key === "reward-waiting";/u);
+  assert.match(source, /title=\{nowWarnLine \? `지금 할 일 \$\{nowItems\.length\}` : "지금 할 일"\}/u);
+  assert.match(source, /"지금 확인할 운영 항목이 없습니다\."/u, 'no items keeps the green all-clear line');
+  assert.match(css, /\.liveOverview \.queueWarn \{[^}]*border: 1px solid var\(--warning-line\)[^}]*background: var\(--warning-soft\)/su, 'amber line uses warning tokens');
+  assert.match(css, /\.liveOverview \.queueIdle \{[^}]*background: var\(--success-soft\)/su, 'all-clear stays green');
+  const queue = fs.readFileSync(path.join(__dirname, '..', 'apps/web/app/console/console-ui/ConsoleTaskQueue.tsx'), 'utf8');
+  assert.match(queue, /variant=\{index === 0 && !liveOverview \? "primary" : "ghost"\}/u, 'the link is ghost on live');
+});
+
+test('preparation ring counts required items and says so in its name and sub line', () => {
+  assert.match(source, /const requiredKeys = currentStage === "READY" \? \["intake", "desk"\] : \["intake"\];/u, 'required = 접수, plus 현장 준비 from 운영 준비');
+  assert.match(source, /<div><strong>\{requiredDone\}<\/strong><span>\/\{requiredItems\.length\} 필수<\/span><\/div>/u);
+  assert.match(source, /aria-label=\{`필수 항목 \$\{requiredItems\.length\}개 중 \$\{requiredDone\}개 완료, 선택 항목 \$\{optionalItems\.length\}개 중 \$\{optionalDone\}개 완료`\}/u);
+  assert.match(source, /`필수 \$\{requiredDone\}\/\$\{requiredItems\.length\} · 선택 \$\{optionalDone\}\/\$\{optionalItems\.length\}\.\$\{optionalDone < optionalItems\.length \? " 선택 항목은 나중에 해도 됩니다\." : ""\}`/u);
+  assert.match(source, /const readyPercent = requiredItems\.length \? Math\.round\(\(requiredDone \/ requiredItems\.length\) \* 100\) : 0;/u);
+  assert.doesNotMatch(source, /준비 완료<\/span>|readyItems\.length\}<\/strong>/u, 'the old whole-list 0/5 ring is gone');
+  assert.equal((source.match(/key: "(intake|desk|program|page|message)"/g) || []).length, 5, 'the five check cards stay');
+});

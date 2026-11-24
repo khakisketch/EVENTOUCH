@@ -1010,6 +1010,23 @@
 .liveOverview .queueIdle [data-console-section-head] h2 { font-size: var(--small); font-weight: var(--fw-strong); color: var(--success); }
 .liveOverview .queueIdle > :global(.astryx-section) > :last-child { min-width: 0; }
 
+/* Reopened 2026-11-24 (owner: 경품 대기 한 줄): the single 경품 지급 대기 row reads as one amber line. */
+.liveOverview .queueWarn {
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--radius-large);
+  background: var(--warning-soft);
+}
+.liveOverview .queueWarn > :global(.astryx-section) { display: flex; align-items: center; gap: var(--s3); }
+.liveOverview .queueWarn > :global(.astryx-section) > :first-child { min-height: 0; flex: none; }
+.liveOverview .queueWarn [data-console-section-head] h2 { font-size: var(--small); font-weight: var(--fw-strong); color: var(--warning); }
+.liveOverview .queueWarn > :global(.astryx-section) > :last-child { min-width: 0; flex: 1; }
+.liveOverview .queueWarn ul > li { min-block-size: 0; padding-block: 0; }
+@media (max-width: 600px) {
+  .liveOverview .queueWarn > :global(.astryx-section) { flex-wrap: wrap; gap: var(--s1) var(--s3); }
+  .liveOverview .queueWarn > :global(.astryx-section) > :last-child { flex-basis: 100%; }
+}
+
 .liveOverview .runbookIdle {
   padding: var(--s4) var(--s4) var(--s4) var(--s5);
   border: 1px dashed var(--line-strong);

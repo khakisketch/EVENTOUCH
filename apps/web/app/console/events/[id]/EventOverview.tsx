@@ -107,6 +107,8 @@ type Overview = {
   messageReviewIncomplete: boolean;
   // 확인 필요 prizes, or null while the 경품 feature is off or unreadable.
   rewardAttention: number | null;
+  // 지급 대기 prizes (same bucket as 현장 모드 rewardsWaiting), or null while 경품 is off or unreadable.
+  rewardWaiting: number | null;
   messageConnection: "connected" | "disconnected" | "unknown";
 };
 
@@ -674,6 +676,8 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             messageReviewIncomplete,
             rewardAttention: Array.isArray(event.features) && event.features.includes("reward")
               ? countRewardAttention(workspace)?.attention ?? null : null,
+            rewardWaiting: Array.isArray(event.features) && event.features.includes("reward")
+              ? countRewardAttention(workspace)?.waiting ?? null : null,
             messageConnection: asRecord(bootstrap.integrations)?.connected === true ? "connected"
               : asRecord(bootstrap.integrations)?.connected === false ? "disconnected" : "unknown",
           },
@@ -951,6 +955,18 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         href: `${base}/reports`,
       });
     }
+    // Reopened 2026-11-24 (owner: 경품 대기 한 줄): 지급 대기 prizes during the event use the
+    // same count as 현장 모드. A ghost link, never a new primary.
+    if (live && overview.rewardWaiting !== null && overview.rewardWaiting > 0) {
+      nowItems.push({
+        key: "reward-waiting",
+        title: "경품 지급 대기",
+        count: `${overview.rewardWaiting}건`,
+        hint: "",
+        action: "경품 지급",
+        href: `${base}/rewards`,
+      });
+    }
     // Last on purpose: a quiet row that never outranks the stage's own work.
     if (overview.rewardAttention !== null && overview.rewardAttention > 0) {
       nowItems.push({
@@ -970,9 +986,11 @@ export default function EventOverview({ eventId }: { eventId: string }) {
     </Link>
   );
 
+  // 경품 대기만 있을 때는 호박색 한 줄("지금 할 일 N · 경품 지급 대기 M건 · 경품 지급 →").
+  const nowWarnLine = live && nowItems.length === 1 && nowItems[0].key === "reward-waiting";
   const nowSection = (
-    <ConsoleSection headingId="event-now-heading" title="지금 할 일" className={`${styles.regionQueue} ${live && !nowItems.length ? styles.queueIdle : ""}`}
-      action={nowItems.length || currentStage !== "LIVE" ? (
+    <ConsoleSection headingId="event-now-heading" title={nowWarnLine ? `지금 할 일 ${nowItems.length}` : "지금 할 일"} className={`${styles.regionQueue} ${live && !nowItems.length ? styles.queueIdle : ""} ${nowWarnLine ? styles.queueWarn : ""}`}
+      action={(nowItems.length && !nowWarnLine) || currentStage !== "LIVE" ? (
         <div className={styles.queueActions}>
           {nowItems.length ? <span className={styles.queueCount}>{nowItems.length}가지</span> : null}
           {currentStage !== "LIVE" && currentStage !== "ARCHIVED" ? fieldOperationsLink : null}
@@ -1028,24 +1046,27 @@ export default function EventOverview({ eventId }: { eventId: string }) {
       href: `${base}/messages`,
     },
   ];
-  const readyDone = readyItems.filter((item) => item.state === "done").length;
   const readyRequired = readyItems.filter((item) => item.state === "todo");
-  const readyOptional = readyItems.filter((item) => item.state === "optional").length;
-  const readyPercent = Math.round((readyDone / readyItems.length) * 100);
+  // Reopened 2026-11-24 (owner: 링 필수 기준): required = 접수, and from 운영 준비 the 현장 준비; the rest is 선택.
+  // The ring, its accessible name and the supporting line all count required items, like the headline.
+  const requiredKeys = currentStage === "READY" ? ["intake", "desk"] : ["intake"];
+  const requiredItems = readyItems.filter((item) => requiredKeys.includes(item.key));
+  const optionalItems = readyItems.filter((item) => !requiredKeys.includes(item.key));
+  const requiredDone = requiredItems.filter((item) => item.state === "done").length;
+  const optionalDone = optionalItems.filter((item) => item.state === "done").length;
+  const readyPercent = requiredItems.length ? Math.round((requiredDone / requiredItems.length) * 100) : 0;
   const readyHeadline = readyRequired.length
     ? `${currentStage === "DRAFT" ? "접수를 열기까지" : `${nextStageText} 단계로 넘어가기까지`} ${readyRequired.length}가지 남았습니다`
     : currentStage === "DRAFT" ? "접수를 열 준비가 됐습니다" : "진행 중으로 전환할 준비가 됐습니다";
-  const readySub = readyRequired.length
-    ? `${readyRequired.map((item) => item.label).join(", ")} 항목이 남았습니다.${readyOptional ? ` 선택 항목 ${readyOptional}가지는 나중에 해도 됩니다.` : ""}`
-    : readyOptional ? `선택 항목 ${readyOptional}가지가 남아 있지만 전환에는 필요하지 않습니다.` : "모든 항목이 준비됐습니다.";
+  const readySub = `필수 ${requiredDone}/${requiredItems.length} · 선택 ${optionalDone}/${optionalItems.length}.${optionalDone < optionalItems.length ? " 선택 항목은 나중에 해도 됩니다." : ""}`;
   const countsUnavailable = !overview.participantsAvailable;
 
   const prepHero = preparing ? (
     <section className={board.prepHero} aria-labelledby="event-metrics-heading">
       <h2 id="event-metrics-heading" className="sr-only">준비 현황과 주요 지표</h2>
       <div className={board.prepTop}>
-        <div className={board.ring} style={{ "--p": readyPercent } as CSSProperties} role="img" aria-label={`준비 항목 ${readyItems.length}개 중 ${readyDone}개 완료`}>
-          <div><strong>{readyDone}/{readyItems.length}</strong><span>준비 완료</span></div>
+        <div className={board.ring} style={{ "--p": readyPercent } as CSSProperties} role="img" aria-label={`필수 항목 ${requiredItems.length}개 중 ${requiredDone}개 완료, 선택 항목 ${optionalItems.length}개 중 ${optionalDone}개 완료`}>
+          <div><strong>{requiredDone}</strong><span>/{requiredItems.length} 필수</span></div>
         </div>
         <div className={board.prepCopy}>
           <p className={board.stageBand}>
