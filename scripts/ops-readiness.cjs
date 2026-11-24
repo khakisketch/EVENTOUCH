@@ -25,8 +25,10 @@
   //   - Public health intentionally omits tenant work counts. A missing count
   //     is unverified, never a successful check of an explicitly set limit.
 //     Reported always; fails only past --max-outbox-pending (unset = report).
-//   - disk (only with --disk-path, repeatable): free bytes via df; fails
-//     only below --min-disk-free-bytes (unset = report).
+//   - disk (only with --disk-path, repeatable): free bytes and used percent
+//     via df. Fails at or above --max-disk-used-percent (default 80, the
+//     2026-11-24 backup decision) and below --min-disk-free-bytes (unset =
+//     not enforced).
 //
 // Output: human lines by default, machine JSON with --json (same object).
 // Exit: 0 when every ENFORCED check passes, 1 otherwise. Report-only checks
@@ -39,6 +41,7 @@ const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { readManifest, verifyChecksums } = require('./backup-lib.cjs');
+const { diskUsage, DEFAULT_MAX_USED_PERCENT } = require('./disk-usage.cjs');
 
 const execFileAsync = promisify(execFile);
 
@@ -57,6 +60,7 @@ const HELP = `
   --max-outbox-pending <N>    대기 outbox가 이 초과면 실패 (미지정=보고만)
   --disk-path <경로>          (반복 가능) 여유 공간 보고 대상
   --min-disk-free-bytes <N>   이 미만이면 실패 (미지정=보고만)
+  --max-disk-used-percent <N> 디스크 사용률이 이 값 이상이면 실패 (기본: 80)
   --timeout-ms <N>            HTTP 타임아웃 (기본: 8000)
   --json                      JSON으로 출력
   --help
@@ -66,7 +70,7 @@ function parseArgs(argv) {
   const options = {
     apiBase: '', webBase: '', backupRoot: '', project: 'eventouch',
     maxBackupAgeHours: '', maxOutboxPending: '', diskPaths: [],
-    minDiskFreeBytes: '', timeoutMs: '8000', json: false, help: false,
+    minDiskFreeBytes: '', maxDiskUsedPercent: String(DEFAULT_MAX_USED_PERCENT), timeoutMs: '8000', json: false, help: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -154,12 +158,8 @@ async function checkBackup(root, project, maxAgeHours) {
 
 async function checkDisk(target) {
   try {
-    const { stdout } = await execFileAsync('df', ['-B1', '--output=avail,target', target]);
-    const line = String(stdout).trim().split('\n').slice(1).find((row) => row.trim());
-    if (!line) return { name: `disk:${target}`, state: 'fail', detail: 'df returned no rows' };
-    const free = Number(line.trim().split(/\s+/)[0]);
-    if (!Number.isFinite(free)) return { name: `disk:${target}`, state: 'fail', detail: 'df output unparseable' };
-    return { name: `disk:${target}`, state: 'report', detail: { freeBytes: free } };
+    const usage = await diskUsage(target);
+    return { name: `disk:${target}`, state: 'report', detail: { freeBytes: usage.freeBytes, usedPercent: usage.usedPercent } };
   } catch (error) {
     return { name: `disk:${target}`, state: 'fail', detail: `df failed: ${error.message}` };
   }
@@ -176,6 +176,8 @@ async function main() {
   const maxAgeHours = numberOrNull(options.maxBackupAgeHours);
   const maxOutbox = numberOrNull(options.maxOutboxPending);
   const minDiskFree = numberOrNull(options.minDiskFreeBytes);
+  const maxDiskUsed = numberOrNull(options.maxDiskUsedPercent);
+  if (maxDiskUsed === null || maxDiskUsed < 1 || maxDiskUsed > 100) throw new Error('--max-disk-used-percent는 1~100 사이여야 합니다');
   const apiBase = options.apiBase.replace(/\/+$/, '');
 
   const checks = [];
@@ -226,11 +228,16 @@ async function main() {
 
   for (const target of options.diskPaths) {
     const result = await checkDisk(target);
-    if (result.state === 'report' && minDiskFree !== null) {
-      result.state = result.detail.freeBytes < minDiskFree ? 'fail' : 'pass';
-      result.detail.minDiskFreeBytes = minDiskFree;
-    } else if (result.state === 'report') {
-      result.detail.threshold = 'no-policy (reported only)';
+    if (result.state === 'report') {
+      result.detail.maxDiskUsedPercent = maxDiskUsed;
+      const reasons = [];
+      if (result.detail.usedPercent >= maxDiskUsed) reasons.push(`디스크 사용률 ${result.detail.usedPercent}%가 ${maxDiskUsed}% 이상입니다`);
+      if (minDiskFree !== null) {
+        result.detail.minDiskFreeBytes = minDiskFree;
+        if (result.detail.freeBytes < minDiskFree) reasons.push('여유 공간이 기준보다 적습니다');
+      }
+      result.state = reasons.length ? 'fail' : 'pass';
+      if (reasons.length) result.detail.warning = reasons.join(', ');
     }
     checks.push(result);
   }
@@ -257,4 +264,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main };
+module.exports = { main, checkDisk };

@@ -341,9 +341,18 @@ test('ops tooling: an explicit queue limit cannot pass without a queue measureme
 });
 
 test('ops tooling: notify stays log-only and honors exit codes', () => {
-  const refused = run('ops-notify.cjs', ['--send']);
-  assert.equal(refused.status, 1);
-  assert.match(refused.stderr + refused.stdout, /log-only|REFUSED/);
+  // --send without EVENTOUCH_OPS_NOTIFY_EMAIL + SMTP settings stays log-only
+  // and says so (the failing report still exits 2). The child env is cleaned
+  // so a developer's real settings can never cause a send from this test.
+  const failingReport = JSON.stringify({ ok: false, checks: [{ name: 'api-health', state: 'fail', detail: 'down' }] });
+  const unsent = spawnSync(process.execPath, [path.join(SCRIPTS, 'ops-notify.cjs'), '--send'], {
+    encoding: 'utf8', input: failingReport, timeout: 15000,
+    env: Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^EVENTOUCH_(OPS_NOTIFY|SMTP|MAIL)/.test(key))),
+  });
+  assert.equal(unsent.status, 2);
+  assert.match(unsent.stdout, /메일: 보내지 않음/);
+  assert.match(unsent.stdout, /EVENTOUCH_OPS_NOTIFY_EMAIL/);
+  assert.match(unsent.stdout, /외부 전송 없음/);
 
   const empty = run('ops-notify.cjs', [], { input: '' });
   assert.equal(empty.status, 1);

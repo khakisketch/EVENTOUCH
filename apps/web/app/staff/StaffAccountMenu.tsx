@@ -111,7 +111,7 @@ export default function StaffAccountMenu({
   const summary = context
     ? `${context.userName} · ${context.organizationName} · ${staffRoleLabel(context.role)}`
     : selectionRequired
-      ? "운영사 선택 필요"
+      ? "조직 선택 필요"
       : snapshot.loading
         ? "계정 정보를 확인하고 있습니다."
         : "계정 정보를 불러오지 못했습니다.";
@@ -155,7 +155,7 @@ export default function StaffAccountMenu({
         ) : (
           <p className={styles.menuNote} role="status">
             {selectionRequired
-              ? "운영사 선택 필요: 아래 운영사 선택에서 작업할 운영사를 고르세요."
+              ? "조직 선택 필요: 아래 조직 선택에서 작업할 조직을 고르세요."
               : snapshot.loading
                 ? "계정 정보를 확인하고 있습니다."
                 : "계정 정보를 불러오지 못했습니다."}
@@ -178,6 +178,12 @@ export default function StaffAccountMenu({
         <OrganizationSwitcher confirmLeave={confirmLeave} />
         <a className={styles.menuLink} href="/account/email" onClick={handleAccountNavigate}>
           내 계정 이메일 인증
+        </a>
+        <a className={styles.menuLink} href="/account/password" onClick={handleAccountNavigate}>
+          비밀번호 변경
+        </a>
+        <a className={styles.menuLink} href="/help" target="_blank" rel="noopener noreferrer" aria-label="도움말·문의 (새 탭)">
+          도움말·문의
         </a>
         <ProductButton
           type="button"

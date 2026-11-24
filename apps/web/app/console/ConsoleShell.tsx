@@ -308,7 +308,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         const roleLabel = role === "STAFF"
           ? "현장 스태프"
           : role === "MANAGER"
-            ? "운영사 구성원"
+            ? "조직 구성원"
             : role === "AGENCY"
               ? "조직 소유자"
               : "운영자";
@@ -1119,6 +1119,12 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           <Link className="operator-menu-item" href="/account/email">
             <span>내 계정 이메일 인증</span>
           </Link>
+          <Link className="operator-menu-item" href="/account/password">
+            <span>비밀번호 변경</span>
+          </Link>
+          <Link className="operator-menu-item" href="/help" target="_blank" rel="noopener noreferrer" aria-label="도움말·문의 (새 탭)">
+            <span>도움말·문의</span>
+          </Link>
           {canManageTeam ? (
             <Link
               className="operator-menu-item"
@@ -1234,7 +1240,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           >
             <span className="operator-identity">
               <strong>{userName}</strong>{" "}
-              <small>{organization.context?.organizationName ?? "운영사"} · {shellData?.roleLabel ?? "역할 확인 중"}</small>
+              <small>{organization.context?.organizationName ?? "조직"} · {shellData?.roleLabel ?? "역할 확인 중"}</small>
             </span>
           </ProductButton>
         </div>
@@ -1254,8 +1260,8 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
             // (2026-11-23).
             <ConsolePageSkeleton shape="list" />
           ) : !organization.context ? <section className={freshnessStyles.selectionRequired}>
-            <h1>작업할 운영사를 선택하세요</h1>
-            <p>소속 운영사와 그곳에서 맡은 역할을 확인한 뒤 이동합니다.</p>
+            <h1>작업할 조직을 선택하세요</h1>
+            <p>소속 조직과 그곳에서 맡은 역할을 확인한 뒤 이동합니다.</p>
             <OrganizationSwitcher />
           </section> : <>
           {shellError ? (

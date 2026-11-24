@@ -92,11 +92,21 @@ function ttlMs() {
   return (Number.isFinite(hours) && hours > 0 && hours <= 24 * 365 ? hours : 12) * 3600 * 1000;
 }
 
+// Absolute session ceiling (SESSION_MAX_DAYS, default 14): sliding renewal
+// never carries a session past sessions.created_at + this limit, however
+// active it is. After that the holder signs in again. Sessions that were
+// already past the ceiling when this rule shipped stop authenticating too.
+function sessionMaxSeconds(env = process.env) {
+  const days = Number(env.SESSION_MAX_DAYS || 14);
+  return Math.floor((Number.isFinite(days) && days > 0 && days <= 365 ? days : 14) * 86400);
+}
+
 // Sliding session: a session whose remaining lifetime has dropped below half
-// of the TTL is renewed to a full TTL on its next authenticated request. The
-// extension is one conditional UPDATE (a no-op for sessions that were already
-// renewed or revoked), never required for the request to succeed, and the
-// browser cookie is refreshed with the same Max-Age by the HTTP layer through
+// of the TTL is renewed to a full TTL (never beyond the absolute ceiling
+// above) on its next authenticated request. The extension is one conditional
+// UPDATE (a no-op for sessions that were already renewed, revoked or at the
+// ceiling), never required for the request to succeed, and the browser cookie
+// is refreshed with the renewed remaining lifetime by the HTTP layer through
 // takeSessionCookieRefresh().
 const REFRESHED_COOKIE_LIMIT = 1000;
 
@@ -337,7 +347,7 @@ function createDatabaseAuth(database, options = {}) {
   // inside its own transaction (see server/tenancy.js).
   async function createSession(accountId, orgId = null, { recordLogin = false } = {}) {
     const token = crypto.randomBytes(32).toString('base64url');
-    const expiresAt = new Date(Date.now() + ttlMs());
+    const expiresAt = new Date(Date.now() + Math.min(ttlMs(), sessionMaxSeconds(env) * 1000));
     const selected = await database.transaction(async (client) => {
       const accountResult = await client.query(
         'SELECT id FROM accounts WHERE id = $1 AND active = true LIMIT 1',
@@ -387,8 +397,8 @@ function createDatabaseAuth(database, options = {}) {
   // path that never consumes it cannot grow the map.
   const refreshedSessionCookies = new Map();
 
-  function rememberRefreshedSession(token) {
-    refreshedSessionCookies.set(token, Date.now());
+  function rememberRefreshedSession(token, maxAgeSeconds) {
+    refreshedSessionCookies.set(token, maxAgeSeconds);
     if (refreshedSessionCookies.size > REFRESHED_COOKIE_LIMIT) {
       const oldest = refreshedSessionCookies.keys().next().value;
       refreshedSessionCookies.delete(oldest);
@@ -399,15 +409,22 @@ function createDatabaseAuth(database, options = {}) {
     const ttlSeconds = Math.floor(ttlMs() / 1000);
     if (!Number.isFinite(remainingSeconds) || remainingSeconds >= ttlSeconds / 2) return;
     try {
+      // The ceiling is part of the statement: a session already at its
+      // ceiling matches no row (nothing to renew, no cookie refresh).
       const renewed = await database.query(
         `UPDATE sessions
-         SET expires_at = now() + ($2::int * interval '1 second')
+         SET expires_at = LEAST(now() + ($2::int * interval '1 second'),
+                                created_at + ($4::int * interval '1 second'))
          WHERE token_hash = $1
            AND expires_at > now()
-           AND expires_at < now() + ($3::numeric * interval '1 second')`,
-        [tokenHash(token), ttlSeconds, ttlSeconds / 2]
+           AND expires_at < now() + ($3::numeric * interval '1 second')
+           AND expires_at < created_at + ($4::int * interval '1 second')
+         RETURNING EXTRACT(EPOCH FROM (expires_at - now()))::float8 AS remaining_seconds`,
+        [tokenHash(token), ttlSeconds, ttlSeconds / 2, sessionMaxSeconds(env)]
       );
-      if (renewed.rowCount === 1) rememberRefreshedSession(token);
+      if (renewed.rowCount === 1) {
+        rememberRefreshedSession(token, Math.max(1, Math.floor(Number(renewed.rows[0].remaining_seconds))));
+      }
     } catch (error) {
       // Renewal is a convenience: the request still has a valid session.
     }
@@ -417,8 +434,10 @@ function createDatabaseAuth(database, options = {}) {
   // session was just extended, otherwise null.
   function takeSessionCookieRefresh(cookieHeader) {
     const token = cookieToken(cookieHeader);
-    if (!token || !refreshedSessionCookies.delete(token)) return null;
-    return databaseCookie(token);
+    if (!token || !refreshedSessionCookies.has(token)) return null;
+    const maxAge = refreshedSessionCookies.get(token);
+    refreshedSessionCookies.delete(token);
+    return databaseCookie(token, maxAge);
   }
 
   async function sessionFromCookie(cookieHeader) {
@@ -431,8 +450,9 @@ function createDatabaseAuth(database, options = {}) {
               EXTRACT(EPOCH FROM (s.expires_at - now()))::float8 AS remaining_seconds
        FROM sessions s JOIN accounts a ON a.id = s.account_id
        WHERE s.token_hash = $1 AND s.expires_at > now() AND a.active = true
+         AND s.created_at + ($2::int * interval '1 second') > now()
        LIMIT 1`,
-      [tokenHash(token)]
+      [tokenHash(token), sessionMaxSeconds(env)]
     );
     const row = result.rows[0];
     if (!row || !ROLES.includes(row.global_role)) return null;
@@ -1051,6 +1071,115 @@ function createDatabaseAuth(database, options = {}) {
       throw error;
     }
   }
+  // Self-service password change for the signed-in holder. Global identity
+  // operation on the caller's OWN account: no org authority is consulted and
+  // no other account is readable. The current password is re-proved under the
+  // account lock; wrong attempts count against the login throttle rules but
+  // under their own keys ("pw:" prefix), so guessing here never locks the
+  // login form and vice versa. Success keeps only the session that made the
+  // change (every other session of the account is revoked) and retires
+  // outstanding recovery bearers. The receipt is the audit record: command,
+  // actor and account id, never any password value.
+  async function changeOwnPassword(user, { currentPassword, newPassword, commandId: commandIdValue, clientIp, sessionToken }) {
+    const command = commandIdentifier(commandIdValue);
+    if (typeof newPassword !== 'string' || newPassword.length < 8 || newPassword.length > 200) {
+      throw invitationFailure(400, '새 비밀번호를 8~200자로 입력하세요', { field: 'newPassword' });
+    }
+    if (typeof currentPassword !== 'string' || !currentPassword) {
+      throw invitationFailure(400, '현재 비밀번호를 입력하세요', { field: 'currentPassword' });
+    }
+    const accountKey = `pw:${user.id}`;
+    const addressKey = `pw:${clientIp}`;
+    const blocked = await withThrottle(async () => (
+      (await isBlocked('account', accountKey, settings.account)) ||
+      (await isBlocked('address', addressKey, settings.address))
+    ), false);
+    if (blocked) {
+      throw invitationFailure(429, '비밀번호 확인 시도가 너무 많습니다. 잠시 후 다시 시도하세요', {
+        retryAfterSeconds: settings.account.blockMinutes * 60,
+      });
+    }
+    const keepTokenHash = sessionToken && sessionToken.length <= 256 ? tokenHash(sessionToken) : '';
+    let result;
+    try {
+      result = await database.transaction(async (client) => {
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`account-password:${command}`]);
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`account-id:${user.id}`]);
+        const found = await client.query(
+          'SELECT id, email, name, role, active, password_hash FROM accounts WHERE id = $1 FOR UPDATE',
+          [String(user.id)]
+        );
+        const account = found.rows[0];
+        if (!account || account.active !== true) throw invitationFailure(401, '로그인이 필요합니다');
+        // The session that authenticated this route must still be alive under
+        // the lock: a revocation that landed meanwhile wins.
+        if (keepTokenHash) {
+          const alive = await client.query(
+            `SELECT 1 FROM sessions WHERE token_hash = $1 AND account_id = $2 AND expires_at > now() LIMIT 1`,
+            [keepTokenHash, String(user.id)]
+          );
+          if (!alive.rowCount) throw invitationFailure(401, '로그인이 필요합니다');
+        }
+        const receiptResult = await client.query(
+          'SELECT actor_id, result FROM command_receipts WHERE command_id = $1 LIMIT 1 FOR UPDATE',
+          [command]
+        );
+        if (receiptResult.rowCount) {
+          const receipt = receiptResult.rows[0];
+          const stored = receipt.result && typeof receipt.result === 'object' ? receipt.result : {};
+          // Only a byte-identical replay (same actor, same account, new
+          // password already in force) is idempotent.
+          if (String(receipt.actor_id || '') === String(user.id) &&
+              stored.command === 'account.password-change' &&
+              verifyPassword(newPassword, account.password_hash)) {
+            return { replayed: true, sessionsRevoked: 0 };
+          }
+          throw invitationFailure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
+        }
+        if (!verifyPassword(currentPassword, account.password_hash)) {
+          throw invitationFailure(401, '현재 비밀번호를 확인하세요', { field: 'currentPassword', code: 'CURRENT_PASSWORD_WRONG' });
+        }
+        if (verifyPassword(newPassword, account.password_hash)) {
+          throw invitationFailure(400, '새 비밀번호가 현재 비밀번호와 같습니다. 다른 비밀번호를 입력하세요', { field: 'newPassword' });
+        }
+        await client.query('UPDATE accounts SET password_hash = $1 WHERE id = $2', [hashPassword(newPassword), account.id]);
+        const proofsRelation = await client.query("SELECT to_regclass('account_email_proofs') AS present");
+        if (proofsRelation.rows[0] && proofsRelation.rows[0].present) {
+          await client.query(
+            `UPDATE account_email_proofs SET consumed_at = now()
+              WHERE account_id = $1 AND consumed_at IS NULL`,
+            [account.id]
+          );
+        }
+        const revoked = await client.query(
+          'DELETE FROM sessions WHERE account_id = $1 AND token_hash != $2',
+          [account.id, keepTokenHash]
+        );
+        await client.query(
+          `INSERT INTO command_receipts (command_id, event_id, actor_id, org_id, result)
+           VALUES ($1, NULL, $2, NULL, $3::jsonb)`,
+          [command, account.id, JSON.stringify({
+            command: 'account.password-change',
+            request: { id: account.id },
+            response: { sessionsRevoked: revoked.rowCount },
+          })]
+        );
+        return { replayed: false, sessionsRevoked: revoked.rowCount };
+      });
+    } catch (error) {
+      if (error && error.code === 'CURRENT_PASSWORD_WRONG') {
+        await recordFailureSafely('account', accountKey);
+        await recordFailureSafely('address', addressKey);
+      } else if (error && error.code === '23505' && !error.status) {
+        throw invitationFailure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
+      }
+      throw error;
+    }
+    await clearFailures('account', accountKey);
+    await clearFailures('address', addressKey);
+    return result;
+  }
+
   async function revokeInvitation(actor, invitationId, commandIdValue) {
     const id = String(invitationId || '').trim();
     if (!id) throw invitationFailure(404, '초대를 찾을 수 없습니다');
@@ -1192,8 +1321,9 @@ function createDatabaseAuth(database, options = {}) {
         `SELECT s.org_id, s.org_select_revision, s.org_context_version, a.id AS account_id
          FROM sessions s JOIN accounts a ON a.id = s.account_id
          WHERE s.token_hash = $1 AND s.expires_at > now() AND a.active = true
+           AND s.created_at + ($2::int * interval '1 second') > now()
          LIMIT 1 FOR UPDATE OF s`,
-        [hash]
+        [hash, sessionMaxSeconds(env)]
       );
       if (!sessionRow.rowCount || String(sessionRow.rows[0].account_id) !== String(user.id)) {
         throw invitationFailure(401, '로그인이 필요합니다');
@@ -1865,6 +1995,39 @@ function createDatabaseAuth(database, options = {}) {
       }
       return;
     }
+    if (urlPath === '/api/auth/password' && req.method === 'POST') {
+      res.setHeader('cache-control', 'no-store');
+      const user = await sessionFromCookie(req.headers.cookie).catch(() => null);
+      if (!user) {
+        sendJson(res, 401, { error: '로그인이 필요합니다' });
+        return;
+      }
+      let body;
+      try {
+        body = await readJsonBody(req);
+      } catch (error) {
+        sendJson(res, 400, { error: error.message });
+        return;
+      }
+      try {
+        const result = await changeOwnPassword(user, {
+          currentPassword: body && body.currentPassword,
+          newPassword: body && body.newPassword,
+          commandId: body && body.commandId,
+          clientIp: clientAddress(req),
+          sessionToken: cookieToken(req.headers.cookie),
+        });
+        sendJson(res, 200, { ok: true, replayed: result.replayed, sessionsRevoked: result.sessionsRevoked });
+      } catch (error) {
+        sendJson(res, error.status || 500, Object.assign(
+          { error: failureMessage(error, '비밀번호를 바꾸지 못했습니다') },
+          error.field ? { field: error.field } : null,
+          error.code && error.code !== 'CURRENT_PASSWORD_WRONG' ? { code: error.code } : null,
+          error.retryAfterSeconds ? { retryAfterSeconds: error.retryAfterSeconds } : null
+        ));
+      }
+      return;
+    }
     const passwordResetPath = /^\/api\/auth\/accounts\/([^/]+)\/password$/.exec(urlPath);
     if (passwordResetPath && req.method === 'POST') {
       let accountId;
@@ -2155,7 +2318,7 @@ function createDatabaseAuth(database, options = {}) {
   async function clearLoginLockout(req, res, scopeValue, keyValue) {
     const actor = await sessionFromCookie(req.headers.cookie);
     if (!actor || actor.noMembership || actor.orgSelectionRequired || actor.role !== 'AGENCY') {
-      sendJson(res, 403, { error: '운영사 구성원만 잠금을 해제할 수 있습니다' });
+      sendJson(res, 403, { error: '조직 구성원만 잠금을 해제할 수 있습니다' });
       return;
     }
     attachOrgRequest(actor, req);
@@ -2164,13 +2327,13 @@ function createDatabaseAuth(database, options = {}) {
       org = await database.transaction(async (client) => resolveActorOrg(client, actor, { requireHeaders: false }));
     } catch (error) {
       sendJson(res, error.status || 403, Object.assign(
-        { error: failureMessage(error, '운영사 구성원만 잠금을 해제할 수 있습니다') },
+        { error: failureMessage(error, '조직 구성원만 잠금을 해제할 수 있습니다') },
         error.code ? { code: error.code } : null
       ));
       return;
     }
     if (org.role !== 'AGENCY') {
-      sendJson(res, 403, { error: '운영사 구성원만 잠금을 해제할 수 있습니다' });
+      sendJson(res, 403, { error: '조직 구성원만 잠금을 해제할 수 있습니다' });
       return;
     }
     const scope = scopeValue === 'address' ? 'address' : 'account';

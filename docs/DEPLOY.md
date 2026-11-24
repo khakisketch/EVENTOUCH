@@ -32,7 +32,7 @@ Production migration, copying existing data/files, deployment and restoring a li
 
 ## Backup and restore
 
-Back up PostgreSQL and the configured file storage together from a consistent point. Store the output outside the repository with restricted access and create an off-site copy under an approved retention policy.
+Back up PostgreSQL and the configured file storage together from a consistent point. Store the output outside the repository with restricted access. An off-site copy is still undecided (see the policy below).
 
 ```bash
 npm run backup -- --project eventouch --out /private/backups/eventouch
@@ -41,7 +41,7 @@ npm run backup:verify -- --project eventouch --out /private/backups/eventouch-ve
 
 Verification restores to a temporary database and compares its recorded table counts, migration state, and file checksums. Before relying on a backup, restore it into a separate, empty Compose project and verify login, an event, an attendee, and file access. Never rehearse recovery against the live project's database or volumes.
 
-The application backup scripts provide snapshot recovery, not point-in-time recovery. Supabase backup/PITR availability depends on the actual service configuration and does not recover NAS bytes. A restored database and files must still match the same approved recovery point. See [Supabase backup scope](https://supabase.com/docs/guides/platform/backups). Backup frequency, retention, encryption, off-site location, and deletion exceptions still need an operational owner and approval.
+The application backup scripts provide snapshot recovery, not point-in-time recovery. Supabase backup/PITR availability depends on the actual service configuration and does not recover NAS bytes. A restored database and files must still match the same approved recovery point. See [Supabase backup scope](https://supabase.com/docs/guides/platform/backups). Backup frequency, encryption, off-site location, and deletion exceptions still need an operational owner and approval. Retention and alerts are decided below.
 
 For managed PostgreSQL, load the approved private environment into the host process, use a compatible `pg_dump` client, stop application writes and workers under the maintenance procedure, and include the same mounted file directory:
 
@@ -52,6 +52,19 @@ npm run backup -- --database-env DATABASE_DIRECT_URL --storage-dir /mnt/nas/even
 The host path uses the application's TLS policy, passes credentials through the child environment rather than command arguments, dumps only the current application schema, and records that schema in the manifest. In mounted mode it checks the same storage identity before and after archiving. `--skip-storage` is a database-only diagnostic backup, not a complete recovery set. Old `--database-url` input remains compatible but exposes the caller's URL in their own command line, so use environment selection instead.
 
 The automated `--verify` and Compose restore paths remain for the default public-schema local deployment. They refuse a private-schema backup before mutating a target. Managed recovery must use a separately approved, empty target and a restored file directory, preserving the recorded schema. Verify every recorded table count and migration plus all file checksums, then login, an event, an attendee and authorized/public file access. Synthetic local restore tests do not approve a real Supabase restore, NAS recovery, role/extension transfer or provider failover. Do not use the local Compose backup scheduler unchanged for a managed deployment.
+
+### Backup retention, disk warning and alerts (decided 2026-11-24)
+
+- **Retention: the last 14 days, and never fewer than the newest 7.** `scripts/backup-prune.cjs` removes only backups that are both older than 14 days and outside the newest 7 (`--keep-days`, `--min-keep` can only be set to 1 or more). By default it prints what it would delete and deletes nothing. Deletion needs `--apply --i-understand` together. It touches only direct children of `--backup-root` named `<project>-<timestamp>` that hold a `manifest.json` with `format: 1`; other names, files, symlinks, half-written backups and other projects are listed as skipped and never removed. A root that is a filesystem top level, a system directory or the home directory is refused.
+- **Scheduler.** `node scripts/backup-schedule.cjs --backup-root <root> --check --prune --notify` takes the backup, verifies it, prunes only after both succeeded (a failed night never shrinks the history), then checks the backup disk. `--print-cron` prints the cron line; this repository never installs it. A cron line is a deployment action for the operator.
+- **Disk warning at 80% used.** The scheduler checks the backup root (`--max-disk-used-percent`, default 80) and `scripts/ops-readiness.cjs --disk-path <path>` fails at the same limit. Both exit nonzero.
+- **Alerts.** `scripts/ops-notify.cjs --send` mails the failures only when `EVENTOUCH_OPS_NOTIFY_EMAIL` and the SMTP settings read by `server/smtp-mail.js` (`EVENTOUCH_MAIL_TRANSPORT=smtp`, `EVENTOUCH_SMTP_HOST/PORT/FROM/USER/PASSWORD`) are all present in the environment of that process. Otherwise it only logs, and the output states that no mail was sent. The mail carries check names and details, never credentials. Configuration alone does not prove an inbox received it; confirm one real alert before relying on it.
+- **Still undecided:** off-site copy, backup encryption, and who is accountable for acting on an alert.
+
+## Sessions and password changes
+
+- A sign-in lasts `SESSION_TTL_HOURS` (default 12) and is renewed while in use, but never past `SESSION_MAX_DAYS` (default 14) from the moment of sign-in. After that the person signs in again. Existing sessions older than the limit stop working when this ships.
+- `/account/password` lets a signed-in person change their own password (current password, new password, confirmation). Success ends every other session of that account and keeps the one that made the change. Wrong current passwords count against the same limits as sign-in, under separate counters, so guessing here cannot lock the sign-in form.
 
 ## Release and human acceptance
 
@@ -65,7 +78,7 @@ A release record requires explicit policy review and actual operator-journey, iO
 
 ## Retention and deletion
 
-Retention periods, deletion authority, exceptions, and backup expiry are not approved. Until they are, do not permanently delete events, accounts, receipts, attendee data, or file bytes. `npm run event:purge:review -- --org-id <organization-id> --event-id <event-id>` reports review information only; it does not purge data.
+Backup expiry is decided above (14 days, newest 7 kept). Retention periods for event, account, receipt, attendee and file data, deletion authority and exceptions are not approved. Until they are, do not permanently delete events, accounts, receipts, attendee data, or file bytes. `npm run event:purge:review -- --org-id <organization-id> --event-id <event-id>` reports review information only; it does not purge data.
 
 ## 배포 전 점검 (2026-11-20 사고 기록)
 - 호스트 디스크 여유가 5GB 아래이면 `docker build`가 Docker VM 디스크를 늘리지 못해 VM 파일시스템이 읽기 전용이 되고 컨테이너가 멈춘다. 배포 전에 `df -h`로 여유를 확인한다.
