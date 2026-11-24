@@ -43,6 +43,7 @@
 
 const { drainMessageOutbox, recordDispatchRequest } = require('./message-outbox');
 const { resolveDelivery } = require('./messaging');
+const { materializeAutoNotices } = require('./auto-notify');
 // Pre-send guards are owned by the command path (server/commands/
 // content-results.js): the worker reuses dueScheduleGuards verbatim so an
 // automatic run can never accept a campaign the operator's own retry would
@@ -261,7 +262,10 @@ async function runMessageMaintenance(database, provider, options = {}) {
   let enqueued = 0;
   let duePending = 0;
   let skippedDue = [];
+  let autoNotices = null;
   if (autoSendDue) {
+    // 자동 안내 규칙이 켜진 행사에서 즉시 실행 예약(AUTO)을 만든다. 발송은 바로 아래 같은 경로가 한다.
+    autoNotices = await materializeAutoNotices(database, { now, limit, providerKind: provider?.state?.provider });
     const queued = await enqueueDueScheduled(database, { now, limit, eventIds: options.eventIds, cursor: options.cursor, providerKind: provider?.state?.provider });
     enqueued = queued.enqueued;
     duePending = queued.duePending;
@@ -273,7 +277,7 @@ async function runMessageMaintenance(database, provider, options = {}) {
   const drain = await drainMessageOutbox(database, provider, { now, limit, fileStorage: options.fileStorage });
   const resolved = await resolvePendingDeliveries(database, provider, { now, limit, eventIds: options.eventIds, cursor: options.resolutionCursor });
 
-  return { at: now, enabled: true, autoSendDue, enqueued, duePending, skippedDue, drain, resolved };
+  return { at: now, enabled: true, autoSendDue, autoNotices, enqueued, duePending, skippedDue, drain, resolved };
 }
 
 module.exports = {

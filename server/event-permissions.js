@@ -152,6 +152,7 @@ const COMMAND_WRITE_SCOPE = {
   'message.retry': 'messages',
   'message.sync': 'messages',
   'message.record-provider-check': 'messages',
+  'autoNotify.save': 'messages',
   'template.save': 'messages',
   'template.archive': 'messages',
   'payment.simulate': 'messages',

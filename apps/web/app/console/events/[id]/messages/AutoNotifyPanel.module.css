@@ -1,0 +1,78 @@
+/* 자동 안내 패널 (2026-11-24). 토큰만 사용한다. */
+.rules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s4);
+  align-items: start;
+}
+
+.rule {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--paper);
+}
+
+.ruleHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.ruleHead h3 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--fw-strong);
+}
+
+.help {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 44px;
+  font-weight: var(--fw-strong);
+}
+
+.when {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s3);
+}
+
+.when label,
+.bodyField {
+  display: grid;
+  gap: var(--s1);
+  font-size: var(--small);
+  font-weight: var(--fw-strong);
+}
+
+.bodyField textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 860px) {
+  .rules { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 400px) {
+  .when { grid-template-columns: minmax(0, 1fr); }
+}

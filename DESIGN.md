@@ -441,6 +441,7 @@ Reopened 2026-11-24 (owner: 시안 A — "시각적으로 쓰기 좋고 직관�
 - Below the sentence: purpose chips, then the message body with the personalization chips. 더 보기 folds the photo attachment, the record title and the saved-template picker (for 알림톡 the saved template lives in the 어떻게 panel because it is required).
 - The phone preview is always visible: a sticky phone frame beside the writing on wide screens, a bottom sheet opened by 미리보기 on phones (Esc or 닫기 closes it). Substituted values are marked so the operator sees what changes per person.
 - The 4-item checklist, the separate review card and its duplicate summary list are gone. The send area is a short summary line, the 모의 발송 choice and one orange 발송 검토 button in a bottom dock; the confirmation, receipts and every check still run on that button.
+- 자동 안내 (owner 2026-11-24, "그렇게 다 해줘"): the workbench has a fourth ink tab, 자동 안내 (`AutoNotifyPanel.tsx`), with two independent rule cards (참가 확정 안내, 행사 리마인드). Each has an on/off checkbox, the text and, for the reminder, 행사 N일 전 + time. Rules are off by default; turning one on always passes an in-place confirm. The pill reads 켜짐 only when the server runs automatic sends and the provider is connected, otherwise 켜짐 · 지금은 보내지 않음. The card's save is its one primary (disabled until something changed). `tests/server-auto-notify.test.cjs` guards the wiring.
 
 ## 현장 운영 확정 구성
 

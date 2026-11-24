@@ -12,6 +12,7 @@ const { reportSourceAvailability } = require('../report-source-availability');
 const { normalizeScheduleAnchor, anchorInstant } = require('../message-schedule-anchor');
 
 const COMMANDS = new Set([
+  'autoNotify.save',
   'template.save',
   'template.archive',
   'message.create',
@@ -1112,6 +1113,7 @@ async function createSuccessor(ctx, input) {
 
 async function apply(ctx) {
   switch (ctx.command) {
+    case 'autoNotify.save': return require('../auto-notify').saveAutoNotify(ctx, ctx.input);
     case 'template.save': return saveTemplate(ctx, ctx.input);
     case 'template.archive': return archiveTemplate(ctx, ctx.input);
     case 'message.create': return createMessage(ctx, ctx.input);
@@ -1137,4 +1139,4 @@ async function apply(ctx) {
   }
 }
 
-module.exports = { COMMANDS, apply, buildMessageDispatch, dueScheduleGuards, explicitScheduleInstant, messageRecipientChangeCount, messageRecipientChangeAssessment, recipientReviewVersion, ticketLinkGuard, smsCharacterGuard };
+module.exports = { COMMANDS, apply, buildMessageDispatch, dueScheduleGuards, explicitScheduleInstant, messageRecipientChangeCount, messageRecipientChangeAssessment, recipientReviewVersion, recipientRoutingParts, recipientRoutingVersion, ticketLinkGuard, smsCharacterGuard, validateTemplateVariables };

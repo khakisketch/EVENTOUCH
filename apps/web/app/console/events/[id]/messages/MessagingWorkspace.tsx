@@ -41,6 +41,7 @@ import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib
 import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 import uiStyles from "../../../console-ui/console-ui.module.css";
 import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, PencilIcon, PlusIcon, XIcon } from "../../../console-ui/ConsoleIcons";
+import AutoNotifyPanel, { type AutoNotifyRules } from "./AutoNotifyPanel";
 import styles from "./MessagingWorkspace.module.css";
 
 type Template = {
@@ -117,6 +118,7 @@ type ReadyState = {
   participants: Participant[];
   templates: Template[];
   campaigns: Campaign[];
+  autoNotify: AutoNotifyRules;
 };
 type RecipientChange = { id: string; name: string; currentName: string | null; identityPhone: string; reasons: string[]; beforeStatus: string | null; afterStatus: string | null; beforeGroup: string | null; afterGroup: string | null; beforePhone: string | null; afterPhone: string | null };
 type ChangeDetails = { available: boolean; changes: RecipientChange[] };
@@ -722,6 +724,21 @@ export function isNewOrgSimOnly(integrations: { orgIsolated: boolean; connected:
 }
 // __ORG_SIM_ONLY_END__
 
+function parseAutoNotify(value: unknown): AutoNotifyRules {
+  const rules = asRecord(asRecord(value)?.rules);
+  const rule = (key: "confirmed" | "reminder") => {
+    const item = asRecord(rules?.[key]);
+    if (!item) return null;
+    return {
+      enabled: item.enabled === true,
+      body: text(item.body),
+      days: Number.isInteger(item.days) ? Number(item.days) : 1,
+      time: /^([01]\d|2[0-3]):[0-5]\d$/.test(text(item.time)) ? text(item.time) : "18:00",
+      issue: text(asRecord(item.issue)?.reason),
+    };
+  };
+  return { confirmed: rule("confirmed"), reminder: rule("reminder") };
+}
 function parseTemplate(value: unknown): Template | null {
   const item = asRecord(value);
   if (!item || typeof item.id !== "string") return null;
@@ -854,14 +871,15 @@ class CommandFailure extends Error {
   }
 }
 
-function MessageWorkbench({ history, composer, templates, composerOpen, templateAttention }: { history: ReactNode; composer: ReactNode; templates: ReactNode; composerOpen: boolean; templateAttention: boolean }) {
+function MessageWorkbench({ history, composer, templates, autoNotify, composerOpen, templateAttention }: { history: ReactNode; composer: ReactNode; templates: ReactNode; autoNotify: ReactNode; composerOpen: boolean; templateAttention: boolean }) {
   useEffect(() => { if (composerOpen) requestConsoleTask("history-heading"); }, [composerOpen]);
   return <>
     <div className={styles.inkTabs} hidden={composerOpen}><ConsoleSectionNav mode="tabs" label="메시지 업무" initialId="history-heading" items={[
       { id: "history-heading", label: "발송 기록" },
       { id: "templates-heading", label: templateAttention ? "템플릿 관리 · 확인 필요" : "템플릿 관리" },
+      { id: "auto-notify-heading", label: "자동 안내" },
     ]} /></div>
-    {history}{composer}{templates}
+    {history}{composer}{templates}{autoNotify}
   </>;
 }
 
@@ -1510,6 +1528,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
               return parsed ? [parsed] : [];
             })
           : [],
+        autoNotify: parseAutoNotify(workspace.autoNotify),
       });
       return true;
     } catch {
@@ -3821,6 +3840,15 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 </ValidatedForm>
               </div>
             </ConsoleSection>
+            )} autoNotify={(
+              <AutoNotifyPanel
+                eventId={eventId}
+                rules={state.autoNotify}
+                canWrite={state.canWriteMessages && !messagesLocked && busyAction === null}
+                active={state.integrations.connected && state.messageSchedule?.autoConfigured === true}
+                serverNote={`${state.integrations.connected ? "" : "발송 연결이 없어 지금은 보내지 않습니다. "}${scheduleServerStatus(state.messageSchedule)} 켜 두면 서버가 같은 확인(연락처·문자 글자·티켓 링크)을 거쳐 보냅니다.`}
+                onSaved={() => void refresh(true)}
+              />
             )} history={(
           <ConsoleSection
             headingId="history-heading"
