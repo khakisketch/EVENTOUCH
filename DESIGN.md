@@ -316,6 +316,28 @@ Reopened 2026-11-20 (참여 이벤트 통합; the menu "추첨·투표" merged i
 - The header carries a ghost back link "참여 이벤트" beside 추첨 프로그램 만들기. The heading, `pageId="draws"`, `#draws-vote` / `#draws-roulette` / `#draws-lucky` / `#draw-program-<id>` selection and every confirmation, blocker line and permission lock are unchanged; the event list links into them.
 - Reopened 2026-11-20 (디자인 시스템 적용): 무대 상태는 `StatusPill`, 빈 상태는 `ConsoleEmptyState`, 당첨자는 "당첨자 n/m명" 알약이 달린 순번 카드로 실행 영역 바로 뒤에 둔다. 모바일(≤768px)은 사실→실행 버튼→당첨자→청중 화면 미리보기 순으로 읽고(미리보기 `order: 3`), 데스크톱은 좌측 미리보기·우측 실행의 확정 구성을 유지한다. 선택 카드는 모바일에서 "아이콘+개수/이름/막대"로 쌓는다. 설정(투표·룰렛·럭키·프로그램)은 계속 접힘이나 대화창이다. CSS는 `--text-*`·`--fw-*`(400/600/800)·`--r-*` 토큰만 쓰고, 청중 화면 시뮬레이터(전광판 1280×720, 폰 390px) 안의 실제 기기 px만 남긴다.
 - Reopened 2026-11-20 (공용 부품 보강): `:global(.product-action) { min-height: 44px }` 반복은 공용 `.product-action`(product-ui.css의 44px 바닥)과 같아 지웠다. 56px 스테퍼처럼 값이 다른 것만 `:is([data-product-action], [data-action-variant])`로 남았다. 참여 이벤트·경품·현장 사진·신청 항목·메시지·참가자 페이지 화면도 같은 정리를 했다.
+- Reopened 2026-11-24 (owner: 다음 할 일 카드; 시안 G, 카드 모양은 시안 H). 이 항목이 위 설명과 다르면 이 항목이 우선한다. 아무것도 설정하지 않았을 때도 "다음에 뭘 할지"가 보이고, 설정이 끝나면 지금처럼 카드→실행으로 이어진다.
+  - "무대 선택" 카드는 아이콘 타일(`ProgramTypeIcon`), 이름, 한 줄 사실, 개수·진행 막대(있을 때만), 현재 상태 알약(공용 `StatusPill`)과 **다음 한 걸음 버튼 하나**(흰 secondary, 없는 상태도 있다)다. 카드 전체가 선택 영역이고 버튼만 따로 눌린다. 버튼은 그 카드를 고르고 기존 설정(접힌 폼)·확인 대화창으로 이동·포커스할 뿐 직접 쓰지 않으며 새 쓰기 경로가 없다. 선택 카드는 잉크 2px 외곽선, 폰(≤768px)에서는 2열이고 알약 아래에 전폭 버튼이 쌓인다.
+  - 다음 할 일 매핑(`DrawsWorkspace.tsx`의 `votePill`·`rouletteNext`·`programStep` 등; 쓰기 권한이 없거나 보관된 행사, 기능이 꺼진 도구는 버튼 없음):
+
+    | 도구 | 상태(알약) | 다음 한 걸음 버튼 | 가는 곳 |
+    |---|---|---|---|
+    | 순위 투표 | 팀이 선택 수보다 적고 마감·투표 0 (팀 0 포함: **팀 등록 필요**) | 팀 등록하기 | "투표 팀 등록" 접힘을 열고 팀 이름 칸에 포커스 |
+    | 순위 투표 | 팀 충분·마감·투표 0 (준비됨) | 투표 열기 | "투표 설정"을 열고 투표 상태를 "운영 중"으로 골라 둔 채 포커스(저장은 직접) |
+    | 순위 투표 | 진행 중 / 마감(투표가 들어옴) | 없음 | 상태가 이미 정해졌다 |
+    | 모바일 룰렛 | 저장된 경품 0 (설정 전) | 경품 설정하기 | "룰렛 운영 설정"을 열고 첫 경품 이름에 포커스 |
+    | 모바일 룰렛 | 경품 있음·비공개 (준비됨) | 공개하기 | 같은 설정에서 운영 상태를 "운영 중"으로 골라 둔 채 포커스(저장 시 기존 확인) |
+    | 모바일 룰렛 | 진행 중 / 마감 | 없음 | |
+    | 럭키번호 사전 배정 | 번호 미배정이 남음 (배정 전 / 일부 배정) | 번호 배정하기 | "승인 참가자 전체 선택" 체크에 포커스(실행은 기존 일괄 배정 확인) |
+    | 럭키번호 사전 배정 | 승인 참가자 없음 / 배정 완료 | 없음 | |
+    | 추첨 프로그램 | 준비 (준비됨) | 운영 시작하기 | 카드를 고르고 기존 "운영 시작" 확인 대화창 |
+    | 추첨 프로그램 | 운영 중인데 결과 비공개 (공개 필요) | 결과 공개하기 | 카드를 고르고 결과 공개 스위치와 같은 경로(당첨 0이면 먼저 "공개 허용" 확인) |
+    | 추첨 프로그램 | 진행 중 / 마감 / 완료 | 없음 | 실행은 아래 큰 영역의 "N명 추첨 실행" |
+
+  - 보여 줄 내용이 없는 도구(팀 0인 투표, 저장된 경품 0인 룰렛, 번호가 하나도 없는 럭키번호)는 청중 미리보기 자리에 점선 "빈 폰"("고른 카드의 객석 화면이 여기에 나와요")을 두고, 오른쪽에 상태 알약·이름·한 문장·**그 도구의 다음 할 일 오렌지 버튼**을 둔다. 폼(설정 접힘)은 그 아래에 그대로 있다. 내용이 있으면 이전 확정 구성(청중 미리보기 + "지금 할 일", 실행, 무대 터치, 결과 공개, 당첨자)이다. 태블릿(769–1199px)도 폰 왼쪽·버튼 오른쪽을 지키고, 폰(≤768px)에서는 버튼과 문장이 먼저, 작은 점선 폰이 뒤, 설정이 마지막이며 버튼은 전폭 56px이다.
+  - 기본 선택은 "다음 할 일이 가장 급한 카드"다: 운영 중인 추첨 프로그램, 없으면 다음 한 걸음이 있는 첫 카드, 없으면 첫 카드. 팀 0인 투표가 마감 상태라는 이유로 "투표하기" 미리보기를 보이지 않는다(표시만 "팀 등록 필요"로 말하고 저장 값은 그대로).
+  - 주황은 하나: 선택 카드의 큰 영역에서 내용이 없을 때는 빈 폰 옆 다음 할 일 버튼, 실행 가능할 때는 "N명 추첨 실행"이다. 카드 안 버튼·헤더("참여 이벤트" ghost 링크, "추첨 프로그램 만들기" secondary)·무대 터치는 흰색 이하이고, 빈 폰 버튼이 보이는 동안 같은 화면의 접힌 폼 버튼(룰렛 설정 저장, 번호 일괄 배정)은 secondary로 내려간다.
+  - 파란 안내 줄("공개 상태로 전환한 무대만 여기에 연결할 수 있습니다")은 없앴다. 같은 안내(추첨 무대는 참여 이벤트에서 만들고 공개하면 여기서 실행한다, 링크 "참여 이벤트에서 추첨 무대를 만들고 공개하세요.")는 추첨 프로그램이 없고 공개된 무대가 없을 때만 면 없는 한 줄로, 빈 폰 옆(내용이 있으면 카드 줄 아래)에 보인다. 행사장 출력·무대 터치 전제 줄, 실행 전제 줄, 앵커(`#draws-vote`·`#draws-roulette`·`#draws-lucky`·`#draw-program-<id>`), 모든 확인·복구·권한 잠금은 그대로다.
 
 ## 참여 콘텐츠 확정 구성
 
@@ -473,6 +495,7 @@ Reopened 2026-11-20 (입장·스태프 + 현장 모드; owner approved proposal 
 - A link or action appears once per page unless two entry points do different jobs.
 - Rows are not wrapped in cards, and dimming never lowers text contrast.
 - Reopened 2026-11-20 (디자인 시스템 적용): 입장·스태프의 3단계를 흰 헤어라인 카드 3장(1 데스크, 2 스태프 배정, 3 스태프 폰 스캔)과 선택 카드 1장(부스)으로 다시 짰다. 단계 상태는 공용 `StatusPill`이고, 비어 있거나 담당이 없는 단계는 앰버 알약과 앰버 카드 테두리로 보인다. 담당자는 `ConsoleAvatar`, 빈 목록은 `ConsoleEmptyState`다. 글자 크기·굵기·모서리는 토큰으로 옮겨 하드코딩이 0이 됐다. 폰에서는 스캔 폰 목업을 숨긴다. A3의 위치 행(타일·이름·담당자·가동 스위치), 담당 없는 곳 목록, 접힌 프리셋 2개는 그대로다.
+- Reopened 2026-11-24 (owner: 진행 중 데스크 보드; `tests/web-operations-composition.test.cjs` asserts it; commands, receipts, recovery, draft guard and the team handoff are unchanged): only while the event is LIVE the page opens on a **desk board** under the header, one card per desk (two columns on desktop, one on phones). A card is a status dot, the desk name and its run switch (the same switch and confirm-before-stop as the list), the number of people processed at that desk as a big figure with "명 처리", "마지막 처리 N분 전", the staff on duty as an initial face and the first name ("외 N명" when there are more), and "상세 ›" at the right; the whole card opens the existing desk detail dialog. A desk with no one on duty is an amber card (`--warning-soft` fill, `--warning-line` border) that says "스태프가 없습니다" with a white "배정" button (the existing assignment flow, not a primary). A stopped desk dims by muted text, never by opacity. The figure is one desk's number, so this is not a big-number strip; desks are never merged into a one-line summary. The counts come from the entry records with the same rules as 운영 현황: corrected records are left out, one person counts once per desk, cancelled participants are left out, an entry desk counts IN and an exit desk counts OUT, and the last processing is that desk's latest uncorrected record. Records that cannot be read (`checksAvailable` or the operator report source is false, or a record is malformed) show "확인 불가" and no number. Time reads "방금", "N분 전", "N시간 전", then a clock time. There is no "접속 중" mark because the server records no presence. Below the board the three setup steps fold into one line ("설정 3단계 · 데스크 만들기, 스태프 배정, 스캔 안내" with "모두 완료" or "N단계 남음"; a native disclosure, 52px row), and one more line shows the staff login address with its copy action. Opening the fold shows the three step cards exactly as before, booths and the two booth presets included. A hash on `ops-desks`, `ops-staff`, `ops-scan`, `ops-booths`, `ops-booth-mode` or `ops-booth-map` opens the fold and scrolls to it, so deep links and the team handoff work while it is folded. Preparing, ended and archived events keep the three numbered steps. The page still has one primary, the header "스태프 배정", only while some place has no one on duty.
 
 ## 현장 모드 확정 구성
 
