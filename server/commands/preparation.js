@@ -119,7 +119,7 @@ async function transitionStage(ctx, nextStage) {
     const preconditions = archivePreconditions(ctx.rawWorkspace);
     if (!preconditions.participantsAvailable || !preconditions.registrationAvailable || !preconditions.modulesAvailable) {
       const missing = [!preconditions.participantsAvailable ? '참가자' : '', !preconditions.registrationAvailable ? '접수' : '', !preconditions.modulesAvailable ? '참여 콘텐츠' : ''].filter(Boolean).join(' · ');
-      throw ctx.fail(409, `${missing} 상태를 확인할 수 없어 보관하지 못했습니다. 시스템 관리자에게 문의하세요.`, undefined, 'ARCHIVE_PRECONDITIONS_UNAVAILABLE');
+      throw ctx.fail(409, `${missing} 상태를 확인할 수 없어 보관하지 못했습니다. 조직 관리자에게 문의하세요.`, undefined, 'ARCHIVE_PRECONDITIONS_UNAVAILABLE');
     }
     if (preconditions.registrationOpen || preconditions.openModules > 0) {
       throw ctx.fail(409, '접수와 참여 콘텐츠를 닫은 뒤 보관하세요');

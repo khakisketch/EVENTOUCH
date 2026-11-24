@@ -894,7 +894,7 @@ function guardReportSources(ctx) {
   const available = reportSourceAvailability(ctx.rawWorkspace);
   const labels = { venue: '행사 장소', participants: '참가자', checks: '입장 기록', responses: '응답', modules: '참여 콘텐츠', groups: '참가자 그룹', booths: '부스', questions: '질문', photos: '사진', survey: '설문 응답', draw: '추첨' };
   const missing = Object.keys(labels).find((key) => !available[key]);
-  if (missing) throw ctx.fail(409, `${labels[missing]} 자료를 확인할 수 없어 보고서를 만들 수 없습니다. 시스템 관리자에게 문의하세요.`, undefined, 'REPORT_SOURCE_UNAVAILABLE');
+  if (missing) throw ctx.fail(409, `${labels[missing]} 자료를 확인할 수 없어 보고서를 만들 수 없습니다. 조직 관리자에게 문의하세요.`, undefined, 'REPORT_SOURCE_UNAVAILABLE');
 }
 
 async function reportSnapshot(ctx) {

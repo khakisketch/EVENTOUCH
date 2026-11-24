@@ -79,7 +79,12 @@ export function buildStaffScopes(
       workspace.checks.every((item) => typeof item === "object" && item !== null && !Array.isArray(item));
     const participantsAvailable = workspace.participantsAvailable === true && Array.isArray(workspace.participants) &&
       workspace.participants.every((item) => typeof item === "object" && item !== null && !Array.isArray(item));
-    const checks = checksAvailable ? (workspace.checks as StaffCheckRow[]) : [];
+    // A staff account is only sent its own desks' checks; an operator account
+    // opening this screen receives every desk's, so narrow to the assigned desks.
+    const checks = checksAvailable
+      ? (workspace.checks as StaffCheckRow[]).filter((check) =>
+          deskAssignments.some((item) => item.targetId === check.deskId))
+      : [];
     const boothVisits = Array.isArray(workspace.visits)
       ? (workspace.visits as StaffBoothVisit[]).filter((visit) =>
           visit && boothAssignments.some((assignment) => assignment.targetId === visit.boothId))

@@ -220,7 +220,7 @@ async function requireClientInOrg(client, clientId, orgId) {
 function checkReceiptScope(receiptRow, orgId) {
   if (!receiptRow) return null;
   if (receiptRow.org_id && String(receiptRow.org_id) !== String(orgId)) {
-    throw Object.assign(new Error('요청 식별자가 이미 다른 작업에 사용되었습니다'), { status: 409 });
+    throw Object.assign(new Error('같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요'), { status: 409 });
   }
   return receiptRow;
 }

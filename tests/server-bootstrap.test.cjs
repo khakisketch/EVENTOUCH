@@ -199,6 +199,19 @@ test('api-bootstrap-staff-sees-only-assigned-targets-and-no-ticket-or-contact-se
   assert.ok(!JSON.stringify(workspace).includes('private-report'));
 });
 
+// Reopened 2026-11-24 (audit S2): an operator who opens the staff screen reads the
+// full lists already, so the projection must say the sources are intact instead
+// of leaving the flags to the STAFF-only branch (which locked operators out).
+test('api-bootstrap-operators-report-attendance-sources-as-available-for-the-staff-screen', async () => {
+  for (const who of ['agency', 'manager']) {
+    const response = await requestJson(harness.baseUrl, '/api/bootstrap', { cookie: cookies[who] });
+    assert.equal(response.status, 200);
+    const workspace = response.json.state.workspaces[ids.eventA];
+    assert.equal(workspace.participantsAvailable, true, `${who} participantsAvailable`);
+    assert.equal(workspace.checksAvailable, true, `${who} checksAvailable`);
+  }
+});
+
 test('api-bootstrap-requires-session-and-ignores-browser-supplied-role-or-account-id', async () => {
   const anonymous = await requestJson(
     harness.baseUrl,

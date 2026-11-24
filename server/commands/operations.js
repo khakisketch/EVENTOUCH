@@ -1117,7 +1117,7 @@ function createOperationsCommands(database) {
         try {
           checkReceiptScope(receipt, receiptScope || undefined);
         } catch (scopeError) {
-          throw failure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다.', undefined, scopeError.code);
+          throw failure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요.', undefined, scopeError.code);
         }
       }
       const pendingInput = object(payload);
@@ -1138,7 +1138,7 @@ function createOperationsCommands(database) {
           ticketToken: guest ? ticketToken : null,
           participantId: pendingParticipantId,
         })) {
-          throw failure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다.');
+          throw failure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요.');
         }
         const stored = object(receipt.result);
         if (command === 'check.reviewed-exit' && stored.exitRequestProof !== reviewedExitRequest(pendingInput).proof) {
@@ -1264,10 +1264,10 @@ function createOperationsCommands(database) {
           if (!list(event.features).includes('stamp')) throw failure(409, '이 행사에서 부스 인증 기능을 먼저 켜세요.');
           const original = object(row.workspace_payload);
           if (Object.hasOwn(original, 'visits') && !Array.isArray(original.visits)) {
-            throw failure(409, '부스 인증 기록을 확인할 수 없습니다. 시스템 관리자에게 문의하세요.', undefined, 'BOOTH_VISITS_UNAVAILABLE');
+            throw failure(409, '부스 인증 기록을 확인할 수 없습니다. 조직 관리자에게 문의하세요.', undefined, 'BOOTH_VISITS_UNAVAILABLE');
           }
           if (!['STAFF', 'SELF'].includes(workspace.stampMode)) {
-            throw failure(409, '현재 부스 인증 방식을 확인할 수 없습니다. 시스템 관리자에게 문의하세요.', undefined, 'BOOTH_MODE_UNAVAILABLE');
+            throw failure(409, '현재 부스 인증 방식을 확인할 수 없습니다. 조직 관리자에게 문의하세요.', undefined, 'BOOTH_MODE_UNAVAILABLE');
           }
           const reviewed = command === 'booth.mode-reviewed' ? reviewedBoothModeRequest(input) : null;
           if (reviewed && reviewed.expectedMode !== workspace.stampMode) {

@@ -1277,6 +1277,7 @@ a.pill:hover {
 }
 
 .console-nav-item {
+  scroll-margin-block: var(--s6);
   position: relative;
   display: flex;
   min-width: 0;
@@ -1319,13 +1320,16 @@ a.pill:hover {
 
 .console-sidebar .side-nav {
   scrollbar-color: var(--side-scroll) transparent;
+  /* The current page scrolls clear of the edge shadows (audit S4, 2026-11-24). */
+  scroll-padding-block: var(--s6);
+  padding-block-end: var(--s4);
   /* Overlay scrollbars hide on macOS, so short windows looked like they had
      fewer menus. Edge shadows show only while more items sit past that edge. */
   background:
     linear-gradient(var(--nav) 30%, transparent) top / 100% 28px no-repeat local,
     linear-gradient(transparent, var(--nav) 70%) bottom / 100% 28px no-repeat local,
-    radial-gradient(farthest-side at 50% 0, color-mix(in srgb, var(--side-text) 45%, transparent), transparent) top / 100% 10px no-repeat scroll,
-    radial-gradient(farthest-side at 50% 100%, color-mix(in srgb, var(--side-text) 45%, transparent), transparent) bottom / 100% 10px no-repeat scroll;
+    radial-gradient(farthest-side at 50% 0, color-mix(in srgb, var(--side-text) 60%, transparent), transparent) top / 100% 16px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, color-mix(in srgb, var(--side-text) 60%, transparent), transparent) bottom / 100% 16px no-repeat scroll;
 }
 
 /* Hairlines on the ink rail use the stage line, not the paper line. */

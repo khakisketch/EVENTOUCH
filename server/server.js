@@ -69,6 +69,28 @@ function sessionWithOrg(auth, cookieHeader, req) {
   return auth.sessionFromCookie(cookieHeader).then((account) => attachOrgRequest(account, req));
 }
 
+// Sliding sessions: when this request's session was just extended on the
+// server, the response carries the same cookie with a fresh Max-Age so the
+// browser keeps it as long as the database does. A response that already sets
+// its own session cookie (login, logout) is never touched.
+function refreshSessionCookieOnResponse(auth, req, res) {
+  if (!auth || typeof auth.takeSessionCookieRefresh !== 'function') return;
+  const writeHead = res.writeHead;
+  res.writeHead = function writeHeadWithSessionRefresh(...args) {
+    res.writeHead = writeHead;
+    try {
+      const explicit = args.find((value) => value && typeof value === 'object' && !Array.isArray(value));
+      const hasCookie = res.hasHeader('set-cookie') ||
+        (explicit && Object.keys(explicit).some((name) => name.toLowerCase() === 'set-cookie'));
+      const refreshed = auth.takeSessionCookieRefresh(req.headers.cookie);
+      if (refreshed && !hasCookie) res.setHeader('set-cookie', refreshed);
+    } catch (error) {
+      // A cookie refresh must never break the response.
+    }
+    return writeHead.apply(this, args);
+  };
+}
+
 // Response stamping shared by every boundary: only the request-start verified
 // snapshot (org + session revision) is ever stamped, never a default.
 function stampSessionOrg(target, account) {
@@ -263,6 +285,7 @@ function createHttpServer(store, auth, access, database, { storageDir, fileStora
     // /api/auth/*, /sw.js, 404, 405, 500 — therefore carries the same policy
     // without each call site having to remember it.
     applySecurityHeaders(res);
+    refreshSessionCookieOnResponse(auth, req, res);
     const urlPath = (req.url || '/').split('?')[0];
     if (urlPath === '/api/diagnostics' && req.method === 'GET') {
       res.setHeader('cache-control', 'no-store');

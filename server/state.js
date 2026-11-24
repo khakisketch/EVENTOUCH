@@ -192,7 +192,7 @@ function normalizeWorkspace(value) {
 function workspaceChangesForSave(raw, before, after) {
   const names = { participants: '참가자 명단을', notices: '공지를', desks: '현장 데스크를', audit: '행사 활동 기록을', venue: '행사 장소를' };
   const invalid = (field) => Object.assign(
-    new Error(`${names[field] || '행사 기록을'} 확인할 수 없어 저장하지 못했습니다. 시스템 관리자에게 문의하세요.`),
+    new Error(`${names[field] || '행사 기록을'} 확인할 수 없어 저장하지 못했습니다. 화면을 새로 고친 뒤에도 같으면 조직 관리자에게 문의하세요.`),
     { status: 409, code: 'WORKSPACE_DATA_UNAVAILABLE', field },
   );
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw invalid('workspace');
@@ -257,6 +257,13 @@ function operatorWorkspaceProjection(workspace, rawWorkspace, event) {
       : Number.isSafeInteger(raw.rouletteConfigVersion) && raw.rouletteConfigVersion >= 0 ? raw.rouletteConfigVersion : null,
     auditAvailable,
     reportSourceAvailability: reportSourceAvailability(rawWorkspace),
+    // Operators already read the full participant and check lists here. The
+    // staff screen only needs to know that the lists are intact, so an
+    // operator who opens it with a desk assignment is not locked out (2026-11-24 S2).
+    ...(() => {
+      const sources = attendanceSourceAvailability(rawWorkspace);
+      return { participantsAvailable: sources.participants, checksAvailable: sources.checks };
+    })(),
     // Normalization turns a malformed stored array into []; distinguish it
     // from the established legacy absence before exporting application data.
     rosterExportFieldsAvailable: !Object.hasOwn(raw, 'publishedFields') || Array.isArray(raw.publishedFields),
@@ -451,7 +458,7 @@ function createState(database, { env = process.env } = {}) {
   async function createEvent(account, input = {}) {
     const idempotencyKey = String(input.commandId || '').trim();
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)) {
-      throw rejected(400, '요청 식별자를 확인하세요', 'commandId');
+      throw rejected(400, '요청을 확인하지 못했습니다. 화면을 새로 고친 뒤 다시 시도하세요', 'commandId');
     }
 
     const name = String(input.name || '').trim();
@@ -497,7 +504,7 @@ function createState(database, { env = process.env } = {}) {
           try {
             checkReceiptScope(receipt, org.orgId);
           } catch (scopeError) {
-            throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+            throw rejected(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
           }
           const stored = object(receipt.result);
           const storedRequest = object(stored.request);
@@ -506,7 +513,7 @@ function createState(database, { env = process.env } = {}) {
           if (String(receipt.actor_id || '') !== String(account.id) || stored.command !== 'event.create' ||
               !sameRequest || !stored.response?.event ||
               String(receipt.event_id || '') !== String(stored.response.event.id)) {
-            throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+            throw rejected(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
           }
           return { event: copy(stored.response.event), replayed: true };
         }
@@ -566,7 +573,7 @@ function createState(database, { env = process.env } = {}) {
   async function duplicateEvent(account, sourceEventId, input = {}) {
     const idempotencyKey = String(input.commandId || '').trim();
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)) {
-      throw rejected(400, '요청 식별자를 확인하세요', 'commandId');
+      throw rejected(400, '요청을 확인하지 못했습니다. 화면을 새로 고친 뒤 다시 시도하세요', 'commandId');
     }
     const sourceId = String(sourceEventId || '').trim();
     if (!sourceId || sourceId.length > 160) throw rejected(404, '행사를 찾을 수 없습니다');
@@ -598,7 +605,7 @@ function createState(database, { env = process.env } = {}) {
           try {
             checkReceiptScope(receipt, org.orgId);
           } catch (scopeError) {
-            throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+            throw rejected(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
           }
           const stored = object(receipt.result);
           const storedRequest = object(stored.request);
@@ -607,7 +614,7 @@ function createState(database, { env = process.env } = {}) {
           if (String(receipt.actor_id || '') !== String(account.id) || stored.command !== 'event.duplicate' ||
               !sameRequest || !stored.response?.event ||
               String(receipt.event_id || '') !== String(stored.response.event.id)) {
-            throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+            throw rejected(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
           }
           return { event: copy(stored.response.event), replayed: true };
         }
@@ -689,7 +696,7 @@ function createState(database, { env = process.env } = {}) {
   async function saveClient(account, input = {}) {
     const idempotencyKey = String(input.commandId || '').trim();
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)) {
-      throw rejected(400, '요청 식별자를 확인하세요', 'commandId');
+      throw rejected(400, '요청을 확인하지 못했습니다. 화면을 새로 고친 뒤 다시 시도하세요', 'commandId');
     }
 
     const requestedId = String(input.id || '').trim();
@@ -724,11 +731,11 @@ function createState(database, { env = process.env } = {}) {
         try {
           checkScope(receipt, org.orgId);
         } catch (scopeError) {
-          throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+          throw rejected(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
         }
         const stored = object(receipt.result);
         if (String(receipt.actor_id || '') !== String(account.id) || stored.command !== 'client.save' || !stored.response?.client) {
-          throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+          throw rejected(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
         }
         return { client: copy(stored.response.client), replayed: true };
       }
@@ -795,7 +802,7 @@ function createState(database, { env = process.env } = {}) {
 
   async function saveOrgPermissions(account, accountId, input = {}) {
     const idempotencyKey = String(input.commandId || '').trim();
-    if (!/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)) throw rejected(400, '요청 식별자를 확인하세요', 'commandId');
+    if (!/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)) throw rejected(400, '요청을 확인하지 못했습니다. 화면을 새로 고친 뒤 다시 시도하세요', 'commandId');
     const targetId = String(accountId || '').trim();
     if (!targetId || targetId.length > 160) throw rejected(400, '구성원을 확인하세요', 'accountId');
     const requested = Array.isArray(input.orgPermissions) ? input.orgPermissions.map((value) => String(value)) : [];
@@ -817,11 +824,11 @@ function createState(database, { env = process.env } = {}) {
         try {
           checkPermScope(receipt.rows[0], org.orgId);
         } catch (scopeError) {
-          throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+          throw rejected(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
         }
         const stored = object(receipt.rows[0].result);
         if (String(receipt.rows[0].actor_id || '') !== String(account.id) || stored.command !== 'org.permissions.save') {
-          throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+          throw rejected(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
         }
         return { account: copy(stored.response.account), replayed: true };
       }
@@ -861,7 +868,7 @@ function createState(database, { env = process.env } = {}) {
 
   async function assignMember(account, eventId, input = {}) {
     const idempotencyKey = String(input.commandId || '').trim();
-    if (!/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)) throw rejected(400, '요청 식별자를 확인하세요', 'commandId');
+    if (!/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)) throw rejected(400, '요청을 확인하지 못했습니다. 화면을 새로 고친 뒤 다시 시도하세요', 'commandId');
     const targetId = String(input.accountId || '').trim();
     if (!targetId || targetId.length > 160) throw rejected(400, '구성원을 확인하세요', 'accountId');
     // An omitted `write` keeps the pre-allow-list behaviour (full access);
@@ -896,11 +903,11 @@ function createState(database, { env = process.env } = {}) {
         try {
           checkAssignScope(receipt.rows[0], org.orgId);
         } catch (scopeError) {
-          throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+          throw rejected(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
         }
         const stored = object(receipt.rows[0].result);
         if (String(receipt.rows[0].actor_id || '') !== String(account.id) || stored.command !== 'member.assign') {
-          throw rejected(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+          throw rejected(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
         }
         return { membership: copy(stored.response.membership), replayed: true };
       }

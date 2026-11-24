@@ -39,7 +39,7 @@ function createFileService(database, { storageDir, fileStorage, env = process.en
     return org;
   }
   async function upload({account,eventId,commandId,name,contentType,bytes}) {
-    if (!ID.test(String(commandId || ''))) throw failure(400,'요청 ID를 확인하세요');
+    if (!ID.test(String(commandId || ''))) throw failure(400,'요청을 확인하지 못했습니다. 화면을 새로 고친 뒤 다시 시도하세요');
     if (typeof name !== 'string' || !name.trim() || name.length > 200 || /[\/\\\x00-\x1f\x7f]/.test(name) || name.includes('..')) throw failure(400,'파일 이름을 확인하세요');
     if (!TYPES.has(contentType) || !Buffer.isBuffer(bytes) || !bytes.length) throw failure(400,'파일 형식을 확인하세요');
     if (bytes.length > MAX_FILE_BYTES) throw failure(413,'파일이 너무 큽니다');
@@ -58,9 +58,9 @@ function createFileService(database, { storageDir, fileStorage, env = process.en
           try {
             checkReceiptScope(r, org.orgId);
           } catch (scopeError) {
-            throw failure(409,'요청 ID가 다른 업로드에 사용되었습니다', scopeError.code);
+            throw failure(409,'같은 업로드 요청이 이미 다른 파일로 처리되었습니다. 화면을 새로 고친 뒤 다시 올려 주세요', scopeError.code);
           }
-          if (r.event_id !== eventId || r.actor_id !== account.id || r.result.command !== 'file.upload' || r.result.fingerprint !== fingerprint) throw failure(409,'요청 ID가 다른 업로드에 사용되었습니다');
+          if (r.event_id !== eventId || r.actor_id !== account.id || r.result.command !== 'file.upload' || r.result.fingerprint !== fingerprint) throw failure(409,'같은 업로드 요청이 이미 다른 파일로 처리되었습니다. 화면을 새로 고친 뒤 다시 올려 주세요');
           return {file:r.result.file,replayed:true};
         }
         await authorizeGrants(client,account,eventId,'file.upload');
@@ -83,7 +83,7 @@ function createFileService(database, { storageDir, fileStorage, env = process.en
   // ticket bearer comes from the attendee link; the file is scoped to the
   // participant and to the photo feature limits.
   async function uploadGuest({slug,token,commandId,name,contentType,bytes}) {
-    if (!ID.test(String(commandId || ''))) throw failure(400,'요청 ID를 확인하세요');
+    if (!ID.test(String(commandId || ''))) throw failure(400,'요청을 확인하지 못했습니다. 화면을 새로 고친 뒤 다시 시도하세요');
     if (typeof name !== 'string' || !name.trim() || name.length > 200 || /[\/\\\x00-\x1f\x7f]/.test(name) || name.includes('..')) throw failure(400,'파일 이름을 확인하세요');
     if (!['image/png','image/jpeg','image/webp'].includes(contentType)) throw failure(400,'사진 형식을 확인하세요');
     if (!Buffer.isBuffer(bytes) || !bytes.length) throw failure(400,'사진 형식을 확인하세요');
@@ -111,9 +111,9 @@ function createFileService(database, { storageDir, fileStorage, env = process.en
           try {
             checkReceiptScope(r, eventOrgId || undefined);
           } catch (scopeError) {
-            throw failure(409,'요청 ID가 다른 업로드에 사용되었습니다', scopeError.code);
+            throw failure(409,'같은 업로드 요청이 이미 다른 파일로 처리되었습니다. 화면을 새로 고친 뒤 다시 올려 주세요', scopeError.code);
           }
-          if (String(r.event_id) !== eventId || r.actor_id != null || r.result.command !== 'file.upload.guest' || r.result.participantId !== actorId || r.result.fingerprint !== fingerprint) throw failure(409,'요청 ID가 다른 업로드에 사용되었습니다');
+          if (String(r.event_id) !== eventId || r.actor_id != null || r.result.command !== 'file.upload.guest' || r.result.participantId !== actorId || r.result.fingerprint !== fingerprint) throw failure(409,'같은 업로드 요청이 이미 다른 파일로 처리되었습니다. 화면을 새로 고친 뒤 다시 올려 주세요');
           return {file:r.result.file,replayed:true};
         }
         const id = `file-${crypto.randomUUID()}`;
@@ -165,7 +165,7 @@ function createFileService(database, { storageDir, fileStorage, env = process.en
     return org;
   }
   async function uploadClientFile({account,clientId,commandId,name,contentType,bytes}) {
-    if (!ID.test(String(commandId || ''))) throw failure(400,'요청 ID를 확인하세요');
+    if (!ID.test(String(commandId || ''))) throw failure(400,'요청을 확인하지 못했습니다. 화면을 새로 고친 뒤 다시 시도하세요');
     if (typeof name !== 'string' || !name.trim() || name.length > 200 || /[\/\\\x00-\x1f\x7f]/.test(name) || name.includes('..')) throw failure(400,'파일 이름을 확인하세요');
     if (!CLIENT_TYPES.has(contentType) || !Buffer.isBuffer(bytes) || !bytes.length) throw failure(400,'파일 형식을 확인하세요');
     if (bytes.length > MAX_CLIENT_FILE_BYTES) throw failure(413,'600KB 이하 파일을 올려주세요');
@@ -184,9 +184,9 @@ function createFileService(database, { storageDir, fileStorage, env = process.en
           try {
             checkReceiptScope(r, org.orgId);
           } catch (scopeError) {
-            throw failure(409,'요청 ID가 다른 업로드에 사용되었습니다', scopeError.code);
+            throw failure(409,'같은 업로드 요청이 이미 다른 파일로 처리되었습니다. 화면을 새로 고친 뒤 다시 올려 주세요', scopeError.code);
           }
-          if (r.actor_id !== account.id || r.result.command !== 'clientfile.upload' || r.result.fingerprint !== fingerprint) throw failure(409,'요청 ID가 다른 업로드에 사용되었습니다');
+          if (r.actor_id !== account.id || r.result.command !== 'clientfile.upload' || r.result.fingerprint !== fingerprint) throw failure(409,'같은 업로드 요청이 이미 다른 파일로 처리되었습니다. 화면을 새로 고친 뒤 다시 올려 주세요');
           return {file:r.result.file,replayed:true};
         }
         if (org.role !== 'AGENCY') throw failure(403, '고객사 관리 권한을 확인하세요');

@@ -285,6 +285,52 @@ integrationTest('malformed-cookie-is-rejected-without-a-server-error', async () 
   assert.equal(me.status, 401);
 });
 
+async function sessionExpiryOf(cookie) {
+  const token = /^etko_session=(.+)$/.exec(cookie)[1];
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const row = await db.query(
+    'SELECT EXTRACT(EPOCH FROM (expires_at - now()))::float8 AS remaining FROM sessions WHERE token_hash = $1',
+    [tokenHash]
+  );
+  return { tokenHash, remaining: Number(row.rows[0].remaining) };
+}
+
+// Sliding session (2026-11-24 audit S1): the TTL in this suite is one hour.
+integrationTest('session-below-half-ttl-is-extended-and-the-cookie-is-refreshed', async () => {
+  const cookie = sessionCookie(await login('admin-test-pw'));
+  const { tokenHash } = await sessionExpiryOf(cookie);
+  await db.query("UPDATE sessions SET expires_at = now() + interval '10 minutes' WHERE token_hash = $1", [tokenHash]);
+  const me = await fetch(`${BASE}/api/auth/me`, { headers: { cookie } });
+  assert.equal(me.status, 200);
+  const refreshed = me.headers.get('set-cookie') || '';
+  assert.match(refreshed, /etko_session=/);
+  assert.match(refreshed, /Max-Age=3600/);
+  assert.match(refreshed, /HttpOnly/i);
+  const after = await sessionExpiryOf(cookie);
+  assert.ok(after.remaining > 3500 && after.remaining <= 3600, `expected a full TTL, got ${after.remaining}`);
+});
+
+integrationTest('session-above-half-ttl-is-not-rewritten', async () => {
+  const cookie = sessionCookie(await login('admin-test-pw'));
+  const { tokenHash } = await sessionExpiryOf(cookie);
+  await db.query("UPDATE sessions SET expires_at = now() + interval '45 minutes' WHERE token_hash = $1", [tokenHash]);
+  const me = await fetch(`${BASE}/api/auth/me`, { headers: { cookie } });
+  assert.equal(me.status, 200);
+  assert.equal(me.headers.get('set-cookie'), null);
+  const after = await sessionExpiryOf(cookie);
+  assert.ok(after.remaining > 2600 && after.remaining <= 2700, `expected the stored expiry, got ${after.remaining}`);
+});
+
+integrationTest('an-expired-session-is-never-revived-by-the-sliding-extension', async () => {
+  const cookie = sessionCookie(await login('admin-test-pw'));
+  const { tokenHash } = await sessionExpiryOf(cookie);
+  await db.query("UPDATE sessions SET expires_at = now() - interval '1 second' WHERE token_hash = $1", [tokenHash]);
+  const me = await fetch(`${BASE}/api/auth/me`, { headers: { cookie } });
+  assert.equal(me.status, 401);
+  const after = await sessionExpiryOf(cookie);
+  assert.ok(after.remaining < 0);
+});
+
 integrationTest('expired-session-rejected', async () => {
   const cookie = sessionCookie(await login('admin-test-pw'));
   const token = /^etko_session=(.+)$/.exec(cookie)[1];

@@ -458,7 +458,7 @@ function setParticipantStatus(event, workspace, person, status, now) {
     return;
   }
   if (person.cancelled === true) {
-    throw failure(409, '신청 상태와 취소 기록을 확인한 뒤 상태를 변경하세요. 시스템 관리자에게 문의하세요.', undefined, 'TICKET_STATUS_CONFLICT');
+    throw failure(409, '신청 상태와 취소 기록을 확인한 뒤 상태를 변경하세요. 계속 막히면 조직 관리자에게 문의하세요.', undefined, 'TICKET_STATUS_CONFLICT');
   }
   // A person who has entered must remain eligible for the OUT desk. Changing
   // approval first would strand their presence record until an operator
@@ -545,18 +545,18 @@ function createParticipantCommands(database) {
         try {
           checkReceiptScope(receipt, (account && account.orgId) || event.orgId || undefined);
         } catch (scopeError) {
-          throw failure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다', undefined, scopeError.code);
+          throw failure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요', undefined, scopeError.code);
         }
         if (!receiptMatches(receipt, { eventId: event.id, actorId, operation, ticketToken })) {
-          throw failure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+          throw failure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
         }
         if (command === 'participant.bulk-cancel' && !cancellationReceiptMatches(receipt, reviewInput)) {
-          throw failure(409, '이 요청 식별자는 다른 취소 검토에 사용되었습니다. 원래 요청을 확인하세요', undefined, 'CANCELLATION_RECEIPT_MISMATCH');
+          throw failure(409, '같은 요청이 이미 다른 취소 검토로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요', undefined, 'CANCELLATION_RECEIPT_MISMATCH');
         }
         if (command === 'participant.resolve-cancellation-conflict') {
           const proof = conflictReviewProof(reviewInput);
           if (!proof || proof !== object(receipt.result).conflictReviewProof) {
-            throw failure(409, '이 요청 식별자는 다른 확인에 사용되었습니다. 원래 요청을 확인하세요.', undefined, 'CANCELLATION_CONFLICT_RECEIPT_MISMATCH');
+            throw failure(409, '같은 요청이 이미 다른 확인으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요.', undefined, 'CANCELLATION_CONFLICT_RECEIPT_MISMATCH');
           }
           await authorizeGrants(client, event, workspace, account, command, assignmentId, partScope);
         }
@@ -566,14 +566,14 @@ function createParticipantCommands(database) {
           if (object(original.participant).id !== clean(requested.id, 120) ||
               !Number.isSafeInteger(requested.expectedTicketRevision) ||
               original.ticketRevision !== requested.expectedTicketRevision + 1) {
-            throw failure(409, '이 요청 식별자는 다른 티켓 검토에 사용되었습니다. 원래 요청을 확인하세요', undefined, 'TICKET_REVIEW_MISMATCH');
+            throw failure(409, '같은 요청이 이미 다른 티켓 검토로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요', undefined, 'TICKET_REVIEW_MISMATCH');
           }
         }
         if (command === 'ticket.reissue') {
           const original = object(object(receipt.result).response);
           if (!clean(object(original.participant).id, 120) ||
               clean(object(original.participant).id, 120) !== clean(object(reviewInput).id, 120)) {
-            throw failure(409, '이 요청 식별자는 다른 티켓 재발급에 사용되었습니다. 원래 요청을 확인하세요', undefined, 'TICKET_REISSUE_MISMATCH');
+            throw failure(409, '같은 요청이 이미 다른 티켓 재발급으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요', undefined, 'TICKET_REISSUE_MISMATCH');
           }
         }
         if (command === 'ticket.reissue' || command === 'ticket.reissue-reviewed') {
@@ -945,7 +945,7 @@ function createParticipantCommands(database) {
             }
           }
           if (person.cancelled === true && String(person.status || '').toUpperCase() !== 'CANCELLED') {
-            throw failure(409, '신청 상태와 취소 기록이 일치하지 않습니다. 시스템 관리자에게 확인하세요.', undefined, 'TICKET_STATUS_CONFLICT');
+            throw failure(409, '신청 상태와 취소 기록이 일치하지 않습니다. 조직 관리자에게 확인하세요.', undefined, 'TICKET_STATUS_CONFLICT');
           }
           if (String(person.status || '').toUpperCase() === 'CANCELLED') throw failure(409, '활성 참가자만 티켓을 재발급할 수 있습니다');
           reissueTicket(event, person, now);

@@ -186,6 +186,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const operatorMenuRef = useRef<HTMLDivElement>(null);
   const globalTriggerRef = useRef<HTMLButtonElement>(null);
   const globalMenuRef = useRef<HTMLElement>(null);
+  const desktopNavRef = useRef<HTMLElement>(null);
   const [menuHasMore, setMenuHasMore] = useState(false);
   const menuFocusPendingRef = useRef(false);
   const globalFocusPendingRef = useRef(false);
@@ -625,6 +626,15 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
     setGlobalMenuOpen(false);
     setEventMenuQuery("");
   }, [pathname, organization.context?.organizationId]);
+
+  // Audit S4 (2026-11-24): on a short window the rail scrolls, and the current
+  // page can sit under the edge shadow. Bring it into view when the page or the
+  // loaded menu changes (never while typing in the menu search, never moving
+  // focus). `nearest` leaves an already visible item exactly where it is.
+  useEffect(() => {
+    const active = desktopNavRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    active?.scrollIntoView({ block: "nearest" });
+  }, [pathname, railPageId, shellData?.currentEventName]);
 
   useEffect(() => {
     const menu = globalMenuRef.current;
@@ -1203,7 +1213,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
           <Avatar className="operator-avatar" name={userName} size={32} shape="circle" tooltip={false} aria-hidden="true" />
         </ProductButton>
 
-        <nav className="side-nav desktop-side-nav" aria-label="주요 메뉴">
+        <nav ref={desktopNavRef} className="side-nav desktop-side-nav" aria-label="주요 메뉴">
           {renderEventsLink("workspace-events-link")}
           {renderEventBranch("workspace-events-link")}
           {renderClientsLink("workspace-clients-link")}

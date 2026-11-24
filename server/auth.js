@@ -92,6 +92,14 @@ function ttlMs() {
   return (Number.isFinite(hours) && hours > 0 && hours <= 24 * 365 ? hours : 12) * 3600 * 1000;
 }
 
+// Sliding session: a session whose remaining lifetime has dropped below half
+// of the TTL is renewed to a full TTL on its next authenticated request. The
+// extension is one conditional UPDATE (a no-op for sessions that were already
+// renewed or revoked), never required for the request to succeed, and the
+// browser cookie is refreshed with the same Max-Age by the HTTP layer through
+// takeSessionCookieRefresh().
+const REFRESHED_COOKIE_LIMIT = 1000;
+
 function normalizeEmail(value) {
   const email = String(value || '').trim().toLowerCase();
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '';
@@ -161,7 +169,7 @@ function invitationFailure(status, message, extra) {
 function commandIdentifier(value) {
   const id = String(value === undefined || value === null ? '' : value).trim();
   if (!/^[A-Za-z0-9_-]{8,128}$/.test(id)) {
-    throw invitationFailure(400, '요청 식별자를 확인하세요', { field: 'commandId' });
+    throw invitationFailure(400, '요청을 확인하지 못했습니다. 화면을 새로 고친 뒤 다시 시도하세요', { field: 'commandId' });
   }
   return id;
 }
@@ -374,13 +382,53 @@ function createDatabaseAuth(database, options = {}) {
   // snapshot (org_context_version) rides along for the per-write check in
   // server/tenancy.js. Hints can only deny, never widen. No write happens
   // here: single-membership compat resolves inline.
+  // Tokens whose server-side expiry was just extended and whose cookie still
+  // carries the old Max-Age. Consumed once by the HTTP layer; bounded so a
+  // path that never consumes it cannot grow the map.
+  const refreshedSessionCookies = new Map();
+
+  function rememberRefreshedSession(token) {
+    refreshedSessionCookies.set(token, Date.now());
+    if (refreshedSessionCookies.size > REFRESHED_COOKIE_LIMIT) {
+      const oldest = refreshedSessionCookies.keys().next().value;
+      refreshedSessionCookies.delete(oldest);
+    }
+  }
+
+  async function extendSessionIfNeeded(token, remainingSeconds) {
+    const ttlSeconds = Math.floor(ttlMs() / 1000);
+    if (!Number.isFinite(remainingSeconds) || remainingSeconds >= ttlSeconds / 2) return;
+    try {
+      const renewed = await database.query(
+        `UPDATE sessions
+         SET expires_at = now() + ($2::int * interval '1 second')
+         WHERE token_hash = $1
+           AND expires_at > now()
+           AND expires_at < now() + ($3::numeric * interval '1 second')`,
+        [tokenHash(token), ttlSeconds, ttlSeconds / 2]
+      );
+      if (renewed.rowCount === 1) rememberRefreshedSession(token);
+    } catch (error) {
+      // Renewal is a convenience: the request still has a valid session.
+    }
+  }
+
+  // Returns the refreshed Set-Cookie value once for a request cookie whose
+  // session was just extended, otherwise null.
+  function takeSessionCookieRefresh(cookieHeader) {
+    const token = cookieToken(cookieHeader);
+    if (!token || !refreshedSessionCookies.delete(token)) return null;
+    return databaseCookie(token);
+  }
+
   async function sessionFromCookie(cookieHeader) {
     const token = cookieToken(cookieHeader);
     if (!token || token.length > 256) return null;
     const result = await database.query(
       `SELECT a.id, a.email, a.name, a.role AS global_role, a.active,
               s.org_id AS session_org, s.org_context_version AS session_org_version,
-              s.org_select_revision AS session_revision
+              s.org_select_revision AS session_revision,
+              EXTRACT(EPOCH FROM (s.expires_at - now()))::float8 AS remaining_seconds
        FROM sessions s JOIN accounts a ON a.id = s.account_id
        WHERE s.token_hash = $1 AND s.expires_at > now() AND a.active = true
        LIMIT 1`,
@@ -388,6 +436,7 @@ function createDatabaseAuth(database, options = {}) {
     );
     const row = result.rows[0];
     if (!row || !ROLES.includes(row.global_role)) return null;
+    await extendSessionIfNeeded(token, Number(row.remaining_seconds));
     const sessionRevision = Number(row.session_revision) || 0;
     const memberships = await database.query(
       `SELECT m.org_id, m.role, o.name AS org_name, o.context_version
@@ -817,7 +866,7 @@ function createDatabaseAuth(database, options = {}) {
               { code: 'INVITATION_LINK_UNAVAILABLE' }
             );
           }
-          throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+          throw invitationFailure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
         }
         requireOrgOwner(org);
         if (request.role === 'AGENCY') {
@@ -883,7 +932,7 @@ function createDatabaseAuth(database, options = {}) {
       });
     } catch (error) {
       if (error && error.code === '23505' && !error.status) {
-        throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+        throw invitationFailure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
       }
       throw error;
     }
@@ -923,12 +972,12 @@ function createDatabaseAuth(database, options = {}) {
             // Same command id, different password is a different operation:
             // only a byte-identical replay counts as idempotent.
             if (!verifyPassword(password, current.rows[0].password_hash)) {
-              throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+              throw invitationFailure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
             }
             const { password_hash: _dropped, ...account } = current.rows[0];
             return { account: publicAccount(account), replayed: true, sessionsRevoked: 0 };
           }
-          throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+          throw invitationFailure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
         }
         requireOrgOwner(org);
 
@@ -997,7 +1046,7 @@ function createDatabaseAuth(database, options = {}) {
       });
     } catch (error) {
       if (error && error.code === '23505' && !error.status) {
-        throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+        throw invitationFailure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
       }
       throw error;
     }
@@ -1031,7 +1080,7 @@ function createDatabaseAuth(database, options = {}) {
             if (!current.rowCount) throw invitationFailure(404, '초대를 찾을 수 없습니다');
             return { invitation: publicInvitation(current.rows[0]), replayed: true };
           }
-          throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+          throw invitationFailure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
         }
         requireOrgOwner(org);
 
@@ -1065,7 +1114,7 @@ function createDatabaseAuth(database, options = {}) {
       });
     } catch (error) {
       if (error && error.code === '23505' && !error.status) {
-        throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+        throw invitationFailure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
       }
       throw error;
     }
@@ -1162,7 +1211,7 @@ function createDatabaseAuth(database, options = {}) {
         if (String(receipt.actor_id || '') !== String(user.id) ||
             stored.command !== 'organization.select' ||
             !stored.request || String(stored.request.organizationId || '') !== String(organizationId)) {
-          throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+          throw invitationFailure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
         }
         const receiptRevision = Number(stored.response && stored.response.revision);
         if (String(session.org_id || '') === String(organizationId) &&
@@ -1253,7 +1302,7 @@ function createDatabaseAuth(database, options = {}) {
             return { organization: stored.response.organization, commandId: command, replayed: true };
           }
           // A commandId is global: reuse across orgs is a conflict, never a fork.
-          throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+          throw invitationFailure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
         }
         requireOrgOwner(org);
         const orgId = `org-${crypto.randomUUID()}`;
@@ -1277,7 +1326,7 @@ function createDatabaseAuth(database, options = {}) {
       });
     } catch (error) {
       if (error && error.code === '23505' && !error.status) {
-        throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+        throw invitationFailure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
       }
       throw error;
     }
@@ -1337,7 +1386,7 @@ function createDatabaseAuth(database, options = {}) {
               (stored.request.role === undefined ? null : stored.request.role) === requestFingerprint.role) {
             return { membership: stored.response.membership, previous: stored.response.previous, replayed: true };
           }
-          throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+          throw invitationFailure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
         }
         // Lock the org before either membership row, just as invitation
         // acceptance does. Re-check the actor only after waiting for this lock.
@@ -1410,7 +1459,7 @@ function createDatabaseAuth(database, options = {}) {
       });
     } catch (error) {
       if (error && error.code === '23505' && !error.status) {
-        throw invitationFailure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+        throw invitationFailure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
       }
       throw error;
     }
@@ -2172,6 +2221,7 @@ function createDatabaseAuth(database, options = {}) {
     authenticate,
     createSession,
     sessionFromCookie,
+    takeSessionCookieRefresh,
     revokeSession,
     seedAdmin,
     setupState,

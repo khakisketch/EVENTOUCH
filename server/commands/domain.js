@@ -208,14 +208,14 @@ function createDomainCommands(database, options = {}) {
         try {
           checkReceiptScope(receipt, receiptScope || undefined);
         } catch (error) {
-          throw failure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다', undefined, error.code);
+          throw failure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요', undefined, error.code);
         }
         const stored = object(receipt.result);
         const storedActorId = receipt.actor_id == null ? null : String(receipt.actor_id);
         const expectedActorId = guest ? null : String(account.id);
         if (String(receipt.event_id) !== String(event.id) || storedActorId !== expectedActorId ||
           stored.command !== command || (stored.ticketHash || null) !== hashTicket(guest ? ticketToken : null)) {
-          throw failure(409, '요청 식별자가 이미 다른 작업에 사용되었습니다');
+          throw failure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요');
         }
         if (command === 'event.basics.save' && stored.basicsRequestHash !== reviewedRequestHash(payload)) {
           throw failure(409, '이 요청은 다른 행사 정보 저장에 사용되었습니다. 원래 요청을 확인하세요', undefined, 'EVENT_BASICS_RECEIPT_MISMATCH');

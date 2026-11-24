@@ -17,7 +17,7 @@ function invalid(status, message) {
 
 function checkId(value) {
   if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(value)) {
-    throw invalid(400, '요청 식별자를 확인하세요');
+    throw invalid(400, '요청을 확인하지 못했습니다. 화면을 새로 고친 뒤 다시 시도하세요');
   }
   return value;
 }

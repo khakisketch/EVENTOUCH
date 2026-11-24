@@ -36,6 +36,7 @@ import { BackIcon, BangIcon, CheckIcon, ClockIcon, CopyIcon, GiftIcon, InfoIcon,
 import { CameraIcon } from "./StaffIcons";
 import { StaffNote, StaffPill, type StaffPillTone } from "./StaffStatus";
 import { useOperatorContextSnapshot } from "./use-operator-context";
+import { STAFF_OFFLINE_MESSAGE, STAFF_SLOW_MESSAGE, useStaffConnection } from "./use-staff-connection";
 import { useEventReceipts } from "../../lib/use-event-receipts";
 import { forgetOperatorReceipt } from "../../lib/operator-receipts";
 import OperatorReceiptRecovery from "../ui/OperatorReceiptRecovery";
@@ -237,12 +238,13 @@ function parseRewardList(value: unknown): DeskReward[] | null {
 function formatCheckTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "시각 확인 중";
-  return new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit" }).format(date);
+  // "오후 3:14", not "오후 03:14": a leading zero on the hour reads as a typo to the person at the door.
+  return new Intl.DateTimeFormat("ko-KR", { hour: "numeric", minute: "2-digit" }).format(date);
 }
 
 // When a ticket is scanned in again the server names who is already inside and
 // when they got in. Both are optional extras: a missing or odd value leaves the
-// plain "이미 입장했어요" notice.
+// plain "이미 입장했습니다" notice.
 function alreadyInDetails(value: unknown): { alreadyName?: string; alreadyAt?: string } {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
   const details = value as { name?: unknown; firstCheckedInAt?: unknown };
@@ -414,6 +416,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const [rewardNotice, setRewardNotice] = useState<string | null>(null);
   const pendingRewardCommandsRef = useRef(new Map<string, { id: string; uncertain: boolean; command: "reward.lookup" | "reward.collect"; payload: Record<string, unknown> }>());
   const eventReceipts = useEventReceipts(targetEventId);
+  // Connection strip (audit S3): informs only, never changes scan handling.
+  const connection = useStaffConnection(submitting || rewardCollectingId !== null);
   const previousOtherReceipt = useRef({ eventId: targetEventId, pending: false });
   const [receiptRefreshNeeded, setReceiptRefreshNeeded] = useState(false);
   const [receiptRefreshing, setReceiptRefreshing] = useState(false);
@@ -1051,6 +1055,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     : activeScope.boothAssignments.find((item) => item.targetId === boothId) ?? null;
   const selectedDesk = activeScope.desks.find((desk) => desk.id === deskId) ?? null;
   const directionReview = activeTask === "desk" ? deskDirectionReviews[deskId] : undefined;
+  // "바뀐" is only true when the direction really changed; the first visit and an unchanged
+  // direction still ask for a confirmation but must not claim a change.
+  const directionChanged = Boolean(directionReview && directionReview.from !== null && directionReview.from !== directionReview.to);
   // The SELF booth QR is shown to the participant, so its visible caption
   // names the booth: with several booths on one screen the wrong code is a
   // one-tap mistake the camera cannot catch.
@@ -1078,7 +1085,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const ready = activeTask === "desk"
     ? Boolean(assignment && selectedDesk && deskDirection(selectedDesk.action) && !deskClosed && !deskRefreshRequired && !directionReview && !confirmingDirection && deskSourcesAvailable)
     : Boolean(assignment && boothAvailable && !boothLimitReached && boothCanAttempt(boothStatus) && !refreshing);
-  const scanHint = directionReview ? "바뀐 데스크 방향을 확인한 뒤 진행하세요." : activeTask === "desk" && !deskSourcesAvailable ? "참가자 명단과 출입 기록을 확인한 뒤 진행하세요." : deskClosed || deskRefreshRequired ? "데스크 상태를 확인한 뒤 진행하세요." : !ready
+  const scanHint = directionReview ? (directionChanged ? "바뀐 데스크 방향을 확인한 뒤 진행하세요." : "데스크 업무 방향을 확인한 뒤 진행하세요.") : activeTask === "desk" && !deskSourcesAvailable ? "참가자 명단과 출입 기록을 확인한 뒤 진행하세요." : deskClosed || deskRefreshRequired ? "데스크 상태를 확인한 뒤 진행하세요." : !ready
     ? activeTask === "desk" ? "데스크를 먼저 선택하세요." : boothStatus && !boothCanAttempt(boothStatus) ? `선택한 부스가 ${boothStatus} 상태입니다. 운영 중인 부스를 선택하세요.` : "운영 중인 부스를 먼저 선택하세요."
     : "카메라로 QR을 스캔하거나 티켓 코드를 입력하세요.";
   // Operating context at the action: after any scroll, the operator still
@@ -1698,7 +1705,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const cameraMounted = !selfBooth && cameraOpen && ready && !orgChanged && !scanUnknown;
   const scanSuspended = submitting || result.kind !== "idle" || writeLocked || sheet !== null || entryMode === "roster";
   const placeTitle = activeTask === "desk" ? (selectedDesk?.name ?? "데스크") : (selectedBooth?.name ?? "부스");
-  const failKicker = boothLimitReached ? "인증 한도 도달" : result.kind === "failed" && result.alreadyIn ? "이미 입장했어요" : result.kind === "failed" && result.uncertain ? "처리 결과를 확인하지 못했습니다" : result.kind === "failed" && result.attendanceReviewRequired ? "출입 기록 확인이 필요합니다" : result.kind === "failed" && result.eligibilityReviewRequired ? "참가 상태 확인이 필요합니다" : "처리하지 못했습니다";
+  const failKicker = boothLimitReached ? "인증 한도 도달" : result.kind === "failed" && result.alreadyIn ? "이미 입장했습니다" : result.kind === "failed" && result.uncertain ? "처리 결과를 확인하지 못했습니다" : result.kind === "failed" && result.attendanceReviewRequired ? "출입 기록 확인이 필요합니다" : result.kind === "failed" && result.eligibilityReviewRequired ? "참가 상태 확인이 필요합니다" : "처리하지 못했습니다";
   const resultActions = result.kind === "failed" ? (
     <div className={prizeStyles.nextActions}>
             {result.uncertain ? (
@@ -1937,6 +1944,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
 
   return (
     <section className={`staff-workspace ${prizeStyles.fieldApp}${kiosk ? " kiosk-mode" : ""}`} aria-label={`${activeScope.eventName} 현장 업무`} data-tone={stageTone}>
+      {!connection.online ? <StaffNote id="staff-connection-offline" tone="danger" role="alert">{STAFF_OFFLINE_MESSAGE}</StaffNote>
+        : connection.slow ? <StaffNote id="staff-connection-slow" tone="warn" role="status">{STAFF_SLOW_MESSAGE}</StaffNote> : null}
       <div className={`staff-event-context ${prizeStyles.eventContext}`}>
         <ProductLink
           className="staff-back-link"
@@ -2332,7 +2341,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                 <p className={prizeStyles.reason} role="alert" ref={correctionConflictRef} tabIndex={-1}>출입 기록이 바뀌어 이 요청은 중단했습니다. 추가 정정은 현장 책임자에게 요청하세요.</p>
               ) : null}
               {!plainSuccess ? (
-                <p className={prizeStyles.reason}>{correctionLocked ? "정정 결과를 먼저 확인하세요. 위 기록은 정정 전 마지막으로 확인한 스캔입니다." : rewardCollectUncertain ? "경품 수령 결과를 확인한 뒤 다음 참가자를 처리하세요." : directionReview ? "바뀐 데스크 업무를 확인한 뒤 다음 참가자를 처리하세요." : result.recordStatus === "UNAVAILABLE" || (activeTask === "desk" && !deskSourcesAvailable) ? "현장 책임자에게 참가자와 최근 출입 기록 확인을 요청한 뒤 다음 참가자를 처리하세요." : rewardHold ? "경품을 전달한 뒤 다음 참가자를 스캔하세요." : "다음 참가자를 스캔하세요."}</p>
+                <p className={prizeStyles.reason}>{correctionLocked ? "정정 결과를 먼저 확인하세요. 위 기록은 정정 전 마지막으로 확인한 스캔입니다." : rewardCollectUncertain ? "경품 수령 결과를 확인한 뒤 다음 참가자를 처리하세요." : directionReview ? (directionChanged ? "바뀐 데스크 업무를 확인한 뒤 다음 참가자를 처리하세요." : "데스크 업무 방향을 확인한 뒤 다음 참가자를 처리하세요.") : result.recordStatus === "UNAVAILABLE" || (activeTask === "desk" && !deskSourcesAvailable) ? "현장 책임자에게 참가자와 최근 출입 기록 확인을 요청한 뒤 다음 참가자를 처리하세요." : rewardHold ? "경품을 전달한 뒤 다음 참가자를 스캔하세요." : "다음 참가자를 스캔하세요."}</p>
               ) : null}
             </div>
             <div className={prizeStyles.overlayFoot}>
