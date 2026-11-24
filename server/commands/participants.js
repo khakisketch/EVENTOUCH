@@ -475,16 +475,24 @@ async function eraseParticipant({ client, event, workspace, input, account, comm
     if (Object.hasOwn(person, 'inside') && typeof person.inside !== 'boolean') {
       throw failure(409, '입장 상태를 확인할 수 없습니다. 현장 기록을 확인한 뒤 다시 시도하세요.', undefined, 'PARTICIPANT_PRESENCE_UNKNOWN');
     }
-    if (person.inside === true) throw failure(409, '입장 중인 참가자는 먼저 퇴장 처리하세요', undefined, 'PARTICIPANT_INSIDE');
+    if (person.inside === true || String(person.status || '').toUpperCase() === 'IN') throw failure(409, '입장 중인 참가자는 먼저 퇴장 처리하세요', undefined, 'PARTICIPANT_INSIDE');
   }
   const formerName = clean(person.name, 60);
   const phones = [...new Set([normalizedPhone(person.phone), attendeePhone(person.phone)].filter(Boolean))];
 
-  if (String(person.status || '').toUpperCase() !== 'CANCELLED') {
+  // After the event the record is history: a deletion request must not turn a
+  // finished attendance into a cancellation or open a refund. Before the end the
+  // person can no longer attend, so cancel like a normal cancellation and open
+  // the refund request.
+  if (!closed && String(person.status || '').toUpperCase() !== 'CANCELLED') {
     person.status = 'CANCELLED';
     requestRefunds(workspace, person);
   }
   person.revoked = true;
+  // A prize still waiting for this person can no longer be handed over.
+  for (const reward of list(workspace.rewards)) {
+    if (reward && String(reward.participantId) === String(person.id) && reward.status === 'READY') reward.status = 'CANCELLED';
+  }
   anonymizeParticipant(person, now);
   const cleaned = eraseWorkspaceCopies(workspace, person.id, formerName);
 

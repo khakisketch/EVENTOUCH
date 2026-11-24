@@ -11,6 +11,7 @@
 
 const ERASED_NAME = '삭제된 참가자';
 const ERASED_TEXT = '삭제된 내용입니다';
+const ERASED_FILE_NAME = '삭제된 사진';
 
 // Participant keys that carry no personal data and keep the record working
 // (counts, ticket state, consent evidence). Every other key is dropped, so an
@@ -23,6 +24,10 @@ const KEPT_PARTICIPANT_KEYS = new Set([
 
 // Keys that copy a person's identity into another record.
 const IDENTITY_KEYS = ['name', 'phone', 'email', 'company', 'recipientName', 'participantName', 'recipientPhone', 'to'];
+
+// Free text a participant wrote (question, caption, post body, comment). Saved
+// receipts replay these inside their original response, so they are blanked there too.
+const AUTHORED_TEXT_KEYS = ['text', 'caption', 'body', 'comment'];
 
 function list(value) {
   return Array.isArray(value) ? value : [];
@@ -98,6 +103,8 @@ function eraseWorkspaceCopies(workspace, participantId, formerName) {
     if (!mine(row)) continue;
     blankIdentity(row);
     row.caption = ERASED_TEXT;
+    // The upload's file name can carry a person's name; the stored bytes stay (see header).
+    if (plain(row.image) && typeof row.image.name === 'string' && row.image.name) row.image.name = ERASED_FILE_NAME;
     row.status = 'HIDDEN';
     counts.photos += 1;
   }
@@ -133,6 +140,12 @@ function eraseWorkspaceCopies(workspace, participantId, formerName) {
   for (const entry of list(workspace.audit)) {
     if (!entry || typeof entry !== 'object') continue;
     let touched = false;
+    // A guest action (question.submit, ...) records the participant id as actor and the
+    // text they wrote as detail: keep who/when/which action, drop what they wrote.
+    if (String(entry.actor) === pid && typeof entry.detail === 'string' && entry.detail !== '') {
+      entry.detail = '';
+      counts.audit += 1;
+    }
     for (const key of Object.keys(entry)) {
       const nested = plain(entry[key]);
       if (nested && String(nested.participantId) === pid) {
@@ -173,8 +186,14 @@ function redactReceiptResult(result, participantId) {
         row.answers = {};
         touched = true;
       }
-      if (typeof row.comment === 'string' && row.comment) {
-        row.comment = '';
+      for (const key of AUTHORED_TEXT_KEYS) {
+        if (typeof row[key] === 'string' && row[key]) {
+          row[key] = '';
+          touched = true;
+        }
+      }
+      if (plain(row.image) && typeof row.image.name === 'string' && row.image.name) {
+        row.image.name = ERASED_FILE_NAME;
         touched = true;
       }
       if (touched) changed += 1;

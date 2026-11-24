@@ -281,6 +281,39 @@ test('participant.erase works after the event ended and after it was archived', 
   }
 });
 
+test('participant.erase leaves no authored text in receipts or audit, and keeps a finished attendance intact', async () => {
+  // Reopened 2026-11-25 (independent review): a guest's own question/photo text lives in the saved
+  // receipt response and in the audit detail; an ended event must not turn into a cancellation/refund.
+  // The ended event was already seeded by the previous test: start from clean rows.
+  await harness.database.query('DELETE FROM checkin_records WHERE event_id = $1', [ids.ended]);
+  await harness.database.query('DELETE FROM attendee_challenges WHERE event_id = $1', [ids.ended]);
+  const { person } = await seedPerson(ids.ended, { inside: false });
+  const row = await workspaceOf(ids.ended);
+  const QUESTION = '개인 사연이 담긴 질문 원문';
+  const FILE = '홍길동-가족사진.jpg';
+  row.audit = [{ id: 'au1', type: 'question.submit', actor: person.id, at: 'x', detail: QUESTION, eventId: ids.ended, guest: true }];
+  row.payments = [{ id: 'payE', participantId: person.id, amount: 1000, status: 'PAID', at: 'x' }];
+  row.photos[0].image = { fileId: 'f1', name: FILE };
+  await harness.database.query('UPDATE event_workspaces SET payload = $2::jsonb WHERE event_id = $1', [ids.ended, JSON.stringify(row)]);
+  const commandId = `receipt-${suffix}-${crypto.randomUUID()}`;
+  await harness.database.query('INSERT INTO command_receipts (command_id,event_id,actor_id,org_id,result) VALUES ($1,$2,NULL,$3,$4::jsonb)',
+    [commandId, ids.ended, LEGACY_ORG, JSON.stringify({ question: { participantId: person.id, name: NAME, text: QUESTION }, photo: { participantId: person.id, caption: FILE, image: { name: FILE } } })]);
+  const result = await run(ids.ended, 'participant.erase', { id: person.id }, cookies.manager);
+  assert.equal(result.status, 200, JSON.stringify(result.json));
+  const ws = await workspaceOf(ids.ended);
+  const stored = ws.participants.find((item) => item.id === person.id);
+  assert.equal(stored.status, 'APPROVED', 'a finished attendance keeps its status');
+  assert.equal(stored.revoked, true);
+  assert.equal(ws.payments.find((item) => item.id === 'payE').status, 'PAID', 'no refund request is opened after the event');
+  const text = JSON.stringify(ws);
+  for (const secret of [QUESTION, FILE]) assert.equal(text.includes(secret), false, `workspace no longer contains ${secret}`);
+  assert.equal(ws.audit.find((entry) => entry.id === 'au1').detail, '');
+  assert.equal(ws.rewards[0].status, 'CANCELLED', 'a waiting prize for an erased person is no longer pending');
+  const receipt = await harness.database.query('SELECT result FROM command_receipts WHERE command_id = $1', [commandId]);
+  const receiptText = JSON.stringify(receipt.rows[0].result);
+  for (const secret of [QUESTION, FILE, NAME]) assert.equal(receiptText.includes(secret), false, `receipt no longer contains ${secret}`);
+});
+
 test('participant.erase asks a person who is still inside a live event to check out first', async () => {
   const { person } = await seedPerson(ids.inside, { inside: true });
   const blocked = await run(ids.inside, 'participant.erase', { id: person.id }, cookies.manager);
