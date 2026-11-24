@@ -14,6 +14,8 @@ import styles from "./programs.module.css";
 type Props = {
   eventId: string;
   closeHref: (target: string) => string;
+  /** 행사 설정 > 운영 기능, where a switched-off type is turned on. */
+  settingsHref: string;
   /** Types switched off in 행사 설정; their module tiles are disabled with the reason. */
   isTypeEnabled: (type: string) => boolean;
   /** Draw-side tiles need the draw/poll feature on and permission to write draws. */
@@ -26,7 +28,7 @@ function drawFeatureKey(template: EventTemplate): "draw" | "poll" {
   return template.id === "vote" ? "poll" : "draw";
 }
 
-export function TemplateGroups({ eventId, closeHref, isTypeEnabled, isDrawEnabled, disabled, onPickModule }: Props) {
+export function TemplateGroups({ eventId, closeHref, settingsHref, isTypeEnabled, isDrawEnabled, disabled, onPickModule }: Props) {
   return (
     <div className={styles.templateGroups}>
       {TEMPLATE_GROUPS.map((group) => (
@@ -41,15 +43,18 @@ export function TemplateGroups({ eventId, closeHref, isTypeEnabled, isDrawEnable
                   <span className={styles.templateText}>
                     <b>{template.label}</b>
                     <span>{off ? "행사 설정에서 이 기능을 켜면 만들 수 있습니다." : template.description}</span>
+                    {off ? <ProductLink variant="ghost" className={styles.templateEnable} href={settingsHref}>기능 켜기</ProductLink> : null}
                   </span>
                 </>
               );
               return (
                 <li key={template.id}>
-                  {template.action === "module" ? (
-                    <button type="button" className={styles.templateTile} disabled={disabled || off} data-template={template.id} onClick={() => onPickModule(template.moduleType)}>{body}</button>
+                  {template.action === "module" && off ? (
+                    <span className={`${styles.templateTile} ${styles.templateTileOff}`} aria-disabled="true" data-template={template.id}>{body}</span>
+                  ) : template.action === "module" ? (
+                    <button type="button" className={styles.templateTile} disabled={disabled} data-template={template.id} onClick={() => onPickModule(template.moduleType)}>{body}</button>
                   ) : off ? (
-                    <span className={styles.templateTile} aria-disabled="true" data-template={template.id}>{body}</span>
+                    <span className={`${styles.templateTile} ${styles.templateTileOff}`} aria-disabled="true" data-template={template.id}>{body}</span>
                   ) : (
                     <ProductLink className={styles.templateTile} data-template={template.id}
                       href={closeHref(`/console/events/${encodeURIComponent(eventId)}/draws${template.query ? `?${template.query}` : ""}${template.hash}`)}>{body}</ProductLink>
@@ -60,14 +65,14 @@ export function TemplateGroups({ eventId, closeHref, isTypeEnabled, isDrawEnable
           </ul>
         </section>
       ))}
-      <p className={styles.templateHint}>기획안 게임은 템플릿으로 추가됩니다.</p>
+      <p className={styles.templateNote}>새 템플릿이 준비되면 이 목록에 추가됩니다.</p>
     </div>
   );
 }
 
 export default function TemplateChooser(props: Props & { onClose: () => void }) {
   return (
-    <ConsoleDialog title="이벤트 만들기" titleId="template-dialog-title" wide onClose={props.onClose}
+    <ConsoleDialog title="이벤트 만들기" titleId="template-dialog-title" wide stickyChrome onClose={props.onClose}
       description="만들 이벤트의 종류를 고르면 해당 설정이 열립니다.">
       <TemplateGroups {...props} />
     </ConsoleDialog>

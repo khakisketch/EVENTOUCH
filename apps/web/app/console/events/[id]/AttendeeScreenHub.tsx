@@ -12,11 +12,11 @@
  * unsaved screen is left.
  */
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import StatusPill from "../../console-ui/StatusPill";
 import { consoleFetch, subscribeConsoleFreshness } from "../../../../lib/console-api";
 import { drawEventsSnapshot } from "../../../../lib/participation-events";
-import { attendeeScreenStatuses, firstPendingTab, hasParticipationFeature, type ScreenStatus, type ScreenTab } from "../../../../lib/attendee-screen-status";
+import { attendeeScreenStatuses, firstPendingTab, hasParticipationFeature, type ContentSource, type ScreenStatus, type ScreenTab } from "../../../../lib/attendee-screen-status";
 import { consolePageHref, type ConsolePageId } from "../../console-navigation";
 import styles from "./attendee-screen-hub.module.css";
 
@@ -25,6 +25,14 @@ const TABS: ReadonlyArray<{ tab: ScreenTab; label: string; pageId: ConsolePageId
   { tab: "content", label: "공지·안내", pageId: "content" },
   { tab: "programs", label: "참여 이벤트", pageId: "programs" },
 ];
+
+/**
+ * The review link of a hub that already sits on the tab holding the waiting item
+ * changes nothing by navigating (same address), so it tells that screen to open
+ * the waiting item instead (reopened 2026-11-24). The screens listen for this event.
+ */
+export const HUB_REVIEW_EVENT = "eventouch:attendee-hub-review";
+export type HubReviewDetail = { tab: ScreenTab; source?: ContentSource };
 
 type Summary = { statuses: ScreenStatus[]; participation: boolean };
 
@@ -89,10 +97,20 @@ export default function AttendeeScreenHub({ eventId, active }: { eventId: string
   // 공지·안내 holds three sub-tabs; open the one that has the waiting item (existing anchors).
   const pendingHref = pendingBase && pending?.source ? `${pendingBase}#content-${({ notice: "notices", program: "program", venue: "venue" })[pending.source]}` : pendingBase;
   // The link opens one tab. When more is waiting elsewhere, name that tab and its own count
-  // so the number promised matches what the page shows.
+  // so the number promised matches what the page shows. From another tab the text says
+  // where the waiting items are, so a screen never reads "nothing to review" beside it.
   const pendingText = pending && pendingTab
-    ? pending.count > pending.tabCount ? `게시 전 ${pending.count}건 · ${pendingTab.label} ${pending.tabCount}건부터 확인` : `게시 전 ${pending.count}건 확인`
+    ? pendingTab.tab !== active
+      ? `${pendingTab.label}에 게시 전 ${pending.tabCount}건${pending.count > pending.tabCount ? ` · 전체 ${pending.count}건` : ""} 확인`
+      : pending.count > pending.tabCount ? `게시 전 ${pending.count}건 · ${pendingTab.label} ${pending.tabCount}건부터 확인` : `게시 전 ${pending.count}건 확인`
     : "";
+  const draftTotal = statuses.reduce((sum, status) => sum + (status.drafts ?? 0), 0);
+  const calmText = draftTotal > 0 ? `게시 대기 없음 · 임시 저장 ${draftTotal}건` : "모두 게시됨";
+  function reviewClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (!pending || pending.tab !== active) return;
+    event.preventDefault();
+    window.dispatchEvent(new CustomEvent<HubReviewDetail>(HUB_REVIEW_EVENT, { detail: { tab: pending.tab, source: pending.source } }));
+  }
 
   return (
     <div className={styles.hub} data-attendee-screen-hub="">
@@ -114,9 +132,9 @@ export default function AttendeeScreenHub({ eventId, active }: { eventId: string
         // Phones get one line instead of the chips (CSS toggles which is shown),
         // so the hub no longer pushes the screen's own content down the page.
         pending && pendingHref ? (
-          <Link className={styles.summary} href={pendingHref}>게시 상태 · {pendingText} <span aria-hidden="true">→</span></Link>
+          <Link className={styles.summary} href={pendingHref} onClick={reviewClick}>게시 상태 · {pendingText} <span aria-hidden="true">→</span></Link>
         ) : (
-          <p className={styles.summary}>게시 상태 · 모두 게시됨</p>
+          <p className={styles.summary}>게시 상태 · {calmText}</p>
         )
       ) : null}
       {statuses.length ? (
@@ -128,7 +146,7 @@ export default function AttendeeScreenHub({ eventId, active }: { eventId: string
             ))}
           </span>
           {pending && pendingHref ? (
-            <Link className={styles.review} href={pendingHref}>{pendingText}</Link>
+            <Link className={styles.review} href={pendingHref} onClick={reviewClick}>{pendingText}</Link>
           ) : null}
         </div>
       ) : null}

@@ -25,6 +25,11 @@ export type ScreenStatus = {
   pending: number;
   /** 공지·안내 only: the first sub-tab (공지 / 일정 / 장소) that holds something waiting. */
   source?: ContentSource;
+  /**
+   * 공지·안내 only: 임시 저장 items that were never published. They are saved work,
+   * not a waiting publish, so they never count in `pending` (reopened 2026-11-24).
+   */
+  drafts?: number;
 };
 
 /** Features that make 참여 이벤트 a destination (same list as the console rail). */
@@ -114,18 +119,32 @@ export function venueDraftDiffers(record: unknown): boolean {
     || published.map?.alt !== draft.map?.alt;
 }
 
+/**
+ * A notice or 일정 that was never published (no publishedAt, not published) is an 임시 저장:
+ * the operator is still writing it. One that was published and then taken down
+ * (publishedAt set, published false) is a deliberate 게시 내림. Neither is "게시 전".
+ * What waits for a publish review is a published item whose saved draft differs.
+ */
+export function isNeverPublished(item: unknown): boolean {
+  const value = rec(item);
+  return Boolean(value) && value?.published !== true && !text(value?.publishedAt);
+}
+
 function contentStatus(workspace: Rec, venueEnabled: boolean): ScreenStatus {
   const notices = Array.isArray(workspace.notices) ? workspace.notices.flatMap((value) => (rec(value) ? [rec(value) as Rec] : [])) : [];
   const program = Array.isArray(workspace.program) ? workspace.program.flatMap((value) => (rec(value) ? [rec(value) as Rec] : [])) : [];
-  const waiting = (item: Rec, hasEdit: (item: Rec) => boolean) => item.published !== true || hasEdit(item);
+  const waiting = (item: Rec, hasEdit: (item: Rec) => boolean) => item.published === true && hasEdit(item);
   const noticePending = notices.filter((item) => waiting(item, noticeHasEdit)).length;
   const programPending = program.filter((item) => waiting(item, programHasEdit)).length;
   const venuePending = venueEnabled && venueDraftDiffers(workspace.venue) ? 1 : 0;
   const pending = noticePending + programPending + venuePending;
+  const drafts = [...notices, ...program].filter(isNeverPublished).length;
   // The hub links to the sub-tab that actually holds the first waiting item.
   const source: ContentSource | undefined = noticePending > 0 ? "notice" : programPending > 0 ? "program" : venuePending > 0 ? "venue" : undefined;
-  if (pending > 0) return { tab: "content", label: `공지·안내 · 게시 전 ${pending}건`, tone: "wait", pending, source };
+  const draftText = drafts > 0 ? ` · 임시 저장 ${drafts}건` : "";
+  if (pending > 0) return { tab: "content", label: `공지·안내 · 게시 전 ${pending}건${draftText}`, tone: "wait", pending, source, drafts };
   if (notices.length + program.length === 0) return { tab: "content", label: "공지·안내 · 등록 없음", tone: "neutral", pending: 0 };
+  if (drafts > 0) return { tab: "content", label: `공지·안내 · 임시 저장 ${drafts}건`, tone: "neutral", pending: 0, drafts };
   return { tab: "content", label: "공지·안내 · 게시됨", tone: "ok", pending: 0 };
 }
 

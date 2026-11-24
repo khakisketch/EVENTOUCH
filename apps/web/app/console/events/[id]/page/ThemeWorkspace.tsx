@@ -40,13 +40,17 @@ import { formatConsoleEventMeta } from "../../../console-ui/ConsolePageHeader";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { useConsoleDraftGuard } from "../../../console-draft-guard";
 import styles from "./page.module.css";
+import hubStyles from "../attendee-screen-hub.module.css";
+import { HUB_REVIEW_EVENT, type HubReviewDetail } from "../AttendeeScreenHub";
 import { consoleFetch } from "../../../../../lib/console-api";
+import { bannerAppearance } from "../../../../../lib/banner-appearance";
+import { fitImage } from "../../../../../lib/image-fit";
+import { formatDayTime } from "../../../../../lib/screen-hub-date";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
 import { acknowledgeOperatorReceipt, confirmsAttendeePageCommand, isOrganizationContextBlock } from "../../../../../lib/operator-context";
 import { forgetOperatorReceipt } from "../../../../../lib/operator-receipts";
 
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
-const IMAGE_MAX_BYTES = 600_000;
 const MENU_LABELS: Record<ConfigurableHomeMenu, string> = {
   notice: "공지사항", lucky: "럭키드로우 번호", roulette: "룰렛 이벤트", vote: "순위 투표", stamp: "부스 인증",
 };
@@ -99,6 +103,8 @@ type UploadIntent = {
   status: "uploading" | "failed" | "uploaded";
   uncertain: boolean;
   error?: string;
+  /** The picture was larger than the limit and was shrunk in the browser before upload. */
+  shrunk?: boolean;
 };
 type ConflictState = { latest: Snapshot | null; loading: boolean; error: string | null; afterWrite?: boolean; contextChanged?: boolean };
 
@@ -158,10 +164,7 @@ function isUncertainStatus(status: number): boolean {
 }
 
 function formatPublishedAt(value: string | null): string {
-  if (!value) return "";
-  const time = Date.parse(value);
-  if (!Number.isFinite(time)) return value.slice(0, 10);
-  return new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(time));
+  return value ? formatDayTime(value) : "";
 }
 
 function parseSnapshot(
@@ -597,7 +600,7 @@ export default function ThemeWorkspace({ eventId, publicBase = null, afterHeader
         : current);
       setUpload({ ...intent, uncertain: false, status: "uploaded" });
       setFailure(null);
-      setNotice("배너 이미지를 올렸습니다. 참가자에게 보이려면 초안을 저장하고 게시하세요.");
+      setNotice(`${intent.shrunk ? "사진을 자동으로 줄여 올렸습니다. " : "배너 이미지를 올렸습니다. "}참가자에게 보이려면 초안을 저장하고 게시하세요.`);
     } catch (error) {
       if (activeThemeEventRef.current !== eventId) return;
       // Keep the same upload receipt intent and local object URL. Retrying
@@ -609,7 +612,20 @@ export default function ThemeWorkspace({ eventId, publicBase = null, afterHeader
     }
   }
 
-  function selectImage(event: ChangeEvent<HTMLInputElement>) {
+  // The hub's "게시 전 N건 확인" link on this very screen changes no address, so it asks the
+  // screen to bring the save/publish bar into view instead (reopened 2026-11-24).
+  useEffect(() => {
+    const onHubReview = (event: Event) => {
+      if ((event as CustomEvent<HubReviewDetail>).detail?.tab !== "design") return;
+      const bar = document.getElementById("theme-save");
+      bar?.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      bar?.focus({ preventScroll: true });
+    };
+    window.addEventListener(HUB_REVIEW_EVENT, onHubReview);
+    return () => window.removeEventListener(HUB_REVIEW_EVENT, onHubReview);
+  }, []);
+  const fittingImageRef = useRef(false);
+  async function selectImage(event: ChangeEvent<HTMLInputElement>) {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
     if (!file || commandBusy) return;
@@ -617,21 +633,33 @@ export default function ThemeWorkspace({ eventId, publicBase = null, afterHeader
       setFailure({ message: "배너 이미지는 PNG, JPEG, WEBP 형식만 올릴 수 있습니다.", field: "keyvisual" });
       return;
     }
-    if (file.size > IMAGE_MAX_BYTES) {
-      setFailure({ message: "배너 이미지는 600KB 이하로 올려주세요.", field: "keyvisual" });
+    // Reopened 2026-11-24 (H8): phone photos are routinely over 600KB. They are shrunk
+    // here (longest side, then JPEG quality) instead of being refused.
+    if (fittingImageRef.current) return;
+    fittingImageRef.current = true;
+    let fitted: Awaited<ReturnType<typeof fitImage>>;
+    try {
+      fitted = await fitImage(file);
+    } finally {
+      fittingImageRef.current = false;
+    }
+    if ("error" in fitted) {
+      setFailure({ message: fitted.error, field: "keyvisual" });
       return;
     }
+    const picked = fitted.file;
     if (upload?.status === "uploading" || upload?.status === "failed") return;
     revokeUploadPreview();
-    const objectUrl = URL.createObjectURL(file);
+    const objectUrl = URL.createObjectURL(picked);
     uploadUrlRef.current = objectUrl;
     const intent: UploadIntent = {
-      file,
+      file: picked,
       objectUrl,
       commandId: randomCommandId(),
       previousImage: state.kind === "ready" ? state.form.keyvisual : null,
       status: "uploading",
       uncertain: false,
+      shrunk: picked !== file,
     };
     setUpload(intent);
     setFailure(null);
@@ -1412,8 +1440,12 @@ export default function ThemeWorkspace({ eventId, publicBase = null, afterHeader
   const bannerSummary = homeStyle.bannerKind === "gradient" ? "그라데이션" : homeStyle.bannerKind === "solid" ? `단색 ${homeStyle.bannerColor}`
     : upload?.status === "uploading" ? upload.file.name : !state.form.keyvisual && state.defaultHomeBanner === "neutral" ? "기본 색상 배너" : homeImageLabel(state.form.keyvisual);
   const bannerFill = bannerFillCss(homeStyle);
+  // Reopened 2026-11-24 (H7): with no picture the thumbnail was a black pill. It now shows
+  // what the banner really shows: its fill, its picture (or the built-in one), or the
+  // neutral surface of a picture banner that has no picture.
+  const bannerLook = bannerAppearance(homeStyle, imageUrl, state.defaultHomeBanner, false);
   const bannerSwatch = (
-    <span className={studio.swatchArt} style={bannerFill ? { background: bannerFill } : imageUrl ? { backgroundImage: `url(${imageUrl})` } : undefined} aria-hidden="true" />
+    <span className={studio.swatchArt} style={bannerFill ? { background: bannerFill } : bannerLook.source ? { backgroundImage: `url(${bannerLook.source})` } : { background: "var(--surface-sunken)" }} aria-hidden="true" />
   );
   const menuShown = state.form.homeMenus.order.filter((key) => !state.form.homeMenus.hidden.includes(key)).length;
   const menuSummary = `${state.form.homeMenus.order.length}개 중 ${menuShown}개 표시${state.form.homeMenus.programs.length ? ` · 프로그램 ${state.form.homeMenus.programs.length}개` : ""}`;
@@ -1445,7 +1477,7 @@ export default function ThemeWorkspace({ eventId, publicBase = null, afterHeader
   return (
     <ConsolePage
       pageId="attendeePage"
-      eventId={eventId} afterHeader={afterHeader}
+      eventId={eventId} afterHeader={afterHeader} className={hubStyles.frame}
       eventName={state.eventName}
       meta={state.eventMeta}
       headerActions={publicAvailable ? <AttendeeGuideQr eventName={state.eventName} slug={state.slug} publicBase={publicBase} /> : undefined}
@@ -1601,7 +1633,8 @@ export default function ThemeWorkspace({ eventId, publicBase = null, afterHeader
             </label>
             <button type="button" className={studio.expand} onClick={() => setStageOpen(true)}>크게 보기</button>
           </div>
-          <p className={styles.previewNote}>미리보기 메뉴는 작동하지 않습니다. 행사 안내의 소개·강조색·일정·장소·프로그램은 안내 화면에서 확인하세요.</p>
+          <p className={`${styles.previewNote} ${studio.phoneOnly}`}>‘크게 보기’로 참가자 휴대폰에 보일 모습을 확인하세요.</p>
+          <p className={`${styles.previewNote} ${studio.wideOnly}`}>미리보기 메뉴는 작동하지 않습니다. 행사 안내의 소개·강조색·일정·장소·프로그램은 안내 화면에서 확인하세요.</p>
           {/* Home presentation and menu configuration reflect the selected
               draft or published version; event-page content remains separate. */}
           {!showingPublished && designDirty && !uploadBlocked ? <p className={styles.previewNote}>미저장 변경이 미리보기에 바로 반영됩니다.</p> : null}
@@ -1695,7 +1728,7 @@ export default function ThemeWorkspace({ eventId, publicBase = null, afterHeader
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
-                  onChange={selectImage}
+                  onChange={(event) => void selectImage(event)}
                   disabled={!canEditImage || Boolean(conflict)}
                   aria-label="배너 이미지 선택"
                 />
@@ -1894,8 +1927,8 @@ export default function ThemeWorkspace({ eventId, publicBase = null, afterHeader
               </StatusPill>
               <span>
                 {statusNeedsReview ? "편집 중인 초안은 최신 상태와 다를 수 있습니다" : state.publishedAt
-                  ? `게시 버전 ${state.publishedVersion} · 초안 ${state.draftVersion}`
-                  : `아직 게시하지 않음 · 초안 ${state.draftVersion}`}
+                  ? state.publishedVersion === state.draftVersion ? "게시된 내용과 저장한 초안이 같습니다" : "게시한 뒤 저장한 변경이 있습니다"
+                  : "아직 게시하지 않았습니다"}
               </span>
             </div>
             <p className={styles.workflowHelp}>{statusNeedsReview ? "요청 결과와 최신 페이지 상태를 확인한 뒤 저장하거나 게시하세요." : dirty ? "편집 내용은 아직 저장되지 않았습니다. 초안 저장은 참가자 화면을 바꾸지 않습니다." : alreadyPublished ? publicAvailable ? "저장된 초안이 참가자 화면에 게시되어 있습니다." : state.eventStage === "DRAFT" ? "페이지 설정은 게시됐지만 행사가 기획 단계라 참가자에게 공개되지 않습니다." : "페이지 설정은 게시됐지만 행사 공개 상태를 확인할 수 없습니다." : "저장된 초안은 아직 참가자 화면에 적용되지 않았습니다. 게시 검토를 눌러 확인하세요."}</p>
@@ -1913,7 +1946,7 @@ export default function ThemeWorkspace({ eventId, publicBase = null, afterHeader
                 <p className={styles.publishedNote}>게시본과 다른 저장된 변경: {publishedChanges.join(" · ")}</p>
               </details>
             ) : null}
-            {dirty && !uploadBlocked ? <p className={styles.inlineHelp}>게시 버튼은 저장된 초안에만 작동합니다. 먼저 초안을 저장하세요.</p> : null}
+            {dirty && !uploadBlocked ? <p className={styles.inlineHelp}>‘게시 검토’는 저장한 초안에만 쓸 수 있습니다. 먼저 초안을 저장하세요.</p> : null}
             {stageUnknown ? <div className={styles.inlineHelp}>
               <p>행사 공개 상태나 주소를 확인하지 못했습니다. 최신 행사 정보를 확인한 뒤 게시하세요.</p>
               <ProductButton variant="secondary" type="button" disabled={Boolean(commandBusy || conflict)} onClick={() => void reloadLatestDraft(true)}>최신 상태 확인</ProductButton>

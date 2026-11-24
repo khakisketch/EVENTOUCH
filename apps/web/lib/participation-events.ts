@@ -57,11 +57,13 @@ export function lifecycleSteps(facts: EventFacts): LifecycleStep[] {
   if (status === "OPEN" && !facts.configured) current = 0;
   if (current >= 0 && states[current] !== "na") states[current] = "current";
   const labels: Array<[LifecycleStep["key"], string, string]> = [
-    ["prepare", "문항·설정 준비", facts.configured ? "설정이 저장되어 있습니다." : "내용을 채워 설정을 완성하세요."],
-    ["expose", "화면·공개", exposed ? "참가자에게 공개되었습니다." : "시작하면 참가자 화면에 공개됩니다."],
+    // Reopened 2026-11-24 (H5): the five steps carry the names of the row meter's four segments
+    // (준비 · 진행 · 결과 · 경품); 공개 is the one step the meter folds into 진행.
+    ["prepare", "준비", facts.configured ? "설정이 저장되어 있습니다." : "내용을 채워 설정을 완성하세요."],
+    ["expose", "공개", exposed ? "참가자에게 공개되었습니다." : "시작하면 참가자 화면에 공개됩니다."],
     ["run", "진행", status === "OPEN" ? "지금 진행 중입니다." : status === "CLOSED" ? "진행이 끝났습니다." : "시작하면 응답을 받습니다."],
     ["result", "결과", resultDone ? "결과를 확인할 수 있습니다." : "종료하면 결과가 정리됩니다."],
-    ["reward", "경품 연결", facts.rewardCount === null ? "이 유형은 경품을 연결하지 않습니다." : facts.rewardCount > 0 ? `경품 ${facts.rewardCount}건이 연결되어 있습니다.` : "연결된 경품이 아직 없습니다."],
+    ["reward", "경품", facts.rewardCount === null ? "이 유형은 경품을 연결하지 않습니다." : facts.rewardCount > 0 ? `경품 ${facts.rewardCount}건이 연결되어 있습니다.` : "연결된 경품이 아직 없습니다."],
   ];
   return labels.map(([key, label, hint], index) => ({ key, label, hint, state: states[index] }));
 }

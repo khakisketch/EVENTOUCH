@@ -163,7 +163,12 @@
 .dot[data-status="live"]::after { background: var(--success); }
 .dot[data-status="edit"] { background: var(--warning-soft); }
 .dot[data-status="edit"]::after { background: var(--warning); }
-.dot[data-status="off"]::after { background: transparent; box-shadow: inset 0 0 0 2px var(--muted); }
+.dot[data-status="off"]::after,
+.dot[data-status="draft"]::after { background: transparent; box-shadow: inset 0 0 0 2px var(--muted); }
+/* The row the hub's "게시 전 N건 확인" link points at (reopened 2026-11-24). */
+.ledgerItem[data-highlight="true"] { border-radius: var(--r-ctl); box-shadow: 0 0 0 2px var(--warning); animation: pendingPulse 2.4s ease-out 1; }
+@keyframes pendingPulse { from { background: var(--warning-soft); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .ledgerItem[data-highlight="true"] { animation: none; background: var(--warning-soft); } }
 
 .rowSummary { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -179,9 +184,11 @@
   border: 0;
   border-radius: var(--r-ctl);
   background: transparent;
-  color: var(--muted);
+  color: var(--ink);
   font: inherit;
   font-weight: var(--fw-strong);
+  text-decoration: underline;
+  text-underline-offset: var(--s1);
   cursor: pointer;
 }
 .crumb:hover:not(:disabled) { color: var(--ink); background: var(--surface-muted); }

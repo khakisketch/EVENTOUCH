@@ -48,7 +48,8 @@ test('theme draft status lives in the save region, the single announcement', () 
   assert.doesNotMatch(source, /editStatusLine/u);
   assert.equal((source.match(/aria-live="polite"/g) || []).length, 1);
   assert.match(source, /id="theme-save"[\s\S]*?className=\{styles.versionSummary\} aria-live="polite"[\s\S]*?저장되지 않은 변경/u);
-  assert.match(source, /id="theme-save"[\s\S]*?게시 버전 \$\{state.publishedVersion\} · 초안 \$\{state.draftVersion\}/u);
+  // Reopened 2026-11-24 (H6): version numbers ("초안 0/1") told the operator nothing; the line says what differs.
+  assert.match(source, /id="theme-save"[\s\S]*?게시한 뒤 저장한 변경이 있습니다[\s\S]*?아직 게시하지 않았습니다/u);
   // Reopened 2026-11-20 (디자인 시스템 적용): the header also carries a short, NON-live
   // StatusPill (aria-live stays unique to the save region, asserted above); the unique
   // last-publish evidence still lives in the header.

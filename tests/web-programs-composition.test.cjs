@@ -34,8 +34,10 @@ test('approved programs design stays locked: ledger rows grouped by run state, o
   assert.ok((workspace.slice(0, workspace.indexOf('function ModuleDialog')).match(/variant="primary"/gu) || []).length === 1, 'the page has exactly one orange action: 이벤트 만들기 (the create dialog keeps its own submit)');
   assert.match(workspace, /이벤트 만들기/u);
   assert.doesNotMatch(workspace, /styles\.typeBadge|styles\.status\b|statusOpen|statusDraft|workspacePurpose/u, 'type and state pills and the purpose paragraph stay gone');
-  assert.match(workspace, /className=\{styles\.rowAction\}/u, '시작 / 다시 열기 sit at the row end, 종료 inside the expanded row');
-  assert.match(workspace, /onClick=\{\(\) => props\.onRequestStatus\("CLOSED"\)\}>종료</u);
+  assert.match(workspace, /className=\{styles\.rowAction\}/u, '시작 / 다시 열기 sit at the row end');
+  // Reopened 2026-11-24 (H5): 종료 is the row-end action of a running event, so it is found without expanding the row.
+  assert.match(workspace, /module\.status === "OPEN" \? \{ label: "종료", to: "CLOSED" as const \}/u);
+  assert.doesNotMatch(workspace, /onClick=\{\(\) => props\.onRequestStatus\("CLOSED"\)\}>종료</u, 'one 종료 button per row');
   assert.match(css, /\.moduleCard \+ \.moduleCard\s*\{[^}]*border-top:\s*1px solid var\(--line\)/su, 'Reopened 2026-11-20: C1 rows are divided by a hairline');
 });
 
@@ -82,7 +84,11 @@ test('reopened 2026-11-20: 이벤트 만들기 is a template chooser over the ex
   assert.match(workspace, /function openCreateOfType\(type: string\)[\s\S]*?setDraft\(\{ \.\.\.EMPTY_DRAFT, type \}\)/u, 'a module tile opens the existing create dialog with the type preselected');
   assert.match(chooser, /TEMPLATE_GROUPS\.map/u);
   assert.match(chooser, /closeHref\(`\/console\/events\/\$\{encodeURIComponent\(eventId\)\}\/draws/u, 'draw tiles open the draws screen settings (룰렛·럭키번호·순위 투표·무대 추첨)');
-  assert.match(chooser, /기획안 게임은 템플릿으로 추가됩니다/u);
+  // Reopened 2026-11-24 (H3): the dashed non-button box became a plain line; a switched-off tile links to the setting; the dialog has a visible close.
+  assert.match(chooser, /새 템플릿이 준비되면 이 목록에 추가됩니다/u);
+  assert.doesNotMatch(chooser, /기획안/u);
+  assert.match(chooser, /기능 켜기/u);
+  assert.match(chooser, /<ConsoleDialog [^>]*stickyChrome/u);
   assert.doesNotMatch(chooser, /스탬프|빙고/u, 'unbuilt game types get no tile');
   assert.match(css, /\.templateGroup ul\s*\{[^}]*grid-template-columns/su);
 });

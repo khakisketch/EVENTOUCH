@@ -278,7 +278,9 @@ test('unified-frame: programs pre-block writes for switched-off types', () => {
   assert.match(programs, /!props\.featureOn/, 'card writes disable with the type off');
   assert.match(programs, /typeEnabled=\{isTypeEnabled\(draft\.type\)\}/, 'dialog tracks the selected type');
   assert.match(programs, /꺼져 있는 기능의 콘텐츠는 저장할 수 없습니다/, 'dialog submit rejects without a round trip');
-  assert.match(programs, /이 유형은 꺼져 있습니다/, 'dialog names the reason with a settings link');
+  // Reopened 2026-11-24 (H3): the reason says what to do and the link is "기능 켜기"; off types are disabled in the dropdown.
+  assert.match(programs, /이 유형은 행사 설정에서 꺼져 있어 만들 수 없습니다\. <ProductLink href=\{settingsHref\}>기능 켜기<\/ProductLink>/, 'dialog names the reason with a settings link');
+  assert.match(programs, /disabled=\{off\}>\{off \? `\$\{type\.label\} \(행사 설정에서 꺼져 있음\)`/, 'a switched-off type is disabled in the 유형 dropdown with its reason');
   assert.match(programs, /disabled=\{busy \|\| locked \|\| !typeEnabled\}/, 'dialog submit affordance locks with the type off');
 });
 
@@ -375,7 +377,7 @@ test('unified-frame: engagement writes keep their command contracts', () => {
 
 test('engagement-growth: program cards aggregate results without new APIs or identities', () => {
   const programs = read(PROGRAMS);
-  assert.match(programs, /<details className=\{styles\.moduleDetails\}>/, 'each row mounts collapsed by default');
+  assert.match(programs, /<details ref=\{detailsRef\} className=\{styles\.moduleDetails\}>/, 'each row mounts collapsed by default');
   assert.match(programs, /<section className=\{styles\.resultSection\} aria-label="결과">/, 'results show inline in the expanded row, with no second fold');
   assert.doesNotMatch(programs, /resultDisclosure/, 'the nested 결과 보기 fold stays gone');
   assert.match(programs, /response\.answer === option/, 'poll/quiz tallies derive from loaded answers');

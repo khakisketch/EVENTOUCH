@@ -3,8 +3,21 @@
 
 .hub {
   display: grid;
+  align-content: start;
+  /* Reserves the publish-state row before the read answers, so the tab row does not
+     jump when the line appears (reopened 2026-11-24). */
+  min-height: calc(var(--s7) + var(--s7));
   margin-bottom: var(--s4);
   border-bottom: 1px solid var(--line);
+}
+
+/* The three attendee screens put different things in their headers (QR button, one
+   or two action buttons, no action while an editor is open), which moved the tab
+   row 40px between tabs. The frame gives every one of them the same header rows
+   (reopened 2026-11-24). Passed to ConsolePage as className. */
+.frame > header {
+  min-height: calc(var(--s8) + var(--s6) + var(--s5));
+  align-content: start;
 }
 
 .tabs {

@@ -26,6 +26,7 @@ import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib
 import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 import { useOperatorContextSnapshot } from "../../../../../lib/use-operator-context";
 import styles from "./programs.module.css";
+import hubStyles from "../attendee-screen-hub.module.css";
 import ProgramTypeIcon from "./ProgramIcons";
 import ReviewDrawer, { questionNeedsReview, type ReviewTab } from "./ReviewDrawer";
 import CountTabs from "../../../console-ui/CountTabs";
@@ -1153,7 +1154,7 @@ export default function ProgramsWorkspace({ eventId, afterHeader }: { eventId: s
       setModuleSaveRetry(null);
       dialogUnresolvedRef.current = false;
       setDialogOpen(false);
-      setNotice(wasCreate ? "콘텐츠를 만들었습니다." : "콘텐츠를 저장했습니다.");
+      setNotice(`‘${String(payload.title ?? "")}’ 이벤트를 ${wasCreate ? "만들었습니다" : "저장했습니다"}.`);
       setFailure(null);
       await load(true);
       if (wasCreate) {
@@ -1252,14 +1253,14 @@ export default function ProgramsWorkspace({ eventId, afterHeader }: { eventId: s
 
   async function changeStatus(module: Module, status: "DRAFT" | "OPEN" | "CLOSED") {
     if (writeLocked || !isTypeEnabled(module.type)) return;
-    const action = status === "OPEN" ? "시작" : status === "CLOSED" ? "종료" : "준비로 되돌리기";
+    const action = status === "OPEN" ? "시작했습니다" : status === "CLOSED" ? "종료했습니다" : "준비 중으로 되돌렸습니다";
     setBusy(`status:${module.id}`);
     setNotice(null);
     setFailure(null);
     try {
       await postCommand("module.status", { id: module.id, status });
       if (activeProgramEventRef.current !== eventId) return;
-      setNotice(`콘텐츠를 ${action}했습니다.`);
+      setNotice(`‘${module.title}’ 이벤트를 ${action}.`);
       await load(true);
     } catch (error) {
       if (activeProgramEventRef.current !== eventId) return;
@@ -1781,7 +1782,7 @@ export default function ProgramsWorkspace({ eventId, afterHeader }: { eventId: s
     <ConsolePage
       pageId="programs"
       closeSnapshot={state.closeSnapshot}
-      eventId={eventId} afterHeader={afterHeader}
+      eventId={eventId} afterHeader={afterHeader} className={hubStyles.frame}
       eventName={state.eventName}
       meta={state.eventMeta}
       headerActions={
@@ -1858,7 +1859,7 @@ export default function ProgramsWorkspace({ eventId, afterHeader }: { eventId: s
                 <span>검토할 것 {reviewTotal}<small>{[reviewQuestions ? `질문 ${reviewQuestions}` : "", reviewPhotos ? `사진 ${reviewPhotos}` : "", reviewPosts ? `글 ${reviewPosts}` : ""].filter(Boolean).join(" · ")}</small></span>
                 <span aria-hidden="true">열기 ›</span>
               </button>
-            ) : <span>검토할 항목이 없습니다.</span>}
+            ) : <span>참가자가 올린 질문·사진·글 중 검토할 항목이 없습니다.</span>}
           </div>
         </>
       ) : undefined}
@@ -2070,7 +2071,7 @@ export default function ProgramsWorkspace({ eventId, afterHeader }: { eventId: s
           <section className={styles.emptyChooser} aria-label="이벤트 만들기">
             <h2 className={styles.emptyChooserTitle}>첫 이벤트를 만들어 보세요</h2>
             <p>종류를 고르면 해당 설정이 열립니다.</p>
-            <TemplateGroups eventId={eventId} closeHref={closeHref} isTypeEnabled={isTypeEnabled} isDrawEnabled={(key) => state.features.includes(key)}
+            <TemplateGroups eventId={eventId} closeHref={closeHref} settingsHref={settingsHref} isTypeEnabled={isTypeEnabled} isDrawEnabled={(key) => state.features.includes(key)}
               disabled={writeLocked || Boolean(moduleSaveRetry) || otherModuleReceipt} onPickModule={openCreateOfType} />
           </section>
         )
@@ -2109,6 +2110,7 @@ export default function ProgramsWorkspace({ eventId, afterHeader }: { eventId: s
         <TemplateChooser
           eventId={eventId}
           closeHref={closeHref}
+          settingsHref={settingsHref}
           isTypeEnabled={isTypeEnabled}
           isDrawEnabled={(key) => state.features.includes(key)}
           disabled={writeLocked || Boolean(moduleSaveRetry) || otherModuleReceipt}
@@ -2125,6 +2127,7 @@ export default function ProgramsWorkspace({ eventId, afterHeader }: { eventId: s
           frozen={Boolean(moduleSaveRetry) || otherModuleReceipt}
           recovery={moduleSaveRetry ? moduleSaveRecovery() : null}
           typeEnabled={isTypeEnabled(draft.type)}
+          isTypeEnabled={isTypeEnabled}
           settingsHref={settingsHref}
           failure={dialogFailure}
           fieldError={dialogFieldError}
@@ -2296,16 +2299,24 @@ function ModuleCard(props: {
   const reviewedDraw = props.publishPending;
   const reviewedNames = reviewedDraw?.winners.slice(0, 3).map((winner) => winner.name || "이름 미등록").join(", ");
   const reviewedOthers = Math.max(0, (reviewedDraw?.winners.length ?? 0) - 3);
-  const statusAction = props.statusPending
+  // Reopened 2026-11-24 (H4): the confirmation names the event and says what the change does
+  // for attendees, and its button is a plain "시작하기" instead of "시작한다".
+  const statusConfirm = props.statusPending
     ? props.statusPending.status === "OPEN"
-      ? "시작"
+      ? { summary: `‘${module.title}’ 이벤트를 시작할까요? 시작하면 참가자 화면에 공개됩니다.`, label: "시작하기" }
       : props.statusPending.status === "CLOSED"
-        ? "종료"
-        : "준비로 되돌리기"
+        ? { summary: `‘${module.title}’ 이벤트를 종료할까요? 종료하면 참가자는 더 이상 참여할 수 없습니다.`, label: "종료하기" }
+        : { summary: `‘${module.title}’ 이벤트를 준비 중으로 되돌릴까요?`, label: "준비 중으로 되돌리기" }
     : null;
+  // The confirmation sits under the row head, next to the button that asked for it: an
+  // open row would otherwise push it a screen below.
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (statusConfirm && detailsRef.current) detailsRef.current.open = false;
+  }, [Boolean(statusConfirm)]); // eslint-disable-line react-hooks/exhaustive-deps
   const summary = rowSummary(module, props.moduleResponses, props.questions, props.photos, props.posts);
   const state = module.status === "OPEN" ? "live" : module.status === "CLOSED" ? "done" : "prep";
-  const rowAction = module.status === "DRAFT" ? { label: "시작", to: "OPEN" as const } : module.status === "CLOSED" ? { label: "다시 열기", to: "OPEN" as const } : null;
+  const rowAction = module.status === "DRAFT" ? { label: "시작", to: "OPEN" as const } : module.status === "CLOSED" ? { label: "다시 열기", to: "OPEN" as const } : module.status === "OPEN" ? { label: "종료", to: "CLOSED" as const } : null;
   const actionsDisabled = props.busy !== null || props.locked || !props.featureOn;
   const facts: EventFacts = {
     status: module.status,
@@ -2316,7 +2327,7 @@ function ModuleCard(props: {
   const pill = eventPill(facts, props.reviewCount);
   return (
     <li className={styles.moduleCard} data-status={module.status} data-feature-off={props.featureOn ? undefined : "true"}>
-      <details className={styles.moduleDetails}>
+      <details ref={detailsRef} className={styles.moduleDetails}>
         <summary className={styles.moduleSummary} data-has-action={rowAction ? "true" : undefined}>
           <ProgramTypeIcon type={module.type} state={state} />
           <span className={styles.moduleName}>
@@ -2493,19 +2504,16 @@ function ModuleCard(props: {
             >
               편집
             </ProductButton>
-            {module.status === "OPEN" ? (
-              <ProductButton type="button" variant="ghost" disabled={actionsDisabled} onClick={() => props.onRequestStatus("CLOSED")}>종료</ProductButton>
-            ) : null}
           </div>
         </div>
       </details>
       {rowAction ? (
         <ProductButton type="button" variant="ghost" className={styles.rowAction} disabled={actionsDisabled} onClick={() => props.onRequestStatus(rowAction.to)}>{rowAction.label}</ProductButton>
       ) : null}
-      {props.statusPending && statusAction ? (
+      {props.statusPending && statusConfirm ? (
         <ConsoleConfirm
-          summary={`“${module.title}” 콘텐츠를 ${statusAction}할까요?`}
-          confirmLabel={`${statusAction}한다`}
+          summary={statusConfirm.summary}
+          confirmLabel={statusConfirm.label}
           busy={props.busy !== null}
           onConfirm={props.onConfirmStatus}
           onCancel={props.onCancelStatus}
@@ -3048,6 +3056,7 @@ function ModuleDialog(props: {
   frozen: boolean;
   recovery: ReactNode;
   typeEnabled: boolean;
+  isTypeEnabled: (type: string) => boolean;
   settingsHref: string;
   failure: Failure | null;
   fieldError: { field: string; message: string } | null;
@@ -3056,7 +3065,7 @@ function ModuleDialog(props: {
   onClose: () => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
 }) {
-  const { draft, busy, locked, frozen, recovery, typeEnabled, settingsHref, failure, fieldError, canClose, onChange, onClose, onSubmit } = props;
+  const { draft, busy, locked, frozen, recovery, typeEnabled, isTypeEnabled, settingsHref, failure, fieldError, canClose, onChange, onClose, onSubmit } = props;
   const titleInputRef = useRef<HTMLInputElement>(null);
   function fieldMessage(field: string): string | null {
     return fieldError?.field === field ? fieldError.message : null;
@@ -3096,14 +3105,16 @@ function ModuleDialog(props: {
             aria-describedby={fieldMessage("type") ? "program-type-error" : undefined}
             onChange={(event) => onChange({ ...draft, type: event.target.value })}
           >
-            {MODULE_TYPES.map((type) => (
-              <option key={type.id} value={type.id}>{type.label}</option>
-            ))}
+            {MODULE_TYPES.map((type) => {
+              // A type that is off in 행사 설정 cannot be created; the one being edited stays choosable.
+              const off = !isTypeEnabled(type.id) && type.id !== draft.type;
+              return <option key={type.id} value={type.id} disabled={off}>{off ? `${type.label} (행사 설정에서 꺼져 있음)` : type.label}</option>;
+            })}
           </select>
           {fieldMessage("type") ? <p className={styles.fieldError} id="program-type-error" role="alert">{fieldMessage("type")}</p> : null}
           {!typeEnabled ? (
             <p className={styles.fieldError} role="note">
-              이 유형은 꺼져 있습니다. <ProductLink href={settingsHref}>행사 설정</ProductLink>에서 기능을 먼저 켜세요.
+              이 유형은 행사 설정에서 꺼져 있어 만들 수 없습니다. <ProductLink href={settingsHref}>기능 켜기</ProductLink>
             </p>
           ) : null}
         </div>
@@ -3114,6 +3125,7 @@ function ModuleDialog(props: {
               id="program-options"
               rows={4}
               value={draft.optionsText}
+              placeholder={"예) 한식\n양식\n분식"}
               aria-invalid={fieldError?.field === "options"}
               aria-describedby={fieldMessage("options") ? "program-options-error" : undefined}
               onChange={(event) => onChange({ ...draft, optionsText: event.target.value })}
@@ -3129,6 +3141,7 @@ function ModuleDialog(props: {
               maxLength={500}
               required
               value={draft.answer}
+              placeholder="예) 3번"
               aria-invalid={fieldError?.field === "answer"}
               aria-describedby={fieldMessage("answer") ? "program-answer-error" : undefined}
               onChange={(event) => onChange({ ...draft, answer: event.target.value })}
@@ -3138,7 +3151,7 @@ function ModuleDialog(props: {
         ) : null}
         {draft.type === "survey" ? (
           <div>
-            <label htmlFor="program-questions">만족도 질문 · 한 줄에 하나씩</label>
+            <label htmlFor="program-questions">설문 질문 · 한 줄에 하나씩</label>
             <textarea data-resize-none="true"
               id="program-questions"
               rows={5}

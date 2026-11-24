@@ -47,7 +47,8 @@ const EXPECTED_TITLES = {
   draws: '추첨·투표',
   photos: '현장 사진',
   content: '공지·안내',
-  attendeePage: '참가자 페이지',
+  // Reopened 2026-11-24 (H6): the H1 now matches the rail item and the hub, 참가자 화면.
+  attendeePage: '참가자 화면',
   rewards: '경품 지급',
   settings: '행사 설정',
   reports: '결과 보고서',

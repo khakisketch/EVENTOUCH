@@ -35,7 +35,8 @@ test('허브: 게시하지 않은 장소 안내 수정은 "모두 게시됨"으�
 });
 
 test('허브: 링크가 여는 탭의 건수를 따로 알려, 약속한 건수와 열리는 화면이 어긋나지 않는다', () => {
-  const statuses = attendeeScreenStatuses({ features: ['venue'] }, { pageExperience: { publishedAt: null }, notices: [{ id: 'n', title: 't', published: false }], program: [] });
+  const statuses = attendeeScreenStatuses({ features: ['venue'] }, { pageExperience: { publishedAt: null }, notices: [{ id: 'n', title: 't', published: true, draft: { title: 't', body: '고침' } }], program: [] });
+  // Reopened 2026-11-24 (H1): only a published item with an unpublished edit waits; a never-published one is 임시 저장.
   assert.deepEqual(firstPendingTab(statuses), { tab: 'design', count: 2, tabCount: 1 });
   const hub = read('console', 'events', '[id]', 'AttendeeScreenHub.tsx');
   assert.match(hub, /pending\.count > pending\.tabCount/);
@@ -118,7 +119,7 @@ test('허브: 꺼진 기능의 남은 모듈·추첨은 "준비 중"으로 세�
   assert.equal(row.label, '참여 이벤트 · 없음', 'a switched-off poll and the draws of a draw feature that is off are ignored');
   const on = attendeeScreenStatuses({ features: ['poll', 'draw'] }, stale, ['OPEN'])[2];
   assert.equal(on.label, '참여 이벤트 · 준비 중 1건');
-  const onlyProgram = attendeeScreenStatuses({ features: ['venue'] }, { ...published, notices: [], program: [{ id: 'p', title: '세션', published: false }], venue: { name: '홀', draft: { name: '홀' } } })[1];
+  const onlyProgram = attendeeScreenStatuses({ features: ['venue'] }, { ...published, notices: [], program: [{ id: 'p', title: '세션', date: '', start: '', end: '', place: '', description: '', published: true, draft: { title: '세션 수정' } }], venue: { name: '홀', draft: { name: '홀' } } })[1];
   assert.equal(onlyProgram.source, 'program');
   const venueOnly = attendeeScreenStatuses({ features: ['venue'] }, { ...published, notices: [], program: [], venue: { name: '홀', draft: { name: '새 홀' } } })[1];
   assert.equal(firstPendingTab([venueOnly]).source, 'venue');

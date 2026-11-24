@@ -819,7 +819,12 @@ button.drawerItemMain { cursor: pointer; min-height: 44px; align-content: center
 .templateText { display: grid; gap: 2px; min-width: 0; }
 .templateText b { font-weight: var(--fw-strong); }
 .templateText > span { color: var(--muted); font-size: var(--text-sm); line-height: var(--lh-body); word-break: keep-all; }
-.templateHint { margin: 0; padding: var(--s3) var(--s4); border: 1px dashed var(--line-strong); border-radius: var(--r-card); color: var(--muted); font-size: var(--text-sm); text-align: center; word-break: keep-all; }
+/* Reopened 2026-11-24 (H3): a dashed box read as a button that does nothing. It is a line of text now. */
+.templateNote { margin: 0; color: var(--muted); font-size: var(--text-sm); word-break: keep-all; }
+/* A switched-off type carries a real "기능 켜기" link, so the tile is not dimmed as a whole. */
+.templateTile.templateTileOff { opacity: 1; cursor: default; }
+.templateTileOff > svg, .templateTileOff .templateText > b, .templateTileOff .templateText > span { opacity: 0.7; }
+.templateEnable { justify-self: start; min-height: 44px; }
 .emptyChooser { display: grid; gap: var(--s3); padding: var(--s5) 0; }
 .emptyChooserTitle { margin: 0; font-size: var(--text-lg); font-weight: var(--fw-strong); letter-spacing: var(--ls-heading); }
 .emptyChooser > p { margin: 0 0 var(--s2); color: var(--muted); }

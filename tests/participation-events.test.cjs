@@ -27,7 +27,8 @@ test('the five-step header highlights the real current step', () => {
   assert.equal(current({ status: 'CLOSED', configured: true, hasResult: true, rewardCount: 2 }), null);
   assert.equal(current({ status: 'CLOSED', configured: true, hasResult: true, rewardCount: null }), null, 'no reward path never waits on 경품');
   assert.equal(lifecycleSteps({ status: 'CLOSED', configured: true, hasResult: true, rewardCount: null })[4].state, 'na');
-  assert.deepEqual(lifecycleSteps({ status: 'OPEN', configured: true, hasResult: false, rewardCount: 0 }).map((step) => step.label), ['문항·설정 준비', '화면·공개', '진행', '결과', '경품 연결']);
+  // Reopened 2026-11-24 (H5): step names match the row meter (준비 · 진행 · 결과 · 경품).
+  assert.deepEqual(lifecycleSteps({ status: 'OPEN', configured: true, hasResult: false, rewardCount: 0 }).map((step) => step.label), ['준비', '공개', '진행', '결과', '경품']);
 });
 
 test('status pill: review beats run state, ready needs a saved configuration', () => {

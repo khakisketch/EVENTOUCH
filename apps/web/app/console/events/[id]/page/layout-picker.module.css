@@ -52,7 +52,9 @@
 .thumb .scaled { width: 390px; max-width: none; min-height: 0; height: 848px; margin: 0; }
 
 .name { color: var(--ink); font-weight: var(--fw-heavy); }
-.hint { font-size: var(--text-sm); line-height: 1.3; word-break: keep-all; }
+/* Two lines are reserved so cards with a one-line hint keep their labels level with the
+   others (reopened 2026-11-24). */
+.hint { min-height: calc(var(--text-sm) * 1.3 * 2); font-size: var(--text-sm); line-height: 1.3; word-break: keep-all; }
 
 /* Reopened 2026-11-21 (owner: 레이아웃 선택 시안 A). Phones: one swipeable row of
    larger previews (150px, 0.3846 scale of the 390px phone) with the next card

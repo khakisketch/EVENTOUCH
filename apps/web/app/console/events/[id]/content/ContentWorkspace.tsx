@@ -25,12 +25,15 @@ import CountTabs from "../../../console-ui/CountTabs";
 import StatusPill, { type StatusPillTone } from "../../../console-ui/StatusPill";
 import uiStyles from "../../../console-ui/console-ui.module.css";
 import styles from "./content.module.css";
+import hubStyles from "../attendee-screen-hub.module.css";
 import { consoleFetch } from "../../../../../lib/console-api";
 import { abandonOperatorAttempt, acknowledgeOperatorReceipt, confirmsContentCommand, isOrganizationContextBlock } from "../../../../../lib/operator-context";
 import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib/operator-receipts";
 import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 import { normalizeHomeMenus } from "../../../../../lib/attendee-home-menus";
 import { normalizeVenue } from "../../../../../lib/attendee-screen-status";
+import { HUB_REVIEW_EVENT, type HubReviewDetail } from "../AttendeeScreenHub";
+import { formatDay } from "../../../../../lib/screen-hub-date";
 import { normalizeHomeImage, normalizeHomeStyle } from "../../../../../lib/attendee-home";
 import dynamic from "next/dynamic";
 import ConsoleSkeleton from "../../../console-ui/ConsoleSkeleton";
@@ -75,6 +78,8 @@ type Notice = {
   title: string;
   body: string;
   published: boolean;
+  /** Set the first time it is published and kept after a 게시 내림 (server publishContent). */
+  publishedAt: string;
   pinned: boolean;
   at: string;
   version: number;
@@ -90,6 +95,7 @@ type ProgramItem = {
   place: string;
   description: string;
   published: boolean;
+  publishedAt: string;
   attachment: Attachment | null;
   version: number;
   draft: { title: string; date: string; start: string; end: string; place: string; description: string; attachment: Attachment | null };
@@ -240,6 +246,7 @@ function parseNotice(value: unknown): Notice | null {
     title: item.title,
     body: text(item.body),
     published: item.published === true,
+    publishedAt: text(item.publishedAt),
     pinned: item.pinned === true,
     at: text(item.at),
     version: contentVersion(item),
@@ -266,6 +273,7 @@ function parseProgram(value: unknown): ProgramItem | null {
     place: text(item.place),
     description: text(item.description),
     published: item.published === true,
+    publishedAt: text(item.publishedAt),
     attachment: parseAttachment(item.attachment),
     version: contentVersion(item),
     draft: (() => { const d = asRecord(item.draft) ?? item; return { title: text(d.title), date: text(d.date), start: text(d.start), end: text(d.end), place: text(d.place), description: text(d.description), attachment: parseAttachment(d.attachment) }; })(),
@@ -321,15 +329,33 @@ function CrumbChevron() {
   return <svg className={styles.crumbIcon} viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M14.5 6.5 9 12l5.5 5.5" /></svg>;
 }
 
-type ContentStatus = "live" | "edit" | "off";
+// Reopened 2026-11-24 (H1): "비공개" mixed two different things. 임시 저장 = never
+// published (still being written); 게시 내림 = published once, then taken down on purpose.
+// 게시 대기 = published, with a saved edit that waits for a publish review.
+type ContentStatus = "live" | "edit" | "draft" | "off";
+
+function contentStatusOf(item: { published: boolean; publishedAt: string }, edited: boolean): ContentStatus {
+  if (item.published) return edited ? "edit" : "live";
+  return item.publishedAt ? "off" : "draft";
+}
+
+// What the editor says about reaching attendees, by the item's real state.
+function previewTieText(item: { published: boolean; publishedAt: string } | null): string {
+  const lead = "편집 중인 내용은 폰 미리보기에 윤곽선으로 먼저 보입니다. ";
+  if (!item) return `${lead}게시하기 전까지 참가자에게는 보이지 않습니다.`;
+  if (item.published) return `${lead}현재 게시된 내용입니다. 수정한 뒤 다시 게시하면 반영됩니다.`;
+  if (item.publishedAt) return `${lead}게시를 내린 상태라 참가자에게는 보이지 않습니다. 다시 보이려면 게시 검토를 거쳐 게시하세요.`;
+  return `${lead}아직 게시하지 않아 참가자에게는 보이지 않습니다. 게시 검토를 거쳐 게시하세요.`;
+}
 
 // Ties the list to the phone: only published items reach attendees, so the
 // ledger says how many of them the phone shows and how many drafts still wait.
-function LedgerNote({ live, waiting, hint }: { live: number; waiting: number; hint?: string }) {
+function LedgerNote({ live, waiting, drafts = 0, hint }: { live: number; waiting: number; drafts?: number; hint?: string }) {
   return (
     <p className={styles.ledgerNote} data-ledger-note>
       <span>참가자 폰에는 <strong>게시 중 {live}개</strong>만 보입니다.</span>
       {waiting ? <span>수정본 {waiting}개는 게시 검토를 기다립니다.</span> : null}
+      {drafts ? <span>임시 저장 {drafts}개는 아직 게시한 적이 없습니다.</span> : null}
       {hint ? <span>{hint}</span> : null}
     </p>
   );
@@ -338,8 +364,8 @@ function LedgerNote({ live, waiting, hint }: { live: number; waiting: number; hi
 // Reopened 2026-11-20 (디자인 시스템 적용): state is one StatusPill everywhere
 // (ledger rows, editor head). 게시 중 = ok, 수정본 있음 = wait (the draft waits
 // on a publish review), 비공개 = neutral. The text carries the meaning.
-const STATUS_TONE: Record<ContentStatus, StatusPillTone> = { live: "ok", edit: "wait", off: "neutral" };
-const STATUS_LABEL: Record<ContentStatus, string> = { live: "게시 중", edit: "수정본 있음", off: "비공개" };
+const STATUS_TONE: Record<ContentStatus, StatusPillTone> = { live: "ok", edit: "wait", draft: "neutral", off: "neutral" };
+const STATUS_LABEL: Record<ContentStatus, string> = { live: "게시 중", edit: "게시 대기", draft: "임시 저장", off: "게시 내림" };
 
 function ContentStatusPill({ status, size = "md" }: { status: ContentStatus; size?: "sm" | "md" }) {
   return <StatusPill tone={STATUS_TONE[status]} size={size} dot>{STATUS_LABEL[status]}</StatusPill>;
@@ -350,20 +376,21 @@ function ContentStatusPill({ status, size = "md" }: { status: ContentStatus; siz
 // itself opens the editor; there are no per-row buttons. A row that is shown
 // on the attendee phone says so in its tile (green); the amber tile is an
 // edited draft that still waits for a publish review.
-function LedgerRow({ status, title, summary, pinned = false, attachment = false, note = "", onOpen, disabled, disabledReason }: {
+function LedgerRow({ status, title, summary, pinned = false, attachment = false, note = "", highlight = false, onOpen, disabled, disabledReason }: {
   status: ContentStatus;
   title: string;
   summary: string;
   pinned?: boolean;
   attachment?: boolean;
   note?: string;
+  highlight?: boolean;
   onOpen?: () => void;
   disabled: boolean;
   disabledReason?: string;
 }) {
   const open = onOpen && !disabled ? onOpen : undefined;
   return (
-    <li className={styles.ledgerItem} data-ledger-status={status} data-disabled={disabled && onOpen ? "true" : undefined} title={disabled && onOpen ? disabledReason : undefined}>
+    <li className={styles.ledgerItem} data-ledger-status={status} data-highlight={highlight ? "true" : undefined} data-disabled={disabled && onOpen ? "true" : undefined} title={disabled && onOpen ? disabledReason : undefined}>
       <ListRow
         as="div"
         title={title || "제목 없음"}
@@ -405,6 +432,10 @@ export default function ContentWorkspace({ eventId, afterHeader }: { eventId: st
   const [tab, setTab] = useState<ContentTab>("notice");
   const [previewScreen, setPreviewScreen] = useState<PreviewScreen>("notice");
   const [previewStageOpen, setPreviewStageOpen] = useState(false);
+  // The hub's "게시 전 N건 확인" link (and a link that arrives with a section hash) points at
+  // the first item waiting for a publish review: its tab opens and its row is outlined.
+  const [reviewFocus, setReviewFocus] = useState<ContentTab | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
 
   const [noticeDialogOpen, setNoticeDialogOpen] = useState(false);
   const [noticeDraft, setNoticeDraft] = useState<NoticeDraft>(EMPTY_NOTICE_DRAFT);
@@ -734,12 +765,38 @@ export default function ContentWorkspace({ eventId, afterHeader }: { eventId: st
   useEffect(() => {
     const fromHash = () => {
       const target = ({ "#content-notices": "notice", "#content-program": "program", "#content-venue": "venue" } as Record<string, ContentTab>)[window.location.hash];
-      if (target) { setTab(target); setPreviewScreen(target); }
+      if (target) { setTab(target); setPreviewScreen(target); setNotice(null); setReviewFocus(target); }
+    };
+    // The hub link of a screen that is already open changes no address, so it sends this instead.
+    const fromHub = (event: Event) => {
+      const source = (event as CustomEvent<HubReviewDetail>).detail?.source;
+      const target = ({ notice: "notice", program: "program", venue: "venue" } as Record<string, ContentTab>)[source ?? "notice"];
+      if (target) { setTab(target); setPreviewScreen(target); setNotice(null); setReviewFocus(target); }
     };
     fromHash();
     window.addEventListener("hashchange", fromHash);
-    return () => window.removeEventListener("hashchange", fromHash);
+    window.addEventListener(HUB_REVIEW_EVENT, fromHub);
+    return () => {
+      window.removeEventListener("hashchange", fromHash);
+      window.removeEventListener(HUB_REVIEW_EVENT, fromHub);
+    };
   }, []);
+
+  // Outline the first row of that tab that waits for a publish review, once the list is
+  // on screen, and bring it into view. The outline fades after a few seconds.
+  useEffect(() => {
+    if (!reviewFocus || state.kind !== "ready") return;
+    setReviewFocus(null);
+    const waiting = reviewFocus === "notice"
+      ? state.notices.find((item) => item.published && hasChanges(noticeChanges(item)))
+      : reviewFocus === "program" ? state.program.find((item) => item.published && hasChanges(programChanges(item))) : undefined;
+    if (!waiting) return;
+    setHighlightId(waiting.id);
+    // No cleanup on purpose: clearing reviewFocus above re-runs this effect, which must not
+    // cancel the scroll or the fade timers it just started.
+    window.requestAnimationFrame(() => document.querySelector('[data-highlight="true"]')?.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }));
+    window.setTimeout(() => setHighlightId(null), 4000);
+  }, [reviewFocus, state]);
 
   // Opening an editor moves focus to its first field; closing hands it back
   // to the tab it came from, so keyboard users never land on <body>.
@@ -1538,7 +1595,7 @@ export default function ContentWorkspace({ eventId, afterHeader }: { eventId: st
   const designHref = `/console/events/${encodeURIComponent(eventId)}/page`;
   const fileUrl = (file: Attachment | null | undefined) => file ? `/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(file.fileId)}` : null;
   const programMeta = (value: { date: string; start: string; end: string; place: string }) =>
-    [value.date, value.start && value.end ? `${value.start} ~ ${value.end}` : value.start, value.place].filter(Boolean).join(" · ");
+    [formatDay(value.date), value.start && value.end ? `${value.start} ~ ${value.end}` : value.start, value.place].filter(Boolean).join(" · ");
 
   // Phone content: what attendees see now (published items) plus the one
   // item being edited, drawn from its live draft and outlined.
@@ -1602,6 +1659,8 @@ export default function ContentWorkspace({ eventId, afterHeader }: { eventId: st
     }
     setTab(next);
     setPreviewScreen(next);
+    // A success banner ("게시했습니다") belongs to the tab it was raised in.
+    setNotice(null);
   }
   function closeNoticeEditor() { if (canCloseNoticeDialog()) setNoticeDialogOpen(false); }
   function closeProgramEditor() { if (canCloseProgramDialog()) setProgramDialogOpen(false); }
@@ -1621,7 +1680,7 @@ export default function ContentWorkspace({ eventId, afterHeader }: { eventId: st
   return (
     <ConsolePage
       pageId="content"
-      eventId={eventId} afterHeader={afterHeader}
+      eventId={eventId} afterHeader={afterHeader} className={hubStyles.frame}
       eventName={state.eventName}
       meta={formatConsoleEventMeta(state.eventMeta)}
       headerActions={headerAdd}
@@ -1670,14 +1729,14 @@ export default function ContentWorkspace({ eventId, afterHeader }: { eventId: st
                   noticeDialogOpen ? (
                     <div className={styles.editor}>
                       <div className={styles.editorHead}>
-                        <button type="button" className={styles.crumb} disabled={noticeDialogBusy} onClick={closeNoticeEditor}><CrumbChevron />공지</button>
+                        <button type="button" className={styles.crumb} disabled={noticeDialogBusy} onClick={closeNoticeEditor}><CrumbChevron />공지 목록으로</button>
                         <span className={styles.editorState}>
-                          {noticeDraft.id ? <ContentStatusPill status={!noticeDraft.published ? "off" : editingNotice && hasChanges(noticeChanges(editingNotice)) ? "edit" : "live"} /> : null}
+                          {noticeDraft.id ? <ContentStatusPill status={contentStatusOf({ published: noticeDraft.published, publishedAt: editingNotice?.publishedAt ?? "" }, Boolean(editingNotice && hasChanges(noticeChanges(editingNotice))))} /> : null}
                           {noticeDirty || !noticeDraft.id ? <StatusPill tone="info">{noticeDraft.id ? "저장 전 변경" : "새 항목 · 저장 전"}</StatusPill> : null}
                         </span>
                       </div>
                       <h2 id="content-notice-dialog-title" className={styles.editorTitle}><span className="sr-only">{noticeDraft.id ? "공지 편집: " : "공지 작성: "}</span>{noticeDraft.title || (noticeDraft.id ? "제목 없음" : "새 공지")}</h2>
-                      <p className={styles.previewTie} data-preview-tie>편집 중인 내용은 폰 미리보기에 윤곽선으로 먼저 보입니다. 게시 전까지 참가자에게는 보이지 않습니다.</p>
+                      <p className={styles.previewTie} data-preview-tie>{previewTieText(editingNotice ?? null)}</p>
                       <ValidatedForm className={uiStyles.formStack} onSubmit={(event) => void saveNotice(event)}>
                         <fieldset className={styles.draftFields} disabled={Boolean(pendingContent) || checkingContent || noticeDialogBusy}>
                         <legend className="sr-only">공지 내용</legend>
@@ -1762,7 +1821,7 @@ export default function ContentWorkspace({ eventId, afterHeader }: { eventId: st
                         {editingNotice && noticeDeletePendingId === editingNotice.id && noticeDisplayPendingId !== editingNotice.id ? (
                           <ConsoleConfirm
                             summary={`“${editingNotice.title}” 공지를 삭제할까요?`}
-                            confirmLabel="삭제한다"
+                            confirmLabel="삭제하기"
                             confirmClassName="button button-danger"
                             busy={busy !== null}
                             onConfirm={() => void deleteNotice(editingNotice)}
@@ -1776,6 +1835,7 @@ export default function ContentWorkspace({ eventId, afterHeader }: { eventId: st
                     <LedgerNote
                       live={state.notices.filter((item) => item.published).length}
                       waiting={state.notices.filter((item) => item.published && hasChanges(noticeChanges(item))).length}
+                      drafts={state.notices.filter((item) => contentStatusOf(item, false) === "draft").length}
                     />
                     <ul className={styles.ledger}>
                       {state.notices.map((item) => {
@@ -1783,7 +1843,8 @@ export default function ContentWorkspace({ eventId, afterHeader }: { eventId: st
                         return (
                           <LedgerRow
                             key={item.id}
-                            status={edited ? "edit" : item.published ? "live" : "off"}
+                            status={contentStatusOf(item, edited)}
+                            highlight={highlightId === item.id}
                             title={item.draft.title}
                             summary={richSummary(item.draft.body)}
                             pinned={item.pinned}
@@ -1804,14 +1865,14 @@ export default function ContentWorkspace({ eventId, afterHeader }: { eventId: st
                   programDialogOpen ? (
                     <div className={styles.editor}>
                       <div className={styles.editorHead}>
-                        <button type="button" className={styles.crumb} disabled={programDialogBusy || uploadingAttachment} onClick={closeProgramEditor}><CrumbChevron />일정</button>
+                        <button type="button" className={styles.crumb} disabled={programDialogBusy || uploadingAttachment} onClick={closeProgramEditor}><CrumbChevron />일정 목록으로</button>
                         <span className={styles.editorState}>
-                          {programDraft.id ? <ContentStatusPill status={!programDraft.published ? "off" : editingProgram && hasChanges(programChanges(editingProgram)) ? "edit" : "live"} /> : null}
+                          {programDraft.id ? <ContentStatusPill status={contentStatusOf({ published: programDraft.published, publishedAt: editingProgram?.publishedAt ?? "" }, Boolean(editingProgram && hasChanges(programChanges(editingProgram))))} /> : null}
                           {programDirty || !programDraft.id ? <StatusPill tone="info">{programDraft.id ? "저장 전 변경" : "새 항목 · 저장 전"}</StatusPill> : null}
                         </span>
                       </div>
                       <h2 id="content-program-dialog-title" className={styles.editorTitle}><span className="sr-only">{programDraft.id ? "일정 편집: " : "일정 추가: "}</span>{programDraft.title || (programDraft.id ? "제목 없음" : "새 일정")}</h2>
-                      <p className={styles.previewTie} data-preview-tie>편집 중인 내용은 폰 미리보기에 윤곽선으로 먼저 보입니다. 게시 전까지 참가자에게는 보이지 않습니다.</p>
+                      <p className={styles.previewTie} data-preview-tie>{previewTieText(editingProgram ?? null)}</p>
                       <ValidatedForm className={uiStyles.formStack} onSubmit={(event) => void saveProgram(event)}>
                         <fieldset className={styles.draftFields} disabled={Boolean(pendingContent) || checkingContent || programDialogBusy}>
                         <legend className="sr-only">일정 내용</legend>
@@ -1962,7 +2023,7 @@ export default function ContentWorkspace({ eventId, afterHeader }: { eventId: st
                         {editingProgram && programDeletePendingId === editingProgram.id ? (
                           <ConsoleConfirm
                             summary={`“${editingProgram.title}” 일정을 삭제할까요?`}
-                            confirmLabel="삭제한다"
+                            confirmLabel="삭제하기"
                             confirmClassName="button button-danger"
                             busy={busy !== null}
                             onConfirm={() => void deleteProgram(editingProgram)}
@@ -1976,6 +2037,7 @@ export default function ContentWorkspace({ eventId, afterHeader }: { eventId: st
                     <LedgerNote
                       live={state.program.filter((item) => item.published).length}
                       waiting={state.program.filter((item) => item.published && hasChanges(programChanges(item))).length}
+                      drafts={state.program.filter((item) => contentStatusOf(item, false) === "draft").length}
                       hint="날짜·시작 시간 순으로 보입니다."
                     />
                     <ul className={styles.ledger}>
@@ -1984,7 +2046,8 @@ export default function ContentWorkspace({ eventId, afterHeader }: { eventId: st
                         return (
                           <LedgerRow
                             key={item.id}
-                            status={edited ? "edit" : item.published ? "live" : "off"}
+                            status={contentStatusOf(item, edited)}
+                            highlight={highlightId === item.id}
                             title={item.draft.title}
                             summary={programMeta(item.draft)}
                             attachment={Boolean(item.draft.attachment)}

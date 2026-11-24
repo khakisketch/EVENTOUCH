@@ -104,9 +104,15 @@
 .stageDialogBody > * { width: 100%; max-width: 440px; }
 .stageClose { min-height: 44px; padding: 0 var(--s4); border: 1px solid color-mix(in srgb, var(--paper) 45%, transparent); border-radius: var(--r-ctl); background: transparent; color: var(--paper); font: inherit; font-weight: var(--fw-strong); cursor: pointer; }
 
+.phoneOnly { display: none; }
+
 @media (max-width: 900px) {
   .studio { grid-template-columns: minmax(0, 1fr); gap: var(--s4); }
   .stage { position: static; }
   .phoneSlot, .stageBar { display: none; }
   .phoneOptions { justify-content: flex-start; }
+  /* Reopened 2026-11-24 (H7): the folded phone left its ticket and size pickers with
+     nothing to act on. Phones keep one "크게 보기" and one line saying what it does. */
+  .phoneOptions label, .wideOnly { display: none; }
+  .phoneOnly { display: block; }
 }

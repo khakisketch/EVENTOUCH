@@ -117,8 +117,8 @@ test('the phone is sticky on wide screens and a full view elsewhere, at real pho
 });
 
 test('the way back from an editor is a quiet crumb or the open tab, never a stray button', () => {
-  assert.match(workspace, /<button type="button" className=\{styles\.crumb\}[^>]*onClick=\{closeNoticeEditor\}><CrumbChevron \/>공지<\/button>/u);
-  assert.match(workspace, /<button type="button" className=\{styles\.crumb\}[^>]*onClick=\{closeProgramEditor\}><CrumbChevron \/>일정<\/button>/u);
+  assert.match(workspace, /<button type="button" className=\{styles\.crumb\}[^>]*onClick=\{closeNoticeEditor\}><CrumbChevron \/>공지 목록으로<\/button>/u); // Reopened 2026-11-24 (H2): the way back says where it goes.
+  assert.match(workspace, /<button type="button" className=\{styles\.crumb\}[^>]*onClick=\{closeProgramEditor\}><CrumbChevron \/>일정 목록으로<\/button>/u);
   assert.match(workspace, /Pressing the open tab again is the way back from its editor/u);
   assert.match(css, /\.crumb\s*\{[^}]*min-height:\s*44px/su);
   // The editor names the item it edits as a heading; the state is a dot plus text.
