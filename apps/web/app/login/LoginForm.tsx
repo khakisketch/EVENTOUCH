@@ -10,6 +10,7 @@ import ProductLink from "../ui/ProductLink";
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { safeNextPath, chooseOrganizationHref } from "../auth-redirect";
+import { returnNotice } from "./login-copy";
 import { resetOperatorContext } from "../../lib/operator-context";
 import styles from "../auth-entry.module.css";
 
@@ -288,7 +289,7 @@ export default function LoginForm() {
           로그인이 만료되었습니다. {safeRequested ? "다시 로그인하면 이 화면으로 돌아옵니다." : "다시 로그인하세요."}
         </p>
       ) : safeRequested ? (
-        <p className="auth-help" role="status">로그인하면 요청하신 화면으로 돌아갑니다.</p>
+        <p className="auth-help" role="status">{returnNotice(safeRequested)}</p>
       ) : null}
       {checkingSession ? (
         <p className="auth-help" role="status">로그인 상태를 확인하고 있습니다. 입력은 바로 시작할 수 있습니다.</p>

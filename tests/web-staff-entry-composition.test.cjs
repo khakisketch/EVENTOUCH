@@ -17,6 +17,9 @@ const css = fs.readFileSync(path.join(app, 'staff/staff-event-work.module.css'),
 const menuCss = fs.readFileSync(path.join(app, 'staff/staff-account-menu.module.css'), 'utf8');
 const page = fs.readFileSync(path.join(app, 'staff/page.tsx'), 'utf8');
 const loginPage = fs.readFileSync(path.join(app, 'login/page.tsx'), 'utf8');
+const loginCopySource = fs.readFileSync(path.join(app, 'login/login-copy.ts'), 'utf8');
+const loginForm = fs.readFileSync(path.join(app, 'login/LoginForm.tsx'), 'utf8');
+const authRedirect = fs.readFileSync(path.join(app, 'auth-redirect.ts'), 'utf8');
 const loginCss = fs.readFileSync(path.join(app, 'login/login-entry.module.css'), 'utf8');
 const ts = require(path.join(__dirname, '../apps/web/node_modules/typescript'));
 
@@ -79,9 +82,63 @@ test('routing, empty and failure copy, and the organization notice are unchanged
 test('the login is a dark band over a white sheet, on the existing markup', () => {
   assert.match(loginPage, /styles\.stage/u);
   assert.match(loginPage, /className="auth-brand"/u);
-  assert.match(loginPage, /aria-label="운영 로그인"/u);
+  // Reopened 2026-11-24 (owner: 스태프 진입 시 현장 문구): the labels come from login-copy, whose operator wording is unchanged.
+  assert.match(loginPage, /aria-label=\{copy\.sectionLabel\}/u);
+  assert.match(loginCopySource, /sectionLabel: "운영 로그인"/u);
   assert.match(loginCss, /\.auth-brand\) \{[^}]*background:\s*var\(--ink\)/su);
   assert.match(loginCss, /\.auth-card\) \{[^}]*border-radius:\s*28px 28px 0 0/su);
   assert.match(loginCss, /input \{[^}]*min-height:\s*56px/su);
   assert.match(loginCss, /p\[role="alert"\] \+ :global\(button\)/u, 'the error sits right above the submit');
+});
+
+// Reopened 2026-11-24 (owner: 스태프 진입 시 현장 문구): only a staff return destination changes the words.
+function loginCopyModule() {
+  const begin = authRedirect.indexOf('// __SAFE_NEXT_PATH_BEGIN__');
+  const end = authRedirect.indexOf('// __SAFE_NEXT_PATH_END__');
+  const safe = authRedirect.slice(begin, end).replace('export function', 'function');
+  const copy = loginCopySource.replace(/^import .*$/mu, '').replace(/export type LoginCopy = \{[^}]*\};/u, '').replace(/export function/gu, 'function');
+  const code = ts.transpileModule(`${safe}\n${copy}\nglobalThis.out = { loginCopy, returnNotice, isStaffReturn };`, { compilerOptions: { target: 'ES2020' } }).outputText;
+  const sandbox = { RegExp };
+  sandbox.globalThis = sandbox;
+  vm.runInNewContext(code, sandbox);
+  return sandbox.out;
+}
+
+test('a staff return destination switches the login to field words', () => {
+  const { loginCopy, returnNotice } = loginCopyModule();
+  for (const next of ['/staff', '/staff/events/abc']) {
+    assert.deepEqual({ ...loginCopy(next) }, {
+      sectionLabel: '스태프 로그인',
+      bandLabel: '스태프 로그인',
+      promise: '오늘 배정받은 입장 업무를 열어요.',
+      title: '스태프 로그인',
+    });
+    assert.equal(returnNotice(next), '운영자에게 받은 이메일과 비밀번호로 로그인하면 내 업무가 열립니다.');
+  }
+});
+
+test('every other entry keeps the operator login copy exactly', () => {
+  const { loginCopy, returnNotice, isStaffReturn } = loginCopyModule();
+  const operator = {
+    sectionLabel: '운영 로그인',
+    bandLabel: '운영 로그인',
+    promise: '모집부터 결과까지, 행사 운영을 한곳에서.',
+    title: '로그인',
+  };
+  // No next, console, event, and unsafe or look-alike staff values (open-redirect shapes, /staffx, the login loop).
+  for (const next of [undefined, null, '', '/console', '/console/events', '/event/x', '/staffx', '//evil.example/staff', 'https://evil.example/staff', '/staff/login', '/api/staff', '\\staff', ' /login']) {
+    assert.deepEqual({ ...loginCopy(next) }, operator, `operator copy for ${String(next)}`);
+    assert.equal(returnNotice(next), '로그인하면 요청하신 화면으로 돌아갑니다.');
+    assert.equal(isStaffReturn(next), false);
+  }
+});
+
+test('the login page and form read the same decision, and the reset line stays', () => {
+  assert.match(loginCopySource, /import \{ safeNextPath \} from "\.\.\/auth-redirect"/u, 'staff is judged by the existing safe return validation');
+  assert.match(loginPage, /loginCopy\(rawNext\)/u);
+  assert.match(loginForm, /returnNotice\(safeRequested\)/u);
+  // The recovery flow is account-wide (server/account-recovery.js has no role check), so staff keep the same line and flow.
+  assert.match(loginForm, /비밀번호를 잊으셨나요\?/u);
+  assert.match(loginForm, /재설정 요청/u);
+  assert.match(loginForm, /로그인이 만료되었습니다\./u, 'the session notice is untouched');
 });
