@@ -210,6 +210,58 @@
 .dark :global(.poll-row[data-leader="true"]) strong { color: var(--brand); }
 .dark :global(.display-live) { border: 1px solid var(--stage-line); }
 
+/* Reopened 2026-11-24 (owner: 참여형 장면에 QR 카드, mockup locked-five.html option A).
+   A scene the room joins from a phone (poll, quiz, Q&A) puts a white card on the
+   right: the attendee page QR at about 30% of the screen height so it scans from
+   the back row, a two-line instruction and the address in small type. The scene
+   itself (title, rows, questions) keeps its markup and sizes in the left column.
+   Notices, program, photos and the draw never carry the card. The clamp() sizes
+   are room scale, like the rest of this file. */
+.dark :global(.display-content)[data-join="true"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-content: center;
+  column-gap: clamp(28px, 4vw, 80px);
+}
+.dark :global(.display-content)[data-join="true"] > h1,
+.dark :global(.display-content)[data-join="true"] > :global(.display-frame) { grid-column: 1; min-width: 0; }
+.joinCard {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  display: grid;
+  justify-items: center;
+  gap: clamp(8px, 0.9vw, 18px);
+  width: clamp(220px, 23.5vw, 450px);
+  padding: clamp(14px, 1.6vw, 32px);
+  border-radius: clamp(16px, 1.7vw, 34px);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: center;
+}
+.joinQr { width: min(30vh, 100%); height: auto; aspect-ratio: 1; }
+.joinCard strong {
+  font-size: clamp(16px, 1.75vw, 36px);
+  font-weight: var(--fw-heavy);
+  line-height: 1.3;
+  word-break: keep-all;
+}
+.joinCard small {
+  max-width: 100%;
+  color: var(--muted);
+  font-size: clamp(12px, 1.3vw, 26px);
+  font-weight: var(--fw-strong);
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .dark :global(.display-content)[data-join="true"] { grid-template-columns: minmax(0, 1fr); }
+  .joinCard { grid-column: 1; grid-row: auto; margin-top: clamp(16px, 3vw, 28px); width: min(100%, 320px); justify-self: center; }
+  .joinQr { width: min(40vw, 100%); }
+}
+
 /* Reopened 2026-11-20: states on the stage.
    The stale notice, the refresh button and the four whole-screen states
    (loading, missing, failed, output off) use one vocabulary: icon + words +

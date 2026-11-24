@@ -1,4 +1,5 @@
 import DisplayBoard from "./DisplayBoard";
+import { configuredPublicBase } from "../../../lib/public-origin";
 
 // Public venue board. The client polls the safe public projection, honors the
 // operator's published display selection, and keeps its last good frame during
@@ -11,7 +12,7 @@ export default async function ScreenPage({
   const { slug } = await params;
   return (
       <main id="main-content" tabIndex={-1} className="display-page">
-      <DisplayBoard slug={slug} />
+      <DisplayBoard slug={slug} publicBase={configuredPublicBase()} />
     </main>
   );
 }

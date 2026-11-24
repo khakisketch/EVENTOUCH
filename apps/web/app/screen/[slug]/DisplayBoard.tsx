@@ -7,6 +7,7 @@ import drawStyles from "./draw-stage.module.css";
 import stageStyles from "./board-stage.module.css";
 import { richPlainText } from "../../../lib/rich-text";
 import { BangIcon, InfoIcon } from "../../console/console-ui/ConsoleIcons";
+import JoinCard from "./JoinCard";
 
 // Venue-screen status vocabulary (design-system application 2026-11-20): every
 // state is an icon, words and a tone on the dark stage; colour never carries
@@ -447,7 +448,7 @@ function NeutralRouletteWheel({ className, spinning = false }: { className?: str
   );
 }
 
-export default function DisplayBoard({ slug }: { slug: string }) {
+export default function DisplayBoard({ slug, publicBase = null }: { slug: string; publicBase?: string | null }) {
   const [state, setState] = useState<BoardState>({ kind: "loading" });
   const [revealId, setRevealId] = useState<string | null>(null);
   // Manual recovery trigger: the poll loop already retries on its own, but a
@@ -655,7 +656,8 @@ export default function DisplayBoard({ slug }: { slug: string }) {
 
   // Operator-selected output wins when it resolves to published content;
   // otherwise the board cycles what exists instead of showing a blank.
-  let selected: { key: string; title: string; body: React.ReactNode } | null = null;
+  // join: scenes the room takes part in from a phone (poll, quiz, Q&A) carry the QR card.
+  let selected: { key: string; title: string; body: React.ReactNode; join?: boolean } | null = null;
   if (data.display.type === "notice") {
     const notice = data.notices.find((item) => item.id === data.display.noticeId)
       ?? (data.notices.length === 1 ? data.notices[0] : undefined);
@@ -673,6 +675,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
     selected = {
       key: `poll-${module.id}`,
       title: module.title,
+      join: true,
       body: (
         <div className="display-poll">
           <span className="display-live">투표 진행 중</span>
@@ -698,6 +701,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
     selected = {
       key: `quiz-${module.id}`,
       title: module.title,
+      join: true,
       body: <p className="display-answer">정답 · {module.answer}</p>,
     };
   } else if (data.display.type === "draw" && module && module.type === "draw") {
@@ -718,6 +722,7 @@ export default function DisplayBoard({ slug }: { slug: string }) {
     selected = {
       key: "qa",
       title: "질문과 답변",
+      join: true,
       body: (
         <div className="display-questions">
           {data.questions.slice(0, 4).map((question) => (
@@ -761,12 +766,16 @@ export default function DisplayBoard({ slug }: { slug: string }) {
           ) : null}
           <p className="display-date">{data.date}</p>
         </header>
-        <div className={`display-content ${drawSelected ? drawStyles.cinematicContent : ""}`}>
+        <div
+          className={`display-content ${drawSelected ? drawStyles.cinematicContent : ""}`}
+          data-join={selected.join && !drawSelected ? "true" : undefined}
+        >
           <h1>{data.name}</h1>
           <article className={`display-frame ${drawSelected ? drawStyles.cinematicFrame : ""}`} key={selected.key}>
             <h2 className={drawSelected ? drawStyles.cinematicHeading : undefined}>{selected.title}</h2>
             {selected.body}
           </article>
+          {selected.join && !drawSelected ? <JoinCard slug={slug} publicBase={publicBase} /> : null}
         </div>
         {drawSelected
           ? data.venueName ? <footer className="display-footer"><span>{data.venueName}</span></footer> : null
