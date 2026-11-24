@@ -24,6 +24,7 @@ const COMMANDS = new Set([
   'event.basics.save',
   'event.features',
   'event.stage',
+  'contact.save',
   'field.save',
   'field.move',
   'field.delete',
@@ -422,6 +423,22 @@ function publishForm(ctx, input) {
     consentText: ctx.clean(ctx.workspace.consentText, 3000), consentChanged } };
 }
 
+// The contact line attendees see next to "ask the organizer". Free text, at
+// most 200 characters, and clearable. It never touches consentText: the
+// consent version history only changes through form.publish.
+const PARTICIPANT_CONTACT_MAX = 200;
+function saveParticipantContact(ctx, input) {
+  if (input.participantContact !== undefined && typeof input.participantContact !== 'string') {
+    throw ctx.fail(400, '참가자 문의처를 확인하세요', 'participantContact');
+  }
+  const value = String(input.participantContact ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').trim();
+  if (value.length > PARTICIPANT_CONTACT_MAX) {
+    throw ctx.fail(400, `참가자 문의처는 ${PARTICIPANT_CONTACT_MAX}자 이내로 입력하세요`, 'participantContact');
+  }
+  ctx.workspace.participantContact = value;
+  return { body: { participantContact: value } };
+}
+
 function saveGroup(ctx, input) {
   const name = requireText(ctx, input.name, '그룹명', 40, 'name');
   if (ctx.workspace.groups.includes(name)) throw ctx.fail(409, '이미 등록된 그룹명입니다');
@@ -742,6 +759,7 @@ async function apply(ctx) {
     case 'event.stage':
       await transitionStage(ctx, input.stage);
       return { eventChanged: true, body: { event: { id: ctx.event.id, stage: ctx.event.stage } } };
+    case 'contact.save': return saveParticipantContact(ctx, input);
     case 'field.save': return saveField(ctx, input);
     case 'field.move': return moveField(ctx, input);
     case 'field.delete': return deleteField(ctx, input);

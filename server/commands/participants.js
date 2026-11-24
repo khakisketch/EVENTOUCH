@@ -7,7 +7,8 @@ const { normalizeEvent, normalizeWorkspace, workspaceChangesForSave, projectPart
 const { ensureConsentNotice } = require('../consent-notices');
 const { publicOrigin } = require('../public-origin');
 const { managerWriteAllowed } = require('../event-permissions');
-const { createAttendeeAccess } = require('../attendees');
+const { createAttendeeAccess, normalizePhone: attendeePhone } = require('../attendees');
+const { ERASED_NAME, anonymizeParticipant, eraseWorkspaceCopies, redactReceiptResult } = require('../participant-erasure');
 const { ticketExpiry, TICKET_TOKEN } = require('../ticket-lifetime');
 const { cancellationConflictFingerprint, cancellationConflictIdentity } = require('../cancellation-conflict-review');
 const {
@@ -30,6 +31,7 @@ const COMMANDS = new Set([
   'ticket.reissue',
   'ticket.reissue-reviewed',
   'participant.import',
+  'participant.erase',
 ]);
 const GUEST_COMMANDS = new Set(['participant.self-update', 'participant.cancel']);
 
@@ -391,9 +393,14 @@ function ensureWritableEvent(event) {
   }
 }
 
-function findPerson(workspace, id) {
+function findPerson(workspace, id, { allowErased = false } = {}) {
   const person = existingParticipant(workspace, id);
   if (!person) throw failure(404, '참가자를 찾을 수 없습니다');
+  // An erased record is an anonymous shell kept for counts; it is never
+  // edited, re-approved or re-ticketed.
+  if (person.erased === true && !allowErased) {
+    throw failure(409, '개인정보가 삭제된 참가자는 변경할 수 없습니다', undefined, 'PARTICIPANT_ERASED');
+  }
   return person;
 }
 
@@ -439,6 +446,10 @@ function cancelParticipant(workspace, person) {
   }
   person.status = 'CANCELLED';
   person.revoked = true;
+  requestRefunds(workspace, person);
+}
+
+function requestRefunds(workspace, person) {
   let refundRequested = false;
   for (const payment of list(workspace.payments)) {
     if (payment && payment.participantId === person.id && payment.status === 'PAID') {
@@ -447,6 +458,73 @@ function cancelParticipant(workspace, person) {
     }
   }
   if (refundRequested) person.paymentStatus = 'REFUND_REQUESTED';
+}
+
+// Anonymizes one participant (docs: policy-backlog decision 4). Allowed in
+// every stage, including ENDED and ARCHIVED: deletion requests arrive after
+// the event. A person still checked in during a live event must be checked out
+// first, like a cancellation; after the event that flag is only history.
+async function eraseParticipant({ client, event, workspace, input, account, commandId, now }) {
+  const person = findPerson(workspace, clean(input.id, 120), { allowErased: true });
+  if (person.erased === true) throw failure(409, '이미 개인정보가 삭제된 참가자입니다', undefined, 'PARTICIPANT_ALREADY_ERASED');
+  if (input.expectedName !== undefined && (typeof input.expectedName !== 'string' || input.expectedName !== clean(person.name, 60))) {
+    throw failure(409, '참가자 정보가 변경되었습니다. 최신 내용을 확인한 뒤 다시 시도하세요', 'expectedName', 'PARTICIPANT_CHANGED');
+  }
+  const closed = ['ENDED', 'ARCHIVED'].includes(String(event.stage || '').toUpperCase());
+  if (!closed) {
+    if (Object.hasOwn(person, 'inside') && typeof person.inside !== 'boolean') {
+      throw failure(409, '입장 상태를 확인할 수 없습니다. 현장 기록을 확인한 뒤 다시 시도하세요.', undefined, 'PARTICIPANT_PRESENCE_UNKNOWN');
+    }
+    if (person.inside === true) throw failure(409, '입장 중인 참가자는 먼저 퇴장 처리하세요', undefined, 'PARTICIPANT_INSIDE');
+  }
+  const formerName = clean(person.name, 60);
+  const phones = [...new Set([normalizedPhone(person.phone), attendeePhone(person.phone)].filter(Boolean))];
+
+  if (String(person.status || '').toUpperCase() !== 'CANCELLED') {
+    person.status = 'CANCELLED';
+    requestRefunds(workspace, person);
+  }
+  person.revoked = true;
+  anonymizeParticipant(person, now);
+  const cleaned = eraseWorkspaceCopies(workspace, person.id, formerName);
+
+  // Copies outside the workspace document (same transaction).
+  const checkins = await client.query(
+    `UPDATE checkin_records SET name = '' WHERE event_id = $1 AND participant_id = $2 AND name <> ''`,
+    [event.id, person.id]
+  );
+  cleaned.checkinRecords = checkins.rowCount;
+  if (phones.length) {
+    const challenges = await client.query('DELETE FROM attendee_challenges WHERE event_id = $1 AND phone = ANY($2::text[])', [event.id, phones]);
+    const grants = await client.query('DELETE FROM attendee_grants WHERE event_id = $1 AND phone = ANY($2::text[])', [event.id, phones]);
+    cleaned.verifications = challenges.rowCount + grants.rowCount;
+  } else cleaned.verifications = 0;
+  // Receipts replay their original response: scrub the copies in this event's
+  // saved receipts. The current command's own receipt is written afterwards.
+  const receipts = await client.query(
+    'SELECT command_id, result FROM command_receipts WHERE event_id = $1 AND position($2 in result::text) > 0 FOR UPDATE',
+    [event.id, person.id]
+  );
+  let scrubbedReceipts = 0;
+  for (const row of receipts.rows) {
+    const result = typeof row.result === 'string' ? JSON.parse(row.result) : row.result;
+    if (!redactReceiptResult(result, person.id)) continue;
+    await client.query('UPDATE command_receipts SET result = $2::jsonb WHERE command_id = $1', [row.command_id, JSON.stringify(result)]);
+    scrubbedReceipts += 1;
+  }
+  cleaned.receipts = scrubbedReceipts;
+
+  // Who, when and which record: never the personal values.
+  if (!Array.isArray(workspace.audit)) workspace.audit = [];
+  workspace.audit.unshift({ id: commandId, type: 'participant.erase', actor: String(account.id), at: now,
+    detail: '', eventId: event.id, participantId: person.id });
+  return {
+    body: { participant: { id: person.id, name: ERASED_NAME, status: person.status, erased: true, erasedAt: now }, cleaned },
+    participantId: person.id,
+    revokedParticipantIds: [person.id],
+    revokedPhones: phones,
+    ticketSyncParticipantIds: [person.id],
+  };
 }
 
 function setParticipantStatus(event, workspace, person, status, now) {
@@ -552,6 +630,15 @@ function createParticipantCommands(database) {
         }
         if (command === 'participant.bulk-cancel' && !cancellationReceiptMatches(receipt, reviewInput)) {
           throw failure(409, '같은 요청이 이미 다른 취소 검토로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요', undefined, 'CANCELLATION_RECEIPT_MISMATCH');
+        }
+        if (command === 'participant.erase') {
+          // The retry must name the same participant; the replay is authorized
+          // against the actor's current grant like other reviewed commands.
+          const original = object(object(receipt.result).response);
+          if (clean(object(original.participant).id, 120) !== clean(object(reviewInput).id, 120)) {
+            throw failure(409, '같은 요청이 이미 다른 참가자에 대해 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요', undefined, 'PARTICIPANT_ERASE_MISMATCH');
+          }
+          await authorizeGrants(client, event, workspace, account, command, assignmentId, partScope);
         }
         if (command === 'participant.resolve-cancellation-conflict') {
           const proof = conflictReviewProof(reviewInput);
@@ -757,6 +844,10 @@ function createParticipantCommands(database) {
             revokedParticipantIds,
             revokedPhones,
           };
+        }
+
+        if (command === 'participant.erase') {
+          return eraseParticipant({ client, event, workspace, input, account, commandId: lockedCommandId, now });
         }
 
         ensureWritableEvent(event);

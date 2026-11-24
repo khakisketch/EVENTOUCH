@@ -375,6 +375,8 @@
 .rosterSheet > .sheetPrimary { grid-row: 5; margin-top: var(--s3); }
 .rosterSheet > .participantDetails { grid-row: 6; margin-top: var(--s2); }
 .rosterSheet > .rowConfirm { grid-row: 7; }
+/* 되돌릴 수 없는 개인정보 삭제는 시트의 맨 아래 칸에 둔다(2026-11-24 결정 4). */
+.rosterSheet > .eraseZone { grid-row: 8; }
 .sheetNav {
   grid-row: 1;
   position: sticky;
@@ -465,3 +467,30 @@
 .nameLine .ticketReviewLabel { white-space: nowrap; }
 
 .addHint { margin: 0; color: var(--muted); font-size: var(--small); }
+
+/* 개인정보 삭제: 참가자 상세 맨 아래의 별도 영역. 위쪽 구분선만 두고 상자로 감싸지 않는다. */
+.eraseZone {
+  display: grid;
+  gap: var(--s2);
+  justify-items: start;
+  margin-top: var(--s4);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line-strong);
+}
+
+.eraseZone h4,
+.eraseZone p {
+  margin: 0;
+}
+
+.eraseZone p {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.eraseList {
+  display: grid;
+  gap: var(--s1);
+  margin: 0;
+  padding-left: var(--s4);
+}

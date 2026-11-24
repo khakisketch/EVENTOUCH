@@ -14,6 +14,7 @@ const { cancellationConflictFingerprint, cancellationConflictIndex } = require('
 const { reportSourceAvailability } = require('./report-source-availability');
 const { attendanceSourceAvailability } = require('./attendance-source-availability');
 const { archivePreconditions } = require('./archive-preconditions');
+const { consentTemplate, LEGACY_DEFAULT_CONSENT_TEXT } = require('./consent-template');
 
 const ROLES = new Set(['AGENCY', 'MANAGER', 'STAFF']);
 // Mirrors the console's permission vocabulary so a stored grant can never be
@@ -62,8 +63,13 @@ function emptyWorkspace() {
     publishedVersion: 0,
     registrationOpen: false,
     approvalRequired: false,
-    consentText: '행사 신청과 입장 확인을 위해 이름과 연락처를 사용합니다.',
+    // New events start with the reviewed-draft template. Existing events keep
+    // whatever text (and version) they already store: normalizeWorkspace maps
+    // a row that never stored the key to the historical one-line default.
+    consentText: consentTemplate('', ''),
     consentVersion: 1,
+    // Free-text contact line shown to attendees ("who do I ask?"); '' = unset.
+    participantContact: '',
     notices: [],
     program: [],
     venue: { name: '', address: '', directions: '', contact: '', description: '' },
@@ -170,6 +176,9 @@ function normalizeWorkspace(value) {
   const source = object(value);
   const defaults = emptyWorkspace();
   const workspace = { ...defaults, ...copy(source) };
+  // A stored workspace that never had consentText keeps the historical text,
+  // never the new template: consent history must not change silently.
+  if (!Object.hasOwn(source, 'consentText')) workspace.consentText = LEGACY_DEFAULT_CONSENT_TEXT;
   for (const key of ARRAY_FIELDS) {
     workspace[key] = Array.isArray(source[key]) ? copy(source[key]) : copy(defaults[key]);
   }

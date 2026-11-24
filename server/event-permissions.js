@@ -46,7 +46,7 @@
 //     sent from the participant row, so a participants-scoped manager cannot
 //     register rewards; that stays denied until granted here.
 //   - 'settings' covers event identity and lifecycle: event.update/features/
-//     stage. A settings-scoped manager still needs 'participants' for the
+//     stage, plus the participant contact line (contact.save). A settings-scoped manager still needs 'participants' for the
 //     form.publish toggle above.
 
 const EVENT_PERMISSIONS = new Set([
@@ -69,6 +69,7 @@ const COMMAND_WRITE_SCOPE = {
   'participant.bulk-cancel': 'participants',
   'participant.resolve-cancellation-conflict': 'participants',
   'participant.import': 'participants',
+  'participant.erase': 'participants',
   'ticket.reissue': 'participants',
   'ticket.reissue-reviewed': 'participants',
   'group.save': 'participants',
@@ -83,6 +84,7 @@ const COMMAND_WRITE_SCOPE = {
   'event.basics.save': 'settings',
   'event.features': 'settings',
   'event.stage': 'settings',
+  'contact.save': 'settings',
   // page: attendee-visible surface
   'attendee.page.save': 'page',
   'attendee.page.publish': 'page',

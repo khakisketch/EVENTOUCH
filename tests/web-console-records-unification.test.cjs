@@ -266,7 +266,7 @@ test('csv export guards formulas and matches the visible filter', () => {
 
 test('roster controls have concise unique names rather than including every option', () => {
   const list = read(PAGES.participants);
-  for (const name of ['search', 'status', 'group', 'attendance']) {
+  for (const name of ['search', 'group', 'attendance']) {
     assert.match(list, new RegExp(`id="roster-${name}-label"`, 'u'));
     assert.match(list, new RegExp(`aria-labelledby="roster-${name}-label"`, 'u'));
   }

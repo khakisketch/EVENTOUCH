@@ -18,6 +18,7 @@ export const ACTIVITY_LABELS: Record<string, string> = {
   "event.basics.save": "행사 정보 변경",
   "event.features": "기능 설정",
   "event.stage": "행사 단계 변경",
+  "contact.save": "참가자 문의처 저장",
   "field.save": "신청 항목 저장",
   "field.move": "신청 항목 순서 변경",
   "field.delete": "신청 항목 삭제",
@@ -129,6 +130,7 @@ export const ACTIVITY_LABELS: Record<string, string> = {
   "ticket.reissue-reviewed": "티켓 재발급",
   "participant.resolve-cancellation-conflict": "참가 취소 기록 확인",
   "participant.import": "참가자 명단 가져오기",
+  "participant.erase": "참가자 개인정보 삭제",
 };
 
 export const UNKNOWN_ACTIVITY_LABEL = "기록된 작업";

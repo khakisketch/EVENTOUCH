@@ -476,6 +476,8 @@ function publicWorkspace(value, event, participant = null) {
     full: signupFull(source, event),
     consentText: text(source.consentText, 3000),
     consentVersion: Number(source.consentVersion) || 1,
+    // Always projected (independent of the venue feature); '' when unset.
+    participantContact: text(source.participantContact, 200),
     notices,
     program,
     venue: {

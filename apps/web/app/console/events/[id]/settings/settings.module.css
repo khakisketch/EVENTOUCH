@@ -835,3 +835,32 @@ div.scheduleFields { grid-template-columns: minmax(0, 1fr); }
   .featureGrid > .check input { left: var(--s2); }
 }
 
+
+/* 참가자 문의처: 참가 접수 구역 맨 위의 한 줄 입력. 저장은 입력 옆의 텍스트 버튼. */
+.contactBlock {
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.contactRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.contactRow input {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+/* 동의 안내 라벨 줄: 라벨 오른쪽에 "기본 동의 안내 불러오기" 유틸 버튼. */
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}

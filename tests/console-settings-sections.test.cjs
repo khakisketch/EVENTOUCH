@@ -76,11 +76,11 @@ test("each saving tab keeps its own success/failure line with a clock time", () 
   // The page-top feedback strip is retained (no silent removal). Every
   // section is visible on the single page, so the banner no longer hides
   // per-tab failures; only the inline consent error stays local.
-  assert.match(source, /\{failure && failure\.field !== "serverUnsupported" && failure\.field !== "consentText" \? <ConsoleFeedback kind="error"/u);
+  assert.match(source, /\{failure && failure\.field !== "serverUnsupported" && failure\.field !== "consentText" && failure\.field !== "participantContact" \? <ConsoleFeedback kind="error"/u);
   // The old-server error remains actionable by the save button and is
   // announced there once rather than repeated at the top and footer.
   assert.match(source, /role=\{status\.kind === "error" && failure\?\.field === "serverUnsupported" \? "alert" : "status"\}/u);
-  assert.match(source, /failure\.field === "consentText" \|\| failure\.field === "serverUnsupported" \? null/u);
+  assert.match(source, /failure\.field === "consentText" \|\| failure\.field === "participantContact" \|\| failure\.field === "serverUnsupported" \? null/u);
   assert.match(source, /\{notice \? <ConsoleFeedback kind="success"/u);
   // Tab saves thread their section through the shared command runner.
   assert.match(source, /"기본 정보를 저장했습니다\.", "basics"/u);

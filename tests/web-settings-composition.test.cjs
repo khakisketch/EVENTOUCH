@@ -131,7 +131,8 @@ test('Reopened 2026-11-20: left contents list, hairline section cards and a stic
   assert.match(toc, /aria-label="설정 목차"/u);
   assert.match(toc, /<StatusPill tone="wait" size="sm" dot>변경됨<\/StatusPill>/u, 'each dirty section is named in the list');
   assert.match(toc, /item\.href \? \(/u, 'sections are anchors, basics opens the drawer');
-  for (const flag of ['basicsDirty', 'intakeDirty', 'featuresDirty']) assert.ok(workspace.includes(`dirty: Boolean(${flag})`), `${flag} reaches the list`);
+  // 2026-11-24: 참가자 문의처 저장 기준(contactDirty)도 참가 접수 구역의 변경 표시에 든다.
+  for (const flag of ['basicsDirty', 'intakeDirty || contactDirty', 'featuresDirty']) assert.ok(workspace.includes(`dirty: Boolean(${flag})`), `${flag} reaches the list`);
   assert.match(workspace, /title="참가 접수" heading="rule" surface="panel"/u);
   assert.match(workspace, /title="운영 기능" heading="rule" surface="panel"/u);
   // Reopened 2026-11-20 (shared gaps): the sticky save row is ConsoleFormActions' own `sticky` option, not a local .saveBar.

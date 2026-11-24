@@ -913,6 +913,16 @@ export function confirmsSettingsCommand(command: string, eventId: string, payloa
       result.consentVersion === Number(input.expectedConsentVersion) + (changed ? 1 : 0);
   }
   if (command === "form.close") return result.registrationOpen === false;
+  if (command === "contact.save") {
+    // 서버가 저장한 값(응답의 participantContact 또는 workspace.participantContact)이 있으면 요청과 같아야 한다.
+    // 응답이 값을 싣지 않으면 요청 영수증이 확인된 것으로 본다(값은 다시 불러온 bootstrap이 확정한다).
+    if (typeof input.participantContact !== "string") return false;
+    const wanted = input.participantContact.replace(/\s+/g, " ").trim().slice(0, 200);
+    const nested = asRecord(result.workspace);
+    const stored = typeof result.participantContact === "string" ? result.participantContact
+      : typeof nested?.participantContact === "string" ? nested.participantContact : null;
+    return stored === null || stored === wanted;
+  }
   if (command === "event.stage") {
     const event = asRecord(result.event);
     return Boolean(event && event.id === eventId && typeof input.stage === "string" && event.stage === input.stage.trim().toUpperCase());
@@ -1124,7 +1134,7 @@ function confirmsReceiptBody(pointer: OperatorReceiptPointer, body: BodyInit | n
     if (typeof body !== "string") return false;
     try { return confirmsOperationsCommand(pointer.command, asRecord(JSON.parse(body))?.payload, result); } catch { return false; }
   }
-  if (["event.update", "event.basics.save", "event.features", "form.publish", "form.close", "event.stage"].includes(pointer.command)) {
+  if (["event.update", "event.basics.save", "event.features", "form.publish", "form.close", "event.stage", "contact.save"].includes(pointer.command)) {
     if (typeof body !== "string") return false;
     const match = /^\/api\/events\/([^/]+)\/commands$/.exec(path);
     if (!match) return false;
@@ -1138,6 +1148,15 @@ function confirmsReceiptBody(pointer: OperatorReceiptPointer, body: BodyInit | n
   // The participant projection intentionally contains only published answer
   // fields. The editing screen confirms draft-only answers in a fresh scoped
   // bootstrap before acknowledging its receipt.
+  // 개인정보 삭제의 응답은 개인정보 없이 { participant: { id, erased: true } }만 싣는다.
+  if (pointer.command === "participant.erase") {
+    if (typeof body !== "string") return false;
+    try {
+      const input = asRecord(asRecord(JSON.parse(body))?.payload);
+      const erased = asRecord(result.participant);
+      return Boolean(input && erased && typeof input.id === "string" && erased.id === input.id && erased.erased === true);
+    } catch { return false; }
+  }
   if (pointer.command === "participant.update") return false;
   // The reward desk keeps its pointer until it has refreshed the current
   // list. A plausible or incomplete response alone must not release a lock.

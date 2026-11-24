@@ -38,9 +38,9 @@ test('mobile-workspaces: roster search owns its row, advanced selects disclose',
   assert.match(list, /data-open=\{filtersOpen \? "true" : "false"\}/u, 'panel state is CSS-driven');
   assert.match(list, /필터/u, 'toggle reads as 필터');
   assert.match(list, /개 적용 중/u, 'toggle carries the active count');
-  // A pre-filtered deep link (overview ?status=PENDING) opens the disclosure
-  // so the operator sees why the list is narrow.
-  assert.match(list, /if \(initial\.status \|\| initial\.group \|\| initial\.attendance \|\| initial\.ticket\) \{\s*setFiltersOpen\(true\);/u, 'URL filters including ticket review default the disclosure open');
+  // A pre-filtered deep link opens the disclosure so the operator sees why the list is narrow.
+  // Status is not in the panel any more (2026-11-24): the pressed status tab shows it.
+  assert.match(list, /if \(initial\.group \|\| initial\.attendance \|\| initial\.ticket\) \{\s*setFiltersOpen\(true\);/u, 'URL filters including ticket review default the disclosure open');
   // Filter values survive open/close; only the explicit reset clears them —
   // and the reset never touches the checkbox selection.
   const reset = list.match(/function clearRosterFilters\(\) \{[^}]*\}/u);
@@ -57,7 +57,7 @@ test('mobile-workspaces: roster selects keep their accessible names inside the p
   const list = read(PARTICIPANTS);
   // Audit locators stay valid: the same label ids and aria wiring, now nested
   // in the disclosure panel (open it first on narrow screens).
-  for (const name of ['search', 'status', 'group', 'attendance', 'ticket']) {
+  for (const name of ['search', 'group', 'attendance', 'ticket']) {
     assert.match(list, new RegExp(`id="roster-${name}-label"`, 'u'), `${name} label id stays`);
     assert.match(list, new RegExp(`aria-labelledby="roster-${name}-label"`, 'u'), `${name} wiring stays`);
   }

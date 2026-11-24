@@ -44,6 +44,7 @@ import CompanyField from "./CompanyField";
 import { emailLooksValid } from "../../../../../lib/contact-normalize.cjs";
 import BulkCancelDialog from "./BulkCancelDialog";
 import TicketReissue from "./TicketReissue";
+import PersonErase from "./PersonErase";
 import ReviewedExit from "./ReviewedExit";
 import CancellationConflictReview from "./CancellationConflictReview";
 import CountTabs from "../../../console-ui/CountTabs";
@@ -74,6 +75,8 @@ type Person = {
   attendanceReview: boolean;
   answers: Record<string, string | boolean>;
   consent: { version: number | null; at: string; noticeText: string | null } | null;
+  // 개인정보 삭제(익명화)된 참가자. 이름이 ‘삭제된 참가자’로 바뀌어 있다.
+  erased: boolean;
 };
 type TicketReview = "valid" | "cancelled" | "expired" | "revoked" | "unavailable" | "unknown";
 
@@ -463,6 +466,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   // stays directly visible on PENDING rows.
   const [toolsOpenId, setToolsOpenId] = useState<string | null>(null);
   const [editTargetId, setEditTargetId] = useState<string | null>(null);
+  const [eraseTarget, setEraseTarget] = useState<{ id: string; name: string } | null>(null);
   const [ticketTarget, setTicketTarget] = useState<(Pick<Person, "id" | "name" | "ticketRevision"> & { company: string; maskedPhone: string }) | null>(null);
   const [bulkCancelTargets, setBulkCancelTargets] = useState<Array<{ id: string; name: string; status: string; inside: boolean; company: string; phone: string }> | null>(null);
   const inspectorHeadingRef = useRef<HTMLHeadingElement | null>(null);
@@ -629,10 +633,10 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       setQuery(initial.query);
       setAttendanceFilter(initial.attendance);
       setTicketFilter(initial.ticket);
-      // A shared link that arrives pre-filtered (e.g. the overview approval
-      // CTA with ?status=PENDING) opens the disclosure so the operator sees
-      // why the list is narrow instead of an unexplained short roster.
-      if (initial.status || initial.group || initial.attendance || initial.ticket) {
+      // A shared link that arrives pre-filtered opens the disclosure so the
+      // operator sees why the list is narrow. 상태는 탭(눌린 상태)으로 보이므로
+      // 패널을 열지 않는다.
+      if (initial.group || initial.attendance || initial.ticket) {
         setFiltersOpen(true);
       }
     } catch {
@@ -644,6 +648,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     setSelectedIds([]);
     setEditTargetId(null);
     setTicketTarget(null);
+    setEraseTarget(null);
     setCancellationConflictTarget(null);
     setBulkCancelTargets(null);
     setReceiptNeedsRefresh(false);
@@ -712,7 +717,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         // Back/forward into a filtered URL opens the disclosure for the same
         // reason as the initial load; an unfiltered URL never force-closes an
         // explicitly opened panel.
-        if (next.status || next.group || next.attendance || next.ticket) {
+        if (next.group || next.attendance || next.ticket) {
           setFiltersOpen(true);
         }
       } catch {
@@ -917,6 +922,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               ticketReview: ticketReviewValue(person.ticketReview),
               cancellationConflictReview: typeof person.cancellationConflictReview === "string" && /^[a-f0-9]{64}$/.test(person.cancellationConflictReview) ? person.cancellationConflictReview : null,
               ticketNeedsExplicitReissue: person.ticketNeedsExplicitReissue === true,
+              erased: person.erased === true,
               status: typeof person.status === "string" ? person.status : "",
               paymentStatus:
                 typeof person.paymentStatus === "string" ? person.paymentStatus : "",
@@ -1009,7 +1015,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       if (writeBusyRef.current || pendingStatusRef.current || pendingBulkRef.current) return;
       if (groupBusy || addBusy || rewardBusy || bulkBusy) return;
       if (statusRetry) return;
-      if (groupDialogOpen || addOpen || rewardTarget || editTargetId || bulkCancelTargets || ticketTarget || cancellationConflictTarget) return;
+      if (groupDialogOpen || addOpen || rewardTarget || editTargetId || bulkCancelTargets || ticketTarget || eraseTarget || cancellationConflictTarget) return;
       void load(true);
     })
   );
@@ -1470,6 +1476,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     pending: presetBase.filter((person) => person.status === "PENDING").length,
     approved: presetBase.filter((person) => person.status === "APPROVED").length,
     notEntered: presetBase.filter((person) => person.status === "APPROVED" && matchesAttendance(person, "NOT_ENTERED")).length,
+    waitlist: presetBase.filter((person) => person.status === "WAITLIST").length,
+    cancelled: presetBase.filter((person) => person.status === "CANCELLED").length,
   };
   type RosterPreset = { key: string; label: string; status: string; attendance: string; count: number };
   const rosterPresets: RosterPreset[] = [
@@ -1477,6 +1485,10 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     { key: "pending", label: "승인 대기", status: "PENDING", attendance: "", count: presetCounts.pending },
     { key: "approved", label: "참가 확정", status: "APPROVED", attendance: "", count: presetCounts.approved },
     { key: "not-entered", label: "확정자 중 미입장", status: "APPROVED", attendance: "NOT_ENTERED", count: presetCounts.notEntered },
+    // 상태 선택이 필터에서 빠졌으므로 모든 상태를 탭으로 닿게 한다. 대기 명단은 있을 때만(또는 열려 있을 때만) 보인다.
+    ...(presetCounts.waitlist > 0 || statusFilter === "WAITLIST"
+      ? [{ key: "waitlist", label: "대기 명단", status: "WAITLIST", attendance: "", count: presetCounts.waitlist }] : []),
+    { key: "cancelled", label: "취소된 신청", status: "CANCELLED", attendance: "", count: presetCounts.cancelled },
   ];
   function applyRosterPreset(preset: RosterPreset) {
     setStatusFilter(preset.status);
@@ -1493,9 +1505,9 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   // Disclosure badge: how many of the three advanced selects narrow the list,
   // and under which readable labels. The search box stays visible, so the
   // query is summarized only by the reset label, not the count.
-  const advancedActiveCount = [statusFilter, groupFilter, attendanceFilter, ticketFilter].filter(Boolean).length;
+  // 상태는 탭이 맡으므로 이 패널(그룹·출입·티켓)의 개수에는 세지 않는다.
+  const advancedActiveCount = [groupFilter, attendanceFilter, ticketFilter].filter(Boolean).length;
   const advancedSummary = [
-    statusFilter ? statusLabel(statusFilter) : "",
     groupFilter || "",
     attendanceFilter ? attendanceLabel(attendanceFilter) : "",
     ticketFilter ? "티켓 확인 필요" : "",
@@ -1503,7 +1515,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     .map((part) => part.trim())
     .filter(Boolean)
     .join(" · ");
-  const hasAnyFilter = Boolean(query.trim()) || advancedActiveCount > 0;
+  const hasAnyFilter = Boolean(query.trim()) || Boolean(statusFilter) || advancedActiveCount > 0;
   const isAttendanceReviewOnly = attendanceFilter === "REVIEW" && !query.trim() && !statusFilter && !groupFilter && !ticketFilter;
   // Roster→message handoff: the full known selection, including filtered-out
   // hidden rows, travels as ?to=<comma-separated ids>. Visible-only group
@@ -1824,6 +1836,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   const canWriteRoster = canWriteEvent(capabilities, "participant.status");
   const canEditParticipant = canWriteEvent(capabilities, "participant.update");
   const canReissueTicket = canWriteEvent(capabilities, "ticket.reissue-reviewed");
+  // 삭제 요청은 행사가 끝난 뒤에도 오므로 단계와 무관하게 연다(서버도 보관 행사에서 허용한다).
+  const canEraseParticipant = canWriteEvent(capabilities, "participant.erase");
   const canResolveCancellationConflict = canWriteEvent(capabilities, "participant.resolve-cancellation-conflict");
   const canWriteGroup = canWriteEvent(capabilities, "group.assign");
   const canWriteReward = canWriteEvent(capabilities, "reward.create");
@@ -1834,7 +1848,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   const canMutateStatus = canWriteRoster && !participantsLocked;
   const canAssignGroup = canWriteGroup && !archived;
   const canRewardHere = canWriteReward && state.rewardFeature && !archived;
-  const showRowActions = canMutateStatus || (canEditParticipant && !participantsLocked) || canRewardHere || canReviewExit;
+  const showRowActions = canMutateStatus || (canEditParticipant && !participantsLocked) || canRewardHere || canReviewExit || canEraseParticipant;
   const readOnlyRows = !canAssignGroup;
   const rowClass = readOnlyRows
     ? `${styles.participantRow} ${styles.viewerRow}`
@@ -1870,7 +1884,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       }
     });
   }
-  const sheetOpen = Boolean(showRowActions && selectedPerson && !rewardTarget && !addOpen && !groupDialogOpen && !editTargetId && !ticketTarget && !reviewedExitTarget && !reconcileTarget && !cancellationConflictTarget);
+  const sheetOpen = Boolean(showRowActions && selectedPerson && !rewardTarget && !addOpen && !groupDialogOpen && !editTargetId && !ticketTarget && !eraseTarget && !reviewedExitTarget && !reconcileTarget && !cancellationConflictTarget);
   // Up/Down move through the roster order while focus is in the sheet, except
   // where the arrow keys already mean something (fields, menus, disclosures).
   function sheetArrowKeys(event: React.KeyboardEvent<HTMLElement>) {
@@ -2001,15 +2015,6 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                 className={styles.advancedFilters}
                 data-open={filtersOpen ? "true" : "false"}
               >
-              <label>
-                <span className="sr-only" id="roster-status-label">상태별 보기</span>
-                <select aria-labelledby="roster-status-label" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-                  <option value="">전체 상태</option>
-                  {STATUSES.map((status) => (
-                    <option key={status} value={status}>{statusLabel(status)}</option>
-                  ))}
-                </select>
-              </label>
               {state.groups.length ? (
                 <label>
                   <span className="sr-only" id="roster-group-label">그룹별 보기</span>
@@ -2172,7 +2177,9 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       <CountTabs
         className={styles.quickPresets}
         ariaLabel="빠른 상태 보기"
-        value={ticketFilter ? null : rosterPresets.find((preset) => statusFilter === preset.status && attendanceFilter === preset.attendance)?.key ?? null}
+        value={ticketFilter ? null : (rosterPresets.find((preset) => statusFilter === preset.status && attendanceFilter === preset.attendance)
+          // An extra 출입 filter on top of a status keeps that status tab lit (the filter button shows the count).
+          ?? rosterPresets.find((preset) => statusFilter === preset.status && preset.attendance === ""))?.key ?? null}
         onChange={(key) => { const preset = rosterPresets.find((item) => item.key === key); if (preset) applyRosterPreset(preset); }}
         items={rosterPresets.map((preset) => ({ key: preset.key, label: preset.label, count: preset.count, tone: preset.key === "pending" ? "wait" : "default", srLabel: `${preset.label} · ${preset.count}명` }))}
       />
@@ -2374,7 +2381,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   {canAssignGroup ? <td className={styles.selectColumn}><label className={styles.participantSelectTarget}>
                     <input type="checkbox" className={styles.participantSelect} aria-label={`${person.name} 선택`} checked={effectiveSelection.includes(person.id)} onChange={() => togglePerson(person.id)} />
                   </label></td> : null}
-                  <td><span className={styles.nameCell}><ConsoleAvatar name={person.name} tone={avatarTone(person.status)} /><span className={styles.tableIdentity}><span className={styles.nameLine}><strong id={`roster-name-desktop-${person.id}`}>{person.name}</strong>{emailLooksValid(person.email) ? null : <small className={styles.ticketReviewLabel}>이메일 확인 필요</small>}</span><small>{person.company || "소속 미입력"}</small></span></span></td>
+                  <td><span className={styles.nameCell}><ConsoleAvatar name={person.name} tone={avatarTone(person.status)} /><span className={styles.tableIdentity}><span className={styles.nameLine}><strong id={`roster-name-desktop-${person.id}`}>{person.name}</strong>{person.erased || emailLooksValid(person.email) ? null : <small className={styles.ticketReviewLabel}>이메일 확인 필요</small>}</span><small>{person.company || "소속 미입력"}</small></span></span></td>
                   <td className={styles.rosterContact}>{maskPhone(person.phone)}</td><td className={styles.rosterGroup}>{person.group || "미지정"}</td>
                   <td><StatusPill className={styles.participantStatus} tone={statusTone(person.status)}>{statusLabel(person.status)}</StatusPill>{["PENDING", "WAITLIST"].includes(person.status) && person.ticketReview === "cancelled" ? <small className={styles.ticketReviewLabel}>취소 상태 확인 필요</small> : null}{["PENDING", "WAITLIST"].includes(person.status) && person.ticketNeedsExplicitReissue ? <small className={styles.ticketReviewLabel}>승인 후 티켓 재발급 필요</small> : null}</td>
                   <td><span className={person.inside ? styles.presenceInside : styles.presence}>{presenceLabel(person)}</span></td>
@@ -2418,7 +2425,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   <span className={styles.participantSummary}>
                     <span className={styles.nameLine}>
                       <strong className={styles.participantName} id={`roster-name-mobile-${person.id}`}>{person.name}</strong>
-                      {emailLooksValid(person.email) ? null : <small className={styles.ticketReviewLabel}>이메일 확인 필요</small>}
+                      {person.erased || emailLooksValid(person.email) ? null : <small className={styles.ticketReviewLabel}>이메일 확인 필요</small>}
                     </span>
                     <small className={styles.participantIdentity}>{[identityOrg(person), presenceLabel(person)].filter(Boolean).join(" · ")}</small>
                     {ticketFilter || (["PENDING", "WAITLIST"].includes(person.status) && person.ticketReview === "cancelled") ? <small className={styles.ticketReviewLabel}>{ticketReviewLabel(person.ticketReview)}</small> : null}
@@ -2537,7 +2544,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                     {unresolvedRosterReceipt || receiptRefreshLock ? (
                       <p role="note">이전 작업의 처리 결과를 확인하는 중이라 일부 작업이 잠겨 있습니다. 시트를 닫고 명단 위 안내에서 확인한 뒤 다시 시도하세요.</p>
                     ) : null}
-                    <div className={styles.detailActions}>
+                    {selectedPerson.erased ? <p role="note">개인정보가 삭제된 참가자입니다. 이름·연락처·신청 답변은 남아 있지 않고 티켓은 쓸 수 없습니다.</p> : <div className={styles.detailActions}>
                       {canReviewExit && selectedPerson.attendanceReview ? <ProductButton type="button" className="button button-secondary" disabled={unconfirmedExit || unconfirmedReconciliation || receiptRefreshLock}
                         onClick={() => setReconcileTarget(selectedPerson.id)}>출입 상태 확인</ProductButton> : null}
                       {canReviewExit && selectedPerson.inside ? <ProductButton type="button" className="button button-secondary" disabled={unconfirmedExit || unconfirmedReconciliation || receiptRefreshLock}
@@ -2607,7 +2614,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                           ))}
                         </select>
                       ) : null}
-                    </div>
+                    </div>}
                     {failure && selectedPerson.id === statusFeedbackId ? (
                       <ConsoleFeedback kind="error" id="roster-inspector-status-error">
                         {failure}{" "}
@@ -2649,6 +2656,14 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                         }}
                       />
                     </div>
+                  ) : null}
+                  {canEraseParticipant && !selectedPerson.erased ? (
+                    <section className={styles.eraseZone} aria-label="개인정보 삭제">
+                      <h4>개인정보 삭제</h4>
+                      <p>참가자가 삭제를 요청했을 때만 사용하세요. 이름·연락처·신청 답변이 지워지며 되돌릴 수 없습니다.</p>
+                      <ProductButton type="button" variant="destructive" disabled={unresolvedRosterReceipt || receiptRefreshLock}
+                        onClick={() => setEraseTarget({ id: selectedPerson.id, name: selectedPerson.name })}>개인정보 삭제…</ProductButton>
+                    </section>
                   ) : null}
                 </>
               </div>
@@ -2737,6 +2752,9 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       {cancellationConflictTarget ? <CancellationConflictReview key={`${eventId}-cancellation-${cancellationConflictTarget}`} eventId={eventId} participantId={cancellationConflictTarget}
         onRefresh={() => load(true)} onClose={() => { setCancellationConflictTarget(null); window.requestAnimationFrame(() => inspectorHeadingRef.current?.focus({ preventScroll: true })); }}
         onDone={() => { setCancellationConflictTarget(null); setFailure(null); setNotice("참가 취소 기록 확인을 저장했습니다. 기존 티켓은 무효 상태입니다. 필요하면 새 티켓을 발급해 전달하세요."); }} /> : null}
+      {eraseTarget ? <PersonErase key={`${eventId}-erase-${eraseTarget.id}`} eventId={eventId} person={eraseTarget}
+        onRefresh={() => load(true)} onClose={() => { setEraseTarget(null); window.requestAnimationFrame(() => inspectorHeadingRef.current?.focus({ preventScroll: true })); }}
+        onDone={(name) => { setEraseTarget(null); setFailure(null); setNotice(`${name}님의 개인정보를 삭제했습니다. 명단에는 ‘삭제된 참가자’로 남습니다.`); closeInspector(); }} /> : null}
       {ticketTarget ? <TicketReissue key={`${eventId}-${ticketTarget.id}`} eventId={eventId} slug={state.eventSlug} eventName={state.eventName} person={ticketTarget}
         onRefresh={() => load(true)} onClose={() => setTicketTarget(null)}
         onIssued={(ticketRevision) => setState((current) => current.kind === "ready" ? {

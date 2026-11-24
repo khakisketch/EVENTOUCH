@@ -31,7 +31,8 @@ import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 import { readCloseReturn, readCloseSnapshot, type CloseSnapshot } from "../../../console-event-close";
 import { useEventCloseHandoff } from "../../../use-event-close-handoff";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../../lib/use-verification-mode";
-import { publicRecoveryContact } from "../../../../../lib/public-recovery-contact";
+import { participantContactOf, publicRecoveryContact } from "../../../../../lib/public-recovery-contact";
+import { consentTemplate, isLegacyDefaultConsentText } from "../../../../../lib/consent-template";
 import { parsePublishedRegisterFields, type PublishedField } from "../../../../event/[slug]/register/register-data";
 
 // Mirrors server/commands/preparation.js FEATURES. A toggle that the server
@@ -89,6 +90,8 @@ type Ready = {
   clientName: string;
   venueName: string;
   recoveryContact: string;
+  // 행사의 "참가자 문의처"(workspace.participantContact). 비어 있으면 빈 문자열.
+  participantContact: string;
   clients: Array<{ id: string; name: string }>;
   role: string;
   userId: string;
@@ -254,10 +257,15 @@ function formatClockNow(): string {
 }
 
 type SettingsSectionId = "basics" | "intake" | "features";
-const SETTINGS_COMMANDS = new Set(["event.update", "event.basics.save", "event.features", "form.publish", "form.close", "event.stage", "field.save", "field.move", "field.delete"]);
+const SETTINGS_COMMANDS = new Set(["event.update", "event.basics.save", "event.features", "form.publish", "form.close", "event.stage", "contact.save", "field.save", "field.move", "field.delete"]);
+const CONTACT_MAX = 200;
+// 서버가 저장하는 모양(공백을 한 칸으로, 앞뒤 공백 제거, 200자)과 같게 맞춘다.
+function normalizeContact(value: string): string {
+  return value.replace(/\s+/g, " ").trim().slice(0, CONTACT_MAX);
+}
 const SETTINGS_COMMAND_LABEL: Record<string, string> = {
   "event.update": "기본 정보 저장", "event.basics.save": "기본 정보 저장", "event.features": "운영 기능 저장", "form.publish": "양식 게시",
-  "form.close": "접수 닫기", "event.stage": "행사 단계 전환",
+  "form.close": "접수 닫기", "event.stage": "행사 단계 전환", "contact.save": "참가자 문의처 저장",
 };
 type SettingsAttempt = {
   eventId: string;
@@ -471,6 +479,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     setBasics(null);
     setFeatures(null);
     setConsentText("");
+    setContactDraft("");
+    setTemplateConfirm(false);
+    setConsentNote(null);
     setFailure(null);
     setNotice(null);
     setShowTicketReview(false);
@@ -541,6 +552,10 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   const [basics, setBasics] = useState<Basics | null>(null);
   const [features, setFeatures] = useState<string[] | null>(null);
   const [consentText, setConsentText] = useState("");
+  // 참가자 문의처 입력. 저장 기준은 state.participantContact이고 저장은 contact.save 하나다.
+  const [contactDraft, setContactDraft] = useState("");
+  const [templateConfirm, setTemplateConfirm] = useState(false);
+  const [consentNote, setConsentNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (loadedSettingsEventRef.current === eventId) liveRef.current = { state, basics, features, consentText, fields: state.kind === "ready" ? state.fields : null };
@@ -683,6 +698,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           ? event.features.filter((feature): feature is string => typeof feature === "string")
           : [];
         const newConsentText = text(workspace.consentText);
+        const newParticipantContact = participantContactOf(workspace);
         const pageDraftVersion = Number.isSafeInteger(pageExperience.draftVersion)
           ? Number(pageExperience.draftVersion)
           : 0;
@@ -716,6 +732,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           clientName,
           venueName,
           recoveryContact: publicRecoveryContact(workspace, newFeatures),
+          participantContact: newParticipantContact,
           clients: clients
             .map((client) => ({ id: text(client.id), name: text(client.name) }))
             .filter((client) => client.id !== ""),
@@ -758,6 +775,11 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         setConsentText(
           preserveIntake ? live.consentText : newConsentText
         );
+        // 문의처 입력은 저장 기준값이 바뀌지 않은 동안만 새 값을 따르고, 작성 중이면 그대로 둔다.
+        setContactDraft((current) => {
+          const baseline = previous ? previous.participantContact : null;
+          return baseline === null || current === baseline || normalizeContact(current) === newParticipantContact ? newParticipantContact : current;
+        });
         if (intakeConflictRef.current) {
           const conflict = { latest: null, loading: false, error: null };
           intakeReadRef.current?.abort();
@@ -807,7 +829,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     state.kind === "ready" &&
     features !== null &&
     !sameFeatures(features, state.features);
-  const sectionsDirty = Boolean(basicsDirty || intakeDirty || featuresDirty);
+  const contactDirty =
+    state.kind === "ready" && normalizeContact(contactDraft) !== state.participantContact;
+  const sectionsDirty = Boolean(basicsDirty || intakeDirty || contactDirty || featuresDirty);
   const pendingIntent =
     pendingSettings !== null || otherSettingsReceipt || stageCommandIdRef.current !== null || commandIdCache.current.size > 0;
   const unresolvedConflict = Boolean(intakeConflict || basicsConflict || featuresConflict);
@@ -815,7 +839,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   // still hold unsaved edits so the operator knows where to go back to.
   const dirtySectionNames: string[] = [
     basicsDirty ? SETTINGS_SECTION_LABEL.basics : null,
-    intakeDirty ? SETTINGS_SECTION_LABEL.intake : null,
+    intakeDirty || contactDirty ? SETTINGS_SECTION_LABEL.intake : null,
     featuresDirty ? SETTINGS_SECTION_LABEL.features : null,
   ].filter((name): name is string => name !== null);
   const guardReason = dirtySectionNames.length > 0
@@ -1076,6 +1100,9 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             }
             if (data?.field === "consentText") {
               requestFocusAfterCommit("set-consent");
+            }
+            if (data?.field === "participantContact") {
+              requestFocusAfterCommit("set-contact");
             }
           }
         } else {
@@ -1387,6 +1414,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   const capabilities = { role: state.role, userId: state.userId, memberships: state.memberships, eventId };
     const canWriteSettings = canWriteEvent(capabilities, "event.basics.save");
   const canWriteIntake = canWriteEvent(capabilities, "form.publish");
+  const canWriteContact = canWriteEvent(capabilities, "contact.save");
   const settingsLocked = Boolean(pendingSettings) || otherSettingsReceipt || busy || stageBusy || checkingSettings || refreshingAfterWrite;
   // form.publish is rejected server-side once the event ends (preparation.js
   // publishForm): the button stays visible for layout stability but cannot
@@ -1402,6 +1430,30 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   const endedPublishReason = "종료된 행사에서는 양식을 게시할 수 없습니다. 접수를 닫은 뒤 보관하세요.";
   const settingsNoWriteReason = "행사 정보 변경 권한이 없습니다. 필요하면 담당 행사 운영자에게 요청하세요.";
   const intakeNoWriteReason = "접수 게시·마감은 참가자 쓰기 권한이 필요합니다. 행사 정보 권한과는 별개이며, 필요하면 담당 행사 운영자에게 요청하세요.";
+
+  function saveContact() {
+    if (state.kind !== "ready" || !canWriteContact || archived || settingsLocked || !contactDirty) return;
+    const next = normalizeContact(contactDraft);
+    void runCommand("contact.save", { participantContact: next }, next ? "참가자 문의처를 저장했습니다." : "참가자 문의처를 비웠습니다.", "intake");
+  }
+
+  // 새 행사의 기본 동의 안내를 현재 행사명·문의처로 채운다. 게시는 따로 눌러야 반영된다.
+  function fillDefaultConsent() {
+    if (state.kind !== "ready") return;
+    const filled = consentTemplate(state.basics.name, normalizeContact(contactDraft));
+    setConsentText(filled);
+    setTemplateConfirm(false);
+    if (failure?.field === "consentText") { setFailure(null); setIntakeStatus(null); }
+    setConsentNote("기본 동의 안내를 불러왔습니다. 내용을 확인한 뒤 ‘" + publishLabel + "’을 눌러야 참가자에게 반영됩니다.");
+    window.requestAnimationFrame(() => document.getElementById("set-consent")?.focus());
+  }
+  function requestDefaultConsent() {
+    if (state.kind !== "ready") return;
+    const current = consentText.trim();
+    const filled = consentTemplate(state.basics.name, normalizeContact(contactDraft)).trim();
+    if (current && current !== filled && !isLegacyDefaultConsentText(consentText)) { setTemplateConfirm(true); return; }
+    fillDefaultConsent();
+  }
 
   function sectionStatusLine(status: SectionStatus | null, section: SettingsSectionId) {
     if (!status) return null;
@@ -1495,7 +1547,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
     null
   );
   const lastResult = failure
-    ? failure.field === "consentText" || failure.field === "serverUnsupported" ? null : { kind: "error" as const, message: failure.message }
+    ? failure.field === "consentText" || failure.field === "participantContact" || failure.field === "serverUnsupported" ? null : { kind: "error" as const, message: failure.message }
     : notice
       ? { kind: "success" as const, message: notice }
       : latestSectionStatus;
@@ -1522,7 +1574,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               보관된 행사는 읽기 전용입니다. 설정은 볼 수 있지만 저장·게시·전환할 수 없습니다.
             </ConsoleFeedback>
           ) : null}
-          {failure && failure.field !== "serverUnsupported" && failure.field !== "consentText" ? <ConsoleFeedback kind="error" id="settings-error">{failure.message}</ConsoleFeedback> : null}
+          {failure && failure.field !== "serverUnsupported" && failure.field !== "consentText" && failure.field !== "participantContact" ? <ConsoleFeedback kind="error" id="settings-error">{failure.message}</ConsoleFeedback> : null}
           {notice ? <ConsoleFeedback kind="success">{notice}</ConsoleFeedback> : null}
           {showTicketReview ? <p><ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>티켓 확인이 필요한 참가자 보기</ProductLink></p> : null}
           {intakeConflict ? <ConsoleFeedback kind="warning">참가 접수 설정이 변경되어 최신 내용을 확인해야 합니다. 아래 참가 접수 구역에서 작성 중인 안내를 확인하세요.</ConsoleFeedback> : null}
@@ -1573,7 +1625,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       <SettingsToc items={[
         { id: "basics", label: "기본 정보", hint: `정원 ${state.basics.capacity === "0" ? "제한 없음" : `${state.basics.capacity}명`}`, tone: "ok", dirty: Boolean(basicsDirty), onSelect: () => setBasicsOpen(true), disabled: archived || !canWriteSettings },
         { id: "stage", label: "진행 단계", hint: stageText, tone: "ok", href: "#settings-stage" },
-        { id: "intake", label: "참가 접수", hint: intakeWaiting ? "양식 게시됨 · 접수 대기" : state.registrationOpen ? "접수 중" : "접수 닫힘", note: recoveryGap ? "확인할 안내 1건" : undefined, tone: recoveryGap ? "attention" : state.registrationOpen ? "ok" : "neutral", dirty: Boolean(intakeDirty), href: "#settings-intake" },
+        { id: "intake", label: "참가 접수", hint: intakeWaiting ? "양식 게시됨 · 접수 대기" : state.registrationOpen ? "접수 중" : "접수 닫힘", note: recoveryGap ? "확인할 안내 1건" : undefined, tone: recoveryGap ? "attention" : state.registrationOpen ? "ok" : "neutral", dirty: Boolean(intakeDirty || contactDirty), href: "#settings-intake" },
         { id: "features", label: "운영 기능", hint: `${featureOnCount}개 켜짐`, note: `나머지 ${featureTotal - featureOnCount}개 꺼짐`, tone: "neutral", dirty: Boolean(featuresDirty), href: "#settings-features" },
       ]} />
       <div className={styles.main}>
@@ -1901,7 +1953,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           <p className={`${styles.help} ${styles.policyHelp}`}>인증번호는 신청자의 휴대전화로 발송됩니다. 발송 준비가 안 된 상태에서는 신청이 막히므로, 먼저 인증번호 1건을 테스트하세요.</p>
           </div>
           </div>
-          {failure && failure.field !== "serverUnsupported" && failure.field !== "consentText" ? (
+          {failure && failure.field !== "serverUnsupported" && failure.field !== "consentText" && failure.field !== "participantContact" ? (
             <p role="alert" className={styles.fieldError}>{failure.message}</p>
           ) : null}
           <ConsoleFormActions>
@@ -1965,6 +2017,44 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       <ConsoleSection headingId="settings-intake" title="참가 접수" heading="rule" surface="panel">
         <div className={styles.intakeGrid}>
         <div className={styles.intakeStatus}>
+        <div className={styles.contactBlock} id="settings-contact">
+          <label htmlFor="set-contact">참가자 문의처</label>
+          <div className={styles.contactRow}>
+            <input
+              id="set-contact"
+              type="text"
+              maxLength={CONTACT_MAX}
+              value={contactDraft}
+              placeholder="예: 운영 사무국 02-123-4567 · help@example.com"
+              onChange={(event) => {
+                setContactDraft(event.target.value);
+                if (failure?.field === "participantContact") { setFailure(null); setIntakeStatus(null); }
+              }}
+              onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); saveContact(); } }}
+              aria-invalid={invalid("participantContact") || undefined}
+              aria-describedby={failure?.field === "participantContact" ? "settings-contact-error settings-contact-help" : "settings-contact-help"}
+              disabled={!canWriteContact || archived || settingsLocked}
+            />
+            <ProductButton
+              type="button"
+              variant="ghost"
+              disabled={settingsLocked || archived || !canWriteContact || !contactDirty}
+              title={archived ? archivedReason : !canWriteContact ? settingsNoWriteReason : undefined}
+              onClick={saveContact}
+            >
+              문의처 저장
+            </ProductButton>
+            {contactDirty ? <StatusPill tone="wait" size="sm" dot>저장 안 됨</StatusPill> : null}
+          </div>
+          <p className={styles.help} id="settings-contact-help">티켓을 잃은 참가자와 신청 중 문제가 생긴 참가자에게 보여 줍니다. 전화번호나 이메일을 한 줄로 적으세요. (최대 {CONTACT_MAX}자)</p>
+          {failure?.field === "participantContact" ? <p className={styles.fieldError} id="settings-contact-error" role="alert">{failure.message}</p> : null}
+          {!state.participantContact && state.recoveryContact ? (
+            <p className={styles.help} role="note">문의처가 비어 있어 장소 안내의 연락처({state.recoveryContact})를 대신 보여 줍니다.</p>
+          ) : null}
+          {!state.participantContact && !state.recoveryContact && !(isRecoveryBlocked(verificationMode)) ? (
+            <ConsoleFeedback kind="warning">참가자 문의처가 없습니다. 티켓을 잃은 참가자가 연락할 곳이 없습니다.</ConsoleFeedback>
+          ) : null}
+        </div>
         {!canWriteIntake ? (
           <p className={styles.help} role="note">{intakeNoWriteReason}</p>
         ) : null}
@@ -2008,7 +2098,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         </div>
         {isRecoveryBlocked(verificationMode) && !state.recoveryContact ? (
           <ConsoleFeedback kind="warning">
-            <p className={styles.intakeWarningText}>문자로 티켓을 다시 연결할 수 없고 참가자에게 표시되는 문의처도 없습니다. 탭을 잃은 참가자가 도움을 받을 수 있도록 장소 안내의 문의 정보와 참가자 페이지의 공개 설정을 확인하세요.</p>
+            <p className={styles.intakeWarningText}>문자로 티켓을 다시 연결할 수 없고 참가자에게 표시되는 문의처도 없습니다. 탭을 잃은 참가자가 도움을 받을 수 있도록 위의 참가자 문의처를 입력하세요.</p>
             <ProductLink variant="ghost" className={styles.intakeWarningLink} href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내의 문의 정보</ProductLink>
           </ConsoleFeedback>
         ) : null}
@@ -2071,20 +2161,43 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           </> : <ProductButton type="button" className="button button-secondary" disabled={intakeConflict.loading || settingsLocked} onClick={() => void readLatestIntake()}>{intakeConflict.loading ? "최신 설정 확인 중…" : "최신 설정 확인"}</ProductButton>}
         </section> : null}
         <div className={uiStyles.formStack}>
+          {isLegacyDefaultConsentText(consentText) ? (
+            <ConsoleFeedback kind="warning">동의 안내가 기본 한 줄입니다. 기본 동의 안내를 불러와 확인하세요.</ConsoleFeedback>
+          ) : null}
           <div>
-            <label htmlFor="set-consent">정보 수집 동의 안내</label>
+            <div className={styles.labelRow}>
+              <label htmlFor="set-consent">정보 수집 동의 안내</label>
+              <ProductButton
+                type="button"
+                variant="ghost"
+                disabled={!canWriteIntake || archived || settingsLocked || Boolean(intakeConflict)}
+                title={archived ? archivedReason : !canWriteIntake ? intakeNoWriteReason : undefined}
+                onClick={requestDefaultConsent}
+              >
+                기본 동의 안내 불러오기
+              </ProductButton>
+            </div>
+            {templateConfirm ? <ConsoleConfirm
+              summary="지금 작성한 동의 안내가 기본 동의 안내로 바뀝니다. 바꿀까요? 게시하기 전에는 참가자에게 반영되지 않습니다."
+              confirmLabel="기본 안내로 바꾸기"
+              onConfirm={fillDefaultConsent}
+              onCancel={() => setTemplateConfirm(false)}
+            /> : null}
             <textarea data-resize-none="true"
               id="set-consent"
               rows={3}
               value={consentText}
               onChange={(event) => {
                 setConsentText(event.target.value);
+                setConsentNote(null);
                 if (failure?.field === "consentText") { setFailure(null); setIntakeStatus(null); }
               }}
               aria-invalid={invalid("consentText") || undefined}
               aria-describedby={failure?.field === "consentText" ? "settings-consent-error" : undefined}
               disabled={!canWriteIntake || archived || settingsLocked}
             />
+            <p className={styles.help} role="note">기본 동의 안내는 법무 검토 전 초안입니다. 기본 안내는 행사 종료 후 6개월까지 보관하고 주최 측 요청에 따라 파기한다고 적습니다. 시스템이 자동으로 파기하지는 않으니, 실제 운영과 맞는지 주최 측이 확인한 뒤 게시하세요.</p>
+            {consentNote && intakeDirty ? <p className={styles.help} role="status">{consentNote}</p> : null}
             {failure?.field === "consentText" ? <>
               <p className={styles.fieldError} id="settings-consent-error">{failure.message}</p>
               {state.consentText && !consentText.trim() ? <ProductButton type="button" className={`button button-secondary ${styles.fieldRecovery}`} disabled={settingsLocked || !canWriteIntake || archived} onClick={() => {

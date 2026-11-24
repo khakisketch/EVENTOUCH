@@ -63,7 +63,7 @@ function label(command: string): string {
     "staff.assign": "스태프 배정", "staff.unassign": "스태프 배정 해제", "display.set": "전광판 출력 변경",
     "participant.create": "참가자 등록", "participant.update": "참가자 수정", "participant.import": "참가자 가져오기",
     "participant.status": "참가자 상태 변경", "participant.bulk-cancel": "신청 일괄 취소", "participant.resolve-cancellation-conflict": "참가 취소 기록 확인", "ticket.reissue": "티켓 재발급", "ticket.reissue-reviewed": "티켓 재발급", "group.assign": "그룹 지정", "reward.create": "경품 등록", "reward.lookup": "경품 조회", "reward.collect": "경품 수령", "reward.fulfill": "경품 지급", "reward.cancel": "경품 취소",
-    "notice.publish": "공지 게시", "notice.publish-reviewed": "공지 게시", "program.publish": "일정 게시", "program.publish-reviewed": "일정 게시", "venue.publish": "장소 안내 게시", "venue.publish-reviewed": "장소 안내 게시", "venue.save": "장소 안내 저장",
+    "notice.publish": "공지 게시", "notice.publish-reviewed": "공지 게시", "program.publish": "일정 게시", "program.publish-reviewed": "일정 게시", "venue.publish": "장소 안내 게시", "venue.publish-reviewed": "장소 안내 게시", "venue.save": "장소 안내 저장", "contact.save": "참가자 문의처 저장", "participant.erase": "참가자 개인정보 삭제",
     "notice.save": "공지 저장", "program.save": "일정 저장",
     "report.create": "보고서 만들기", "report.update": "보고서 수정", "report.publish": "보고서 공유 기록", "report.successor": "보고서 새 버전",
     "evidence.photo.add": "현장 사진 등록", "evidence.photo.move": "현장 사진 이동", "evidence.photo.remove": "현장 사진 제외",
@@ -241,7 +241,7 @@ export default function OperatorReceiptRecovery({ currentEventId, currentEventNa
       {mine.map((pointer) => <div className={styles.row} key={pointer.commandId}>
         <span><strong>{label(pointer.command)}</strong>{pointer.eventId
           ? pointer.eventId === currentEventId ? ` · ${currentEventName || "현재 행사"}` : ` · 행사 (${pointer.eventId.slice(-6)})`
-          : " · 운영사"}</span>
+          : " · 조직"}</span>
         <span className={styles.actions}>
           <ProductButton type="button" className="button button-secondary" disabled={Boolean(checking) || snapshot.changed} onClick={() => void check(pointer)}>{checking === pointer.commandId ? "확인 중…" : "서버 처리 확인"}</ProductButton>
           <ProductButton type="button" className="button button-secondary" disabled={Boolean(checking)} onClick={() => setRemoveCandidate(pointer)}>목록에서 지우기</ProductButton>
