@@ -74,8 +74,12 @@ test('purpose templates replace text only after confirmation and never send', ()
   for (const token of tokens) assert.ok(['이름', '행사명', '행사일', '티켓링크', '럭키번호'].includes(token), `${token} is a supported personalization`);
 });
 
-test('보낼 때 states that event-relative times do not follow later date changes', () => {
-  assert.match(SOURCE, /나중에 행사 일정이 바뀌어도 이 예약은 자동으로 옮겨지지 않습니다\./u);
+// Reopened 2026-11-24 (owner: "그렇게 다 해줘"): 행사 기준 예약은 규칙(scheduleAnchor)을 함께 보내
+// 서버가 행사 날짜 변경을 따라가므로, 예전의 "옮겨지지 않습니다" 문구는 반대 계약으로 바뀐다.
+test('보낼 때 sends the event-relative rule and states that it follows later date changes', () => {
+  assert.doesNotMatch(SOURCE, /자동으로 옮겨지지 않습니다/u);
+  assert.match(SOURCE, /행사 날짜가 바뀌면 이 예약도 같은 기준으로 함께 옮겨집니다\. 옮긴 시각이 이미 지났다면 발송하지 않고 예약을 취소합니다\./u);
+  assert.match(SOURCE, /effectiveScheduleChoice === "EVENT"\) payload\.scheduleAnchor = \{ kind: "EVENT_DATE", days: eventOffset\.days, time: eventOffset\.time \}/u);
   const choose = SOURCE.slice(SOURCE.indexOf('function chooseSchedule('), SOURCE.indexOf('function changeEventOffset('));
   assert.match(choose, /choice === "NOW"\) setCampaignDraft\(current => \(\{ \.\.\.current, scheduled: "", scheduleMode: "MANUAL" \}\)\)/u);
   assert.match(SOURCE, /id="campaign-scheduled"/u, 'the exact date input and its validation stay');

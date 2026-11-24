@@ -16,6 +16,7 @@ const { normalizeHomeMenus, validateHomeMenus } = require('../attendee-home-menu
 const { parseEventFormatInput } = require('../state');
 const { contentDraft, saveContent, publishContent, publishReviewedContent } = require('../content-publication');
 const { ensureConsentNotice } = require('../consent-notices');
+const { followEventDate } = require('../message-schedule-anchor');
 const { bodyImageIds, MAX_BODY_IMAGES } = require('../rich-text');
 
 const COMMANDS = new Set([
@@ -260,7 +261,10 @@ async function updateEvent(ctx, input) {
   await transitionStage(ctx, input.stage === undefined ? event.stage : input.stage);
   const ticketImpact = (!isCalendarDate(event.date) || eventDate > event.date)
     ? await extendValidTickets(ctx, eventDate) : null;
+  const dateChanged = eventDate !== event.date;
   Object.assign(event, { name, slug, date: eventDate, start, end, capacity, clientId });
+  // Event-relative reservations follow the new date; see message-schedule-anchor.
+  const scheduleFollow = dateChanged ? followEventDate(workspace, eventDate, { now: Date.now() }) : null;
   workspace.approvalRequired = input.approvalRequired === undefined
     ? workspace.approvalRequired === true
     : input.approvalRequired === true;
@@ -272,7 +276,8 @@ async function updateEvent(ctx, input) {
     : input.verificationRequired === true;
   workspace.price = price;
   return { eventChanged: true, body: { event: { ...event },
-    ...(ctx.command === 'event.basics.save' ? { ticketPolicyVersion: 1, ticketImpact } : ticketImpact ? { ticketImpact } : {}) } };
+    ...(ctx.command === 'event.basics.save' ? { ticketPolicyVersion: 1, ticketImpact } : ticketImpact ? { ticketImpact } : {}),
+    ...(scheduleFollow && (scheduleFollow.moved || scheduleFollow.cancelled) ? { scheduleFollow: { moved: scheduleFollow.moved, cancelled: scheduleFollow.cancelled } } : {}) } };
 }
 
 async function updateFeatures(ctx, input) {

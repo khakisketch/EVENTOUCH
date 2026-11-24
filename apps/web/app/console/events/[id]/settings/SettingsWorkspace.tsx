@@ -397,6 +397,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [showTicketReview, setShowTicketReview] = useState(false);
   const [showScheduleReview, setShowScheduleReview] = useState(false);
+  const [scheduleFollowSummary, setScheduleFollowSummary] = useState("");
   // Per-section save state shown in place ("기본 정보를 저장했습니다 · HH:MM").
   // The page-top ConsoleFeedback strip is kept for the latest page-level
   // result; these lines persist per section with a timestamp instead of
@@ -935,6 +936,16 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       ? ` 유효한 티켓 ${impact.extended}건을 연장했습니다.${impact.review ? ` 만료·철회됐거나 확인이 필요한 티켓 ${impact.review}건은 연장하지 않았습니다.` : ""}` : "";
     setShowTicketReview(Boolean(impact && count(impact.review) && impact.review > 0));
     if (changesEventSchedule(attempt)) setShowScheduleReview(true);
+    const follow = response?.scheduleFollow && typeof response.scheduleFollow === "object" && !Array.isArray(response.scheduleFollow)
+      ? response.scheduleFollow as Record<string, unknown> : null;
+    const followMoved = follow && count(follow.moved) ? follow.moved : 0;
+    const followCancelled = follow && count(follow.cancelled) ? follow.cancelled : 0;
+    const followParts = [
+      followMoved ? `${followMoved}건을 새 행사 날짜에 맞춰 옮겼습니다.` : "",
+      followCancelled ? `${followCancelled}건은 새 시각이 이미 지나 발송하지 않고 취소했습니다.` : "",
+    ].filter(Boolean);
+    setScheduleFollowSummary(followParts.length ? `행사 기준 메시지 예약: ${followParts.join(" ")}` : "");
+    if (followParts.length) setShowScheduleReview(true);
     const message = checked ? "서버에 설정이 반영된 것을 확인했습니다. 최신 내용을 확인하세요." : attempt.successMessage + ticketSummary;
     if (attempt.section === "stage") {
       stageCommandIdRef.current = null;
@@ -1912,6 +1923,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       {showScheduleReview ? (
         <section className={styles.scheduleReview} aria-labelledby="schedule-review-title">
           <h3 id="schedule-review-title" className={styles.blockTitle}>참가자에게 보이는 안내도 확인해 주세요</h3>
+          {scheduleFollowSummary ? <p role="status"><strong>{scheduleFollowSummary}</strong> <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/messages`}>메시지 예약 확인</ProductLink></p> : null}
           <p>행사 일시는 저장됐지만, 기존에 게시한 프로그램 일정과 공지·장소 안내는 그대로입니다. 여러 날짜에 진행하는 일정일 수 있으니 내용을 확인하고 필요한 경우에만 수정·게시하세요.</p>
           <div className={styles.scheduleReviewLinks}>
             {canWriteEvent(capabilities, "program.save") ? <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/content#content-program`}>프로그램 일정 확인</ProductLink> : null}

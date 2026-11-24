@@ -70,6 +70,10 @@ type Campaign = {
   status: string;
   scheduled: string;
   scheduleMode: "MANUAL" | "AUTO";
+  // Event-relative reservation rule (days before the event date, Korea time)
+  // and what the server did the last time the event date changed.
+  scheduleAnchor: { days: number; time: string } | null;
+  scheduleFollow: "MOVED" | "CANCELLED_PAST" | null;
   simulate: boolean;
   smsFallback: boolean;
   at: string;
@@ -239,10 +243,15 @@ const EVENT_OFFSET_CHOICES = [
   { days: 0, label: "행사 당일" },
   { days: -1, label: "행사 다음 날" },
 ] as const;
-// Event-relative scheduling is a convenience over the existing absolute
-// reservation: it computes one Korea-time datetime-local value from the event
-// date. The server still stores that absolute time, so a later change to the
-// event date does not move the reservation (stated next to the control).
+// Event-relative scheduling computes one Korea-time datetime-local value from
+// the event date. The server stores that absolute time plus the rule
+// (scheduleAnchor), so a later change to the event date moves the reservation
+// by the same rule, or cancels it when the new time has already passed.
+export function eventOffsetLabel(anchor: { days: number; time: string }): string {
+  const known = EVENT_OFFSET_CHOICES.find(choice => choice.days === anchor.days);
+  const day = known ? known.label : anchor.days > 0 ? `행사 ${anchor.days}일 전` : `행사 ${-anchor.days}일 후`;
+  return `${day} ${anchor.time}`;
+}
 export function eventRelativeSchedule(eventDate: string, offset: EventOffset): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(eventDate);
   if (!match || !/^([01]\d|2[0-3]):[0-5]\d$/.test(offset.time)) return "";
@@ -270,6 +279,7 @@ const FIELD_LABELS: Record<string, string> = {
   imageFileId: "첨부 이미지",
   ids: "발송 대상",
   scheduled: "예약 시각",
+  scheduleAnchor: "행사 기준 예약",
 };
 const ATTENTION_STATUSES = ["FAILED", "PARTIAL", "NEEDS_CONNECTION"];
 // The shared attention contract includes overdue reservations, unconfirmed
@@ -786,6 +796,15 @@ function parseCampaign(value: unknown): Campaign | null {
     status: text(item.status),
     scheduled: text(item.scheduled),
     scheduleMode: item.scheduleMode === "AUTO" && item.autoScheduleIntent === "confirmed-v1" ? "AUTO" : "MANUAL",
+    scheduleAnchor: (() => {
+      const anchor = asRecord(item.scheduleAnchor);
+      return anchor && anchor.kind === "EVENT_DATE" && Number.isInteger(anchor.days) && /^([01]\d|2[0-3]):[0-5]\d$/.test(text(anchor.time))
+        ? { days: Number(anchor.days), time: text(anchor.time) } : null;
+    })(),
+    scheduleFollow: (() => {
+      const outcome = text(asRecord(item.scheduleFollow)?.outcome);
+      return outcome === "MOVED" || outcome === "CANCELLED_PAST" ? outcome : null;
+    })(),
     // Server persists simulate on every message (content-results.js); the
     // history and retry copy below must read this stored mode, never the
     // composer's draft flag, or a simulated reservation executes under
@@ -2218,6 +2237,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     if (selectedTemplateId) payload.templateId = selectedTemplateId;
     if (isAlimtalk) payload.smsFallback = campaignDraft.smsFallback;
     if (scheduled) { payload.scheduled = scheduled; payload.scheduleMode = campaignDraft.scheduleMode; }
+    // 행사 기준 예약은 규칙도 함께 보내 서버가 행사 날짜 변경을 따라가게 한다.
+    if (scheduled && effectiveScheduleChoice === "EVENT") payload.scheduleAnchor = { kind: "EVENT_DATE", days: eventOffset.days, time: eventOffset.time };
     if (isMms) payload.imageFileId = campaignDraft.imageFileId;
     const fingerprint = fingerprintFor("message.create-charset-reviewed", payload);
     const id = takeCommandId(campaignCreateRef, fingerprint);
@@ -3419,7 +3440,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                         <input id="campaign-event-time" type="time" step={60} value={eventOffset.time} onChange={(event) => { if (/^([01]\d|2[0-3]):[0-5]\d$/.test(event.target.value)) changeEventOffset({ ...eventOffset, time: event.target.value }); }} />
                       </div>
                       <p className={styles.eventOffsetResult} id="campaign-event-result" aria-live="polite">{campaignDraft.scheduled ? `→ ${formatScheduledInput(campaignDraft.scheduled)}` : "행사일을 확인할 수 없습니다."}</p>
-                      <p className={styles.help}>예약 시각은 지금 계산해 저장합니다. 나중에 행사 일정이 바뀌어도 이 예약은 자동으로 옮겨지지 않습니다.</p>
+                      <p className={styles.help}>행사 날짜가 바뀌면 이 예약도 같은 기준으로 함께 옮겨집니다. 옮긴 시각이 이미 지났다면 발송하지 않고 예약을 취소합니다.</p>
                     </div> : null}
                     {effectiveScheduleChoice === "DATE" ? <div>
                     <label htmlFor="campaign-scheduled">예약 시각 (한국 시간)</label>
@@ -3980,9 +4001,12 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                           <div><dt>대상</dt><dd>{campaign.recipientIds.length}명</dd></div>
                           <div><dt>요청 시각</dt><dd>{formatDate(campaign.at)}</dd></div>
                           {campaign.scheduled || campaign.status === "SCHEDULED" ? <div><dt>예약 시각</dt><dd>{formatSavedSchedule(campaign.scheduled)}</dd></div> : null}
+                          {campaign.scheduleAnchor ? <div><dt>예약 기준</dt><dd>{eventOffsetLabel(campaign.scheduleAnchor)} · 행사 날짜가 바뀌면 함께 이동</dd></div> : null}
                           {campaign.scheduled ? <div><dt>예약 실행</dt><dd>{campaign.scheduleMode === "AUTO" && !campaign.simulate ? "자동 실행" : "수동 실행"}</dd></div> : null}
                           <div><dt>시도</dt><dd>{campaign.attempts}회</dd></div>
                         </dl>
+                        {campaign.scheduleFollow === "MOVED" ? <p className={styles.campaignHint} role="note">행사 날짜가 바뀌어 예약 시각을 함께 옮겼습니다. 위 예약 시각을 확인하세요.</p> : null}
+                        {campaign.scheduleFollow === "CANCELLED_PAST" && campaign.status === "CANCELLED" ? <p className={styles.campaignHint} role="note">행사 날짜가 바뀌어 새 예약 시각이 이미 지났기 때문에 발송하지 않고 취소했습니다. 필요하면 새로 예약하세요.</p> : null}
                         {!campaign.simulate && ["SCHEDULED", "NEEDS_CONNECTION"].includes(campaign.status) && !campaign.recipientRoutingReviewed && !blocked ? <p className={styles.campaignHint} role="note">이전 발송 요청은 예약 당시의 참가 상태와 그룹을 확인할 수 없어 변경 여부를 자동으로 비교하지 않습니다. {campaign.status === "SCHEDULED" && campaign.scheduleMode === "AUTO" ? "자동 실행 시에도 이 비교 없이 발송될 수 있으므로 참가자 명단을 확인하세요." : "발송 실행 전에 참가자 명단을 직접 확인하세요."} <ProductLink variant="secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자 명단 보기</ProductLink></p> : null}
                         {campaign.genericTransport && campaign.genericSubmissionUnconfirmed && campaign.genericAttemptActive !== false ? <p className={styles.campaignHint} role="note">이전 발송 작업이 끝났는지 확인할 수 없어 수동 기록을 잠갔습니다. 공급사 내역과 서버 운영 상태를 확인하세요.</p> : null}
                         {!campaign.genericTransport && campaign.providerKind !== "solapi" && campaign.deliveries.some(delivery => delivery.status === "SENT") ? <p className={styles.campaignHint} role="note">이전 기록의 발송 연결과 전달 근거를 확인할 수 없습니다. 공급사 내역을 확인하세요.</p> : null}

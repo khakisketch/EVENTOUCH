@@ -9,6 +9,7 @@ const { cancellationNeedsReview } = require('../../apps/web/lib/cancellation-sta
 const { publicOrigin } = require('../public-origin');
 const { ticketReviewState } = require('../ticket-lifetime');
 const { reportSourceAvailability } = require('../report-source-availability');
+const { normalizeScheduleAnchor, anchorInstant } = require('../message-schedule-anchor');
 
 const COMMANDS = new Set([
   'template.save',
@@ -441,6 +442,19 @@ async function createMessage(ctx, input) {
   if (scheduled && (!Number.isFinite(scheduledAt) || scheduledAt <= Date.now())) {
     throw ctx.fail(400, '예약 시각과 시간대를 확인하고 현재 이후로 설정하세요', 'scheduled');
   }
+  // Event-relative reservations keep their rule so a later event-date change
+  // can move them. The rule must reproduce the instant the operator reviewed
+  // against the event date stored now; a stale editor is rejected, never
+  // silently re-timed.
+  let scheduleAnchor = null;
+  if (input.scheduleAnchor !== undefined && input.scheduleAnchor !== null) {
+    scheduleAnchor = normalizeScheduleAnchor(input.scheduleAnchor);
+    if (!scheduleAnchor || !scheduled) throw ctx.fail(400, '행사 기준 예약 설정을 확인하세요', 'scheduleAnchor');
+    const expectedInstant = anchorInstant(ctx.event.date, scheduleAnchor);
+    if (!expectedInstant || Date.parse(expectedInstant) !== scheduledAt) {
+      throw ctx.fail(409, '행사 날짜가 바뀌었거나 예약 시각이 맞지 않습니다. 행사 정보를 새로 불러온 뒤 다시 설정하세요', 'scheduleAnchor');
+    }
+  }
   const simulated = input.simulate === true;
   if (!simulated) {
     assertDispatchGuard(ctx, ticketLinkGuard({ body, recipientSnapshot: recipients }, ctx.workspace));
@@ -469,6 +483,7 @@ async function createMessage(ctx, input) {
       routingGroup: recipientRoutingParts(person)[1],
     })),
     scheduled,
+    ...(scheduled && scheduleAnchor ? { scheduleAnchor } : {}),
     ...(scheduled ? { scheduleMode, ...(scheduleMode === 'AUTO' ? { autoScheduleIntent: 'confirmed-v1' } : {}) } : {}),
     status,
     simulate: simulated,
