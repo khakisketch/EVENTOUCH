@@ -845,6 +845,8 @@ async function main() {
         await act(task, () => openMessageMore(page));
         await act(task, () => page.locator('#campaign-title').fill(title));
         await act(task, () => page.locator('#campaign-body').fill('{{이름}}님 사용성 감사 안내입니다.'));
+        // Reopened 2026-11-24 (owner decision 11): 미연동이면 모의 발송이 기본 켜짐 — 이 과제는 실제 발송 요청 경로를 잰다.
+        await page.getByLabel('모의 발송으로 기록', { exact: false }).uncheck();
         await messageStep(page, 3);
         await probeKeyboard(page, task, page.locator('#campaign-submit'), '발송 요청 버튼');
         await act(task, () => page.locator('#campaign-submit').click());
@@ -1290,6 +1292,7 @@ async function main() {
         // Reopened 2026-11-24 (시안 A): the 시점 pill opens its panel, then 날짜·시각 지정 is chosen (one operator step here).
         await act(task, () => chooseScheduleDate(page));
         await act(task, () => page.locator('#campaign-scheduled').fill(scheduled));
+        await page.getByLabel('모의 발송으로 기록', { exact: false }).uncheck(); // Reopened 2026-11-24: 미연동 기본값은 모의 발송
         await probeKeyboard(page, task, page.locator('#campaign-submit'), '예약 등록 버튼');
         await act(task, () => page.locator('#campaign-submit').click());
         await page.getByRole('button', { name: '예약 등록', exact: true }).waitFor({ state: 'visible', timeout: 10000 });

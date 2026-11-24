@@ -47,10 +47,10 @@ async function main() {
   const ownerId = `audit-owner-${f.suffix}`;
   try {
     // Synthetic A keeps the explicitly assigned legacy fixture organization.
-    await f.harness.database.query('UPDATE organizations SET name=$2 WHERE id=$1', [f.helpers.LEGACY_ORG, '검증 운영사 A']);
+    await f.harness.database.query('UPDATE organizations SET name=$2 WHERE id=$1', [f.helpers.LEGACY_ORG, '검증 조직 A']);
     const ownerCookie = await f.helpers.sessionCookie(f.harness, ownerId);
     const a = await me(ownerCookie);
-    const createdB = await write(ownerCookie, '/api/auth/organizations', { name: '검증 운영사 B', commandId: crypto.randomUUID() });
+    const createdB = await write(ownerCookie, '/api/auth/organizations', { name: '검증 조직 B', commandId: crypto.randomUUID() });
     assert.ok(createdB.status < 300, JSON.stringify(createdB.json));
     const bOrg = createdB.json.organization.id;
     // Global account is still AGENCY; B membership is STAFF. This intentionally
@@ -113,25 +113,25 @@ async function main() {
     };
     const pick = async (page, organizationId) => {
       const panel = await openAccount(page);
-      await panel.getByLabel('전환할 운영사', { exact: true }).selectOption(organizationId);
-      await panel.getByRole('button', { name: '이 운영사로 이동', exact: true }).click();
+      await panel.getByLabel('전환할 조직', { exact: true }).selectOption(organizationId);
+      await panel.getByRole('button', { name: '이 조직으로 이동', exact: true }).click();
     };
     const original = `${f.baseUrl}/console/events/${f.eventId}/page`;
     await first.goto(original);
     await openStudioPanel(first, 'exposure');
-    await first.locator('#home-intro').fill('운영사 A에만 남아야 하는 초안');
+    await first.locator('#home-intro').fill('조직 A에만 남아야 하는 초안');
     const panel = await openAccount(first);
-    await panel.getByText('운영사 소속을 불러오지 못했습니다.', { exact: false }).waitFor();
+    await panel.getByText('조직 소속을 불러오지 못했습니다.', { exact: false }).waitFor();
     check('membership lookup 503 is retryable without pretending sign-in is required', await panel.getByRole('button', { name: '소속 다시 확인', exact: true }).isEnabled() && await panel.getByRole('link', { name: '로그인으로', exact: true }).count() === 0);
     await capture(first, 'organization-list-503-1280');
     affiliationsUnavailable = false;
     await panel.getByRole('button', { name: '소속 다시 확인', exact: true }).click();
-    await panel.getByLabel('전환할 운영사', { exact: true }).selectOption(bOrg);
+    await panel.getByLabel('전환할 조직', { exact: true }).selectOption(bOrg);
     let cancelledWarning;
     first.once('dialog', async (dialog) => { cancelledWarning = dialog.message(); await dialog.dismiss(); });
-    await panel.getByRole('button', { name: '이 운영사로 이동', exact: true }).click();
+    await panel.getByRole('button', { name: '이 조직으로 이동', exact: true }).click();
     check('dirty explicit switch cancels before any selection request', Boolean(cancelledWarning?.includes('저장하지 않은')) && !requests.some((r) => r.path.endsWith('/select')));
-    check('cancelled switch retains A input', (await openStudioPanel(first, 'exposure'), await first.locator('#home-intro').inputValue()) === '운영사 A에만 남아야 하는 초안');
+    check('cancelled switch retains A input', (await openStudioPanel(first, 'exposure'), await first.locator('#home-intro').inputValue()) === '조직 A에만 남아야 하는 초안');
     await capture(first, 'account-switch-guard-1280');
     await first.keyboard.press('Escape');
 
@@ -144,30 +144,30 @@ async function main() {
     await capture(second, 'staff-effective-B-390');
     await inspect(second, 'staff-effective-B-390');
     const staffAccount = await openAccount(second);
-    check('B STAFF account menu does not inherit A owner actions', await staffAccount.getByRole('button', { name: '운영사 추가', exact: true }).count() === 0);
+    check('B STAFF account menu does not inherit A owner actions', await staffAccount.getByRole('button', { name: '조직 추가', exact: true }).count() === 0);
     await capture(second, 'staff-account-switcher-B-390');
     await second.keyboard.press('Escape');
-    await first.getByRole('region', { name: '운영사 문맥 변경', exact: true }).waitFor();
-    check('other-tab selection keeps A draft and locks its writes', (await openStudioPanel(first, 'exposure'), await first.locator('#home-intro').inputValue()) === '운영사 A에만 남아야 하는 초안' && await first.locator('#theme-save-draft').isDisabled());
+    await first.getByRole('region', { name: '조직 문맥 변경', exact: true }).waitFor();
+    check('other-tab selection keeps A draft and locks its writes', (await openStudioPanel(first, 'exposure'), await first.locator('#home-intro').inputValue()) === '조직 A에만 남아야 하는 초안' && await first.locator('#theme-save-draft').isDisabled());
     await capture(first, 'other-tab-A-draft-locked-1280');
     await first.setViewportSize({ width: 390, height: 844 });
     await capture(first, 'other-tab-A-draft-locked-390');
     await inspect(first, 'other-tab-A-draft-locked-390');
     const stale = await api(ownerCookie, `/api/events/${f.eventId}/commands`, { method: 'POST', headers: headersFor(startContext), body: { commandId: crypto.randomUUID(), command: 'notice.save', payload: { title: '보내지 않아야 할 과거 탭', body: '합성 반례' } } });
     check('actual server rejects old-tab A headers instead of writing under B', stale.status === 409 && stale.json.code === 'ORGANIZATION_CONTEXT_CHANGED', stale.json);
-    await reconnect(first, '검증 운영사 A에 다시 연결');
-    await first.getByRole('region', { name: '운영사 문맥 변경', exact: true }).waitFor({ state: 'hidden' });
-    check('explicit A return preserves the original draft', (await openStudioPanel(first, 'exposure'), await first.locator('#home-intro').inputValue()) === '운영사 A에만 남아야 하는 초안');
+    await reconnect(first, '검증 조직 A에 다시 연결');
+    await first.getByRole('region', { name: '조직 문맥 변경', exact: true }).waitFor({ state: 'hidden' });
+    check('explicit A return preserves the original draft', (await openStudioPanel(first, 'exposure'), await first.locator('#home-intro').inputValue()) === '조직 A에만 남아야 하는 초안');
     await first.locator('#theme-save-draft').click();
     await f.gateway.waitForResponseLoss('attendee.page.save');
     await first.locator('#theme-save-draft').waitFor();
-    await second.getByRole('region', { name: '운영사 문맥 변경', exact: true }).waitFor();
-    await reconnect(second, '검증 운영사 B에 다시 연결');
-    await second.getByRole('region', { name: '운영사 문맥 변경', exact: true }).waitFor({ state: 'hidden' });
-    await first.getByRole('region', { name: '운영사 문맥 변경', exact: true }).waitFor();
+    await second.getByRole('region', { name: '조직 문맥 변경', exact: true }).waitFor();
+    await reconnect(second, '검증 조직 B에 다시 연결');
+    await second.getByRole('region', { name: '조직 문맥 변경', exact: true }).waitFor({ state: 'hidden' });
+    await first.getByRole('region', { name: '조직 문맥 변경', exact: true }).waitFor();
     await capture(first, 'uncertain-A-receipt-under-B-390');
-    await reconnect(first, '검증 운영사 A에 다시 연결');
-    await first.getByRole('region', { name: '운영사 문맥 변경', exact: true }).waitFor({ state: 'hidden' });
+    await reconnect(first, '검증 조직 A에 다시 연결');
+    await first.getByRole('region', { name: '조직 문맥 변경', exact: true }).waitFor({ state: 'hidden' });
     await first.locator('#theme-save-draft').click();
     await first.getByText('초안을 저장했습니다', { exact: false }).first().waitFor();
     const saved = requests.filter((r) => r.body?.command === 'attendee.page.save');
@@ -181,14 +181,14 @@ async function main() {
       if (!lostSelection) { const actual = await committedResponse(route, 'organization.select'); if (!actual) return; lostSelection = true; await route.fulfill({ status: 502, json: { error: '합성 전환 응답 유실' } }); }
       else await route.continue();
     });
-    await reconnect(second, '검증 운영사 B에 다시 연결');
+    await reconnect(second, '검증 조직 B에 다시 연결');
     await second.getByRole('button', { name: '같은 전환 요청 다시 확인', exact: true }).waitFor();
     await capture(second, 'selection-response-unknown-390');
     await second.getByRole('button', { name: '같은 전환 요청 다시 확인', exact: true }).click();
-    await second.getByRole('region', { name: '운영사 문맥 변경', exact: true }).waitFor({ state: 'hidden' });
+    await second.getByRole('region', { name: '조직 문맥 변경', exact: true }).waitFor({ state: 'hidden' });
     check('selection lost response retries identical nonce and expected session revision', selectionBodies.length === 2 && JSON.stringify(selectionBodies[0]) === JSON.stringify(selectionBodies[1]), selectionBodies);
-    await reconnect(first, '검증 운영사 A에 다시 연결');
-    await first.getByRole('region', { name: '운영사 문맥 변경', exact: true }).waitFor({ state: 'hidden' });
+    await reconnect(first, '검증 조직 A에 다시 연결');
+    await first.getByRole('region', { name: '조직 문맥 변경', exact: true }).waitFor({ state: 'hidden' });
 
     // Create is explicit and idempotent; it never selects or inherits sending.
     let lostCreate = false;
@@ -200,18 +200,18 @@ async function main() {
       else await route.continue();
     });
     const createPanel = await openAccount(first);
-    await createPanel.getByRole('button', { name: '운영사 추가', exact: true }).click();
-    await createPanel.getByLabel('새 운영사 이름', { exact: true }).fill('검증 신규 운영사 C');
-    await createPanel.getByRole('button', { name: '운영사 등록', exact: true }).click();
+    await createPanel.getByRole('button', { name: '조직 추가', exact: true }).click();
+    await createPanel.getByLabel('새 조직 이름', { exact: true }).fill('검증 신규 조직 C');
+    await createPanel.getByRole('button', { name: '조직 등록', exact: true }).click();
     await createPanel.getByRole('button', { name: '같은 등록 요청 다시 확인', exact: true }).waitFor();
-    check('unknown org creation freezes its original name', await createPanel.getByLabel('새 운영사 이름', { exact: true }).isDisabled());
+    check('unknown org creation freezes its original name', await createPanel.getByLabel('새 조직 이름', { exact: true }).isDisabled());
     await createPanel.getByRole('button', { name: '같은 등록 요청 다시 확인', exact: true }).click();
-    await createPanel.getByText('운영사를 추가했습니다.', { exact: false }).waitFor();
+    await createPanel.getByText('조직을 추가했습니다.', { exact: false }).waitFor();
     const affiliations = (await api(ownerCookie, '/api/auth/organizations')).json;
-    const cOrg = affiliations.organizations.find((o) => o.name === '검증 신규 운영사 C');
-    check('org create retains same receipt and creates once without switching', createBodies.length === 2 && JSON.stringify(createBodies[0]) === JSON.stringify(createBodies[1]) && affiliations.activeOrganizationId === a.organizationId && affiliations.organizations.filter((o) => o.name === '검증 신규 운영사 C').length === 1);
-    await createPanel.getByLabel('전환할 운영사', { exact: true }).selectOption(cOrg.id);
-    await createPanel.getByRole('button', { name: '이 운영사로 이동', exact: true }).click();
+    const cOrg = affiliations.organizations.find((o) => o.name === '검증 신규 조직 C');
+    check('org create retains same receipt and creates once without switching', createBodies.length === 2 && JSON.stringify(createBodies[0]) === JSON.stringify(createBodies[1]) && affiliations.activeOrganizationId === a.organizationId && affiliations.organizations.filter((o) => o.name === '검증 신규 조직 C').length === 1);
+    await createPanel.getByLabel('전환할 조직', { exact: true }).selectOption(cOrg.id);
+    await createPanel.getByRole('button', { name: '이 조직으로 이동', exact: true }).click();
     await first.waitForURL('**/console');
     const cEvent = `ux-c-event-${f.suffix}`;
     await f.helpers.insertEvent(f.harness.database, { orgId: cOrg.id, id: cEvent, slug: cEvent, payload: { id: cEvent, slug: cEvent, name: '신규 C 행사', stage: 'LIVE', features: [] }, workspace: f.helpers.emptyWorkspace() });
@@ -235,7 +235,7 @@ async function main() {
     await first.goto(f.baseUrl + '/console/team');
     await first.getByRole('heading', { name: '구성원', exact: true }).waitFor();
     await first.getByRole('tab', { name: '연동·활동' }).click();
-    await first.getByText('미연동 · 새 운영사는 모의 기록만 사용합니다', { exact: true }).waitFor();
+    await first.getByText('미연동 · 새 조직은 모의 기록만 사용합니다', { exact: true }).waitFor();
     check('new-org integration display ignores connected legacy health', await first.getByText('fixture-legacy-global-provider', { exact: false }).count() === 0);
     await capture(first, 'new-org-team-1280');
 
@@ -246,11 +246,11 @@ async function main() {
     const picker = await unselected.newPage();
     picker.on('pageerror', (error) => errors.push(error.message));
     await picker.goto(f.baseUrl + '/login');
-    await picker.getByRole('heading', { name: '작업할 운영사를 선택하세요', exact: true }).waitFor();
+    await picker.getByRole('heading', { name: '작업할 조직을 선택하세요', exact: true }).waitFor();
     await capture(picker, 'authenticated-unselected-picker-390');
     await inspect(picker, 'authenticated-unselected-picker-390');
-    await picker.getByRole('region', { name: '운영사 선택', exact: true }).getByLabel('전환할 운영사', { exact: true }).selectOption(a.organizationId);
-    await picker.getByRole('button', { name: '이 운영사로 이동', exact: true }).click();
+    await picker.getByRole('region', { name: '조직 선택', exact: true }).getByLabel('전환할 조직', { exact: true }).selectOption(a.organizationId);
+    await picker.getByRole('button', { name: '이 조직으로 이동', exact: true }).click();
     await picker.getByRole('heading', { name: '행사', exact: true }).waitFor();
     check('unselected identity explicitly reaches chosen effective-role home', new URL(picker.url()).pathname === '/console');
     await unselected.close();
@@ -280,8 +280,8 @@ async function main() {
     const hashAfter = (await f.harness.database.query('SELECT password_hash FROM accounts WHERE id=$1', [f.manager.id])).rows[0].password_hash;
     check('joining preserves global password and waits for explicit org selection', hashBefore === hashAfter && new URL(invitePage.url()).pathname === invitePath);
     await capture(invitePage, 'invite-accepted-explicit-org-390');
-    await invitePage.getByLabel('전환할 운영사', { exact: true }).selectOption(cOrg.id);
-    await invitePage.getByRole('button', { name: '이 운영사로 이동', exact: true }).click();
+    await invitePage.getByLabel('전환할 조직', { exact: true }).selectOption(cOrg.id);
+    await invitePage.getByRole('button', { name: '이 조직으로 이동', exact: true }).click();
     await invitePage.waitForURL('**/staff');
     await invitePage.getByText('배정된 업무가 없습니다.', { exact: false }).waitFor();
     check('joined C membership uses STAFF empty assignment without permission promise', new URL(invitePage.url()).pathname === '/staff');
@@ -387,9 +387,9 @@ async function main() {
     await existingPage.getByRole('button', { name: '초대 수락', exact: true }).click();
     await existingPage.getByText('초대 수락 결과를 확인하지 못했습니다.').waitFor();
     check('existing invite lost response follows a real membership commit', existingInviteCommit === 201 && await existingPage.getByRole('heading', { name: '초대를 수락했습니다' }).count() === 0);
-    const uncertainMembership = existingPage.getByRole('region', { name: '운영사 선택', exact: true });
-    await uncertainMembership.getByLabel('전환할 운영사', { exact: true }).waitFor();
-    check('existing invite membership is visible directly on the invitation', (await uncertainMembership.getByLabel('전환할 운영사', { exact: true }).locator('option').evaluateAll((options, id) => options.some((option) => option.value === id), cOrg.id)));
+    const uncertainMembership = existingPage.getByRole('region', { name: '조직 선택', exact: true });
+    await uncertainMembership.getByLabel('전환할 조직', { exact: true }).waitFor();
+    check('existing invite membership is visible directly on the invitation', (await uncertainMembership.getByLabel('전환할 조직', { exact: true }).locator('option').evaluateAll((options, id) => options.some((option) => option.value === id), cOrg.id)));
     await existingPage.mouse.move(0, 0);
     // A secondary action keeps the quiet Astryx fill; the point is that it is not the orange primary.
     await existingPage.waitForFunction(() => {
@@ -401,9 +401,9 @@ async function main() {
     await existingPage.unroute('**/api/auth/invitations/*/accept');
     await existingPage.getByRole('button', { name: '같은 초대 다시 수락' }).click();
     await existingPage.getByText('초대 수락 결과를 확인하지 못했습니다.').waitFor();
-    check('existing invite remains unconfirmed after a subsequent consumed-invitation response', await uncertainMembership.getByLabel('전환할 운영사', { exact: true }).isVisible());
-    await uncertainMembership.getByLabel('전환할 운영사', { exact: true }).selectOption(cOrg.id);
-    await uncertainMembership.getByRole('button', { name: '이 운영사로 이동' }).click();
+    check('existing invite remains unconfirmed after a subsequent consumed-invitation response', await uncertainMembership.getByLabel('전환할 조직', { exact: true }).isVisible());
+    await uncertainMembership.getByLabel('전환할 조직', { exact: true }).selectOption(cOrg.id);
+    await uncertainMembership.getByRole('button', { name: '이 조직으로 이동' }).click();
     await existingPage.waitForURL('**/staff');
     check('existing invite allows an explicit switch to the confirmed membership', true);
     await existingContext.close();
@@ -420,29 +420,29 @@ async function main() {
     const memberDrawer = first.locator('[role="group"][aria-label="상세 내용"]:visible').first().locator('xpath=ancestor::*[self::aside or @role="dialog" or @role="complementary"][1]');
     const reset = memberDrawer.getByRole('button', { name: '비밀번호 재설정', exact: true });
     check('known shared account offers no enabled password reset', await reset.count() === 0 || await reset.isDisabled());
-    check('shared account explains the cross-organization restriction before input', /공유|여러 (?:운영사|조직)/.test(await memberDrawer.innerText()) && await first.locator('#reset-password').count() === 0);
+    check('shared account explains the cross-organization restriction before input', /공유|여러 조직/.test(await memberDrawer.innerText()) && await first.locator('#reset-password').count() === 0);
     const refusedReset = await write(ownerCookie, `/api/auth/accounts/${f.manager.id}/password`, { password: 'SyntheticNeverApplied!2026', commandId: crypto.randomUUID() });
     check('shared account API refuses a global password change', refusedReset.status === 403 && refusedReset.json.code === 'SHARED_ACCOUNT_GLOBAL_EFFECT', refusedReset.json);
     check('shared account password hash remains unchanged', (await f.harness.database.query('SELECT password_hash FROM accounts WHERE id=$1', [f.manager.id])).rows[0].password_hash === hashBefore);
     await capture(first, 'shared-password-reset-restricted-upfront-1280');
-    await memberDrawer.getByRole('button', { name: '이 운영사 소속 사용 중지', exact: true }).click();
-    await first.getByRole('button', { name: /소속.*중지.*확인|사용 중지한다|이 운영사 소속만 사용 중지/ }).click();
+    await memberDrawer.getByRole('button', { name: '이 조직 소속 사용 중지', exact: true }).click();
+    await first.getByRole('button', { name: /소속.*중지.*확인|사용 중지한다|이 조직 소속만 사용 중지/ }).click();
     await first.getByText(/사용 중지했습니다/, { exact: false }).first().waitFor();
     const membership = (await f.harness.database.query('SELECT active FROM organization_memberships WHERE org_id=$1 AND account_id=$2', [cOrg.id, f.manager.id])).rows[0];
     check('deactivation changes only C membership, not the global account or A membership', membership.active === false && (await f.harness.database.query('SELECT active FROM accounts WHERE id=$1', [f.manager.id])).rows[0].active === true && (await f.harness.database.query('SELECT active FROM organization_memberships WHERE org_id=$1 AND account_id=$2', [a.organizationId, f.manager.id])).rows[0].active === true);
     const joinedPanel = await openAccount(invitePage);
     await joinedPanel.getByRole('button', { name: '소속 다시 확인', exact: true }).click();
-    await joinedPanel.getByLabel('전환할 운영사', { exact: true }).selectOption(a.organizationId);
+    await joinedPanel.getByLabel('전환할 조직', { exact: true }).selectOption(a.organizationId);
     check('remaining single membership is not automatically selected', (await api(managerSession, '/api/auth/organizations')).json.activeOrganizationId === null && new URL(invitePage.url()).pathname === '/staff');
     await capture(invitePage, 'membership-revoked-explicit-selection-390');
-    await joinedPanel.getByRole('button', { name: '이 운영사로 이동', exact: true }).click();
+    await joinedPanel.getByRole('button', { name: '이 조직으로 이동', exact: true }).click();
     await invitePage.waitForURL('**/console');
     // Synthetic final revocation of the remaining membership proves that an
     // authenticated org-less identity has an honest empty state, not a login loop.
     await f.harness.database.query('UPDATE organization_memberships SET active=false WHERE account_id=$1', [f.manager.id]);
     await invitePage.goto(f.baseUrl + '/login');
-    await invitePage.getByRole('heading', { name: '작업할 운영사를 선택하세요', exact: true }).waitFor();
-    await invitePage.getByText(/활성 운영사 소속이 없습니다/, { exact: false }).first().waitFor();
+    await invitePage.getByRole('heading', { name: '작업할 조직을 선택하세요', exact: true }).waitFor();
+    await invitePage.getByText(/활성 조직 소속이 없습니다/, { exact: false }).first().waitFor();
     const none = await api(managerSession, '/api/auth/me');
     check('zero-membership identity remains authenticated with truthful no-membership state', none.status === 403 && none.json.code === 'NO_ORGANIZATION_MEMBERSHIP' && new URL(invitePage.url()).pathname === '/console');
     await capture(invitePage, 'zero-membership-not-login-loop-390');

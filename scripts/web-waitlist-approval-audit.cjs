@@ -110,7 +110,7 @@ async function main() {
     await page.getByText(/대기자 2명을 참가 확정했습니다/).waitFor();
     const afterCapacityRepair = await read();
     assert.deepEqual(people.slice(2, 4).map(p => afterCapacityRepair.participants.find(item => item.id === p.id).status), ['APPROVED', 'APPROVED']);
-    assert.equal(await page.getByLabel('상태별 보기', { exact: true }).inputValue(), '', 'the waitlist filter is released to show the confirmed participant');
+    assert.equal(await page.getByRole('button', { name: /^대기 명단/ }).getAttribute('aria-pressed') !== 'true', true, 'the waitlist filter is released to show the confirmed participant');
     await page.screenshot({ path: path.join(out, 'confirmed-1280.png'), fullPage: true });
     assert.equal((await request('participant.status', { id: people[5].id, status: 'WAITLIST', expectedStatus: 'APPROVED' })).status, 200);
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}/participants`);

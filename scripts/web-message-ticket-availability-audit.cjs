@@ -31,6 +31,7 @@ let stage = 'setup';
     await openMessageMore(page); // Reopened 2026-11-24 (시안 A): the optional record title sits under 더 보기
     await page.locator('#campaign-title').fill('합성 티켓 안내');
     await page.locator('#campaign-body').fill('입장 안내 {{티켓링크}}');
+    await page.getByLabel('모의 발송으로 기록', { exact: false }).uncheck(); // Reopened 2026-11-24 (owner decision 11): 미연동 기본값은 모의 발송, 이 감사는 실제 요청 경로
     // Reopened 2026-11-23: the review zone is always on screen; the checklist link only moves there.
     await messageStep(page, 3);
     await page.getByRole('heading', { name: '발송 전 검토' }).waitFor();

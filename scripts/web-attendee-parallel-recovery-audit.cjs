@@ -136,7 +136,7 @@ async function main() {
     await e.getByRole('button', { name: '내 티켓 열기' }).click();
     await e.getByRole('button', { name: '다시 시도', exact: true }).click();
     await e.getByRole('img', { name: /합성 참가자 마님의/ }).waitFor();
-    await e.getByText('이 브라우저에서 탭 보관이 차단되어 있습니다.', { exact: false }).waitFor();
+    await e.getByText('이 브라우저에서 티켓 보관이 차단되어 있습니다.', { exact: false }).waitFor(); // Reopened 2026-11-24: the boundary is the browser, not the tab
     assert.equal(interrupted, true);
     const pendingSlug = `pending-guidance-${fixture.suffix}`;
     await fixture.helpers.insertEvent(fixture.harness.database, { id: pendingSlug, slug: pendingSlug, orgId: fixture.helpers.LEGACY_ORG,
@@ -157,8 +157,9 @@ async function main() {
     await pending.getByRole('button', { name: '신청하기', exact: true }).click();
     await pending.getByRole('heading', { name: '내 티켓' }).waitFor();
     await pending.getByText('승인 대기', { exact: true }).first().waitFor();
-    await pending.getByText('이 행사에서는 문자로 티켓을 다시 연결할 수 없어', { exact: false }).waitFor();
-    await pending.getByText('탭을 찾을 수 없다면 행사 주최 측에 문의하세요.', { exact: false }).waitFor();
+    // Reopened 2026-11-24: one guidance line (attendee-guidance.ts) — the boundary is the browser, and the organizer contact replaces the generic ask when published.
+    await pending.getByText('이 브라우저에서는 티켓을 다시 열 수 있습니다.', { exact: false }).first().waitFor();
+    await pending.getByText('행사 주최 측에 문의하세요.', { exact: false }).first().waitFor();
     assert.equal(await pending.getByRole('img', { name: /QR/ }).count(), 0);
     for (const width of [320, 390, 768, 1280]) {
       await pending.setViewportSize({ width, height: 900 });

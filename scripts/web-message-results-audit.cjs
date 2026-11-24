@@ -167,6 +167,7 @@ async function main() {
     await page.locator('#campaign-title').fill('합성 예약');
     await page.locator('#campaign-body').fill('합성 안내');
     await messageStep(page, 3);
+    await page.getByLabel('모의 발송으로 기록', { exact: false }).uncheck(); // Reopened 2026-11-24 (owner decision 11): 미연동 기본값은 모의 발송, 이 감사는 실제 요청 경로
     await (await chooseScheduleDate(page)).fill('2099-01-16T10:00');
     assert.equal(await page.getByRole('radio', { name: '수동 실행', exact: true }).isChecked(), true);
     await page.getByRole('radio', { name: '자동 실행', exact: true }).check();

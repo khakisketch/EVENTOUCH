@@ -689,8 +689,8 @@ async function main() {
     await openRecipientList(page);
     await page.locator('#recipient-clear-all').click();
     await page.goto(base + '/participants?status=PENDING');
-    await page.getByRole('combobox', { name: '상태별 보기', exact: true }).waitFor();
-    check('pending deep link restores filter', await page.getByRole('combobox', { name: '상태별 보기', exact: true }).inputValue() === 'PENDING');
+    await page.getByRole('group', { name: '빠른 상태 보기', exact: true }).getByRole('button', { name: /^승인 대기/ }).waitFor();
+    check('pending deep link restores filter', await page.getByRole('group', { name: '빠른 상태 보기', exact: true }).getByRole('button', { name: /^승인 대기/ }).getAttribute('aria-pressed') === 'true');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => { document.body.tabIndex = -1; document.body.focus(); });
     await page.keyboard.press('Tab');

@@ -101,7 +101,7 @@ async function runOrganizationRoleAudit() {
 
   const ownerId = `audit-owner-${f.suffix}`;
   try {
-    await f.harness.database.query('UPDATE organizations SET name=$2 WHERE id=$1', [f.helpers.LEGACY_ORG, '검증 운영사 R']);
+    await f.harness.database.query('UPDATE organizations SET name=$2 WHERE id=$1', [f.helpers.LEGACY_ORG, '검증 조직 R']);
     const ownerCookie = await f.helpers.sessionCookie(f.harness, ownerId);
     const orgId = f.helpers.LEGACY_ORG;
     // Second owner + worker accounts, all synthetic rows inside the disposable task schema.
@@ -113,7 +113,7 @@ async function runOrganizationRoleAudit() {
     await f.helpers.insertAccount(f.harness.database, { orgId, id: workerId, role: 'MANAGER', name: '검증 운영 구성원', email: `${workerId}@example.test` });
     await f.helpers.insertAccount(f.harness.database, { orgId, id: dormantId, role: 'STAFF', name: '검증 휴면 스태프', email: `${dormantId}@example.test` });
     // Second org makes one account shared, proving per-org scope of every write.
-    const createdB = await write(ownerCookie, '/api/auth/organizations', { name: '검증 운영사 R-B', commandId: crypto.randomUUID() });
+    const createdB = await write(ownerCookie, '/api/auth/organizations', { name: '검증 조직 R-B', commandId: crypto.randomUUID() });
     assert.ok(createdB.status < 300, JSON.stringify(createdB.json));
     const orgB = createdB.json.organization.id;
     await f.harness.database.query(
@@ -188,7 +188,7 @@ async function runOrganizationRoleAudit() {
       // lock region must recover through the product's own restore
       // control (verified as a product feature here); a persistent block
       // fails loudly, never counted as a pass.
-      const lockNotice = page.getByRole('region', { name: '운영사 문맥 변경', exact: true });
+      const lockNotice = page.getByRole('region', { name: '조직 문맥 변경', exact: true });
       if (await lockNotice.count() > 0) {
         await capture(`context-block-before-recovery-${stage}-1280`);
         check(`context lock is honestly shown instead of a silent wrong-org view (${stage})`, true);
@@ -358,7 +358,7 @@ async function runOrganizationRoleAudit() {
     // The actor learns it through the real account-menu refresh, not a direct read.
     const refreshMenu = await openAccountMenu();
     await refreshMenu.getByRole('button', { name: '소속 다시 확인', exact: true }).click();
-    const contextNotice = page.getByRole('region', { name: '운영사 문맥 변경', exact: true });
+    const contextNotice = page.getByRole('region', { name: '조직 문맥 변경', exact: true });
     await contextNotice.waitFor();
     await page.keyboard.press('Escape');
     await refreshMenu.waitFor({ state: 'hidden' });
@@ -378,7 +378,7 @@ async function runOrganizationRoleAudit() {
     const lockedMemberPosts = memberPosts().length;
     const lockedCreatePosts = createPosts().length;
     const gateMenu = await openAccountMenu();
-    const createIntent = gateMenu.getByRole('button', { name: '운영사 추가', exact: true });
+    const createIntent = gateMenu.getByRole('button', { name: '조직 추가', exact: true });
     check('new org intent is gated while uncertain', await createIntent.count() === 0 || await createIntent.isDisabled());
     await page.keyboard.press('Escape');
     await gateMenu.waitFor({ state: 'hidden' });
@@ -434,7 +434,7 @@ async function runOrganizationRoleAudit() {
     // locks until the explicit restore rebinds it. Recover through the
     // product control, then prove a clean reload does NOT bring it back.
     await page.goto(`${f.baseUrl}/console/team`);
-    const rebindNotice = page.getByRole('region', { name: '운영사 문맥 변경', exact: true });
+    const rebindNotice = page.getByRole('region', { name: '조직 문맥 변경', exact: true });
     // The lock renders asynchronously after the guarded reads settle, so a
     // bare count right after goto misses it: wait for either the team
     // screen or the lock, then recover through the product control.
@@ -456,7 +456,7 @@ async function runOrganizationRoleAudit() {
     // team screen, no lock, and no recurrence.
     await page.reload();
     await headingReady();
-    check('clean reload after rebinding shows no lock', await page.getByRole('region', { name: '운영사 문맥 변경', exact: true }).count() === 0);
+    check('clean reload after rebinding shows no lock', await page.getByRole('region', { name: '조직 문맥 변경', exact: true }).count() === 0);
 
     // Owner-only enforcement (confirmed policy: no enabled non-owner path, direct API answers 403).
     const dormantCookie = await f.helpers.sessionCookie(f.harness, dormantId);
@@ -533,9 +533,9 @@ async function runOrganizationRoleAudit() {
     await accountMenuButton.click();
     const menu = page.getByRole('dialog', { name: '운영자 메뉴' });
     await menu.waitFor();
-    await menu.getByRole('button', { name: '운영사 추가', exact: true }).click();
-    const pendingOrgName = `검증 보류 운영사 R-${f.suffix}`.slice(0, 60);
-    const orgNameInput = menu.getByLabel('새 운영사 이름', { exact: true });
+    await menu.getByRole('button', { name: '조직 추가', exact: true }).click();
+    const pendingOrgName = `검증 보류 조직 R-${f.suffix}`.slice(0, 60);
+    const orgNameInput = menu.getByLabel('새 조직 이름', { exact: true });
     await orgNameInput.fill(pendingOrgName);
     let createLost = false;
     const createBodies = [];
@@ -550,7 +550,7 @@ async function runOrganizationRoleAudit() {
         await route.fulfill({ status: 502, json: { error: '합성 등록 응답 유실' } });
       } else await route.continue();
     });
-    await menu.getByRole('button', { name: '운영사 등록', exact: true }).click();
+    await menu.getByRole('button', { name: '조직 등록', exact: true }).click();
     await menu.getByRole('button', { name: '같은 등록 요청 다시 확인', exact: true }).waitFor();
     check('unknown org creation freezes its original name', await orgNameInput.isDisabled());
     check('create-unknown explains reconnect-then-retry', await menu.getByText(/등록 결과를 확인하지 못했습니다/, { exact: false }).count() > 0);
@@ -572,9 +572,9 @@ async function runOrganizationRoleAudit() {
     await menu.waitFor();
     check('reopened menu retains the frozen create form',
       await menu.getByRole('button', { name: '같은 등록 요청 다시 확인', exact: true }).count() > 0
-      && await menu.getByLabel('새 운영사 이름', { exact: true }).inputValue() === pendingOrgName);
+      && await menu.getByLabel('새 조직 이름', { exact: true }).inputValue() === pendingOrgName);
     await menu.getByRole('button', { name: '같은 등록 요청 다시 확인', exact: true }).click();
-    await menu.getByText(/운영사를 추가했습니다/, { exact: false }).first().waitFor();
+    await menu.getByText(/조직을 추가했습니다/, { exact: false }).first().waitFor();
     check('create retry replays the identical name and command id', createBodies.length === 2
       && JSON.stringify(createBodies[0]) === JSON.stringify(createBodies[1])
       && createBodies[0].commandId === createBodies[1].commandId, createBodies);

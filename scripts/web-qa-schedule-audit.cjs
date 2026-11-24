@@ -307,6 +307,8 @@ const snapshot = async (page, name) => {
     await messageStep(manager, 3);
     // Reopened 2026-11-23: the 예약 details is the 보낼 때 radio zone; pick 날짜·시각 지정 first.
     await (await chooseScheduleDate(manager)).fill('2099-01-16T10:00');
+    // Reopened 2026-11-24 (owner decision 11): 미연동이면 모의 발송이 기본 켜짐이고, 모의 발송에는 실행 방식 선택이 없다.
+    await manager.getByLabel('모의 발송으로 기록', { exact: false }).uncheck();
     const manual = manager.getByRole('radio', { name: '수동 실행', exact: true });
     const automatic = manager.getByRole('radio', { name: '자동 실행', exact: true });
     assert.equal(await manual.isChecked(), true);

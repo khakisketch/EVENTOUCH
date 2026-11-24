@@ -938,7 +938,7 @@ async function main() {
           await page.keyboard.press('Enter');
           await page.waitForURL((url) => url.pathname === `/console/events/${eventId}/participants` && url.searchParams.get('status') === 'PENDING');
           await assertConsoleScreen(page, SCREENS.find((item) => item.key === 'participants'), eventId, eventName);
-          if (await page.getByLabel('상태별 보기', { exact: true }).inputValue() !== 'PENDING') throw new Error('card queue did not apply its pending filter');
+          if (await page.getByRole('group', { name: '빠른 상태 보기', exact: true }).getByRole('button', { name: /^승인 대기/ }).getAttribute('aria-pressed') !== 'true') throw new Error('card queue did not apply its pending filter');
           await go('events');
           // A2: duplication lives in the create dialog, not on cards. Open
           // it, switch to copy mode, take the stage-labeled source, then
@@ -1055,14 +1055,14 @@ async function main() {
           await go('participants');
           const toggle = page.locator('#roster-filter-toggle');
           if (await toggle.getAttribute('aria-expanded') !== 'false') throw new Error('clean roster filters not collapsed');
-          if (await page.getByLabel('상태별 보기', { exact: true }).isVisible()) throw new Error('advanced filters consume clean first screen');
+          if (await page.getByLabel('출입 상태별 보기', { exact: true }).isVisible()) throw new Error('advanced filters consume clean first screen');
           const first = await page.locator('main li').first().boundingBox();
           if (!first || first.y > 600) throw new Error(`roster starts too late: ${first?.y}px`);
           await shot('participants');
           const selected = page.getByRole('checkbox', { name: '통합 확정 미입장 선택' });
           await selected.check();
           await toggle.click();
-          await page.getByLabel('상태별 보기', { exact: true }).selectOption('PENDING');
+          await page.getByLabel('출입 상태별 보기', { exact: true }).selectOption('INSIDE');
           await toggle.click();
           if (!(await toggle.innerText()).includes('1개 적용 중')) throw new Error('collapsed active filter hidden');
           await toggle.click();
@@ -1072,8 +1072,11 @@ async function main() {
           const download = page.waitForEvent('download');
           await page.getByRole('button', { name: /CSV 내보내기/ }).click();
           if (!(await download).suggestedFilename().endsWith('.csv')) throw new Error('CSV no longer downloads');
+          // 2026-11-24: 상태는 탭이 맡는다(필터 안의 상태 선택은 없다). 패널을 여는 딥링크는 출입·그룹·티켓 조건이다.
+          await go('participants', '?attendance=NOT_ENTERED');
+          if (await toggle.getAttribute('aria-expanded') !== 'true' || !await page.getByLabel('출입 상태별 보기', { exact: true }).isVisible()) throw new Error('attendance deep link does not disclose its filter');
           await go('participants', '?status=PENDING');
-          if (await toggle.getAttribute('aria-expanded') !== 'true' || !await page.getByLabel('상태별 보기', { exact: true }).isVisible()) throw new Error('pending deep link does not disclose its filter');
+          if (await page.getByRole('group', { name: '빠른 상태 보기', exact: true }).getByRole('button', { name: /^승인 대기/ }).getAttribute('aria-pressed') !== 'true') throw new Error('pending deep link does not press its status tab');
           await shot('participants-filtered');
         });
         await check(`phone/section-destinations@${width}`, async () => {
@@ -1177,10 +1180,10 @@ async function main() {
         }
         // The visible filters carry the deep link, and the entered subset
         // is genuinely absent while a never-entered name is present.
-        const statusValue = await page.getByLabel('상태별 보기', { exact: true }).inputValue();
+        const statusPressed = await page.getByRole('group', { name: '빠른 상태 보기', exact: true }).getByRole('button', { name: /^확정자 중 미입장/ }).getAttribute('aria-pressed');
         const attendanceValue = await page.getByLabel('출입 상태별 보기', { exact: true }).inputValue();
-        if (statusValue !== 'APPROVED' || attendanceValue !== 'NOT_ENTERED') {
-          throw new Error(`filters show status=${statusValue} attendance=${attendanceValue}`);
+        if (statusPressed !== 'true' || attendanceValue !== 'NOT_ENTERED') {
+          throw new Error(`filters show not-entered tab pressed=${statusPressed} attendance=${attendanceValue}`);
         }
         if (await page.getByText('통합 확정 입장', { exact: false }).count()) {
           throw new Error('entered person leaks into the not-entered subset');
@@ -1190,7 +1193,7 @@ async function main() {
         }
         await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
         await waitForMarker(page, SCREENS.find((screen) => screen.key === 'participants').marker);
-        if ((await page.getByLabel('상태별 보기', { exact: true }).inputValue()) !== 'APPROVED' ||
+        if ((await page.getByRole('group', { name: '빠른 상태 보기', exact: true }).getByRole('button', { name: /^확정자 중 미입장/ }).getAttribute('aria-pressed')) !== 'true' ||
           (await page.getByLabel('출입 상태별 보기', { exact: true }).inputValue()) !== 'NOT_ENTERED') {
           throw new Error('reload did not restore the shared deep-link filters');
         }
@@ -1204,7 +1207,7 @@ async function main() {
           throw new Error('selection did not survive the cross-filter excursion');
         }
         // Reset through the visible filters restores the full list and URL.
-        await page.getByLabel('상태별 보기', { exact: true }).selectOption('');
+        await page.getByRole('group', { name: '빠른 상태 보기', exact: true }).getByRole('button', { name: /^전체/ }).click();
         await page.getByLabel('출입 상태별 보기', { exact: true }).selectOption('');
         const resetCount = (await page.locator('p[role="status"]').filter({ hasText: /전체 \d+명/ }).first().innerText()).replace(/\s+/g, ' ');
         if (!resetCount.includes(`전체 ${people.length}명`) || resetCount.includes('/')) {

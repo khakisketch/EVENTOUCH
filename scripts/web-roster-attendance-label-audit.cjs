@@ -80,7 +80,7 @@ async function main() {
     const quick = page.getByRole('button', { name: before ? /^미입장 ·/ : /^확정자 중 미입장 ·/ });
     await quick.focus();
     await page.keyboard.press('Enter');
-    assert.equal(await page.getByLabel('상태별 보기', { exact: true }).inputValue(), 'APPROVED');
+    assert.equal(await quick.getAttribute('aria-pressed'), 'true');
     assert.equal(await page.getByLabel('출입 상태별 보기', { exact: true }).inputValue(), 'NOT_ENTERED');
     assert.equal(await desktopRow('검증 대기').count(), 0);
     assert.equal(await desktopRow('검증 취소').count(), 0);
@@ -93,7 +93,7 @@ async function main() {
     const attendance = page.getByLabel('출입 상태별 보기', { exact: true });
     assert.equal((await attendance.locator('option[value="NOT_ENTERED"]').innerText()).trim(), before ? '미입장' : '입장 기록 없음');
     await attendance.selectOption('NOT_ENTERED');
-    assert.equal(await page.getByLabel('상태별 보기', { exact: true }).inputValue(), '');
+    assert.equal(await page.getByRole('button', { name: /^전체 ·/ }).getAttribute('aria-pressed'), 'true');
     assert.equal(await desktopRow('검증 대기').count(), 1);
     assert.equal(await desktopRow('검증 취소').count(), 1);
     assert.equal(await desktopRow('검증 퇴장 후 취소').count(), 0);

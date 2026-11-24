@@ -112,6 +112,7 @@ async function main() {
     const publics = [
       ['landing', '/', '#home-title'], ['login', '/login', '#login-email'],
       ['recover', '/recover', '#recover-email'],
+      ['help', '/help', 'main h1'], ['terms', '/terms', 'main h1'], ['privacy', '/privacy', 'main h1'],
       ['event', `/event/${f.slug}`, 'main h1'], ['attendee', `/event/${f.slug}/home`, 'nav[aria-label="참가 메뉴"]'],
       ['register', `/event/${f.slug}/register`, '#field-name'],
       ['recover-unavailable', `/event/${f.slug}/ticket/recover`, '.verification-unavailable'],
@@ -197,7 +198,7 @@ async function main() {
       for (const role of ['owner', 'public', 'staff']) {
         const context = await contextFor(role, width);
         const page = await context.newPage(); observe(page);
-        const routes = role === 'owner' ? [...CONSOLE, ['account-email', '/account/email', '.account-email-page h1']] : role === 'public' ? publics : [
+        const routes = role === 'owner' ? [...CONSOLE, ['account-email', '/account/email', '.account-email-page h1'], ['account-password', '/account/password', '.account-password-page h1']] : role === 'public' ? publics : [
           ['staff', '/staff', '.staff-assignment-list'], ['staff-work', `/staff/events/${f.eventId}`, '#staff-desk'],
         ];
         for (const [name, route, marker] of routes) {
@@ -220,7 +221,12 @@ async function main() {
             await account.locator('#verify-current-password').waitFor({ state: 'visible' });
             check(`account-email@${width}: signed-in account surface`, await account.getByRole('link', { name: '로그인으로 이동', exact: true }).count() === 0 && await account.getByRole('alert').count() === 0 && await account.locator('#verify-current-password').isVisible());
           }
-          if (role === 'owner' && name !== 'account-email') {
+          if (name === 'account-password') {
+            const account = page.locator('.account-password-page');
+            await account.locator('#pw-current').waitFor({ state: 'visible' });
+            check(`account-password@${width}: signed-in password form`, await account.getByRole('link', { name: '로그인으로 이동', exact: true }).count() === 0 && await account.locator('#pw-new').isVisible() && await account.locator('#pw-confirm').isVisible());
+          }
+          if (role === 'owner' && name !== 'account-email' && name !== 'account-password') {
             if (name === 'draws') {
               // 무대 ID는 선택 종류마다 달라지므로 이름 있는 영역과 별도 선택기를 확인한다.
               const picker = page.getByRole('heading', { name: '무대 선택', exact: true }).locator('xpath=following-sibling::ul[1]');

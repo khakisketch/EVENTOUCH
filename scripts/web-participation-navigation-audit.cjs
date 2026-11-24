@@ -189,7 +189,18 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
       await page.setViewportSize({ width: 1280, height: 960 });
       check('actual initial page count is 12 of 15', await page.getByRole('button', { name: '더 보기 (3)' }).count() === 1);
       const preparation = page.getByRole('group', { name: '행사 준비', exact: true });
-      check('preparation distinguishes guidance from participation content', await preparation.getByRole('link', { name: '공지·안내', exact: true }).count() === 1 && await preparation.getByRole('link', { name: '참여 이벤트', exact: true }).count() === 1);
+      // Reopened 2026-11-24: the rail no longer lists 공지·안내 and 참여 이벤트 (2026-11-21 merged them into one 참가자 화면 item);
+      // the path to each is the hub's tab row on the 참가자 화면 pages, and the two tabs keep separate destinations.
+      check('preparation holds one 참가자 화면 item instead of separate guidance and participation links',
+        await preparation.getByRole('link', { name: /^참가자 화면/ }).count() === 1 &&
+        await preparation.getByRole('link', { name: '공지·안내', exact: true }).count() === 0 &&
+        await preparation.getByRole('link', { name: '참여 이벤트', exact: true }).count() === 0);
+      const hubTabs = page.getByRole('navigation', { name: '참가자 화면', exact: true });
+      const guidanceTab = hubTabs.getByRole('link', { name: /^공지·안내/ });
+      const participationTab = hubTabs.getByRole('link', { name: /^참여 이벤트/ });
+      check('the 참가자 화면 hub still tells guidance from participation content',
+        await guidanceTab.count() === 1 && await participationTab.count() === 1 &&
+        (await guidanceTab.getAttribute('href')).endsWith('/content') && (await participationTab.getAttribute('href')).endsWith('/programs'));
       check('onsite group leads with operational destinations', await page.getByRole('group', { name: '당일', exact: true }).getByRole('link', { name: '참여 이벤트', exact: true }).count() === 0);
       check('old participation title is absent', await page.getByRole('heading', { name: '참여 프로그램', exact: true }).count() === 0);
       phase = 'home work queue';
@@ -234,11 +245,11 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
       await rosterLinks.first().press('Enter');
       await page.getByLabel('출입 상태별 보기').waitFor();
       check('the first roster link opens the confirmed non-entry filter', await page.getByLabel('출입 상태별 보기').inputValue() === 'NOT_ENTERED' &&
-        await page.getByLabel('상태별 보기', { exact: true }).inputValue() === 'APPROVED');
+        await page.getByRole('group', { name: '빠른 상태 보기', exact: true }).getByRole('button', { name: /^확정자 중 미입장/ }).getAttribute('aria-pressed') === 'true');
       await page.goto(base, { waitUntil: 'networkidle' });
       await page.getByRole('link', { name: '승인 대기 처리', exact: true }).click();
-      await page.getByLabel('상태별 보기', { exact: true }).waitFor();
-      check('the lead action opens the pending roster without writing', await page.getByLabel('상태별 보기', { exact: true }).inputValue() === 'PENDING' && writes.length === 0);
+      await page.getByRole('group', { name: '빠른 상태 보기', exact: true }).getByRole('button', { name: /^승인 대기/ }).waitFor();
+      check('the lead action opens the pending roster without writing', await page.getByRole('group', { name: '빠른 상태 보기', exact: true }).getByRole('button', { name: /^승인 대기/ }).getAttribute('aria-pressed') === 'true' && writes.length === 0);
       await page.goto(base, { waitUntil: 'networkidle' });
       phase = 'home to QA handoff';
       await qaTask().getByRole('link', { name: '질문 승인 검토' }).click();
