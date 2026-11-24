@@ -74,5 +74,5 @@ test("ending a stage protects participant work and explains the report capture b
   assert.match(settings, /nextStage === "ENDED" \? \(/u);
   assert.match(settings, /승인 대기 등 필요한 참가자 처리는 종료 전에 마치세요/u);
   assert.match(settings, /결과 보고서는 생성 시점 값으로 고정됩니다/u);
-  assert.match(settings, /종료 뒤 마감 집계를 생성·검토하고 동결할 수 있으며/u);
+  assert.match(settings, /종료 뒤 마감 집계를 생성·검토하고 확정\(수정 잠금\)할 수 있으며/u);
 });

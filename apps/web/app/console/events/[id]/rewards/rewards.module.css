@@ -81,6 +81,9 @@
 .rowLine { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); color: var(--muted); font-size: var(--text-sm); }
 .rowLine strong { color: var(--ink); font-weight: var(--fw-strong); }
 .method { display: inline-flex; align-items: center; gap: var(--s1); }
+/* The code stays on one line: it shortens with an ellipsis (full text in the title and the row's details) instead of breaking in two. */
+.codeLine { max-width: 100%; min-width: 0; }
+.codeText { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .method svg { width: var(--s4); height: var(--s4); fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 
 .rowBody {

@@ -167,7 +167,7 @@ test("frozen detail links to the existing settings stage anchor with exact remai
   const workspace = read("console/events/[id]/reports/ReportsWorkspace.tsx");
   const flow = read("console/events/[id]/reports/EventCloseFlow.tsx");
   assert.match(flow, /\/settings#settings-stage/);
-  assert.match(workspace, /보관 전제 · 조회 시점/);
+  assert.match(workspace, /보관 조건 · 조회 시점/);
   assert.match(flow, /새로고침 시 갱신됩니다/);
   assert.match(workspace, /loadedAt \? capturedLabel\(loadedAt\)/);
   assert.match(flow, /참가 접수 열림 — 보관 전에 접수 닫기가 필요합니다/);

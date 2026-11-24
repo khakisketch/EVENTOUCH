@@ -399,6 +399,9 @@ export function LiveSidePane({ model, eventId, selected, cues, canRewards, locke
   const nextModule = next ? model.modules.find((module) => module.status === "DRAFT" && titlesMatch(next.title, module.title)) : undefined;
   const waiting = model.modules.filter((module) => module.status === "DRAFT" && module.id !== nextModule?.id).slice(0, 4);
   const tasks = model.participation.tasks;
+  // Handing over a prize cannot be undone and the next person's row moves up
+  // into the same spot, so the row asks first, in place, as the 경품 지급 screen does.
+  const [pendingRewardId, setPendingRewardId] = useState<string | null>(null);
 
   return (
     <aside className={`${styles.pane} ${styles.paneSide}`} aria-label="실시간 현황" data-live-pane="side">
@@ -472,10 +475,22 @@ export function LiveSidePane({ model, eventId, selected, cues, canRewards, locke
           {model.rewardsWaiting.length ? (
             <ul className={styles.todo} data-live-rewards>
               {model.rewardsWaiting.slice(0, 5).map((reward) => (
-                <li key={reward.id}>
-                  <span>{reward.who}<small>{reward.name}</small></span>
+                <li key={reward.id} className={styles.rewardItem}>
+                  <span className={styles.rewardWho}>{reward.who}<small>{reward.name}</small></span>
                   {canRewards ? (
-                    <ProductButton type="button" variant="secondary" disabled={locked} aria-label={`${reward.who} ${reward.name} 지급`} onClick={() => onFulfill(reward)}>지급</ProductButton>
+                    <ProductButton type="button" variant="secondary" className={styles.rewardAct} disabled={locked} aria-label={`${reward.who} ${reward.name} 지급 처리`} onClick={() => setPendingRewardId(reward.id)}>지급 처리</ProductButton>
+                  ) : null}
+                  {canRewards && pendingRewardId === reward.id ? (
+                    <div className={styles.rewardConfirm}>
+                      <ConsoleConfirm
+                        summary={`${reward.who}님께 ${reward.name}을(를) 지급할까요? 처리한 뒤에는 취소할 수 없습니다.`}
+                        confirmLabel="지급 처리하기"
+                        cancelLabel="돌아가기"
+                        busy={locked}
+                        onConfirm={() => { setPendingRewardId(null); onFulfill(reward); }}
+                        onCancel={() => setPendingRewardId(null)}
+                      />
+                    </div>
                   ) : null}
                 </li>
               ))}

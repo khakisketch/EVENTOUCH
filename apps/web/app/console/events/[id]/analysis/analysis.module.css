@@ -193,7 +193,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
   gap: var(--s1) var(--s4);
+  margin-bottom: var(--s2);
 }
 
 .legend {

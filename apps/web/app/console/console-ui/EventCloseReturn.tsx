@@ -44,7 +44,7 @@ export default function EventCloseReturn({ eventId, pageId, snapshot, noticeStat
       <div className={styles.closeReturn} data-close-progress>
         <div><strong>{progress ? `마감 ${progress.position}/7 · ${progress.label}${progress.complete ? progress.position === 6 ? " · 안내 기록 확인" : " · 완료" : ""}` : "행사 마감 경로"}</strong>
           <p>{progress?.detail || "현재 화면의 상태가 준비되면 다음 단계를 표시합니다."}</p>
-          {progress?.warnings.length ? <p role="note">미충족 전제: {progress.warnings.join(" · ")}. 이동은 막지 않습니다.</p> : null}
+          {progress?.warnings.length ? <p role="note">미충족 조건: {progress.warnings.join(" · ")}. 이동은 막지 않습니다.</p> : null}
         </div>
         {archiveControl && progress && snapshot?.archiveAvailable && [6, 7].includes(progress.position) && snapshot.stage !== "ARCHIVED" ? archiveControl : progress?.next ? progress.next.localStage ? (
           <a ref={nextRef} className="button button-secondary" href={progress.next.href} data-close-linear-next onClick={() => {

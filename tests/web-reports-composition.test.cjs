@@ -138,7 +138,10 @@ test('exportPptx dynamically imports pptxgenjs, fetches each approved photo, and
   assert.match(workspace, /async function exportPptx\(report: Report\)/u);
   assert.match(workspace, /const PptxGenJS = \(await import\("pptxgenjs"\)\)\.default;/u);
   assert.match(workspace, /pres\.write\(\{ outputType: "blob" \}\)/u);
-  assert.match(workspace, /`EVENTOUCH_report_v\$\{report\.version\}\.pptx`/u);
+  // Reopened 2026-11-24 (R9): the file carries the event name, "{행사명}_결과보고서_v{n}.pptx".
+  assert.match(workspace, /_결과보고서_v\$\{version\}\.\$\{extension\}/u);
+  assert.match(workspace, /anchor\.download = reportFileName\(text\(snapshot\?\.event\?\.name\), report\.version, "pptx"\)/u);
+  assert.match(workspace, /PPTX를 내려받았습니다 · \$\{slideCount\}장/u, 'the export says how many slides were made and which empty sections were left out');
   assert.match(workspace, /consoleFetch\(`\/api\/events\/\$\{encodeURIComponent\(eventId\)\}\/files\/\$\{encodeURIComponent\(fileId\)\}`, \{ cache: "no-store" \}\)/u);
   assert.match(workspace, /\} catch \{\s*\/\/ Skip only this photo; the rest of the export still proceeds\./u);
 });
@@ -166,7 +169,7 @@ test('the close map keeps a one-line status plus the full 7-step checklist, fold
   assert.match(closeFlow, /className=\{styles\.statusDot\}/u);
   assert.match(closeFlow, /마감 \$\{stepNumber\}\/7/u);
   assert.match(closeFlow, /<details className=\{styles\.closeDetails\}>/u);
-  assert.match(closeFlow, /전체 마감 단계와 전제 확인/u);
+  assert.match(closeFlow, /전체 마감 단계와 조건 확인/u);
   // All seven checklist items and their links are unchanged.
   assert.match(closeFlow, /승인 대기 \{inputs\.pending\}명 — 참가 확정과 구분되며/u);
   assert.match(closeFlow, /보고서 생성·검토·공유 완료 기록 — 초안도 집계가 고정됩니다/u);

@@ -214,6 +214,8 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
   const photoRevealRef = useRef<number | null>(null);
   const [jobs, setJobs] = useState<UploadJob[]>([]);
   const [queueBusy, setQueueBusy] = useState(false);
+  // How many photos the running upload started with, for the "n / total" progress line.
+  const [runTotal, setRunTotal] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [busyPhotoId, setBusyPhotoId] = useState<string | null>(null);
@@ -594,6 +596,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
     if (queueRunningRef.current || writeLocked) return;
     const selectedIds = new Set(jobsRef.current.filter((job) => job.status === "selected").map((job) => job.id));
     if (!selectedIds.size) return;
+    setRunTotal(selectedIds.size);
     commitJobs(jobsRef.current.map((job) => selectedIds.has(job.id)
       ? { ...job, status: "queued", error: null }
       : job));
@@ -766,6 +769,10 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
     if (next) setViewerId(next.id);
   }
   const hasUnresolvedJobs = historyJobs.some((job) => job.status !== "recorded");
+  const activeJobs = jobs.filter((job) => ["queued", "uploading", "bytes-uploaded", "recording"].includes(job.status)).length;
+  // The list is named after what it holds ("현장 사진 3장"), not after the process that made it.
+  const historySections = [...new Set(historyJobs.map((job) => job.section))];
+  const historySummary = `${historySections.length === 1 ? `${sectionLabel(historySections[0])} 사진` : "올린 사진"} ${historyJobs.length}장${hasUnresolvedJobs ? " · 확인 필요" : ""}`;
 
   return (
     <ConsolePage
@@ -774,7 +781,8 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
       eventName={state.eventName}
       meta={state.eventMeta}
       headerActions={writeLocked ? undefined : (
-        <ProductButton type="button" variant="primary" disabled={queueBusy} aria-describedby="evidence-photo-file-guidance" onClick={() => fileInputRef.current?.click()}>사진 올리기</ProductButton>
+        // 선택(고르기)과 올리기(저장)를 다른 말로 쓴다. 고른 사진이 있으면 주 버튼은 아래의 "올리기"이고 여기는 보조다.
+        <ProductButton type="button" variant={stagedJobs.length ? "secondary" : "primary"} disabled={queueBusy} aria-describedby="evidence-photo-file-guidance" onClick={() => fileInputRef.current?.click()}>사진 선택</ProductButton>
       )}
       feedback={
         <>
@@ -865,7 +873,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
           disabled={queueBusy || writeLocked}
           tabIndex={-1}
           aria-hidden="true"
-          // The visible 사진 올리기 / 사진 추가 buttons are the keyboard entry
+          // The visible 사진 선택 / 사진 추가 buttons are the keyboard entry
           // points; this input stays programmatic-only by design. The label
           // keeps it named for assistive tech instead of labelless.
           aria-label="증빙 사진 파일 선택 (PNG, JPG, WebP)"
@@ -926,15 +934,19 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
               </div>
             ))}
 
-            <div className={styles.previewActions}>
-              <p className={styles.guidance}>업로드 버튼을 누르기 전까지 파일은 행사에 저장되지 않습니다.</p>
+            <div className={styles.previewActions} role="group" aria-label="사진 올리기">
+              <p className={styles.guidance} role={queueBusy ? "status" : undefined}>
+                {queueBusy
+                  ? `${selectedLabel} 구간에 올리는 중 · ${Math.max(0, runTotal - activeJobs)} / ${runTotal}장`
+                  : `${selectedJobs.length}장을 고르셨습니다. 올리기를 누르기 전까지 행사에 저장되지 않습니다.`}
+              </p>
               <ProductButton
                 type="button"
                 variant="primary"
                 disabled={queueBusy || selectedJobs.length === 0}
                 onClick={uploadSelectedJobs}
               >
-                {queueBusy ? "사진 올리는 중…" : `선택한 사진 올리기 (${selectedJobs.length}장)`}
+                {queueBusy ? "올리는 중…" : `${selectedJobs.length}장 올리기`}
               </ProductButton>
             </div>
           </section>
@@ -942,7 +954,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
 
         {historyJobs.length ? (
           <details className={styles.jobDisclosure} open={hasUnresolvedJobs}>
-            <summary>업로드 처리 내역 · {historyJobs.length}개</summary>
+            <summary>{historySummary}</summary>
             <div className={styles.jobArea} aria-labelledby="evidence-upload-history-title">
               <div className={styles.jobHeading}>
                 <h3 id="evidence-upload-history-title">파일별 처리 상태</h3>
@@ -970,7 +982,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
                           </p>
                         ) : null}
                         {job.status === "failed-upload" ? (
-                          <p className={styles.guidance}>응답이 유실됐을 수 있습니다. 다시 시도해도 같은 파일과 업로드 요청 ID를 사용합니다.</p>
+                          <p className={styles.guidance}>응답을 받지 못했습니다. 이미 올라갔을 수 있어도 다시 시도하면 같은 사진이 두 번 저장되지 않습니다.</p>
                         ) : null}
                       </div>
                       {job.status === "failed-upload" || job.status === "failed-record" ? (
@@ -1013,7 +1025,7 @@ export default function EvidencePhotosWorkspace({ eventId }: { eventId: string }
         ) : (
           <ConsoleEmptyState
             title="이 구간에는 아직 등록된 사진이 없습니다."
-            description={writeLocked ? undefined : "‘사진 올리기’로 첫 사진을 올리세요."}
+            description={writeLocked ? undefined : "‘사진 선택’으로 사진을 고른 뒤 올리세요."}
           />
         )}
       </div>

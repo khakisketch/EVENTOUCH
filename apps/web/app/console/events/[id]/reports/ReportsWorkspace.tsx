@@ -107,6 +107,13 @@ type ReportFailure = { message: string; field?: string; code?: string; attendanc
 type ReportAttendance = Pick<Ready["metrics"], "total" | "pending" | "approved" | "checked" | "inside" | "attendanceReview" | "cancellationReview">;
 type ReportAttempt = { eventId: string; command: string; payload: Record<string, unknown>; fingerprint: string; commandId: string; successMessage: string; fromDialog: boolean; uncertain: boolean };
 
+// Download names carry the event: "행사명_결과보고서_v2.pptx". Characters a file
+// system refuses (and runs of spaces) are dropped; an empty name falls back to the product.
+function reportFileName(eventName: string, version: number, extension: "pptx"): string {
+  const safe = (eventName || "").replace(/[\\/:*?"<>|\u0000-\u001f]/gu, " ").replace(/\s+/gu, " ").trim().slice(0, 60);
+  return `${safe || "EVENTOUCH"}_결과보고서_v${version}.${extension}`;
+}
+
 const SECTION_LABELS: Array<{ id: string; label: string }> = [
   { id: "overview", label: "운영 요약" },
   { id: "attendance", label: "참가·입장" },
@@ -377,7 +384,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
   // 보관된 행사는 서버가 모든 쓰기를 거부하므로(409) 쓰기 affordance를
   // 잠그고 읽기·내보내기(내용 보기·JSON 저장·인쇄)만 둡니다.
   // 보고서 작성·게시(report.*)는 결과 쓰기 권한이 필요하며, 서버가 매번 다시
-  // 확인합니다. 읽기와 마감 지도·전제 확인은 구성원 자격이면 열립니다.
+  // 확인합니다. 읽기와 마감 단계·조건 확인은 구성원 자격이면 열립니다.
   const reportCapability = state.kind === "ready"
     ? { role: state.role, userId: state.userId, memberships: state.memberships, eventId }
     : null;
@@ -645,6 +652,13 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
     window.dispatchEvent(new HashChangeEvent("hashchange"));
   }
 
+  function openReportEdit(report: Report) {
+    setEditReport(report);
+    setFailure(null);
+    dialogUnresolvedRef.current = false;
+    setCreateOpen(true);
+  }
+
   useEffect(() => {
     const readSelection = () => setCloseReportId(new URLSearchParams(window.location.search).get("closeReport"));
     readSelection();
@@ -805,13 +819,17 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         dialogUnresolvedRef.current = false;
       }
       if (command === "report.publish" && payload.id === closeReportId) closePublishedFocusRef.current = true;
-      if (command === "report.create" && closeCreateRef.current) {
-        setCloseReportId(data.report.id);
-        const url = new URL(window.location.href);
-        url.searchParams.set("closeReport", data.report.id);
-        window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+      if (command === "report.create") {
+        // The new report opens at once, so the operator sees what was made
+        // instead of hunting for it in the switcher.
+        if (closeCreateRef.current) {
+          setCloseReportId(data.report.id);
+          const url = new URL(window.location.href);
+          url.searchParams.set("closeReport", data.report.id);
+          window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+          closeCreateRef.current = false;
+        }
         openReport(data.report.id);
-        closeCreateRef.current = false;
       }
       setNotice(successMessage);
       setReloadTick((tick) => tick + 1);
@@ -861,13 +879,15 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         setPendingReport(null);
         dialogUnresolvedRef.current = false;
         if (attempt.command === "report.publish" && attempt.payload.id === closeReportId) closePublishedFocusRef.current = true;
-        if (attempt.command === "report.create" && closeCreateRef.current) {
-          setCloseReportId(attempt.commandId);
-          const url = new URL(window.location.href);
-          url.searchParams.set("closeReport", attempt.commandId);
-          window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+        if (attempt.command === "report.create") {
+          if (closeCreateRef.current) {
+            setCloseReportId(attempt.commandId);
+            const url = new URL(window.location.href);
+            url.searchParams.set("closeReport", attempt.commandId);
+            window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+            closeCreateRef.current = false;
+          }
           openReport(attempt.commandId);
-          closeCreateRef.current = false;
         }
         setNotice("보고서 처리가 서버에 반영된 것을 확인했습니다. 최신 내용을 확인하세요.");
         setReloadTick((tick) => tick + 1);
@@ -949,6 +969,8 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
     clone.id = "eventouch-report-print";
     clone.dataset.layout = printLayout;
     clone.querySelectorAll("[id]").forEach((node) => node.removeAttribute("id"));
+    // On-screen guidance (an empty-summary prompt and its button) never belongs on paper.
+    clone.querySelectorAll("[data-print-omit]").forEach((node) => node.remove());
     const photos = Array.from(clone.querySelectorAll("img"));
     const retryKey = printStatus === "failed" ? String(Date.now()) : null;
     for (const photo of photos) {
@@ -1049,6 +1071,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
     if (pptxBusy) return;
     setPptxBusy(true);
     setFailure(null);
+    setNotice(null);
     try {
       const PptxGenJS = (await import("pptxgenjs")).default;
       const pres = new PptxGenJS();
@@ -1062,7 +1085,12 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
       const eventFacts = [text(snapshot?.event?.name), text(snapshot?.event?.date), text(snapshot?.event?.client), text(snapshot?.event?.venue)]
         .filter(Boolean).join(" · ");
 
+      // Sections the report asked for that had nothing to draw are named afterwards,
+      // so a shorter deck does not look like a failed export.
+      let slideCount = 0;
+      const omitted: string[] = [];
       const cover = pres.addSlide();
+      slideCount += 1;
       cover.background = { color: "1E2026" };
       cover.addText("EVENTOUCH · 결과 보고서", { x: 0.6, y: 0.9, w: 8.8, h: 0.5, fontSize: 14, bold: true, color: "EA552E", fontFace: FONT });
       cover.addText(report.title || "결과 보고서", { x: 0.6, y: 1.5, w: 8.8, h: 1.4, fontSize: 36, bold: true, color: "FFFFFF", fontFace: FONT });
@@ -1074,6 +1102,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
       );
 
       const summarySlide = pres.addSlide();
+      slideCount += 1;
       summarySlide.addText("핵심 숫자", { x: 0.5, y: 0.4, w: 9, h: 0.5, fontSize: 22, bold: true, color: "1E2026", fontFace: FONT });
       if (report.summary) summarySlide.addText(report.summary, { x: 0.5, y: 1.0, w: 9, h: 0.7, fontSize: 13, color: "61656C", fontFace: FONT });
       if (metrics) {
@@ -1094,8 +1123,10 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
       }
 
       const programs = snapshotRecords(snapshot?.programs).items;
+      if (report.sections.includes("programs") && !programs?.length) omitted.push("프로그램·부스");
       if (report.sections.includes("programs") && programs?.length) {
         const slide = pres.addSlide();
+        slideCount += 1;
         slide.addText("참여 콘텐츠", { x: 0.5, y: 0.4, w: 9, h: 0.5, fontSize: 22, bold: true, color: "1E2026", fontFace: FONT });
         programs.slice(0, 8).forEach((program, index) => {
           const y = 1.2 + index * 0.5;
@@ -1107,8 +1138,10 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
       }
 
       const surveys = snapshotRecords(snapshot?.survey).items;
+      if (report.sections.includes("survey") && !surveys?.length) omitted.push("만족도");
       if (report.sections.includes("survey") && surveys?.length) {
         const slide = pres.addSlide();
+        slideCount += 1;
         slide.addText("행사 만족도", { x: 0.5, y: 0.4, w: 9, h: 0.5, fontSize: 22, bold: true, color: "1E2026", fontFace: FONT });
         surveys.slice(0, 8).forEach((survey, index) => {
           const y = 1.2 + index * 0.5;
@@ -1133,8 +1166,10 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
           // Skip only this photo; the rest of the export still proceeds.
         }
       }
+      if (report.sections.includes("photos") && !inlinedPhotos.length) omitted.push("승인 사진");
       for (let i = 0; i < inlinedPhotos.length; i += 2) {
         const slide = pres.addSlide();
+        slideCount += 1;
         slide.addText("행사 사진", { x: 0.5, y: 0.4, w: 9, h: 0.5, fontSize: 22, bold: true, color: "1E2026", fontFace: FONT });
         inlinedPhotos.slice(i, i + 2).forEach((entry, index) => {
           const x = 0.5 + index * 4.6;
@@ -1147,11 +1182,12 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `EVENTOUCH_report_v${report.version}.pptx`;
+      anchor.download = reportFileName(text(snapshot?.event?.name), report.version, "pptx");
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
+      setNotice(`PPTX를 내려받았습니다 · ${slideCount}장${omitted.length ? ` · 내용이 없어 빠진 항목: ${omitted.join(", ")}` : ""}`);
     } catch {
       setFailure({ message: "PPTX 파일을 만들지 못했습니다. 다시 시도하거나 JSON 원본으로 내려받으세요." });
     } finally {
@@ -1197,9 +1233,18 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         : step === "intake" ? "참가 접수 닫기"
           : step === "stage" ? "행사 종료 확인하기"
             : step === "archived" ? "보관 완료"
-              : frozenReport ? "결과 안내 작성·확인하기" : "보고서 검토·동결하기";
+              : frozenReport ? "결과 안내 작성·확인하기"
+              : closeReport ? "보고서 검토·확정하기"
+                : state.reports.length ? "마감 보고서 선택·검토하기" : "마감 보고서 만들기";
     return { position, label, done: step === "archived" };
   })();
+  // Which button carries the page. A draft without a summary is waiting for the summary;
+  // once it is written the file to hand over (PPTX) leads and "공유 완료" is the follow-up.
+  // Inside the close flow the freeze itself is the step, so it keeps the lead there.
+  const summaryEmpty = Boolean(detail && !detail.summary.trim());
+  const inCloseFlow = Boolean(detail && closeReportId === detail.id);
+  const shareIsPrimary = inCloseFlow && !summaryEmpty;
+  const pptxPrimary = Boolean(detail && detail.status === "DRAFT" && !summaryEmpty && !inCloseFlow && publishIntent?.id !== detail.id);
   const detailAttendanceChanges = attendanceAvailable ? attendanceChanges(detail, state.metrics) : [];
   const savedPrograms = snapshotRecords(detail?.snapshot?.programs);
   const savedBooths = snapshotRecords(detail?.snapshot?.booths);
@@ -1280,7 +1325,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
             <ConsoleFeedback kind="warning">보관된 행사는 읽기 전용입니다. 분석과 보고서를 볼 수 있지만 만들거나 바꿀 수 없습니다.</ConsoleFeedback>
           ) : null}
           {!state.archived && !canWriteReports ? (
-            <ConsoleFeedback kind="warning">보고서 만들기·게시는 결과 쓰기 권한이 필요합니다. 분석 보기와 마감 전제 확인은 그대로 할 수 있습니다.</ConsoleFeedback>
+            <ConsoleFeedback kind="warning">보고서 만들기·게시는 결과 쓰기 권한이 필요합니다. 분석 보기와 마감 조건 확인은 그대로 할 수 있습니다.</ConsoleFeedback>
           ) : null}
         </>
       }
@@ -1302,7 +1347,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
         onReview={() => { if (closeReportId) { openReport(closeReportId); setReloadTick((tick) => tick + 1); } }}
         refreshing={refreshing} onRefresh={() => setReloadTick((tick) => tick + 1)} /> : (
         <ConsoleSection headingId="event-close" title="행사 마감" action={<ConsoleRefreshButton label="마감 상태 새로고침" busy={refreshing} onRefresh={() => setReloadTick((tick) => tick + 1)} />}>
-          <ConsoleFeedback kind="warning">참가자, 접수 또는 참여 콘텐츠 자료를 확인할 수 없어 마감 상태를 확인할 수 없습니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요.</ConsoleFeedback>
+          <ConsoleFeedback kind="warning">참가자, 접수 또는 참여 콘텐츠 자료를 확인할 수 없어 마감 상태를 확인할 수 없습니다. 새로고침해도 계속되면 조직 관리자에게 문의하세요.</ConsoleFeedback>
         </ConsoleSection>
       )}
       <ConsoleSection
@@ -1319,7 +1364,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
           </div>
         )}
       >
-        {!reportSourcesAvailable ? <ConsoleFeedback kind="warning">{missingSourceText} 자료를 확인할 수 없어 현재 집계로 보고서를 만들 수 없습니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요. 기존 보고서는 확인할 수 있습니다.</ConsoleFeedback> : null}
+        {!reportSourcesAvailable ? <ConsoleFeedback kind="warning">{missingSourceText} 자료를 확인할 수 없어 현재 집계로 보고서를 만들 수 없습니다. 새로고침해도 계속되면 조직 관리자에게 문의하세요. 기존 보고서는 확인할 수 있습니다.</ConsoleFeedback> : null}
         {/* 2026-11-15 redesign: the saved-report list is an ink-underline
             switcher (title + status dot/text), not a row list — picking a
             report and reading its content/analysis is now one always-visible
@@ -1331,7 +1376,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
             <StepBar position={closeStatus.position} />
             {closeStatus.done ? null : (
               <ProductLink variant="ghost" href={eventCloseHref(eventId, closeReportId)} onNavigate={() => requestConsoleTask("event-close", true)}>
-                마감 지도 보기 <ArrowRightIcon />
+                마감 단계 보기 <ArrowRightIcon />
               </ProductLink>
             )}
           </div>
@@ -1378,7 +1423,19 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                       {detail.coverNote ? <p>{detail.coverNote}</p> : null}
                     </header>
                     {detail.sections.includes("overview") ? (
-                      <section><h3>운영 요약</h3><p>{detail.summary || "운영 요약을 작성해주세요."}</p></section>
+                      summaryEmpty ? (
+                        <section data-print-omit>
+                          <h3>운영 요약</h3>
+                          <div className={styles.summaryEmpty} role="note">
+                            <p>{detail.status === "DRAFT"
+                              ? "아직 운영 요약이 없습니다. 고객사에 전달하기 전에 행사 진행을 한두 문단으로 정리해 두세요."
+                              : "이 버전에는 운영 요약이 없습니다. 내용을 바꾸려면 새 버전을 만드세요."}</p>
+                            {detail.status === "DRAFT" ? (
+                              <ProductButton type="button" variant="ghost" icon={<PencilIcon />} disabled={writeLocked} onClick={() => openReportEdit(detail)}>운영 요약 작성</ProductButton>
+                            ) : null}
+                          </div>
+                        </section>
+                      ) : <section><h3>운영 요약</h3><p>{detail.summary}</p></section>
                     ) : null}
                     {detail.sections.includes("attendance") ? (
                       <section>
@@ -1405,7 +1462,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                               ))}
                             </div>
                             <div className={styles.legend}>
-                              {groupChart.map((segment) => (
+                              {groupChart.filter((segment) => segment.count > 0).map((segment) => (
                                 <span key={segment.name}><em style={{ background: segment.color }} />{segment.name} · <b>{segment.count}명</b> <small>{Math.round((segment.count / groupChartTotal) * 100)}%</small></span>
                               ))}
                             </div>
@@ -1426,7 +1483,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                           <p>취소 기록과 신청 상태가 다른 {detail.snapshot.metrics.cancellationReview}명이 등록 집계에 포함돼 있습니다. 참가 여부는 확인이 필요하며 승인 상태·입장 집계에도 반영될 수 있습니다.</p>
                         ) : null}
                         {savedGroups.items?.length ? (
-                          <p className={groupChart ? "sr-only" : undefined}>{savedGroups.items.map((group) => `${text(group.name) || "이름 확인 불가"} ${snapshotValue(group.count, "명")}`).join(" · ")}</p>
+                          <p className={groupChart ? "sr-only" : undefined}>{savedGroups.items.filter((group) => group.count !== 0).map((group) => `${text(group.name) || "이름 확인 불가"} ${snapshotValue(group.count, "명")}`).join(" · ")}</p>
                         ) : null}
                         {savedGroups.items === null || savedGroups.invalid ? <p className={styles.reportUnavailable}>저장된 참가자 분류 정보의 전부 또는 일부를 확인할 수 없습니다.</p> : null}
                         </> : <p className={styles.reportUnavailable}>저장된 참가·입장 집계를 확인할 수 없습니다.</p>}
@@ -1566,12 +1623,12 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                 ) : null}
                 {/* Only one checklist: the hub above owns current prerequisites.
                     Keep this handoff outside the frozen article and print clone. */}
-                <div className={styles.archiveCheck} role="note" aria-label="보관 전제 · 조회 시점">
-                  {closeReportId === detail.id ? <p className={styles.archiveLead} data-close-report-progress><strong>마감 5/7 · 보고서 검토·동결{detail.status === "PUBLISHED" ? " · 완료" : ""}</strong></p> : null}
+                <div className={styles.archiveCheck} role="note" aria-label="보관 조건 · 조회 시점">
+                  {closeReportId === detail.id ? <p className={styles.archiveLead} data-close-report-progress><strong>마감 5/7 · 보고서 검토·확정{detail.status === "PUBLISHED" ? " · 완료" : ""}</strong></p> : null}
                   <p className={styles.archiveLead}>
-                    위 보고서는 생성 시점 그대로 유지됩니다. 단계·접수·승인 대기·진행 프로그램의 전체 전제는 ‘행사 마감’ 지도에서 선택해서 확인할 수 있습니다. 작업을 마치면 다음 단계로 바로 이어가세요.
+                    위 보고서는 생성 시점 그대로 유지됩니다. 단계·접수·승인 대기·진행 프로그램의 전체 조건은 ‘행사 마감’ 단계 안내에서 확인할 수 있습니다. 작업을 마치면 다음 단계로 바로 이어가세요.
                   </p>
-                  {closeReportId === detail.id && detail.status !== "PUBLISHED" ? <p className={styles.help}>이 버전의 공유 완료·잠금은 아직 기록하지 않았습니다. 내용 검토·동결 전에도 이동은 가능하며 자동으로 완료 처리하지 않습니다.</p> : null}
+                  {closeReportId === detail.id && detail.status !== "PUBLISHED" ? <p className={styles.help}>이 버전의 공유 완료·잠금은 아직 기록하지 않았습니다. 내용 검토·확정 전에도 이동은 가능하며 자동으로 완료 처리하지 않습니다.</p> : null}
                 </div>
               </>
             ) : (
@@ -1622,13 +1679,14 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                       ) : (
                         <>
                           {publishIntent?.id === detail.id ? <span className={styles.help} role="status">보고서가 변경됐습니다. 최신 내용을 검토한 뒤 공유 완료를 다시 확인하세요.</span> : null}
-                          <ProductButton type="button" variant="primary" disabled={writeLocked || refreshing || (failure?.field === "expectedVersion" && Boolean(refreshFailure))} onClick={() => { setFailure(null); setPublishIntent({ id: detail.id, version: detail.version }); }}>
+                          {summaryEmpty ? <span className={styles.help} id="report-share-reason">운영 요약을 작성하면 공유 완료로 표시할 수 있습니다.</span> : null}
+                          <ProductButton type="button" variant={shareIsPrimary ? "primary" : "secondary"} aria-describedby={summaryEmpty ? "report-share-reason" : undefined} disabled={writeLocked || summaryEmpty || refreshing || (failure?.field === "expectedVersion" && Boolean(refreshFailure))} onClick={() => { setFailure(null); setPublishIntent({ id: detail.id, version: detail.version }); }}>
                             공유 완료로 표시
                           </ProductButton>
                         </>
                       )}
-                      <ProductButton type="button" variant="secondary" icon={<PencilIcon />} disabled={writeLocked} onClick={() => { setEditReport(detail); setFailure(null); dialogUnresolvedRef.current = false; setCreateOpen(true); }}>
-                        내용 편집
+                      <ProductButton type="button" variant={summaryEmpty ? "primary" : "secondary"} icon={<PencilIcon />} disabled={writeLocked} onClick={() => openReportEdit(detail)}>
+                        {summaryEmpty ? "운영 요약 작성" : "내용 편집"}
                       </ProductButton>
                     </>
                   ) : (
@@ -1723,7 +1781,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                 <div className={styles.exportGroup}>
                   <p className={styles.toolbarLabel}>내보내기</p>
                   <ConsoleFormActions>
-                    <ProductButton type="button" variant="ghost" icon={<DownloadIcon />} disabled={pptxBusy} onClick={() => void exportPptx(detail)}>
+                    <ProductButton type="button" variant={pptxPrimary ? "primary" : "ghost"} icon={<DownloadIcon />} disabled={pptxBusy} onClick={() => void exportPptx(detail)}>
                       {pptxBusy ? "PPTX 만드는 중" : "PPTX로 내보내기"}
                     </ProductButton>
                     <ProductButton type="button" variant="ghost" icon={<DocumentIcon />} aria-describedby="report-export-scope-help" onClick={() => exportJson(detail)}>
@@ -1784,7 +1842,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                 <ConsoleRefreshButton label="결과 분석 새로고침" busy={refreshing} onRefresh={() => setReloadTick((tick) => tick + 1)} />
               </div>
               <p className={styles.stamp}>{state.metrics.cancellationReview > 0 ? "신청 상태 기준 · 취소 기록 확인 필요 인원 포함" : "취소 제외 등록 기준"} · 조회 기준 시각 {loadedAt ? capturedLabel(loadedAt) : "확인 중"}</p>
-              {attendanceAvailable && !reportSourcesAvailable ? <ConsoleFeedback kind="warning">{missingSourceText} 자료를 확인할 수 없습니다. 다른 집계는 확인 가능한 자료를 표시합니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요.</ConsoleFeedback> : null}
+              {attendanceAvailable && !reportSourcesAvailable ? <ConsoleFeedback kind="warning">{missingSourceText} 자료를 확인할 수 없습니다. 다른 집계는 확인 가능한 자료를 표시합니다. 새로고침해도 계속되면 조직 관리자에게 문의하세요.</ConsoleFeedback> : null}
               <div className={styles.analysisSubheads}>
               {/* Headline first: the outcome rate leads at double width, the
                   supporting counts follow. Same five values, same labels, only
@@ -1802,7 +1860,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                   <StatCard label="현재 입장" value={state.metrics.inside} unit="명" />
                   {state.metrics.pending > 0 ? <StatCard tone="wait" label="승인 대기" value={state.metrics.pending} unit="명" /> : null}
                 </StatRow>
-              </div> : <ConsoleFeedback kind="warning">참가·입장 자료를 확인할 수 없어 집계를 표시할 수 없습니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요.</ConsoleFeedback>}
+              </div> : <ConsoleFeedback kind="warning">참가·입장 자료를 확인할 수 없어 집계를 표시할 수 없습니다. 새로고침해도 계속되면 조직 관리자에게 문의하세요.</ConsoleFeedback>}
               {attendanceAvailable && state.metrics.attendanceReview > 0 ? (
                 <ConsoleFeedback kind="warning">
                   일부 출입 기록이 명확하지 않아 입장 수와 입장률이 실제와 다를 수 있습니다.{" "}
@@ -1820,19 +1878,19 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                 <summary>그룹·부스·프로그램별 상세 집계</summary>
               <div className={styles.subgroup}>
               <h3>등록 그룹</h3>
-              {!sources.participants || !sources.groups ? <p className={styles.help}>참가자 그룹 집계를 확인할 수 없습니다.</p> : state.groups.length ? (
+              {!sources.participants || !sources.groups ? <p className={styles.help}>참가자 그룹 집계를 확인할 수 없습니다.</p> : state.groups.some((group) => group.count > 0) ? (
                 <div className={styles.tableScroll} role="region" tabIndex={0} aria-label="등록 그룹별 인원 표">
                   <table className={styles.dataTable}>
                     <thead><tr><th scope="col">그룹</th><th scope="col" className={styles.num}>인원</th></tr></thead>
                     <tbody>
-                      {state.groups.map((group) => (
+                      {state.groups.filter((group) => group.count > 0).map((group) => (
                         <tr key={group.name}><td>{group.name}</td><td className={styles.num}>{group.count}명</td></tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               ) : (
-                <p className={styles.help}>등록 그룹이 없습니다.</p>
+                <p className={styles.help}>등록된 인원이 있는 그룹이 없습니다.</p>
               )}
               </div>
               <div className={styles.subgroup}>
@@ -1939,6 +1997,7 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
           pendingApproval={state.metrics.pending}
           participantChangesLocked={["ENDED", "ARCHIVED"].includes(state.stage)}
           eventId={eventId}
+          eventName={state.eventName}
           submitGateRef={sendingRef}
           unresolvedRef={dialogUnresolvedRef}
           locked={writeLocked}
@@ -1976,6 +2035,7 @@ function CreateDialog({
   missingSourceText,
   participantChangesLocked,
   eventId,
+  eventName,
   submitGateRef,
   unresolvedRef,
   locked,
@@ -1999,6 +2059,7 @@ function CreateDialog({
   missingSourceText: string;
   participantChangesLocked: boolean;
   eventId: string;
+  eventName: string;
   submitGateRef: { current: boolean };
   unresolvedRef: { current: boolean };
   locked: boolean;
@@ -2009,7 +2070,9 @@ function CreateDialog({
   onAcceptAttendance: () => void;
   onSubmit: (payload: Record<string, unknown>) => Promise<void>;
 }) {
-  const [title, setTitle] = useState(initial?.title ?? "");
+  // A new report starts with a usable title; the operator only has to change it when they want to.
+  const defaultTitle = eventName && eventName !== "이름 없는 행사" ? `${eventName} 결과 보고서`.slice(0, 100) : "";
+  const [title, setTitle] = useState(initial?.title ?? defaultTitle);
   const [subtitle, setSubtitle] = useState(initial?.subtitle ?? "");
   const [coverNote, setCoverNote] = useState(initial?.coverNote ?? "");
   const [summary, setSummary] = useState(initial?.summary ?? "");
@@ -2061,7 +2124,7 @@ function CreateDialog({
       color.toUpperCase() === initial.color.toUpperCase() &&
       sections.length === initial.sections.length &&
       sections.every((section) => initial.sections.includes(section))
-    : title === "" &&
+    : title === defaultTitle &&
       subtitle === "" &&
       coverNote === "" &&
       summary === "" &&
@@ -2116,7 +2179,7 @@ function CreateDialog({
         }}
       >
           {!initial && !sourcesAvailable ? <div>
-            <ConsoleFeedback kind="warning">{missingSourceText} 자료를 확인할 수 없어 현재 집계로 보고서를 만들 수 없습니다. 다시 확인해도 계속되면 시스템 관리자에게 문의하세요.</ConsoleFeedback>
+            <ConsoleFeedback kind="warning">{missingSourceText} 자료를 확인할 수 없어 현재 집계로 보고서를 만들 수 없습니다. 다시 확인해도 계속되면 조직 관리자에게 문의하세요.</ConsoleFeedback>
             <ProductButton type="button" variant="secondary" disabled={refreshing || busy} onClick={onRefresh}>{refreshing ? "자료 확인 중" : "자료 다시 확인"}</ProductButton>
           </div> : null}
           {!initial && sourcesAvailable ? (
@@ -2187,12 +2250,19 @@ function CreateDialog({
           </div>
           <div>
             <label htmlFor="report-color">보고서 테마 색</label>
-            <input
-              id="report-color"
-              type="color"
-              value={color}
-              onChange={(event) => setColor(event.target.value)}
-            />
+            <div className={styles.colorField}>
+              <input
+                id="report-color"
+                type="color"
+                value={color}
+                onChange={(event) => setColor(event.target.value)}
+                aria-describedby="report-color-chip"
+              />
+              <span className={styles.colorChip} id="report-color-chip">
+                <i style={{ background: color }} aria-hidden="true" />
+                표지 띠와 강조 색 · {color.toUpperCase()}
+              </span>
+            </div>
           </div>
           <fieldset>
             <legend>화면·인쇄에 포함할 항목</legend>

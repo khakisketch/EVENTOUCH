@@ -102,7 +102,7 @@ test('linear next warns about unfinished prerequisites without adding a new busi
   assert.match(program.next.href, /closeStep=intake/);
   const message = linearCloseProgress('e', 'messages', snapshot, null, null, '');
   assert.match(message.next.href, /closeStep=archive/);
-  assert.ok(message.warnings.some(w => w.includes('동결 미확인')));
+  assert.ok(message.warnings.some(w => w.includes('확정 미확인')));
   assert.ok(message.warnings.some(w => w.includes('행사 종료 미확인')));
   const scheduled = linearCloseProgress('e', 'messages', snapshot, null, null, '', 'SCHEDULED');
   assert.match(scheduled.detail, /자동 발송되지 않습니다/);

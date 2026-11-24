@@ -40,14 +40,14 @@ export default function EventCloseFlow({ eventId, inputs, loadedAt, report, hasR
         : step === "intake"
           ? { label: "참가 접수 닫기", href: href(`${base}/settings?closeStep=intake#settings-intake`), detail: "새 신청을 받지 않도록 접수를 닫으세요. 같은 설정 화면에서 진행 단계도 확인할 수 있습니다." }
           : step === "stage"
-            ? { label: "진행 단계에서 종료 확인하기", href: href(`${base}/settings?closeStep=end#settings-stage`), detail: "기존 진행 단계 순서와 전제·확인을 거쳐 종료로 전환하세요. 단계는 건너뛰거나 되돌릴 수 없습니다." }
+            ? { label: "진행 단계에서 종료 확인하기", href: href(`${base}/settings?closeStep=end#settings-stage`), detail: "기존 진행 단계 순서와 조건·확인을 거쳐 종료로 전환하세요. 단계는 건너뛰거나 되돌릴 수 없습니다." }
             : step === "archived"
               ? null
               : frozen
-                ? { label: "결과 안내 작성·확인하기", href: href(`${base}/messages`), detail: "동결한 보고서의 집계 기준을 확인한 뒤 메시지에서 대상과 내용을 직접 검토하세요. 자동 발송되지 않습니다." }
+                ? { label: "결과 안내 작성·확인하기", href: href(`${base}/messages`), detail: "확정(수정 잠금)한 보고서의 집계 기준을 확인한 뒤 메시지에서 대상과 내용을 직접 검토하세요. 자동 발송되지 않습니다." }
                 : report
-                  ? { label: "보고서 검토·동결하기", href: null, detail: "초안도 생성 시점의 집계입니다. 내용을 검토하고 파일을 별도로 전달한 뒤 공유 완료·잠금을 기록하세요." }
-                  : { label: "마감 보고서 만들기", href: null, detail: "마감 전제가 준비됐습니다. 현재 집계를 담은 보고서를 생성하고 검토·동결하세요." };
+                  ? { label: "보고서 검토·확정하기", href: null, detail: "초안도 생성 시점의 집계입니다. 내용을 검토하고 파일을 별도로 전달한 뒤 공유 완료·잠금을 기록하세요." }
+                  : { label: "마감 보고서 만들기", href: null, detail: "마감 조건이 준비됐습니다. 현재 집계를 담은 보고서를 만들고 검토한 뒤 확정(수정 잠금)하세요." };
   const stepNumber = step === "pending" ? 1 : ["features", "programs"].includes(step) ? 2 : step === "intake" ? 3 : step === "stage" ? 4 : step === "archived" ? 7 : frozen ? 6 : 5;
   return (
     <ConsoleSection headingId="event-close" title="행사 마감" className={styles.closeFlow}
@@ -71,8 +71,8 @@ export default function EventCloseFlow({ eventId, inputs, loadedAt, report, hasR
           </ProductButton>
         ) : null}
       </div>
-      <p className={styles.help}>{next ? next.detail : "분석과 동결 보고서는 읽기 전용이며, 메시지 작성·발송과 행사 변경은 잠겨 있습니다."}</p>
-      {creationIssue ? <ConsoleFeedback kind="warning">{creationIssue} 자료를 확인할 수 없어 현재 집계로 보고서를 만들 수 없습니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요.</ConsoleFeedback> : null}
+      <p className={styles.help}>{next ? next.detail : "분석과 확정된 보고서는 읽기 전용이며, 메시지 작성·발송과 행사 변경은 잠겨 있습니다."}</p>
+      {creationIssue ? <ConsoleFeedback kind="warning">{creationIssue} 자료를 확인할 수 없어 현재 집계로 보고서를 만들 수 없습니다. 새로고침해도 계속되면 조직 관리자에게 문의하세요.</ConsoleFeedback> : null}
       {cancellationReview > 0 ? <ConsoleFeedback kind="warning">취소 기록과 신청 상태가 다른 {cancellationReview}명이 등록 집계에 포함돼 있습니다. 참가 여부를 확인해야 하며 승인 상태·입장 집계에도 반영될 수 있습니다. {["ENDED", "ARCHIVED"].includes(inputs.stage) ? "종료 이후에는 참가자 상태를 변경할 수 없습니다. " : ""}<ProductLink href={href(`${base}/participants?ticket=review`)}>티켓 확인 필요 명단 보기</ProductLink></ConsoleFeedback> : null}
       {inputs.pending > 0 && ["ENDED", "ARCHIVED"].includes(inputs.stage) ? (
         <ConsoleFeedback kind="warning">승인 대기 {inputs.pending}명이 남아 있지만 종료 이후에는 참가자를 변경할 수 없습니다. 참가 확정은 아니며, 취소 제외 등록 집계에는 포함됩니다.</ConsoleFeedback>
@@ -91,8 +91,8 @@ export default function EventCloseFlow({ eventId, inputs, loadedAt, report, hasR
         <ProductLink variant="secondary" href={href(`${base}/settings?closeStep=archive#settings-stage`)} data-close-archive>결과 안내 확인 후 보관하기</ProductLink>
       </div> : null}
       <details className={styles.closeDetails}>
-        <summary>전체 마감 단계와 전제 확인</summary>
-        <p className={styles.help}>보관 전제 · 조회 시점 — 보고서는 생성 시점 그대로 유지되며 아래는 마지막으로 불러온 행사 상태입니다. 새로고침 시 갱신됩니다. 각 화면의 ‘다음’으로 바로 이어가며 ‘마감으로 돌아가기’는 상태 확인용 선택입니다.</p>
+        <summary>전체 마감 단계와 조건 확인</summary>
+        <p className={styles.help}>보관 조건 · 조회 시점 — 보고서는 생성 시점 그대로 유지되며 아래는 마지막으로 불러온 행사 상태입니다. 새로고침 시 갱신됩니다. 각 화면의 ‘다음’으로 바로 이어가며 ‘마감으로 돌아가기’는 상태 확인용 선택입니다.</p>
         <dl className={styles.closeFacts}>
           <div><dt>진행 단계</dt><dd>{eventStageLabel(inputs.stage)}</dd></div>
           <div><dt>참가 접수</dt><dd>{inputs.registrationOpen ? "열림" : "닫힘"}</dd></div>

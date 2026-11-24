@@ -1144,7 +1144,7 @@
   border: 0;
   border-radius: var(--r-card);
   background: var(--paper);
-  box-shadow: inset 0 0 0 2px var(--ink);
+  border: 1px solid var(--line);
 }
 .analysisBox .metricLead .leadText { display: grid; gap: 2px; }
 .analysisBox .metricLead strong { font-size: var(--text-num); line-height: var(--lh-tight); font-weight: var(--fw-heavy); letter-spacing: var(--ls-num); }
@@ -1209,3 +1209,10 @@
 .closeFlow .stepBar { order: 5; flex: 1 0 100%; gap: 4px; }
 .closeFlow .stepBar i { flex: 1; width: auto; height: 8px; border-radius: var(--r-ctl); }
 .closeFlow .statusLine { padding-block: var(--s4); }
+
+/* R3/R4 (reopened 2026-11-24): a summary that is still empty reads as guidance, not as a sentence of the report; the theme colour shows its swatch and value. */
+.summaryEmpty { display: grid; justify-items: start; gap: var(--s2); padding: var(--s3) var(--s4); border: 1px dashed var(--line-strong, var(--line)); border-radius: var(--r-card); background: var(--surface-muted); }
+.summaryEmpty p { margin: 0; color: var(--muted); }
+.colorField { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
+.colorChip { display: inline-flex; align-items: center; gap: var(--s2); color: var(--muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.colorChip i { display: inline-block; width: var(--s5); height: var(--s5); border-radius: var(--r-pill); box-shadow: inset 0 0 0 1px var(--line); }

@@ -30,6 +30,7 @@ import { LocationRow, RunSwitch, StaffFaces, StatusDot, type Staffer } from "./L
 import { CheckIcon, CopyIcon, PlusIcon } from "../../../console-ui/ConsoleIcons";
 import { CrewIcon } from "./OpsIcons";
 import { consoleFetch } from "../../../../../lib/console-api";
+import { fitImage } from "../../../../../lib/image-fit";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
 import { abandonOperatorAttempt, acknowledgeOperatorReceipt, confirmsOperationsCommand, isOrganizationContextBlock } from "../../../../../lib/operator-context";
 import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib/operator-receipts";
@@ -1154,11 +1155,24 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       setFailure({ message: "배치도는 PNG·JPG·WebP 이미지를 사용하세요." });
       return;
     }
-    if (file.size > 600000) {
-      setFailure({ message: "600KB 이하 배치도 이미지를 올려주세요." });
-      return;
+    // A phone or plan export is usually bigger than the 600KB limit: shrink it here instead of refusing.
+    // A retry of an unconfirmed upload already holds the shrunk file and keeps it untouched.
+    let source = file;
+    let shrunk = false;
+    if (!mapUploadRef.current) {
+      mapUploadGateRef.current = true;
+      setMapUploading(true);
+      const fitted = await fitImage(file);
+      mapUploadGateRef.current = false;
+      setMapUploading(false);
+      if ("error" in fitted) {
+        setFailure({ message: fitted.error });
+        return;
+      }
+      source = fitted.file;
+      shrunk = fitted.file !== file;
     }
-    const attempt = mapUploadRef.current ?? { eventId, file, commandId: randomCommandId(), uncertain: false };
+    const attempt = mapUploadRef.current ?? { eventId, file: source, commandId: randomCommandId(), uncertain: false };
     mapUploadRef.current = attempt;
     mapUploadGateRef.current = true;
     setMapUploading(true);
@@ -1194,6 +1208,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       mapUploadRef.current = null;
       setMapUploadUncertain(false);
       setMapUploadAbandonConfirm(false);
+      if (shrunk) setNotice("배치도를 자동으로 줄여 올렸습니다.");
       const previousImage = mapImageOverride ?? boothMap.draft?.image ?? null;
       if (previousImage && previousImage.fileId !== fileId && mapPoints.length) {
         // The server refuses an image swap with leftover points; clear them
@@ -1525,10 +1540,10 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           <p className={styles.hint}>
             {stampMode === "SELF"
               ? "참가자가 부스 QR을 직접 스캔합니다. 부스마다 QR을 붙여 주세요."
-              : stampMode === "STAFF" ? "스태프가 참가자 티켓을 확인해 처리합니다. 부스 배정이 필요합니다." : "현재 인증 방식을 확인할 수 없습니다. 시스템 관리자에게 문의하세요."}
+              : stampMode === "STAFF" ? "스태프가 참가자 티켓을 확인해 처리합니다. 부스 배정이 필요합니다." : "현재 인증 방식을 확인할 수 없습니다. 조직 관리자에게 문의하세요."}
             {visitsCount ? ` · 이미 인증 ${visitsCount}건이라 방식을 바꿀 수 없습니다.` : ""}
           </p>
-          {visitsCount === null ? <ConsoleFeedback kind="warning">부스 인증 기록을 확인할 수 없습니다. 인증 방식을 변경하기 전에 시스템 관리자에게 문의하세요.</ConsoleFeedback> : null}
+          {visitsCount === null ? <ConsoleFeedback kind="warning">부스 인증 기록을 확인할 수 없습니다. 인증 방식을 변경하기 전에 조직 관리자에게 문의하세요.</ConsoleFeedback> : null}
           <div className={styles.buttonRow}>
             <ProductButton
               type="button"

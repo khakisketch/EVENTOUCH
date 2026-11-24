@@ -291,10 +291,14 @@ export default function LiveWorkspace({ eventId }: { eventId: string }) {
             <span className={styles.clock}><time dateTime={now.toISOString()}>{TIME.format(now)}</time></span>
             {model.registered !== null ? (
               <span className={styles.entry} role="img" aria-label={`입장 ${model.everIn ?? 0}명, 등록 ${model.registered}명${model.capacity ? `, 정원 ${model.capacity}명` : ""}, 등록 대비 ${entryPct}%`}>
-                <span aria-hidden="true">입장 <b>{model.everIn ?? 0}</b> / 등록 {model.registered}<em>{model.capacity ? ` · 정원 ${model.capacity}` : ""}</em> · {entryPct}%</span>
+                <span aria-hidden="true">입장 <b>{model.everIn ?? 0}</b> / 등록 {model.registered} ({entryPct}%)<em>{model.capacity ? ` · 정원 ${model.capacity}` : ""}</em></span>
                 <i className={styles.entryBar} aria-hidden="true"><i style={{ width: `${Math.min(100, entryPct)}%` }} /></i>
               </span>
             ) : <span className={styles.entry}>입장 현황을 읽을 수 없습니다</span>}
+            <span className={styles.entryLinks}>
+              <ProductLink variant="ghost" size="sm" href={`${base}/participants`}>명단 보기</ProductLink>
+              <ProductLink variant="ghost" size="sm" href="/staff" target="_blank" rel="noreferrer">스태프 화면<span className="sr-only"> (새 탭)</span></ProductLink>
+            </span>
           </div>
           <div className={styles.topSide}>
             <div className={styles.topSideRow}>

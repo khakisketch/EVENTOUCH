@@ -14,7 +14,6 @@ import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import CountTabs from "../../../console-ui/CountTabs";
 import StatCard from "../../../console-ui/StatCard";
 import StatusPill from "../../../console-ui/StatusPill";
-import { InfoIcon } from "../../../console-ui/ConsoleIcons";
 import { consoleFetch } from "../../../../../lib/console-api";
 import { cancellationNeedsReview } from "../../../../../lib/cancellation-state.cjs";
 import {
@@ -38,6 +37,7 @@ type AnalysisData = {
   eventName: string;
   meta: string | undefined;
   eventDate: string;
+  stage: string;
   canManage: boolean;
   available: boolean;
   applications: string[];
@@ -83,7 +83,8 @@ export default function PeriodAnalysisWorkspace({ eventId }: { eventId: string }
   const [state, setState] = useState<State>({ kind: "loading" });
   const [reload, setReload] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const [preset, setPreset] = useState<PeriodPreset>("last7");
+  // null = nobody chose yet: the default follows the event once it is read.
+  const [chosenPreset, setPreset] = useState<PeriodPreset | null>(null);
   const [customRange, setCustomRange] = useState<{ from: string; to: string } | null>(null);
 
   useEffect(() => {
@@ -133,6 +134,7 @@ export default function PeriodAnalysisWorkspace({ eventId }: { eventId: string }
               venue: text(workspaceVenue?.name) || text(event.venue),
             }),
             eventDate: text(event.date),
+            stage: text(event.stage),
             canManage,
             available: participantsAvailable && checksAvailable,
             applications: people.map((person) => text(person.createdAt)).filter((value) => value !== ""),
@@ -182,6 +184,9 @@ export default function PeriodAnalysisWorkspace({ eventId }: { eventId: string }
 
   const { data } = state;
   const now = new Date();
+  // A finished event is looked at as a whole; during the run the last week is the useful window.
+  const finished = ["ENDED", "ARCHIVED"].includes(data.stage) || (data.eventDate !== "" && data.eventDate < localDateKey(now));
+  const preset: PeriodPreset = chosenPreset ?? (finished ? "all" : "last7");
   const selectedRange = preset === "custom"
     ? customRange ?? presetRange("last7", now, data)
     : presetRange(preset, now, data);
@@ -201,7 +206,7 @@ export default function PeriodAnalysisWorkspace({ eventId }: { eventId: string }
       {!data.canManage ? (
         <ConsoleFeedback kind="warning">기간 분석은 행사 운영자만 볼 수 있습니다.</ConsoleFeedback>
       ) : !data.available ? (
-        <p className={styles.note}>참가자 또는 출입 기록을 확인할 수 없어 기간 분석을 표시할 수 없습니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요.</p>
+        <p className={styles.note}>참가자 또는 출입 기록을 확인할 수 없어 기간 분석을 표시할 수 없습니다. 새로고침해도 계속되면 조직 관리자에게 문의하세요.</p>
       ) : (
         <PeriodView
           data={data}
@@ -378,7 +383,7 @@ function PeriodView({
               <div className={styles.sideRow}>
                 <dt><i className={styles.dotEntries} aria-hidden="true" />일별 입장 합</dt>
                 <dd className={styles.sideValue}><b data-metric="entriesSum">{dailyEntriesSum}</b>명</dd>
-                <dd className={styles.sideNote}>{entriesCompare}<span className={styles.hint}>하루 한 번씩 더한 값</span></dd>
+                <dd className={styles.sideNote}>{entriesCompare}<span className={styles.hint}>날마다 입장한 사람을 더한 값(여러 날 오면 날마다 셉니다)</span></dd>
               </div>
             </dl>
           </div>
@@ -390,19 +395,19 @@ function PeriodView({
             headingId="period-daily-title"
             title="일별 신청·입장"
             heading="rule"
-            action={(
-              <div className={styles.cardTools}>
-                <ul className={styles.legend} aria-label="막대그래프 범례">
-                  <li><span className={`${styles.swatch} ${styles.swatchApplications}`} aria-hidden="true" />신청</li>
-                  <li><span className={`${styles.swatch} ${styles.swatchEntries}`} aria-hidden="true" />입장(일별 고유)</li>
-                </ul>
-                <ProductButton type="button" variant="ghost" icon={<InfoIcon />} aria-expanded={showBasis} aria-controls="period-basis"
-                  onClick={() => setShowBasis((current) => !current)}>
-                  집계 기준
-                </ProductButton>
-              </div>
-            )}
           >
+            {/* The legend and the basis button sit under the title, not beside it, so a phone keeps the
+                title on one line (2026-11-24). The basis button is plain text: a lone "i" glyph read as a letter. */}
+            <div className={styles.cardTools}>
+              <ul className={styles.legend} aria-label="막대그래프 범례">
+                <li><span className={`${styles.swatch} ${styles.swatchApplications}`} aria-hidden="true" />신청</li>
+                <li><span className={`${styles.swatch} ${styles.swatchEntries}`} aria-hidden="true" />입장(일별 고유)</li>
+              </ul>
+              <ProductButton type="button" variant="ghost" aria-expanded={showBasis} aria-controls="period-basis"
+                onClick={() => setShowBasis((current) => !current)}>
+                집계 기준
+              </ProductButton>
+            </div>
             {showBasis ? (
               <p className={styles.basis} id="period-basis">
                 신청은 신청 상태가 취소인 기록을 제외합니다.{data.cancellationReview ? " 취소 기록과 신청 상태가 다른 인원은 확인 전까지 포함합니다." : ""} 입장은 정정된 기록을 제외하며 같은 날의 재입장은 중복 집계하지 않습니다. 일별 입장은 그 날의 고유 입장자 수이며, 기간 고유 입장은 선택한 전체 기간의 중복 제거 수라서 일별 합과 다를 수 있습니다. 날짜는 이 브라우저의 달력 날짜입니다.

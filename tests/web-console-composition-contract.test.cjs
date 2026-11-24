@@ -296,7 +296,7 @@ test('evidence photos stay separate, section-scoped and retry-safe', () => {
   assert.match(photos, /evidence\.photo\.remove/u);
   assert.match(photos, /className=\{styles\.sectionTiles\} role="group" aria-labelledby="evidence-photo-sections"/u, 'one pressed-state tile group picks the section on every width');
   assert.match(photos, /URL\.createObjectURL\(file\)/u, 'selected images have a local preview before upload');
-  assert.match(photos, /사진을 끌어 놓아도 됩니다/u, 'the guidance explains drop as well as the 사진 올리기 button');
+  assert.match(photos, /사진을 끌어 놓아도 됩니다/u, 'the guidance explains drop as well as the 사진 선택 button');
   assert.match(photos, /onDrop=\{/u, 'files can be dropped onto the upload area');
   assert.match(photos, /onClick=\{uploadSelectedJobs\}/u, 'uploads start only after explicit confirmation');
   assert.match(photos, /<details className=\{styles\.jobDisclosure\}/u, 'successful upload history is disclosed on demand');

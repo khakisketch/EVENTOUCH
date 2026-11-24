@@ -35,7 +35,10 @@ test('approved photos design stays locked: coverage, cover tiles, justified gall
   assert.match(workspace, /className=\{styles\.sectionTiles\}/u);
   assert.match(workspace, /<EvidenceGallery/u);
   assert.match(workspace, /presentation="drawer"/u);
-  assert.match(workspace, /variant="primary"[\s\S]{0,260}>사진 올리기<\/ProductButton>/u, 'one orange action: 사진 올리기');
+  // Reopened 2026-11-24 (R10): 고르기와 올리기가 같은 말이었다. 헤더는 "사진 선택"(고른 사진이 없을 때만 주 버튼),
+  // 고른 뒤 주 버튼은 하단 고정 바의 "{n}장 올리기".
+  assert.match(workspace, /variant=\{stagedJobs\.length \? "secondary" : "primary"\}[\s\S]{0,260}>사진 선택<\/ProductButton>/u, 'one orange action at a time: 사진 선택, then 올리기');
+  assert.match(workspace, /\$\{selectedJobs\.length\}장 올리기/u);
   assert.doesNotMatch(workspace, /ConsoleSection\b|mobileCategoryPicker|categoryGrid|photoManage/u, 'no section panels, no mobile-only picker, no per-photo disclosure');
   assert.match(css, /\.galleryRow\s*\{[^}]*display:\s*flex/su);
 });

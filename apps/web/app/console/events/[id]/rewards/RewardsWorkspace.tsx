@@ -584,6 +584,14 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
     { key: "done" as const, label: "완료·취소" },
   ].map((group) => ({ ...group, rewards: visibleRewards.filter((reward) => bucketOf(reward) === group.key) })).filter((group) => group.rewards.length);
   const hasRewardFilter = rewardSearch !== "" || rewardStatusFilter !== "";
+  async function copyCode(code: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(code);
+      setNotice("경품 코드를 복사했습니다.");
+    } catch {
+      setNotice("복사하지 못했습니다. 코드를 길게 눌러 직접 복사하세요.");
+    }
+  }
   function clearRewardFilters(): void {
     setRewardQuery("");
     setRewardStatusFilter("");
@@ -627,7 +635,13 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
               {!["READY", "FAILED", "RECEIVED", "CANCELLED", "NEEDS_CONNECTION", "PENDING"].includes(reward.status) ? <StatusPill tone="danger" size="sm">{statusLabel(reward.status)}</StatusPill> : null}
               {reward.status === "RECEIVED" ? <StatusPill tone="ok" size="sm">수령 완료</StatusPill> : null}
               {reward.status === "CANCELLED" ? <StatusPill tone="neutral" size="sm">취소</StatusPill> : null}
-              {reward.code ? <span className={styles.method}><RewardGlyph name="ticket" small />{reward.code}</span> : null}
+              {reward.code ? (
+                <span className={`${styles.method} ${styles.codeLine}`}>
+                  <RewardGlyph name="ticket" small />
+                  <span className={styles.codeText} title={reward.code}>{reward.code}</span>
+                  <ProductButton type="button" variant="ghost" size="sm" aria-label={`${who} 경품 코드 복사`} onClick={() => void copyCode(reward.code)}>복사</ProductButton>
+                </span>
+              ) : null}
             </span>
           )}
         />
@@ -683,7 +697,8 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
             summary={confirmLines(
               rewardPending.command === "reward.fulfill" ? fulfillSummary(reward) : cancelSummary(reward)
             )}
-            confirmLabel={rewardPending.command === "reward.fulfill" ? "처리한다" : "취소한다"}
+            confirmLabel={rewardPending.command === "reward.fulfill" ? "처리하기" : "경품 취소하기"}
+            cancelLabel="돌아가기"
             busy={busy === reward.id}
             onConfirm={() => {
               const pending = rewardPending;
@@ -746,27 +761,39 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
           {canWriteRewards && archived ? (
             <ConsoleFeedback kind="warning">보관된 행사는 변경할 수 없습니다. 경품 목록 확인은 계속할 수 있습니다.</ConsoleFeedback>
           ) : null}
-          {!state.featureOn ? (
+          {!state.featureOn && state.rewards.length ? (
             <ConsoleFeedback kind="warning">
               경품 기능이 꺼져 있습니다.{" "}
-              <ProductLink href={`/console/events/${encodeURIComponent(eventId)}/settings`}>행사 설정</ProductLink>에서 먼저 켜세요.
+              <ProductLink href={`/console/events/${encodeURIComponent(eventId)}/settings#settings-features`}>행사 설정에서 켜기</ProductLink>
             </ConsoleFeedback>
           ) : null}
         </>
       }
     >
       {!state.rewards.length ? (
-        <ConsoleEmptyState
-          titleAs="h2"
-          title="등록된 경품이 없습니다."
-          description="참가자 화면에서 참가 확정자에게 경품을 등록하세요."
-          action={<ProductLink variant="secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자 명단 열기</ProductLink>}
-        />
+        // One message at a time: while the feature is off the way forward is turning it on;
+        // the registration hint would only repeat what cannot be done yet.
+        state.featureOn ? (
+          <ConsoleEmptyState
+            titleAs="h2"
+            title="등록된 경품이 없습니다."
+            description="참가자 명단에서 받을 사람을 열고 ‘경품 등록’을 누르세요."
+            action={<ProductLink variant="secondary" href={`/console/events/${encodeURIComponent(eventId)}/participants`}>참가자 명단 열기</ProductLink>}
+          />
+        ) : (
+          <ConsoleEmptyState
+            titleAs="h2"
+            title="경품 기능이 꺼져 있습니다."
+            description="행사 설정에서 경품 기능을 켜면 참가 확정자에게 경품을 등록할 수 있습니다."
+            action={<ProductLink variant="secondary" href={`/console/events/${encodeURIComponent(eventId)}/settings#settings-features`}>행사 설정에서 켜기</ProductLink>}
+          />
+        )
       ) : (
         <section className={styles.oversight} aria-label="경품 지급 목록">
           <CountTabs
             className={styles.rewardTabs}
             ariaLabel="상태별 보기"
+            fit="wrap"
             value={rewardStatusFilter || "all"}
             onChange={(key) => setRewardStatusFilter(key === "all" ? "" : key)}
             aside={<span role="img" aria-label={`지급 완료 ${countReceived}건 / 전체 ${activeTotal}건`}>지급 완료 {countReceived} / {activeTotal}</span>}

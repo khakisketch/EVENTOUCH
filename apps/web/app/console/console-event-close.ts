@@ -93,7 +93,7 @@ export function linearCloseProgress(eventId: string, page: CloseLinearPage, snap
     if (step <= 4 && !ended) return page === "settings"
       ? { label: '진행 단계 ENDED', href: '#settings-stage', localStage: true }
       : link('/settings?closeStep=end#settings-stage', '진행 단계 ENDED');
-    if (step < 5 && !published) return link('/reports?closeFlow=1#event-close', '보고서 만들기/동결');
+    if (step < 5 && !published) return link('/reports?closeFlow=1#event-close', '보고서 만들기·확정');
     if (step < 6) return link('/messages', '결과 안내');
     if (step < 7) return link('/settings?closeStep=archive#settings-stage', '보관');
     return null;
@@ -102,7 +102,7 @@ export function linearCloseProgress(eventId: string, page: CloseLinearPage, snap
     : intent === "archive" ? 7 : intent === "programs" ? 2
       : (!ended || snapshot.registrationOpen) && (intent === "intake" || !intent && hash === "#settings-intake") && hash !== "#settings-stage" ? 3 : 4;
   if (snapshot.stage === "ARCHIVED") position = 7;
-  const labels = ['', '승인 대기 처리', '진행 프로그램 닫기', '참가 접수 닫기', '행사 종료', '보고서 검토·동결', '결과 안내', '보관'];
+  const labels = ['', '승인 대기 처리', '진행 프로그램 닫기', '참가 접수 닫기', '행사 종료', '보고서 검토·확정', '결과 안내', '보관'];
   const complete = position === 1 ? snapshot.participantsAvailable && snapshot.pending === 0 : position === 2 ? snapshot.modulesAvailable && snapshot.openModules.length === 0
     : position === 3 ? snapshot.registrationAvailable && !snapshot.registrationOpen : position === 4 ? ended : position === 6 ? Boolean(noticeStatus) : snapshot.stage === "ARCHIVED";
   const warnings: string[] = [];
@@ -113,7 +113,7 @@ export function linearCloseProgress(eventId: string, page: CloseLinearPage, snap
   if (position > 2 && snapshot.openModules.length) warnings.push(`진행 프로그램 ${snapshot.openModules.length}개 남음`);
   if (position > 3 && snapshot.registrationOpen) warnings.push('참가 접수 열림');
   if (position > 4 && !ended) warnings.push('행사 종료 미확인');
-  if (position > 5 && !published) warnings.push('선택한 마감 보고서 동결 미확인');
+  if (position > 5 && !published) warnings.push('선택한 마감 보고서 확정 미확인');
   const next = snapshot.stage === "ARCHIVED" || !snapshot.participantsAvailable || !snapshot.archiveAvailable ? null : page === "settings" && intent === "programs" && snapshot.openModules.length
     ? link('/programs', '진행 중 프로그램 닫기')
     : position === 2 && disabledOpen ? link('/settings?closeStep=programs#settings-features', '프로그램 기능 설정 확인')
