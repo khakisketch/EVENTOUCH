@@ -327,3 +327,6 @@ fieldset.notice > legend + * { clear: both; }
 
 .txtRules { margin-top: var(--s2); }
 .txtRules summary { cursor: pointer; color: var(--muted); font-weight: var(--fw-strong); min-height: 44px; display: flex; align-items: center; }
+/* Reopened 2026-11-24: a flex summary loses the browser marker, so say it opens. */
+.txtRules summary::after { content: "+"; margin-left: var(--s2); }
+.txtRules[open] summary::after { content: "−"; }
