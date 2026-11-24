@@ -27,6 +27,7 @@ import { boothCanAttempt, boothOperatingStatus, formatBoothScheduleTime, isBooth
 import { captureServerClock, readServerClock, type ServerClock } from "../../../../lib/server-clock";
 import { allowSessionForTab, clearSessionForTab, clearTicketRejected, getAllowedTicketForTab, isTicketRejected, markTicketRejected, REJECTED_TICKET_BEARER, ticketStorageAvailable } from "../../../../lib/attendee-ticket-identity";
 import { clearStoredTicket, readStoredTicket, storeTicket } from "../../../../lib/attendee-ticket-storage";
+import { noTicketHereNote } from "../attendee-guidance";
 import { randomCommandId } from "../../../../lib/command-id";
 import { asRecord, text } from "../../../../lib/json-guards";
 
@@ -1094,8 +1095,8 @@ export default function HomeShell({ slug }: { slug: string }) {
 
   function returnToMenu() {
     if ((detailDirty || activeWrites > 0) && !window.confirm(activeWrites > 0
-      ? "요청을 처리 중입니다. 이동해도 서버 처리는 취소되지 않습니다. 참가 메뉴로 이동할까요?"
-      : "선택하거나 입력한 내용이 사라집니다. 참가 메뉴로 이동할까요?")) return;
+      ? "요청을 처리 중입니다. 이동해도 서버 처리는 취소되지 않습니다. 참가자 홈으로 이동할까요?"
+      : "선택하거나 입력한 내용이 사라집니다. 참가자 홈으로 이동할까요?")) return;
     const historyState = asRecord(window.history.state);
     if (historyState?.eventouchAttendeeDetail === true) {
       window.history.back();
@@ -1159,21 +1160,23 @@ export default function HomeShell({ slug }: { slug: string }) {
       ? { label: "다시 시도", onClick: retrySameTab }
       : state.reason === "ticket-invalid" && !recoveryBlocked
         ? { label: "내 티켓 찾기", href: `${guideHref}/ticket/recover` }
-        : state.reason === "event-missing"
-          ? { label: "처음으로", href: "/" }
-          : { label: "행사 안내로", href: guideHref };
-    const secondary = primary.label === "행사 안내로" ? undefined : { label: "행사 안내로", href: guideHref };
+        : { label: "행사 안내로", href: guideHref };
+    // A missing event has no guide to go back to, and the product's landing page is not
+    // for an attendee who followed a message: no button, the address is what to check.
+    const secondary = primary.label === "행사 안내로" || state.reason === "event-missing" ? undefined : { label: "행사 안내로", href: guideHref };
     return (
       <AttendeeSurface as="main" id="main-content" tabIndex={-1} className={styles.homePage}>
         <section className={styles.statePanel}>
           <h1 className={styles.stateTitle}>{title}</h1>
           <AttendeeStateMessage kind={state.reason === "transient" ? "error" : "info"} title={state.message}>
             {state.reason === "ticket-invalid" && recoveryBlocked
-              ? "이 행사는 문자로 티켓을 다시 연결할 수 없습니다. 신청을 완료한 브라우저 탭을 확인하고, 확인되지 않으면 행사 주최 측에 문의하세요."
-              : null}
+              ? noTicketHereNote()
+              : state.reason === "event-missing"
+                ? "문자나 안내문에 적힌 주소를 다시 확인하거나, 행사 주최 측에 문의해 주세요."
+                : null}
           </AttendeeStateMessage>
         </section>
-        <BottomAction primary={primary} secondary={secondary} label="다음 행동" />
+        {state.reason === "event-missing" ? null : <BottomAction primary={primary} secondary={secondary} label="다음 행동" />}
         {recovery}
       </AttendeeSurface>
     );
@@ -1215,7 +1218,7 @@ export default function HomeShell({ slug }: { slug: string }) {
               <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none">
                 <path d="M19 12H5m7 7-7-7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <span>참가 메뉴</span>
+              <span>참가자 홈</span>
             </button>
             <span className={styles.detailEventName}>{state.eventName}</span>
           </header>
@@ -1226,7 +1229,7 @@ export default function HomeShell({ slug }: { slug: string }) {
         )}
         {activeTab === "qr" && <TicketView slug={slug} initialTicket={state.ticketToken} />}
         {activeTab === "application" && <TicketView slug={slug} initialTicket={state.ticketToken} mode="application" />}
-        {state.unavailable.includes(activeTab) && <div className={styles.statePanel}><h1 className={styles.stateTitle}>{activeMenu?.label}</h1><AttendeeStateMessage kind="empty" title="현재 이 행사에서 제공하지 않습니다.">참가 메뉴에서 다른 안내를 확인하세요.</AttendeeStateMessage></div>}
+        {state.unavailable.includes(activeTab) && <div className={styles.statePanel}><h1 className={styles.stateTitle}>{activeMenu?.label}</h1><AttendeeStateMessage kind="empty" title="현재 이 행사에서 제공하지 않습니다.">참가자 홈에서 다른 안내를 확인하세요.</AttendeeStateMessage></div>}
         {activeTab === "notice" && !state.unavailable.includes(activeTab) && <NoticeTab slug={slug} notices={state.notices} />}
         {activeTab === "lucky" && !state.unavailable.includes(activeTab) && (
           <LuckyTab
@@ -1340,9 +1343,9 @@ function NeedTicket({ slug }: { slug: string }) {
   const recoveryBlocked = isRecoveryBlocked(useVerificationMode());
   return (
     <section className={styles.needTicket}>
-      <AttendeeStateMessage kind="info" icon="ticket" title="이 탭에서 티켓이 확인되지 않습니다.">
+      <AttendeeStateMessage kind="info" icon="ticket" title="이 브라우저에서 티켓을 찾지 못했습니다.">
         {recoveryBlocked
-          ? "이 행사는 문자로 티켓을 다시 연결할 수 없습니다. 신청을 완료한 브라우저 탭을 확인하고, 탭을 찾을 수 없다면 행사 주최 측에 문의하세요."
+          ? noTicketHereNote()
           : "신청한 티켓을 확인하면 이 참여를 이어서 할 수 있어요."}
       </AttendeeStateMessage>
       <p className={styles.needTicketAction}>
@@ -1404,7 +1407,7 @@ function LuckyTab({
   return (
     <section className={styles.luckyPanel}>
       <div className={styles.eticket}>
-        <p className={styles.eticketHead}>E-Ticket</p>
+        <p className={styles.eticketHead}>럭키 티켓</p>
         <p className={styles.eticketSub}>럭키드로우 번호</p>
         {lucky ? (
           <>
@@ -1560,7 +1563,7 @@ function RouletteTab({
   return (
     <section className={styles.roulettePanel}>
       <div className={styles.eticket}>
-        <p className={styles.eticketHead}>E-Ticket</p>
+        <p className={styles.eticketHead}>럭키 티켓</p>
         <h2 className={styles.eticketTitle}>룰렛 이벤트</h2>
         {config?.prizes.length ? (
           <>
@@ -1591,7 +1594,9 @@ function RouletteTab({
             </p>
           </>
         ) : (
-          <p className={styles.rouletteWaiting} role="status">룰렛 경품이 아직 준비되지 않았습니다.</p>
+          // With no prizes the line below ("준비 중" or "운영이 종료되었습니다") already says why;
+          // saying "not ready" as well contradicted a closed roulette.
+          open || result ? <p className={styles.rouletteWaiting} role="status">룰렛 경품이 아직 준비되지 않았습니다.</p> : null
         )}
         {spinning ? (
           <p className={styles.rouletteSpinStatus} role="status">

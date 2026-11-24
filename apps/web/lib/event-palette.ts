@@ -112,6 +112,26 @@ export function deriveEventPalette(color: string): EventPalette {
   return { accent, accentStrong, accentSoft, onAccent, accentInk };
 }
 
+/**
+ * The accent as small text directly on a ground color (an a2 page's own ground, not
+ * white). accentInk is only proven on white and the soft card; on a tinted ground
+ * it can fall under 4.5:1 (e.g. #B24E14 on #B9DEF0 reads 3.69:1). The accent keeps
+ * its hue and saturation and gets darker until it clears the floor; when even black
+ * cannot keep that hue, the ground's own readable ink is used.
+ */
+export function accentInkOn(color: string, ground: string): string {
+  const accent = normalizeEventColor(color);
+  const base = normalizeEventColor(ground);
+  const { accentInk } = deriveEventPalette(accent);
+  if (contrastRatio(accentInk, base) >= INK_FLOOR) return accentInk;
+  const [h, s, l] = toHsl(parseHex(accentInk) as Rgb);
+  for (let light = l - 1; light >= 0; light -= 1) {
+    const candidate = fromHsl(h, s, light);
+    if (contrastRatio(candidate, base) >= INK_FLOOR) return candidate;
+  }
+  return readableInk(base);
+}
+
 /** The palette as CSS custom properties for an attendee screen's root. */
 export function paletteStyle(color: string): CSSProperties {
   const palette = deriveEventPalette(color);

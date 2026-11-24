@@ -109,8 +109,28 @@
   overflow-wrap: break-word;
 }
 
+/* A ticket is already in this browser: say so first, with the way to it as a real button. */
 .ticketChoice {
-  margin: calc(var(--s2) * -1) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2) var(--s3);
+  margin: 0;
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius-large);
+  background: color-mix(in srgb, var(--ink) 5%, var(--paper));
+  font-size: var(--small);
+  font-weight: 800;
+}
+
+.ticketChoice :global(.button) {
+  flex: none;
+  min-height: 44px;
+}
+
+.waitlistNotice {
+  margin: 0;
 }
 
 .form:global(.registration-form) {
@@ -365,11 +385,6 @@
   .form {
       scroll-behavior: auto;
     }
-}
-
-/* The step bar reads as the form's progress, right under the sheet's banner. */
-.step {
-  margin: 0;
 }
 
 /* a1: the white sheet sits on a white ground, so a hairline draws it. */

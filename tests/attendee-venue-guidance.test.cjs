@@ -22,11 +22,23 @@ const guideVenueCard = loadComponent('../event/[slug]/GuideVenueCard');
 const attendeeHome = require('../apps/web/lib/attendee-home.ts');
 const jsonGuards = require('../apps/web/lib/json-guards.ts');
 // The surface colors are not what these tests are about; the real helper is covered by the home layout tests.
+// Reopened 2026-11-24 (attendee screens review): the guide's wording about signup state and ticket
+// recovery now lives in two small modules; they run for real here, only the page's other imports are stubbed.
+function loadEventModule(name) {
+  const code = ts.transpileModule(fs.readFileSync(path.join(web, 'app/event/[slug]', `${name}.ts`), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const moduleExports = {};
+  vm.runInNewContext(code, { exports: moduleExports, require: () => { throw new Error('unexpected dependency'); } });
+  return moduleExports;
+}
+const attendeeGuidance = loadEventModule('attendee-guidance');
+const signupAvailability = loadEventModule('signup-availability');
 const homeSurface = { homeSurfaceStyle: (style) => ({ '--home-background-color': style.backgroundColor }) };
 // Class-name stubs for CSS modules: every key reads as its own name.
 const cssModule = () => ({ __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) });
 
-async function renderVenue(venue, published, features = ['venue'], program = []) {
+async function renderVenue(venue, published, features = ['venue'], program = [], extra = {}) {
   const source = fs.readFileSync(path.join(web, 'app/event/[slug]/page.tsx'), 'utf8');
   const code = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
@@ -38,8 +50,8 @@ async function renderVenue(venue, published, features = ['venue'], program = [])
   vm.runInNewContext(recoveryCode, { exports: recoveryExports });
   const exports = {};
   const response = {
-    event: { id: 'fixture', slug: 'fixture', name: '합성 행사', date: '2027-01-16', stage: 'READY', features },
-    workspace: { venue, program, pageExperience: { published } },
+    event: { id: 'fixture', slug: 'fixture', name: '합성 행사', date: '2027-01-16', stage: 'READY', features, ...extra.event },
+    workspace: { venue, program, pageExperience: { published }, ...extra.workspace },
   };
   vm.runInNewContext(code, {
     exports,
@@ -60,6 +72,8 @@ async function renderVenue(venue, published, features = ['venue'], program = [])
       if (id === './PublicProgramSchedule') return schedule;
       if (id === './AddressCopyButton') return addressCopy;
       if (id === './TabTicketChoice') return tabTicketChoice;
+      if (id === './attendee-guidance') return attendeeGuidance;
+      if (id === './signup-availability') return signupAvailability;
       if (id === '../../../lib/verification-mode') return { loadVerificationMode: async () => 'real' };
       if (id === '../../../lib/public-recovery-contact') return recoveryExports;
       if (id === '../../ui/RichText') return { __esModule: true, default: ({ source }) => jsx.jsx('div', { children: source }) };
@@ -139,4 +153,30 @@ test('venue map has escaped descriptive alt text and an accessible full-size lin
   assert.match(html, /안내도 크게 보기 \(새 탭\)/);
   const hidden = await renderVenue({ map: { image: { fileId: 'file-example' }, alt: '숨긴 안내도' } }, { showVenue: false });
   assert.doesNotMatch(hidden, /file-example|숨긴 안내도/);
+});
+
+// Added 2026-11-24 (attendee screens review, D2/D3): the guide says why signup is closed, in its own words.
+test('the guide names why signup is closed and offers a ticket search only where a ticket can exist', async () => {
+  const guide = (extra) => renderVenue({}, {}, ['venue'], [], extra);
+  const full = await guide({ workspace: { registrationOpen: true, full: true, approvalRequired: false } });
+  assert.match(full, /정원이 마감되었습니다\./u);
+  assert.doesNotMatch(full, /참가 신청하기|대기 신청하기|\/register"/u);
+  assert.match(full, /이미 신청했다면 내 티켓 찾기/u);
+  const waitlist = await guide({ workspace: { registrationOpen: true, full: true, approvalRequired: true } });
+  assert.match(waitlist, /대기 신청하기/u);
+  assert.match(waitlist, /\/register"/u);
+  assert.doesNotMatch(waitlist, /정원이 마감되었습니다\./u);
+  const open = await guide({ workspace: { registrationOpen: true, full: false } });
+  assert.match(open, /참가 신청하기/u);
+  const notOpen = await guide({ workspace: { registrationOpen: false } });
+  assert.match(notOpen, /지금은 신청 접수 기간이 아닙니다\./u);
+  assert.match(notOpen, /접수가 열리면/u);
+  assert.doesNotMatch(notOpen, /참가 신청하기/u);
+  // Nobody can hold a ticket before the intake opens: the closed card carries no ticket search.
+  assert.doesNotMatch(notOpen.split('행사 안내와 참여')[0], /이미 신청했다면 내 티켓 찾기/u);
+  const closed = await guide({ event: { stage: 'LIVE' }, workspace: { registrationOpen: false } });
+  assert.match(closed, /신청 접수가 마감되었습니다\./u);
+  const ended = await guide({ event: { stage: 'ENDED' }, workspace: { registrationOpen: true } });
+  assert.match(ended, /종료된 행사입니다\./u);
+  assert.doesNotMatch(ended, /현재 신청을 받지 않습니다/u);
 });

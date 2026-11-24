@@ -52,8 +52,10 @@ test("ticket need reads on the entry itself while additional paths may scroll", 
 });
 
 test("an attendee without a ticket is told how to get one", () => {
-  assert.match(shell, /이 탭에서 티켓이 확인되지 않습니다\./u);
-  assert.match(shell, /신청을 완료한 브라우저 탭/u);
+  // Reopened 2026-11-24: the boundary is the browser that registered, not the tab (the signup cookie reopens it).
+  assert.match(shell, /이 브라우저에서 티켓을 찾지 못했습니다\./u);
+  assert.match(shell, /noTicketHereNote\(\)/u);
+  assert.doesNotMatch(shell, /브라우저 탭/u);
   assert.match(shell, /행사 안내 확인/u);
   assert.match(shell, /처음 신청하기/u);
   assert.match(shell, /\/register/u);

@@ -22,7 +22,7 @@ export default async function TicketPage({
       <AttendeeSurface as="main" id="main-content" tabIndex={-1} color={look.color} mode={look.mode} ground={look.ground} className={`site-page ticket-page ${styles.ticketPage}`} style={attendeeGroundStyle(theme)}>
         <header className="public-page-header">
           <span className="compact-wordmark">EVENTOUCH</span>
-          <ProductLink href={`/event/${encodeURIComponent(slug)}/home`} className={`public-return-link ${styles.returnLink}`}>← 참가 메뉴로</ProductLink>
+          <ProductLink href={`/event/${encodeURIComponent(slug)}/home`} className={`public-return-link ${styles.returnLink}`}>← 참가자 홈으로</ProductLink>
         </header>
         <TicketView key={slug} slug={slug} theme={theme} />
       </AttendeeSurface>

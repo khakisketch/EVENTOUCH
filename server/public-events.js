@@ -26,6 +26,20 @@ function text(value, max = 5000) {
   return typeof value === 'string' ? value.slice(0, max) : '';
 }
 
+// Same count and rule as participant signup (server/commands/participants.js
+// eventCapacity + isActive): an event with a capacity is full once its active
+// (not cancelled) participants, waiting list included, reach that capacity.
+// Kept here as a boolean only: the headcount itself never leaves the server.
+function isActiveParticipant(person) {
+  return Boolean(person) && person.status !== 'CANCELLED' && person.cancelled !== true;
+}
+
+function signupFull(source, event) {
+  const capacity = Number(object(event).capacity);
+  if (!Number.isFinite(capacity) || capacity <= 0) return false;
+  return array(source.participants).filter(isActiveParticipant).length >= capacity;
+}
+
 function pick(source, keys) {
   const result = {};
   for (const key of keys) {
@@ -458,6 +472,8 @@ function publicWorkspace(value, event, participant = null) {
     publishedVersion: Number(source.publishedVersion) || 0,
     registrationOpen: source.registrationOpen === true,
     approvalRequired: source.approvalRequired === true,
+    // Capacity reached: the form can say so before the attendee fills it in.
+    full: signupFull(source, event),
     consentText: text(source.consentText, 3000),
     consentVersion: Number(source.consentVersion) || 1,
     notices,

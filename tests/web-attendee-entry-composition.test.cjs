@@ -64,7 +64,16 @@ test('the ticket page sits on the event ground and wears its published banner', 
 });
 
 test('the QR stays large and keeps its four-module quiet zone', () => {
-  assert.match(ticketCss, /\.ticketQr\s*\{[^}]*width:\s*min\(100%,\s*340px\)/su);
+  // Reopened 2026-11-24: on a 360x640 phone the 340px code ran under the fixed bottom bar; its width is also
+  // bounded by the screen height (44svh), and never below 200px so it stays scannable.
+  assert.match(ticketCss, /\.ticketQr\s*\{[^}]*width:\s*min\(100%,\s*340px,\s*44svh\)/su);
+  assert.match(ticketCss, /\.ticketQr\s*\{[^}]*min-width:\s*200px/su);
+  // A very long name keeps to two lines so it cannot push the QR down; the full name stays in the markup.
+  assert.match(ticketCss, /\.ticketAttendeeName\s*\{[^}]*-webkit-line-clamp:\s*2/su);
+  assert.match(ticket, /<h2 className=\{styles\.ticketAttendeeName\} title=\{state\.name\}>\{state\.name\}<\/h2>/u);
+  // The completion receipt folds away after a few seconds instead of staying above the QR.
+  assert.match(ticket, /RECEIPT_VISIBLE_MS = 6000/u);
+  assert.match(ticketCss, /\.ticketSuccess\[data-folded\]/u);
   assert.match(ticketCss, /\.ticketQr\s*\{[^}]*padding:\s*var\(--s5\)/su);
   assert.match(ticketCss, /\.ticketQr\s*\{[^}]*background:\s*var\(--paper\)/su);
   assert.match(ticketCss, /\.ticketQr svg\s*\{[^}]*width:\s*100% !important/su);
@@ -104,12 +113,14 @@ test('the application is a numbered sheet: banner, facts, sections, a sticky sub
   // Reopened 2026-11-20: a1 (white ground) or a2 (the event's color) from AttendeeSurface; a step bar and a BottomAction submit.
   assert.match(registerCss, /\.page:global\(\.registration-page\)\s*\{[^}]*background:\s*var\(--ev-ground, var\(--home-background-color\)/su);
   assert.match(registerPage, /<AttendeeSurface as="main"/u);
-  assert.match(register, /<AttendeeStep className=\{styles\.step\} current=\{currentStep\} total=\{totalSteps\}/u, 'the sections are the steps, with a progress bar');
+  // Reopened 2026-11-24: no "1/2" step bar on a one-page form; the progress line is the one indicator.
+  assert.doesNotMatch(register, /<AttendeeStep/u, 'no ambiguous step counter');
+  assert.match(register, /필수 항목 \$\{pendingSteps\.length\}개 남음/u, 'the progress line says what is left');
   assert.match(register, /<span className=\{styles\.req\}>/u);
   assert.match(registerCss, /\.stepSection :global\(\.form-field\) input:not\(\[type="checkbox"\]\)[\s\S]*?min-height:\s*calc\(var\(--s7\) \+ var\(--s2\)\)/u, 'large input fields (56px)');
   assert.match(registerCss, /\[aria-invalid="true"\]\s*\{[^}]*var\(--danger\)/su, 'only the field to fix turns red');
   // The submit is the BottomAction primary (fixed to the bottom of the column), still inside the form.
-  assert.match(register, /<BottomAction[\s\S]*?label: submitting \? \(retryPending \? "신청 결과 확인 중입니다" : "신청 중입니다"\) : \(retryPending \? "신청 결과 다시 확인" : "신청하기"\),\s*type: "submit"/u, 'one strong submit');
+  assert.match(register, /<BottomAction[\s\S]*?label: submitting \? \(retryPending \? "신청 결과 확인 중입니다" : "신청 중입니다"\) : \(retryPending \? "신청 결과 다시 확인" : waitlist \? "대기 신청하기" : "신청하기"\),\s*type: "submit"/u, 'one strong submit');
   assert.doesNotMatch(registerCss, /\.submitBlock/u, 'the old sticky submit block is gone');
   assert.doesNotMatch(registerCss, /\.sheet\s*\{[^}]*overflow:\s*(?:hidden|clip)/su, 'no overflow clip on the sheet, or the submit bar stops sticking');
   assert.match(registerCss, /scroll-margin-block-end:\s*220px/u, 'a focused field keeps its error clear of the bar');
@@ -119,11 +130,14 @@ test('closed intake has one way forward: find my ticket becomes the primary', ()
   // The registration card is the home's ticket-card slot: open intake offers
   // "참가 신청"; closed intake turns the same slot into "내 티켓 찾기" (or a quiet
   // closed note where recovery is unavailable), so there is still one way forward.
-  assert.match(eventPage, /\{acceptingSignup \? \(\s*<GuideCard slot=\{!simple\} href=\{`\$\{guideHref\}\/register`\}/u);
-  assert.match(eventPage, /: !recoveryBlocked \? \(\s*<GuideCard slot=\{!simple\} href=\{`\$\{guideHref\}\/ticket\/recover`\}/u);
-  // Reopened 2026-11-20: the closed note is an AttendeeStateMessage; the stylesheet only places it.
-  assert.match(eventPage, /<AttendeeStateMessage kind="info" title="현재 신청을 받지 않습니다\." className=\{styles\.closedCard\} \/>/u);
+  // Reopened 2026-11-24: the closed state first says WHY (its own line from signup-availability), then offers the way
+  // back to a ticket only where one can exist; no recovery is offered where text messages cannot reconnect it.
+  assert.match(eventPage, /\{acceptingSignup \? \(\s*<GuideCard\s+slot=\{!simple\}\s+href=\{`\$\{guideHref\}\/register`\}/u);
+  assert.match(eventPage, /<AttendeeStateMessage kind="info" title=\{availability\.title\} className=\{styles\.closedCard\}>\{availability\.next\}<\/AttendeeStateMessage>/u);
+  assert.match(eventPage, /\{recoverable \? \(\s*<GuideCard slot=\{!simple\} href=\{`\$\{guideHref\}\/ticket\/recover`\}/u);
+  assert.match(eventPage, /const recoverable = mayHaveTicket\(availability\.kind\) && !recoveryBlocked;/u);
   assert.match(eventCss, /\.closedCard\s*\{[^}]*margin:/su);
+  assert.match(eventCss, /\.closedStack\s*\{[^}]*display:\s*grid/su);
 });
 
 test('finding a ticket again is one large field and one primary action', () => {

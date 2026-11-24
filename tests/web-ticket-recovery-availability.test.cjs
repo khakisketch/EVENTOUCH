@@ -14,6 +14,9 @@ const path = require('node:path');
 
 const WEB = path.join(__dirname, '..', 'apps', 'web');
 const read = (rel) => fs.readFileSync(path.join(WEB, rel), 'utf8');
+// Reopened 2026-11-24 (attendee screens review): where a ticket reopens is the BROWSER that registered (the signup
+// session cookie), not the tab. The words live in one module and the screens use it.
+const guidance = read('app/event/[slug]/attendee-guidance.ts');
 
 test('recovery availability resolves from the existing health response', () => {
   const hook = read('lib/use-verification-mode.ts');
@@ -32,8 +35,9 @@ test('registration hides the dead-end link when recovery is blocked', () => {
     'duplicate and changed-result guidance each provide an available-mode recovery link'
   );
   assert.match(form, /signupSuperseded[\s\S]*?recoveryBlocked \? \([\s\S]*?행사 주최 측에 문의하세요[\s\S]*?ticket\/recover/u, 'changed-result guidance also gates recovery');
-  assert.match(form, /신청을 완료한 브라우저 탭을 확인하세요/u, 'blocked duplicate names the original tab');
-  assert.match(form, /recoveryContact \? ` 문의: \$\{recoveryContact\}`/u, 'only a visible contact is shown');
+  assert.match(form, /organizerContactLine\(recoveryContact\)/u, 'blocked duplicate offers the contact, not a tab to look for');
+  assert.doesNotMatch(form, /브라우저 탭/u, 'no tab boundary is promised');
+  assert.match(guidance, /value \? `문의: \$\{value\}` : fallback/u, 'only a visible contact is shown');
   const page = read('app/event/[slug]/register/page.tsx');
   assert.match(page, /verificationMode === "none" \|\| verificationMode === "mock"/u, 'mock blocks too, like the recover screen');
 });
@@ -42,14 +46,16 @@ test('attendee home gates every recovery entry on availability', () => {
   const home = read('app/event/[slug]/home/HomeShell.tsx');
   assert.match(home, /useVerificationMode\(\)/u, 'home resolves the transport mode');
   assert.match(home, /recoveryBlocked \? null : \(/u, 'need-ticket link steps aside when blocked');
-  assert.match(home, /신청을 완료한 브라우저 탭을 확인/u, 'blocked guidance names the tab limit');
+  assert.match(home, /noTicketHereNote\(\)/u, 'blocked guidance is the shared note');
+  assert.match(guidance, /신청을 완료한 기기의 같은 브라우저에서 열어 주세요/u, 'blocked guidance names the browser limit');
 });
 
 test('ticket screen gates missing, failed and kept-ticket recovery copy', () => {
   const view = read('app/event/[slug]/ticket/TicketView.tsx');
   assert.match(view, /useVerificationMode\(\)/u, 'ticket screen resolves the transport mode');
   assert.match(view, /state\.canRecover && !recoveryBlocked/u, 'failed 404 hides recover when blocked');
-  assert.match(view, /다른 탭이나 기기에서는 열리지 않을 수 있습니다/u, 'kept-ticket note names the tab boundary');
+  assert.match(view, /TICKET_BROWSER_NOTE/u, 'kept-ticket note is the one shared explanation');
+  assert.match(guidance, /이 브라우저에서는 티켓을 다시 열 수 있습니다\. 다른 기기나 시크릿 창에서는 열리지 않으니 입장 QR 화면을 캡처해 두세요\./u, 'kept-ticket note names the browser boundary');
 });
 
 test('engagement and event pages gate their recovery entries', () => {
@@ -58,7 +64,8 @@ test('engagement and event pages gate their recovery entries', () => {
   const eventPage = read('app/event/[slug]/page.tsx');
   assert.match(eventPage, /loadVerificationMode\(\)/u, 'event page reads the same server-side mode');
   assert.match(eventPage, /recoveryBlocked \? \(/u, 'event page branches on availability');
-  assert.match(eventPage, /이 행사는 문자로 다시 연결할 수 없습니다/u, 'blocked event page names the limit, not the link');
+  assert.match(eventPage, /noTicketHereNote\(recoveryContact\)/u, 'blocked event page names the limit, not the link');
+  assert.match(guidance, /이 행사는 문자로 티켓을 다시 연결할 수 없습니다/u);
 });
 
 test('recover screen still refuses mock and none transports', () => {

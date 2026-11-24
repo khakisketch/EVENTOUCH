@@ -3,7 +3,9 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 // Default share card for link previews (카카오톡·문자·메신저 썸네일). Every route
-// inherits it: no page defines its own metadata. Colors follow the brand tokens
+// inherits it. The event pages (app/event/[slug]) define their own title and
+// description and use their banner picture when there is one; without a picture
+// they re-export this same card (event/[slug]/opengraph-image.tsx). Colors follow the brand tokens
 // (--brand #EA552E, --brand-text #8E351F). Pretendard is set explicitly because
 // the default Satori font cannot draw Hangul.
 export const alt = "EVENTOUCH · 행사 운영 워크스페이스";

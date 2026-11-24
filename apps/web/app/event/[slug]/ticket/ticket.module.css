@@ -124,6 +124,25 @@
   line-height: 1.5;
 }
 
+/* A few seconds after the receipt appears it folds away, so it stops pushing the QR down. */
+.ticketSuccess[data-folded] {
+  max-height: 0;
+  margin-bottom: calc(var(--s3) * -1);
+  padding-block: 0;
+  overflow: hidden;
+  opacity: 0;
+  animation: receiptFold 0.35s ease both;
+}
+
+@keyframes receiptFold {
+  from { max-height: 8rem; opacity: 1; }
+  to { max-height: 0; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticketSuccess[data-folded] { animation: none; }
+}
+
 .ticketHeading {
   display: grid;
   justify-items: start;
@@ -172,6 +191,12 @@
 .ticketBand[data-tone="in"] { background: var(--info-soft); }
 
 .ticketAttendeeName {
+  /* Two lines, then an ellipsis: a very long name must not push the QR out of the first screen. */
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   margin: var(--s1) 0 0;
   font-size: clamp(var(--text-num), 10.5vw, calc(var(--text-num) + var(--s2)));
   font-weight: 800;
@@ -291,7 +316,9 @@
 /* Preserve the pure-white four-module quiet zone and existing code size. */
 .ticketQr {
   display: block;
-  width: min(100%, 340px);
+  /* Also bounded by the screen's height, so the whole code stays above the fixed bottom bar on a short phone. */
+  width: min(100%, 340px, 44svh);
+  min-width: 200px;
   margin-inline: auto;
   padding: var(--s5);
   border: 1px solid var(--line);

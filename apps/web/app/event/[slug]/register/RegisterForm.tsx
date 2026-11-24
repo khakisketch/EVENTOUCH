@@ -14,9 +14,10 @@ import { useUnsavedNavigationGuard } from "../../../../lib/use-unsaved-navigatio
 import { randomCommandId } from "../../../../lib/command-id";
 import { postAttendeeRequest } from "../attendee-request";
 import AttendeeIcon from "../AttendeeIcons";
-import AttendeeStep from "../ui/AttendeeStep";
 import AttendeeStateMessage from "../ui/AttendeeStateMessage";
 import BottomAction from "../ui/BottomAction";
+import { organizerContactLine } from "../attendee-guidance";
+import { signupAvailability } from "../signup-availability";
 
 type Props = {
   slug: string;
@@ -31,6 +32,9 @@ type Props = {
   // Approval-gated events issue the entry QR only after an operator
   // approves: the lead must promise a receipt, not an immediate ticket.
   approvalRequired?: boolean;
+  // Capacity is reached and approval-gated signups still queue: the form says
+  // so first and the outcome becomes "waiting list", not "ticket".
+  waitlist?: boolean;
   // Paid-flow events (v1-excluded from payment UI, but the server still
   // lands these signups payment-pending): same receipt promise.
   paymentPending?: boolean;
@@ -43,8 +47,8 @@ export default function RegisterForm(initial: Props) {
   const [form, setForm] = useState(() => ({ fields: initial.fields, consentText: initial.consentText,
     consentVersion: initial.consentVersion, formVersion: initial.formVersion,
     verificationRequired: initial.verificationRequired, recoveryContact: initial.recoveryContact,
-    approvalRequired: initial.approvalRequired, paymentPending: initial.paymentPending }));
-  const { fields, consentText, consentVersion, formVersion, verificationRequired, recoveryContact, approvalRequired, paymentPending } = form;
+    approvalRequired: initial.approvalRequired, paymentPending: initial.paymentPending, waitlist: initial.waitlist === true }));
+  const { fields, consentText, consentVersion, formVersion, verificationRequired, recoveryContact, approvalRequired, paymentPending, waitlist } = form;
   const router = useRouter();
   // Keep the entire original request in memory, not in browser storage: its
   // id can replay a ticket and the body contains personal information.
@@ -105,9 +109,10 @@ export default function RegisterForm(initial: Props) {
       const next = parseRegisterData(await response.json());
       if (!next) throw new Error("invalid");
       if (!current()) return;
-      if (!next.registrationOpen || next.stage === "ENDED" || next.publishedVersion < 1) {
+      const nextAvailability = signupAvailability({ stage: next.stage, registrationOpen: next.registrationOpen, full: next.full, approvalRequired: next.approvalRequired });
+      if (nextAvailability.kind !== "open" || next.publishedVersion < 1) {
         setFormClosed(true);
-        setFormRefreshError("현재 참가 신청을 받지 않습니다. 입력한 내용은 이 화면에 남아 있습니다.");
+        setFormRefreshError(`${nextAvailability.kind !== "open" ? nextAvailability.title : "지금은 신청 접수 기간이 아닙니다."} 입력한 내용은 이 화면에 남아 있습니다.`);
         return;
       }
       if (next.publishedVersion < formVersion || (formRefreshNeedsNewVersion && next.publishedVersion === formVersion)) {
@@ -128,7 +133,7 @@ export default function RegisterForm(initial: Props) {
       }
       setForm({ fields: nextFields, consentText: next.consentText, consentVersion: next.consentVersion,
         formVersion: next.publishedVersion, verificationRequired: next.verificationRequired,
-        recoveryContact: next.recoveryContact, approvalRequired: next.approvalRequired, paymentPending: next.paymentPending });
+        recoveryContact: next.recoveryContact, approvalRequired: next.approvalRequired, paymentPending: next.paymentPending, waitlist: nextAvailability.waitlist });
       setConsent(false);
       setFormClosed(false);
       setFailure(null);
@@ -433,18 +438,17 @@ export default function RegisterForm(initial: Props) {
     }
   }
 
+  // The rejection itself ("이미 등록된 연락처") is said once, by the field or the message above.
+  // This is only the way on: open the ticket this browser already holds, or look for it.
   const duplicateRecovery = alreadyRegistered ? (
-    recoveryBlocked ? (
-      <p className="registration-duplicate" role="status">
-        이미 신청하신 연락처로 등록되어 있습니다. 문자로 다시 연결할 수 없으므로 신청을 완료한 브라우저 탭을 확인하세요.
-        {recoveryContact ? ` 문의: ${recoveryContact}` : " 탭을 찾을 수 없다면 행사 주최 측에 문의하세요."}
-      </p>
-    ) : (
-      <p className="registration-duplicate" role="status">
-        이미 신청하신 연락처로 등록되어 있습니다.{" "}
-        <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</ProductLink>
-      </p>
-    )
+    <p className="registration-duplicate" role="status">
+      <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket`} prefetch={false}>내 티켓 열기</ProductLink>
+      {recoveryBlocked ? (
+        <> {organizerContactLine(recoveryContact)}</>
+      ) : (
+        <> <ProductLink variant="ghost" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>다른 기기라면 연락처 인증으로 찾기</ProductLink></>
+      )}
+    </p>
   ) : null;
 
   const pendingSteps = fields.flatMap((field) => {
@@ -472,13 +476,8 @@ export default function RegisterForm(initial: Props) {
     pendingSteps.push({ id: "consent", label: "개인정보 동의", problem: failure?.field === "consent", required: true });
   }
 
-  // The sections are the steps: 참가자 정보, 연락처 인증 (verified-only events), 정보 수집 동의.
-  // The current step follows what is still open, so the bar reads as progress without hiding a field.
-  const hasVerificationStep = verificationRequired && !signupSuperseded && !recoveryBlocked;
-  const totalSteps = 1 + (hasVerificationStep ? 1 : 0) + (consentText ? 1 : 0);
-  const fieldsPending = pendingSteps.some((step) => step.id.startsWith("field-"));
-  const currentStep = fieldsPending ? 1 : hasVerificationStep && !grant ? 2 : totalSteps;
-
+  // Reopened 2026-11-24: the "1/2" step bar read as two pages on a one-page form. The
+  // progress line below ("필수 항목 N개 남음") is the one place that says how far along it is.
   function focusRegistrationStep(id: string) {
     const target = document.getElementById(id);
     if (!(target instanceof HTMLElement)) return;
@@ -499,7 +498,7 @@ export default function RegisterForm(initial: Props) {
     nextProgressStep = { id: "signup-form-changed", label: "양식 변경 확인", problem: false, required: true };
   }
   else if (verificationRequired && recoveryBlocked) progressMessage = "현재 연락처 인증을 사용할 수 없습니다.";
-  else if (alreadyRegistered) progressMessage = "이미 신청된 연락처입니다.";
+  else if (alreadyRegistered) progressMessage = "내 티켓을 열거나 다른 연락처로 신청하세요.";
   else {
     nextProgressStep = pendingSteps[0];
     if (pendingSteps.length === 0) progressMessage = "필수 항목을 모두 작성했습니다.";
@@ -608,13 +607,14 @@ export default function RegisterForm(initial: Props) {
     >
       <fieldset className="registration-fields" disabled={submitting || retryPending || signupSuperseded}>
       <legend className="sr-only">참가 신청 정보</legend>
-      {totalSteps > 1 ? <AttendeeStep className={styles.step} current={currentStep} total={totalSteps} label="신청 진행 단계" /> : null}
       <section className={styles.stepSection} aria-label="신청 결과 안내">
         <h2 className="sr-only">신청하면 어떻게 되나요</h2>
         <p className={styles.outcomeNote} role="note">
           <span className={styles.outcomeIcon}><AttendeeIcon name="ticket" size={18} /></span>
           <span>
-          {approvalRequired && paymentPending
+          {waitlist
+            ? "정원이 마감되어 대기 명단으로 접수됩니다. 자리가 나면 운영자가 확정하고, 확정되면 입장 QR이 표시됩니다."
+            : approvalRequired && paymentPending
             ? "신청 접수 후 운영자 승인과 결제 확인이 모두 끝나면 입장 QR이 표시됩니다."
             : approvalRequired
               ? "신청 접수 후 운영자가 승인하면 입장 QR이 표시됩니다."
@@ -622,9 +622,6 @@ export default function RegisterForm(initial: Props) {
                 ? "신청 접수 후 결제 확인이 끝나면 입장 QR이 표시됩니다."
                 : "신청하면 입장 티켓이 바로 발급됩니다."}
           {verificationRequired ? " 신청 전 연락처 인증이 필요합니다." : null}
-          {recoveryBlocked ? (
-            <> 문자 복구가 불가능하므로 신청을 마친 브라우저 탭을 닫지 마세요. {recoveryContact ? `문의: ${recoveryContact}` : "탭을 찾을 수 없다면 행사 주최 측에 문의하세요."}</>
-          ) : null}
           </span>
         </p>
       </section>
@@ -762,7 +759,7 @@ export default function RegisterForm(initial: Props) {
       <BottomAction
         label="신청 진행"
         primary={{
-          label: submitting ? (retryPending ? "신청 결과 확인 중입니다" : "신청 중입니다") : (retryPending ? "신청 결과 다시 확인" : "신청하기"),
+          label: submitting ? (retryPending ? "신청 결과 확인 중입니다" : "신청 중입니다") : (retryPending ? "신청 결과 다시 확인" : waitlist ? "대기 신청하기" : "신청하기"),
           type: "submit",
           disabled: submitting || signupSuperseded || formClosed || (verificationRequired && recoveryBlocked) || failure?.field === "formVersion",
         }}

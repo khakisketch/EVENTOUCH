@@ -24,6 +24,8 @@ import GuideIcon, { type GuideIconType } from "./GuideIcon";
 import PublicProgramSchedule, { type PublicProgramScheduleItem } from "./PublicProgramSchedule";
 import AddressCopyButton from "./AddressCopyButton";
 import TabTicketChoice from "./TabTicketChoice";
+import { noTicketHereNote } from "./attendee-guidance";
+import { mayHaveTicket, signupAvailability } from "./signup-availability";
 import styles from "./public-event.module.css";
 
 type PublicEvent = {
@@ -44,6 +46,9 @@ type PublicWorkspace = {
   program?: unknown;
   venue?: { name?: unknown; address?: unknown; directions?: unknown; contact?: unknown; description?: unknown; map?: unknown } | null;
   registrationOpen?: unknown;
+  approvalRequired?: unknown;
+  // Capacity reached, computed by the server with the signup writer's own rule.
+  full?: unknown;
   // The look (banner, ground, accent) is read by readAttendeeTheme; only the page's own switches stay here.
   pageExperience?: { published?: {
     intro?: unknown;
@@ -129,10 +134,16 @@ export default async function EventPage({
   const registrationOpen = workspace.registrationOpen === true;
   // The public signup writer only runs on READY/LIVE (participants writer
   // rule publicSignupEvent): an ENDED event with the intake flag still on
-  // must not offer a form that can only fail. No API change: the stage
-  // already ships in this payload.
-  const acceptingSignup =
-    registrationOpen && (event.stage === "READY" || event.stage === "LIVE");
+  // must not offer a form that can only fail. Each way of being closed (not
+  // open, closed, full, ended) gets its own line and next step; a full event
+  // that takes approvals still queues a waiting list, so it stays open.
+  const availability = signupAvailability({
+    stage: event.stage,
+    registrationOpen,
+    full: workspace.full === true,
+    approvalRequired: workspace.approvalRequired === true,
+  });
+  const acceptingSignup = availability.kind === "open";
   const notices: Notice[] = Array.isArray(workspace.notices)
     ? workspace.notices.flatMap((item) => {
         if (typeof item !== "object" || item === null) return [];
@@ -233,6 +244,7 @@ export default async function EventPage({
   // Poster keeps the home's own composition (ticket-card slot, icon tiles); tile and
   // photo layouts read as one plain summary card, then plain cards (owner decision 2026-11-19).
   const simple = layout !== "poster";
+  const recoverable = mayHaveTicket(availability.kind) && !recoveryBlocked;
   const registration = (
     <TabTicketChoice slug={slug} whenPresent={
       <GuideCard
@@ -241,16 +253,26 @@ export default async function EventPage({
         prefetch={false}
         icon="ticket"
         label="내 티켓 열기"
-        sub={acceptingSignup ? stageLabel : "현재 신청을 받지 않습니다"}
+        sub={acceptingSignup ? stageLabel : availability.title}
         go="열기"
       />
     }>
       {acceptingSignup ? (
-        <GuideCard slot={!simple} href={`${guideHref}/register`} icon="register" label="참가 신청하기" sub={`${stageLabel} · 접수 중`} go="신청" />
-      ) : !recoveryBlocked ? (
-        <GuideCard slot={!simple} href={`${guideHref}/ticket/recover`} icon="ticket" label="이미 신청했다면 내 티켓 찾기" sub="현재 신청을 받지 않습니다" go="찾기" />
+        <GuideCard
+          slot={!simple}
+          href={`${guideHref}/register`}
+          icon="register"
+          label={availability.waitlist ? "대기 신청하기" : "참가 신청하기"}
+          sub={availability.waitlist ? "정원이 마감되어 대기 신청으로 받고 있습니다" : `${stageLabel} · 접수 중`}
+          go="신청"
+        />
       ) : (
-        <AttendeeStateMessage kind="info" title="현재 신청을 받지 않습니다." className={styles.closedCard} />
+        <div className={styles.closedStack}>
+          <AttendeeStateMessage kind="info" title={availability.title} className={styles.closedCard}>{availability.next}</AttendeeStateMessage>
+          {recoverable ? (
+            <GuideCard slot={!simple} href={`${guideHref}/ticket/recover`} icon="ticket" label="이미 신청했다면 내 티켓 찾기" sub="신청한 연락처로 다시 열 수 있습니다" go="찾기" />
+          ) : null}
+        </div>
       )}
     </TabTicketChoice>
   );
@@ -403,7 +425,7 @@ export default async function EventPage({
           {recoveryBlocked ? (
             <details className={styles.recoveryDetails}>
               <summary data-disclosure-indicator>이미 신청하셨나요?</summary>
-              <p className={styles.recoveryNote} role="note">이미 신청했다면 신청을 완료한 브라우저 탭에서 티켓을 여세요. 이 행사는 문자로 다시 연결할 수 없습니다. {recoveryContact ? `문의: ${recoveryContact}` : "탭을 찾을 수 없다면 행사 초대 안내를 확인하거나 행사 주최 측에 문의하세요."}</p>
+              <p className={styles.recoveryNote} role="note">{noTicketHereNote(recoveryContact)} <ProductLink variant="ghost" href={`${guideHref}/ticket`} prefetch={false}>이 브라우저에서 내 티켓 열기</ProductLink></p>
             </details>
           ) : null}
         </TabTicketChoice>

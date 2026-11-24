@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { readableInk } from "../../../../lib/attendee-home";
 import type { AttendeeMode } from "../../../../lib/attendee-look";
-import { normalizeEventColor, paletteStyle } from "../../../../lib/event-palette";
+import { accentInkOn, normalizeEventColor, paletteStyle } from "../../../../lib/event-palette";
 import styles from "./AttendeeSurface.module.css";
 
 // The one wrapper of the attendee design system. It applies the event palette
@@ -45,6 +45,8 @@ export default function AttendeeSurface({
     ...(paletteStyle(accentColor) as SurfaceStyle),
     "--ev-ground": groundColor ?? "var(--paper)",
     "--ev-ground-ink": groundColor ? readableInk(groundColor) : "var(--ink)",
+    // Small accent-colored text that sits straight on an a2 ground (not on a white card).
+    ...(groundColor ? { "--ev-ground-accent-ink": accentInkOn(accentColor, groundColor) } : {}),
   };
   return (
     <Tag

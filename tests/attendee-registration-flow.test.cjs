@@ -60,9 +60,28 @@ test("the supplied field order is rendered without regrouping", () => {
 });
 
 test("a duplicate application offers the way back to the ticket", () => {
+  // Reopened 2026-11-24: the duplicate was said three times (field error, panel, progress line).
+  // The rejection is said once by the field; the panel is the next action ("내 티켓 열기"), the progress
+  // line names that next step instead of repeating the rejection.
   assert.match(form, /alreadyRegistered/u);
-  assert.match(form, /이미 신청하신 연락처로 등록되어 있습니다/u);
+  assert.doesNotMatch(form, /이미 신청하신 연락처로 등록되어 있습니다/u);
+  assert.match(form, /내 티켓 열기/u);
+  assert.match(form, /내 티켓을 열거나 다른 연락처로 신청하세요/u);
   assert.match(form, /ticket\/recover/u);
+});
+
+test("the form does not tell attendees to keep a browser tab open", () => {
+  // Reopened 2026-11-24: the signup cookie reopens the ticket in the same browser, so "탭을 닫지 마세요"
+  // was wrong; where the ticket reopens is said once, on the ticket screen.
+  assert.doesNotMatch(form, /탭을 닫지 마세요|브라우저 탭/u);
+});
+
+test("the one-page form carries no 1/2 step bar and names the waiting list when full", () => {
+  // Reopened 2026-11-24: "1/2" read as two pages; the progress line ("필수 항목 N개 남음") is the one indicator.
+  assert.doesNotMatch(form, /AttendeeStep/u);
+  assert.match(form, /필수 항목 \$\{pendingSteps\.length\}개 남음/u);
+  assert.match(form, /waitlist \? "대기 신청하기" : "신청하기"/u);
+  assert.match(form, /정원이 마감되어 대기 명단으로 접수됩니다/u);
 });
 
 test("the attendee's keyboard can fill the common fields", () => {

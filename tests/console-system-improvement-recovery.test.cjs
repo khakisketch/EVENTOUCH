@@ -169,9 +169,12 @@ test('attendee-home-distinguishes-404-ticket-and-transient', () => {
   assert.match(read('lib/attendee-ticket-storage.ts'), /removeItem\(TICKET_STORAGE_PREFIX \+ slug\)/);
   assert.match(shell, /ticketRes\.status === 404/);
   // Recovery links stay scoped: invalid tickets point at recovery (unless
-  // the event blocks it), missing events point home.
+  // the event blocks it).
+  // Reopened 2026-11-24: a missing event no longer sends an attendee to the product landing page ("처음으로"); the
+  // address is what to check, said in words, with no button to the B2B site.
   assert.match(shell, /내 티켓 찾기/);
-  assert.match(shell, /처음으로/);
+  assert.doesNotMatch(shell, /처음으로/);
+  assert.match(shell, /문자나 안내문에 적힌 주소를 다시 확인하거나/);
   // Missing ticket without any bearer is still the ready hasTicket=false
   // state, not an error panel.
   assert.match(shell, /hasTicket: false/);

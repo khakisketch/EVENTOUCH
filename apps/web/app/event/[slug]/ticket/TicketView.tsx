@@ -16,6 +16,8 @@ import AttendeeStateMessage from "../ui/AttendeeStateMessage";
 import BottomAction from "../ui/BottomAction";
 import { DEFAULT_ATTENDEE_THEME, type AttendeeTheme } from "../event-theme";
 import { readPublicEventContext } from "../../../../lib/public-event-context";
+import { publicRecoveryContact } from "../../../../lib/public-recovery-contact";
+import { noTicketHereNote, organizerContactLine, TICKET_BROWSER_NOTE } from "../attendee-guidance";
 import type { PublicEventContext as EventContext } from "../../../../lib/public-event-context";
 import { allowSessionForTab, clearSessionForTab, clearTicketRejected, getAllowedTicketForTab, isTicketRejected, markTicketRejected, REJECTED_TICKET_BEARER, ticketStorageAvailable } from "../../../../lib/attendee-ticket-identity";
 import { clearStoredTicket, readStoredTicket, storeTicket } from "../../../../lib/attendee-ticket-storage";
@@ -36,6 +38,8 @@ type TicketState =
       eventName: string;
       eventDate: string;
       eventContext: EventContext;
+      // The organizer's published contact, when the event shows one (venue guide).
+      contact: string;
       application: Array<{ label: string; value: string }>;
       // True only on the navigation that follows a fresh registration: the
       // bearer and this flag arrive together and are cleaned together, so a
@@ -69,6 +73,7 @@ function entryLabel(state: {
 }
 
 const TICKET_READ_TIMEOUT_MS = 8000;
+const RECEIPT_VISIBLE_MS = 6000;
 
 type TicketResponse = {
   error?: unknown;
@@ -312,6 +317,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
             eventName: text(data.event?.name),
             eventDate: text(data.event?.date),
             eventContext: readPublicEventContext(data.event, data.workspace),
+            contact: publicRecoveryContact(data.workspace, data.event?.features),
             application: applicationRows(participant, data.workspace),
             fresh: justRegistered,
             recovered: preferSession || hasRecovery,
@@ -406,6 +412,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
         eventName: text(data.event?.name),
         eventDate: text(data.event?.date),
         eventContext: readPublicEventContext(data.event, data.workspace),
+        contact: publicRecoveryContact(data.workspace, data.event?.features),
         application: applicationRows(participant, data.workspace),
         fresh: false,
         recovered: false,
@@ -434,6 +441,17 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
       window.removeEventListener("pageshow", recheckRestoredTicket);
     };
   }, [recheckTicket, state.kind]);
+
+  // The completion receipt is a toast: after a few seconds it folds away so it stops
+  // pushing the QR down on a small phone. (attendee screens review, 2026-11-24)
+  const freshReceipt = state.kind === "ready" && state.fresh;
+  const [receiptFolded, setReceiptFolded] = useState(false);
+  useEffect(() => {
+    if (!freshReceipt) return;
+    setReceiptFolded(false);
+    const timer = window.setTimeout(() => setReceiptFolded(true), RECEIPT_VISIBLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [freshReceipt]);
 
   if (state.kind === "loading") {
     return <div className={`ticket-state${pass ? ` ${styles.passMessage}` : ""}`}>
@@ -474,9 +492,9 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
         {/* Same state, same words as the home entries: the attendee has no
             ticket here, and the way forward is the same everywhere. */}
         <h1>티켓이 확인되지 않습니다</h1>
-        <AttendeeStateMessage kind="info" icon="ticket" className={styles.messageInline} title={!storageAvailable ? "이 탭에서 티켓이 확인되지 않습니다." : "이 브라우저에 티켓이 보관되어 있지 않습니다."}>
+        <AttendeeStateMessage kind="info" icon="ticket" className={styles.messageInline} title={!storageAvailable ? "이 화면에서 티켓이 확인되지 않습니다." : "이 브라우저에서 티켓을 찾지 못했습니다."}>
           {!storageAvailable ? null : recoveryBlocked
-            ? "이 행사는 문자로 다시 연결할 수 없으므로 신청을 완료한 브라우저 탭을 확인하세요. 탭을 찾을 수 없다면 행사 주최 측에 문의하세요."
+            ? noTicketHereNote()
             : "신청할 때 쓴 연락처를 인증하면 다시 열 수 있습니다."}
         </AttendeeStateMessage>
         {!storageAvailable ? <p className={styles.ticketIdentityNotice}>브라우저 저장소를 사용할 수 없어 자동으로 티켓을 불러오지 않았습니다. 확인하면 이 브라우저에서 마지막으로 인증한 참가자의 티켓이 열립니다.</p> : null}
@@ -555,18 +573,17 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
       <EventFacts slug={slug} context={state.eventContext} fallbackDate={state.eventDate} />
     </div>
   );
+  // The one place that explains where the ticket opens again (every other screen points here).
+  // True boundary: the browser that registered, not the tab (see attendee-guidance.ts).
   const recoveryNote = state.ticket ? !storageAvailable ? (
-    <p className={styles.ticketRecovery}>이 브라우저에서 탭 보관이 차단되어 있습니다. 이 화면을 벗어나거나 새로고침하면 티켓을 다시 확인해야 할 수 있습니다. 인증된 세션이 없다면 행사 주최 측에 문의하세요.</p>
+    <p className={styles.ticketRecovery}>이 브라우저에서 티켓 보관이 차단되어 있습니다. 이 화면을 벗어나거나 새로고침하면 티켓을 다시 확인해야 할 수 있습니다. 입장 QR 화면을 캡처해 두세요. {organizerContactLine(state.contact)}</p>
   ) : recoveryBlocked ? (
-    <p className={styles.ticketRecovery}>
-      이 탭에서 티켓을 확인할 수 있습니다. 이 행사에서는 문자로 티켓을 다시 연결할 수 없어
-      다른 탭이나 기기에서는 열리지 않을 수 있습니다. 탭을 찾을 수 없다면 행사 주최 측에 문의하세요.
-    </p>
+    <p className={styles.ticketRecovery}>{TICKET_BROWSER_NOTE} {organizerContactLine(state.contact)}</p>
   ) : (
     <p className={styles.ticketRecovery}>
-      이 탭에서 티켓을 확인할 수 있습니다. 다른 기기에서 열 때는{" "}
+      이 브라우저에서는 티켓을 다시 열 수 있습니다. 다른 기기나 시크릿 창에서는{" "}
       <ProductLink className={styles.inlineLink} href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>연락처 인증으로 다시 연결</ProductLink>
-      하세요.
+      하거나 입장 QR 화면을 캡처해 두세요.
     </p>
   ) : null;
   return (
@@ -578,9 +595,9 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
           application gets a receipt, only a usable ticket gets the entry claim. */}
       {state.fresh ? (
         usable ? (
-          <p className={styles.ticketSuccess} role="status">신청이 완료되었습니다. 이 화면이 입장권입니다.</p>
+          <p className={styles.ticketSuccess} role="status" data-folded={receiptFolded || undefined} aria-hidden={receiptFolded || undefined}>신청이 완료되었습니다. 이 화면이 입장권입니다.</p>
         ) : (
-          <p className={styles.ticketSuccess} role="status">신청이 접수되었습니다. 아래에서 진행 상태를 확인하세요.</p>
+          <p className={styles.ticketSuccess} role="status" data-folded={receiptFolded || undefined} aria-hidden={receiptFolded || undefined}>신청이 접수되었습니다. 아래에서 진행 상태를 확인하세요.</p>
         )
       ) : null}
       <section className={`${styles.ticketCard} ${styles.pass}`}>
@@ -592,7 +609,8 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
           <p className={styles.ticketEntryState} aria-live="polite" data-tone={tone}>
             {statusUnconfirmed ? rechecking ? "상태 확인 중" : "상태 확인 필요" : entryLabel(state)}
           </p>
-          <h2 className={styles.ticketAttendeeName}>{state.name}</h2>
+          {/* Two lines at most so a long name never pushes the QR down; the whole name stays in the text and the tooltip. */}
+          <h2 className={styles.ticketAttendeeName} title={state.name}>{state.name}</h2>
           {state.company ? <p className={styles.ticketCompany}>{state.company}</p> : null}
         </header>
         {usable ? (
@@ -613,7 +631,8 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
                 event's content, alone in the bottom bar: a second button there would be taller than the
                 room under the QR and cover its lower edge on a 390x844 phone. */}
             <p className={styles.ticketMessageActions}>
-              <ProductButton type="button" variant="ghost" disabled={rechecking} onClick={() => void recheckTicket()}>
+              {/* Reopened 2026-11-24: a quiet text link read as a caption; checking the state is an action people look for at the door. */}
+              <ProductButton type="button" variant="secondary" disabled={rechecking} onClick={() => void recheckTicket()}>
                 {rechecking ? "확인 중입니다" : "상태 다시 확인"}
               </ProductButton>
             </p>

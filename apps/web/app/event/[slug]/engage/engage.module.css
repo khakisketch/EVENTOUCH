@@ -91,6 +91,25 @@
   font-weight: 600;
 }
 
+/* A survey row left without a score: marked in place until it is scored. */
+.fieldset[data-missing] {
+  padding: var(--s2) var(--s3);
+  border: 2px solid var(--danger);
+  border-radius: var(--radius-medium);
+}
+
+.fieldset:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.rowMissing {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--small);
+  font-weight: 600;
+}
+
 .choiceRow {
   display: flex;
   align-items: center;
@@ -132,7 +151,7 @@
 .entryList {
   display: grid;
   gap: var(--s2);
-  margin: 0;
+  margin: var(--s4) 0 0;
   padding: 0;
   list-style: none;
 }
@@ -358,6 +377,7 @@
 .typeTab[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 .typeTab:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .todoDot { width: 8px; height: 8px; border-radius: 50%; background: var(--ev-accent, var(--brand)); }
+.tabDone { display: inline-flex; align-items: center; }
 
 .moduleList { gap: var(--s3); }
 .moduleCard { padding: var(--s4); border: 0; border-radius: calc(var(--radius-card) + var(--s1)); background: var(--paper); box-shadow: var(--shadow-raised); color: var(--ink); }

@@ -15,6 +15,8 @@ import TabTicketChoice from "../TabTicketChoice";
 import AttendeeSurface from "../ui/AttendeeSurface";
 import AttendeeStateMessage from "../ui/AttendeeStateMessage";
 import { attendeeLook } from "../../../../lib/attendee-look";
+import { organizerContactLine } from "../attendee-guidance";
+import { mayHaveTicket, signupAvailability } from "../signup-availability";
 export type { PublishedField } from "./register-data";
 
 function apiBase(): string {
@@ -89,29 +91,47 @@ export default async function RegisterPage({
     );
   }
   const theme = data.theme;
-  if (!data.registrationOpen || data.stage === "ENDED") {
+  // One reason per line: not open, closed, full and ended each say so, with
+  // their own next step. A full event that takes approvals still takes a
+  // waiting-list application, so its form opens with that said first.
+  const availability = signupAvailability({
+    stage: data.stage,
+    registrationOpen: data.registrationOpen,
+    full: data.full,
+    approvalRequired: data.approvalRequired,
+  });
+  if (availability.kind !== "open") {
     const recoveryUnavailable = verificationMode === "mock" || verificationMode === "none";
+    // Someone with a ticket may land here; someone before the intake opens cannot have one.
+    const askAboutTicket = mayHaveTicket(availability.kind);
+    const recoverLink = askAboutTicket && !recoveryUnavailable;
+    const ticketHref = `/event/${encodeURIComponent(slug)}/ticket`;
     return (
       <Shell slug={slug} data={data} theme={theme} state>
-        <AttendeeStateMessage kind="info" title="현재 신청을 받지 않습니다." />
+        <AttendeeStateMessage kind="info" title={availability.title}>{availability.next}</AttendeeStateMessage>
         <div className={styles.stateActions}>
           <TabTicketChoice
             slug={slug}
             whenPresent={(
-              <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket`} prefetch={false}>
+              <ProductLink className={askAboutTicket ? "button button-primary" : "button button-secondary"} href={ticketHref} prefetch={false}>
                 내 티켓 열기
               </ProductLink>
             )}
           >
-            {recoveryUnavailable ? (
-              <p role="note">이 행사는 문자로 티켓을 다시 연결할 수 없습니다. 신청을 완료한 브라우저 탭을 확인하세요. {data.recoveryContact ? `문의: ${data.recoveryContact}` : "탭을 찾을 수 없다면 행사 초대 안내를 확인하거나 행사 주최 측에 문의하세요."}</p>
-            ) : (
+            {recoverLink ? (
               <ProductLink className="button button-primary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>
                 이미 신청했다면 내 티켓 찾기
               </ProductLink>
-            )}
+            ) : askAboutTicket ? (
+              <>
+                <p role="note">이 행사는 문자로 티켓을 다시 연결할 수 없습니다. 신청한 기기의 같은 브라우저에서 열어 보세요. {organizerContactLine(data.recoveryContact)}</p>
+                <ProductLink className="button button-primary" href={ticketHref} prefetch={false}>
+                  이 브라우저에서 내 티켓 열기
+                </ProductLink>
+              </>
+            ) : null}
           </TabTicketChoice>
-          <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}`}>
+          <ProductLink className={askAboutTicket ? "button button-secondary" : "button button-primary"} href={`/event/${encodeURIComponent(slug)}`}>
             행사 안내로
           </ProductLink>
         </div>
@@ -138,11 +158,13 @@ export default async function RegisterPage({
   }
   return (
     <Shell slug={slug} data={data} theme={theme}>
+      {availability.waitlist ? <AttendeeStateMessage kind="info" title={availability.title} className={styles.waitlistNotice}>{availability.next}</AttendeeStateMessage> : null}
       <TabTicketChoice
         slug={slug}
         whenPresent={(
           <p className={styles.ticketChoice}>
-            <ProductLink variant="ghost" href={`/event/${encodeURIComponent(slug)}/ticket`} prefetch={false}>
+            <span>이미 신청하셨어요</span>
+            <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket`} prefetch={false}>
               내 티켓 열기
             </ProductLink>
           </p>
@@ -157,6 +179,7 @@ export default async function RegisterPage({
         verificationRequired={data.verificationRequired}
         approvalRequired={data.approvalRequired}
         paymentPending={data.paymentPending}
+        waitlist={availability.waitlist}
         recoveryBlocked={verificationMode === "none" || verificationMode === "mock"}
         recoveryContact={data.recoveryContact}
       />

@@ -54,7 +54,7 @@ test('a voted poll shows its public counts as bars', () => {
 });
 
 test('submit, recovery and conflict contracts are unchanged', () => {
-  for (const text of ['response.submit', 'question.submit', 'expectedContentVersion', '참여 내용이 변경됐습니다', '서버 처리 결과 확인', '요청 결과 확인', '이미 제출했습니다. 참여해 주셔서 감사합니다.', '참가 확정 후 참여할 수 있습니다']) {
+  for (const text of ['response.submit', 'question.submit', 'expectedContentVersion', '참여 내용이 변경됐습니다', '서버 처리 결과 확인', '요청 결과 확인', '제출을 마쳤습니다. 참여해 주셔서 감사합니다.', '참가 확정 후 참여할 수 있습니다']) {
     assert.ok(client.includes(text), `${text} stays`);
   }
 });

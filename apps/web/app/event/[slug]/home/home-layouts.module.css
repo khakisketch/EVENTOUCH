@@ -123,6 +123,8 @@
 .group_row { gap: 0; }
 
 .needTicket { font-size: var(--text-xs); font-weight: 800; color: var(--ev-accent-ink, var(--brand-text)); white-space: nowrap; }
+/* Circle labels sit straight on the a2 ground, where the accent ink (proven on white) can fall under 4.5:1. */
+[data-attendee-mode="a2"] .circle .needTicket { color: var(--ev-ground-accent-ink, var(--lay-text)); }
 
 /* tile: square, icon over label. a1 is a quiet soft card, a2 a white card on the event color. */
 .root .tile {

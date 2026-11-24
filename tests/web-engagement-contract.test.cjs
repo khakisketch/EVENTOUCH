@@ -103,7 +103,8 @@ test('web-console-programs-dialog-is-modal-and-wires-field-errors', () => {
   assert.match(dialog, /event\.key !== "Tab"/);
   assert.match(workspace, /투표 선택지/);
   assert.match(workspace, /퀴즈 정답/);
-  assert.match(workspace, /만족도 질문/);
+  // Reopened 2026-11-24 (H3): 만족도 조사 and 설문 were one thing under two names; it is 설문 everywhere.
+  assert.match(workspace, /설문 질문 · 한 줄에 하나씩/);
   assert.match(workspace, /data\?\.field/);
   assert.match(workspace, /aria-describedby/);
 });
@@ -177,7 +178,9 @@ test('web-engage-keeps-the-bearer-off-the-screen-and-explains-without-a-ticket',
   const client = read('app/event/[slug]/engage/EngageClient.tsx');
   assert.match(client, /티켓이 확인되지 않습니다/);
   assert.match(client, /내 티켓 찾기/);
-  assert.match(client, /이미 제출했습니다/);
+  // Reopened 2026-11-24: said once, inside the card (no page-top notice besides it).
+  assert.match(client, /제출을 마쳤습니다/);
+  assert.match(client, /pending\.command === "response\.submit" \? null : successMessage/);
   assert.match(client, /참가 확정 후/);
   assert.doesNotMatch(client, /localStorage/);
   assert.doesNotMatch(client, /console\.log/);

@@ -25,8 +25,13 @@ import { confirmsGuestCommand, confirmsGuestPhotoUpload } from "../../../../lib/
 import { useUnsavedNavigationGuard } from "../../../../lib/use-unsaved-navigation-guard";
 import { allowSessionForTab, clearSessionForTab, clearTicketRejected, getAllowedTicketForTab, isTicketRejected, markTicketRejected, REJECTED_TICKET_BEARER, ticketStorageAvailable } from "../../../../lib/attendee-ticket-identity";
 import { clearStoredTicket, readStoredTicket, storeTicket } from "../../../../lib/attendee-ticket-storage";
+import { fitImage } from "../../../../lib/image-fit";
+import { noTicketHereNote } from "../attendee-guidance";
 import { randomCommandId } from "../../../../lib/command-id";
 import { asRecord, text } from "../../../../lib/json-guards";
+
+// The upload limit of a shared photo; a larger phone photo is shrunk to fit (lib/image-fit).
+const PHOTO_UPLOAD_MAX_BYTES = 600000;
 
 // Attendee engagement screen. Reads the public projection (published
 // programs only; the server filters drafts, disabled features, and other
@@ -756,7 +761,9 @@ export default function EngageClient({ slug }: { slug: string }) {
       delete pendingCommandsRef.current[formKey];
       delete commandIdsRef.current[formKey];
       setPendingRevision((revision) => revision + 1);
-      setNotice(successMessage);
+      // A poll, quiz or survey answer is confirmed by its own card ("제출 완료" in the title
+      // row and the thank-you line), so the page-top notice would only say it twice and shove the list.
+      setNotice(pending.command === "response.submit" ? null : successMessage);
       setReloadTick((tick) => tick + 1);
     } catch (error) {
       if (!isCurrentRequest(formKey, requestToken)) return;
@@ -1061,9 +1068,20 @@ export default function EngageClient({ slug }: { slug: string }) {
       setFormError({ form: formKey, field: "image", message: "사진 형식을 확인하세요." });
       return;
     }
-    if (photo.file.size > 600000) {
-      setFormError({ form: formKey, field: "image", message: "600KB 이하 사진을 올려주세요." });
-      return;
+    // Phone photos are routinely larger than the upload limit: shrink them here instead of
+    // refusing (attendee screens review, 2026-11-24). A retry keeps the file already fitted.
+    let shrunk = false;
+    if (!prior && photo.file.size > PHOTO_UPLOAD_MAX_BYTES) {
+      setUploadingPhoto(true);
+      setFormError(null);
+      const fitted = await fitImage(photo.file, PHOTO_UPLOAD_MAX_BYTES);
+      setUploadingPhoto(false);
+      if ("error" in fitted) {
+        setFormError({ form: formKey, field: "image", message: fitted.error });
+        return;
+      }
+      photo.file = fitted.file;
+      shrunk = true;
     }
     const requestToken = beginRequest(formKey);
     if (requestToken === null) return;
@@ -1132,7 +1150,7 @@ export default function EngageClient({ slug }: { slug: string }) {
       delete pendingPhotosRef.current[formKey];
       delete commandIdsRef.current[formKey];
       delete commandIdsRef.current[`upload:${photo.slug}:${formKey}`];
-      setNotice("사진을 공유했습니다. 운영자 승인 후 공개됩니다.");
+      setNotice(shrunk ? "사진을 공유했습니다. 큰 사진은 자동으로 줄여서 올렸습니다. 운영자 승인 후 공개됩니다." : "사진을 공유했습니다. 운영자 승인 후 공개됩니다.");
       setReloadTick((tick) => tick + 1);
     } catch (error) {
       if (!isCurrentRequest(formKey, requestToken)) return;
@@ -1181,16 +1199,16 @@ export default function EngageClient({ slug }: { slug: string }) {
           <h2>티켓이 확인되지 않습니다</h2>
           <AttendeeStateMessage kind="info" icon="ticket" title="참여 콘텐츠에는 본인 티켓이 필요합니다.">
             {recoveryBlocked
-              ? "이 행사는 문자로 다시 연결할 수 없으므로 신청을 완료한 브라우저 탭을 확인하세요. 탭을 찾을 수 없다면 행사 주최 측에 문의하세요."
-              : "브라우저의 탭 보관이 차단되었거나 인증 세션이 없을 수 있습니다. 신청할 때 쓴 연락처를 인증해 티켓을 다시 연결하세요."}
+              ? noTicketHereNote()
+              : "이 브라우저에서 티켓을 찾지 못했습니다. 신청할 때 쓴 연락처를 인증해 티켓을 다시 연결하세요."}
           </AttendeeStateMessage>
           <p className={styles.actions}>
             <ProductLink variant="ghost" href={`/event/${encodeURIComponent(slug)}`}>행사 안내로</ProductLink>
           </p>
         </section>
         {recoveryBlocked
-          ? <BottomAction label="다음 행동" primary={{ label: "참가 메뉴로", href: `/event/${encodeURIComponent(slug)}/home` }} />
-          : <BottomAction label="다음 행동" primary={{ label: "내 티켓 찾기", href: `/event/${encodeURIComponent(slug)}/ticket/recover` }} secondary={{ label: "참가 메뉴로", href: `/event/${encodeURIComponent(slug)}/home` }} />}
+          ? <BottomAction label="다음 행동" primary={{ label: "참가자 홈으로", href: `/event/${encodeURIComponent(slug)}/home` }} />
+          : <BottomAction label="다음 행동" primary={{ label: "내 티켓 찾기", href: `/event/${encodeURIComponent(slug)}/ticket/recover` }} secondary={{ label: "참가자 홈으로", href: `/event/${encodeURIComponent(slug)}/home` }} />}
       </>,
     );
   }
@@ -1208,7 +1226,7 @@ export default function EngageClient({ slug }: { slug: string }) {
           <h2>참여 콘텐츠를 열 수 없습니다</h2>
           <AttendeeStateMessage kind="error" title={state.message} />
           <p className={styles.actions}>
-            <ProductLink variant="ghost" href={`/event/${encodeURIComponent(slug)}/home`}>참가 메뉴로</ProductLink>
+            <ProductLink variant="ghost" href={`/event/${encodeURIComponent(slug)}/home`}>참가자 홈으로</ProductLink>
             {state.hasTicket ? null : recoveryBlocked ? null : (
               <ProductLink variant="ghost" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</ProductLink>
             )}
@@ -1367,7 +1385,7 @@ export default function EngageClient({ slug }: { slug: string }) {
       <header className={styles.pageHeader}>
         <span className={styles.wordmark}>EVENTOUCH</span>
         <span className="eyebrow">참여 콘텐츠</span>
-        <ProductLink className={styles.returnLink} href={`/event/${encodeURIComponent(slug)}/home`}>← 참가 메뉴로</ProductLink>
+        <ProductLink className={styles.returnLink} href={`/event/${encodeURIComponent(slug)}/home`}>← 참가자 홈으로</ProductLink>
         <EventBanner theme={state.theme} title={state.eventName} titleAs="h1" className={styles.banner} />
       </header>
       {receiptRecovery}{pendingRecovery}
@@ -1392,8 +1410,13 @@ export default function EngageClient({ slug }: { slug: string }) {
         <nav className={styles.typeTabs} aria-label="참여 종류">
           {typeOrder.map((type) => {
             const todo = state.approved && state.modules.some((module) => module.type === type && ["poll", "quiz", "survey"].includes(module.type) && module.status !== "CLOSED" && !state.submittedModuleIds.includes(module.id));
+            // Every answerable program of this kind has been submitted: say so on the tab itself.
+            const answerableOfType = state.modules.filter((module) => module.type === type && ["poll", "quiz", "survey"].includes(module.type) && (module.status !== "CLOSED" || state.submittedModuleIds.includes(module.id)));
+            const allDone = state.approved && answerableOfType.length > 0 && answerableOfType.every((module) => state.submittedModuleIds.includes(module.id));
             return <button key={type} type="button" className={styles.typeTab} aria-pressed={type === currentType} onClick={() => { setActiveType(type); setNotice(null); }}>
-              <AttendeeIcon name={typeIcon(type)} size={18} />{typeLabel(type)}{todo ? <span className={styles.todoDot} role="img" aria-label="아직 참여하지 않은 프로그램이 있습니다" /> : null}
+              <AttendeeIcon name={typeIcon(type)} size={18} />{typeLabel(type)}
+              {todo ? <span className={styles.todoDot} role="img" aria-label="아직 참여하지 않은 프로그램이 있습니다" /> : null}
+              {allDone ? <span className={styles.tabDone} role="img" aria-label="제출 완료"><AttendeeIcon name="check" size={16} /></span> : null}
             </button>;
           })}
         </nav>
@@ -1422,7 +1445,7 @@ export default function EngageClient({ slug }: { slug: string }) {
       {/* The way out: one quiet list of rows. */}
       <footer className={styles.pageFooter}>
         <AttendeeList label="다른 화면">
-          {state.modules.length || pendingKeys.length || savedReceipts.length ? <AttendeeListRow icon="board" title="참가 메뉴로" href={`/event/${encodeURIComponent(slug)}/home`} /> : null}
+          {state.modules.length || pendingKeys.length || savedReceipts.length ? <AttendeeListRow icon="user" title="참가자 홈으로" href={`/event/${encodeURIComponent(slug)}/home`} /> : null}
           <AttendeeListRow icon="ticket" title="내 티켓으로 이동" href={`/event/${encodeURIComponent(slug)}/ticket`} />
           <AttendeeListRow icon="info" title="행사 안내로" href={`/event/${encodeURIComponent(slug)}`} />
         </AttendeeList>
@@ -1609,12 +1632,15 @@ function ModuleSection(props: {
 }) {
   const { module } = props;
   const busy = props.submitting !== null;
+  // Survey rows the attendee tried to submit without a score. They stay marked until scored.
+  const [unrated, setUnrated] = useState<string[]>([]);
+  const stillMissing = unrated.filter((question) => !Object.hasOwn(props.ratings, question));
   return (
     <div>
       {module.type === "poll" ? (
         props.submitted ? (
           <>
-            <p className={styles.submitted} role="status">이미 제출했습니다. 참여해 주셔서 감사합니다.</p>
+            <p className={styles.submitted} role="status">제출을 마쳤습니다. 참여해 주셔서 감사합니다.</p>
             {(() => {
               // The counts are already public on every poll; after voting they read as bars.
               const total = module.counts.reduce((sum, count) => sum + count, 0);
@@ -1667,7 +1693,7 @@ function ModuleSection(props: {
         <>
           {module.revealed && module.answer ? <p className={styles.revealed}>공개된 정답: {module.answer}</p> : null}
           {props.submitted ? (
-            <p className={styles.submitted} role="status">이미 제출했습니다. 참여해 주셔서 감사합니다.</p>
+            <p className={styles.submitted} role="status">제출을 마쳤습니다. 참여해 주셔서 감사합니다.</p>
           ) : (
             <ValidatedForm
               onSubmit={(event) => {
@@ -1700,12 +1726,26 @@ function ModuleSection(props: {
 
       {module.type === "survey" ? (
         props.submitted ? (
-          <p className={styles.submitted} role="status">이미 제출했습니다. 참여해 주셔서 감사합니다.</p>
+          <p className={styles.submitted} role="status">제출을 마쳤습니다. 참여해 주셔서 감사합니다.</p>
         ) : (
           <ValidatedForm
             onSubmit={(event) => {
               event.preventDefault();
               if (!props.canSubmit || busy || props.hasPending) return;
+              // Say which rows are missing and take the attendee to the first one, instead of
+              // sending a half-filled survey and reporting a bare error at the bottom.
+              const missing = module.questions.filter((question) => !Object.hasOwn(props.ratings, question));
+              if (missing.length) {
+                setUnrated(missing);
+                const firstIndex = module.questions.indexOf(missing[0]);
+                window.requestAnimationFrame(() => {
+                  const row = document.getElementById(`survey-${module.id}-row-${firstIndex}`);
+                  row?.scrollIntoView({ block: "center" });
+                  row?.focus({ preventScroll: true });
+                });
+                return;
+              }
+              setUnrated([]);
               props.onSubmit(
                 "response.submit",
                 { moduleId: module.id, ratings: Object.fromEntries(module.questions.filter((question) => Object.hasOwn(props.ratings, question)).map((question) => [question, props.ratings[question]])), comment: props.surveyComment },
@@ -1717,9 +1757,17 @@ function ModuleSection(props: {
               <p>이전에 작성한 항목은 최신 설문에 없어 제출되지 않습니다.</p>
               <ul>{Object.entries(props.ratings).filter(([question]) => !module.questions.includes(question)).map(([question, score]) => <li key={question}>{question}: {score}점</li>)}</ul>
             </div> : null}
-            {module.questions.map((question) => (
-              <fieldset key={question} className={styles.fieldset}>
+            {module.questions.map((question, index) => (
+              <fieldset
+                key={question}
+                id={`survey-${module.id}-row-${index}`}
+                tabIndex={-1}
+                className={styles.fieldset}
+                data-missing={stillMissing.includes(question) || undefined}
+                aria-describedby={stillMissing.includes(question) ? `survey-${module.id}-row-${index}-missing` : undefined}
+              >
                 <legend>{question}</legend>
+                {stillMissing.includes(question) ? <p id={`survey-${module.id}-row-${index}-missing`} className={styles.rowMissing} role="alert">점수를 선택하세요.</p> : null}
                 <div className={styles.scoreRow} role="radiogroup" aria-label={`${question} 점수`}>
                   {[1, 2, 3, 4, 5].map((score) => (
                     <label key={score} className={styles.scoreChoice}>
@@ -1748,6 +1796,7 @@ function ModuleSection(props: {
                 onChange={(event) => props.setSurveyComment(event.target.value)}
               />
             </div>
+            {stillMissing.length ? <AttendeeFieldError>점수를 고르지 않은 항목이 {stillMissing.length}개 있습니다.</AttendeeFieldError> : null}
             {props.formMessage("ratings") ? <AttendeeFieldError>{props.formMessage("ratings")}</AttendeeFieldError> : null}
             {props.generalMessage ? <AttendeeFieldError>{props.generalMessage}</AttendeeFieldError> : null}
             <ProductButton type="submit" className="button button-primary" disabled={!props.canSubmit || busy || props.hasPending}>
@@ -1847,7 +1896,8 @@ function ModuleSection(props: {
             }}
           >
             <div>
-              <label htmlFor={`photo-file-${module.id}`}>사진 선택 · 600KB 이하</label>
+              <label htmlFor={`photo-file-${module.id}`}>사진 선택</label>
+              <p className={styles.help}>큰 사진은 자동으로 줄여서 올립니다.</p>
               <input id={`photo-file-${module.id}`} name={`photo-file-${module.id}`} type="file" accept="image/png,image/jpeg,image/webp" disabled={!props.canSubmit || busy || props.hasPending}
                 onChange={(event) => props.setPhotoSelected(Boolean(event.currentTarget.files?.length))} />
               {props.formMessage("image") ? <AttendeeFieldError>{props.formMessage("image")}</AttendeeFieldError> : null}

@@ -39,7 +39,8 @@ test('scan-success-groups-summary-and-next-action-before-auxiliary-acts', () => 
 
 test('scan-failure-guides-retry-and-manual-entry-without-repeating-itself', () => {
   assert.match(work, /aria-label=\{result\.uncertain \? "스캔 결과 미확인과 복구" : "스캔 실패와 복구"\}/);
-  assert.match(work, /result\.alreadyIn \? "이미 입장했어요" : result\.kind === "failed" && result\.uncertain \? "처리 결과를 확인하지 못했습니다" : result\.kind === "failed" && result\.attendanceReviewRequired \? "출입 기록 확인이 필요합니다" : result\.kind === "failed" && result\.eligibilityReviewRequired \? "참가 상태 확인이 필요합니다" : "처리하지 못했습니다"/);
+  // Reopened 2026-11-24: the title is in the same 합니다 voice as the body ("이미 입장했습니다").
+  assert.match(work, /result\.alreadyIn \? "이미 입장했습니다" : result\.kind === "failed" && result\.uncertain \? "처리 결과를 확인하지 못했습니다" : result\.kind === "failed" && result\.attendanceReviewRequired \? "출입 기록 확인이 필요합니다" : result\.kind === "failed" && result\.eligibilityReviewRequired \? "참가 상태 확인이 필요합니다" : "처리하지 못했습니다"/);
   assert.match(work, /retryFailedRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(work, /scanFailureRef\.current\?\.scrollIntoView\(\{ block: "center", behavior: "instant" \}\)/);
   assert.match(work, /role=\{boothLimitReached \|\| result\.alreadyIn \? "status" : "alert"\}>\{result\.message\}/);

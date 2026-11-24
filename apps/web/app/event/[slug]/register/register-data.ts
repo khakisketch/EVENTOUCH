@@ -20,6 +20,8 @@ export type RegisterData = {
   consentText: string;
   consentVersion: number;
   registrationOpen: boolean;
+  // Capacity reached (server projection). Older servers omit it: not full.
+  full: boolean;
   publishedVersion: number;
   verificationRequired: boolean;
   approvalRequired: boolean;
@@ -110,6 +112,7 @@ export function parseRegisterData(value: unknown): RegisterData | null {
     consentText: workspace.consentText,
     consentVersion: Number(workspace.consentVersion),
     registrationOpen: workspace.registrationOpen,
+    full: workspace.full === true,
     publishedVersion: Number(workspace.publishedVersion),
     verificationRequired: workspace.verificationRequired,
     approvalRequired: workspace.approvalRequired,
