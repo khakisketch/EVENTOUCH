@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import styles from "./landing.module.css";
@@ -20,33 +20,6 @@ const INQUIRY_SUBJECT = "EVENTOUCH 도입 문의";
 const INQUIRY_BODY =
   "행사 종류:\n일정:\n예상 규모(인원):\n연락처(성함/전화):\n궁금한 점:\n";
 
-type HeroTab = {
-  id: "console" | "ticket" | "report";
-  label: string;
-  caption: string;
-  note: string;
-};
-
-const HERO_TABS: readonly HeroTab[] = [
-  {
-    id: "console",
-    label: "운영 현황",
-    caption: "운영 현황 · 입장 상황과 신청 상태",
-    note: "화면 구성 예시 · 합성 데이터",
-  },
-  {
-    id: "ticket",
-    label: "모바일 티켓",
-    caption: "참가자 모바일 티켓",
-    note: "화면 구성 예시 · 합성 데이터",
-  },
-  {
-    id: "report",
-    label: "결과 보고서",
-    caption: "결과 보고서 · 보고서 목록과 입장률",
-    note: "화면 구성 예시 · 합성 데이터",
-  },
-];
 const INQUIRY_HREF =
   `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(INQUIRY_SUBJECT)}&body=${encodeURIComponent(INQUIRY_BODY)}`;
 
@@ -114,48 +87,11 @@ const ENTRY_BARS = [18, 46, 82, 64, 38, 52, 30] as const;
 export default function Home() {
   const router = useRouter();
   const [copyStatus, setCopyStatus] = useState<{ message: string; tone: "success" | "error" } | null>(null);
-  const [heroTab, setHeroTab] = useState<HeroTab["id"]>("console");
-  const [heroPaused, setHeroPaused] = useState(false);
-  // Once the reader picks a screen, the hero stops turning for good.
-  const [heroChosen, setHeroChosen] = useState(false);
-  const heroTabButtons = useRef<Array<HTMLButtonElement | null>>([]);
-  const activeHero = HERO_TABS.find((tab) => tab.id === heroTab) ?? HERO_TABS[0];
   // The address is filled in after mount so the edge email filter never sees
   // a bare address in server HTML (it rewrites visible addresses and breaks
   // hydration). Copying uses the same constant from JS, which it ignores.
   const [emailShown, setEmailShown] = useState(false);
   useEffect(() => { setEmailShown(true); }, []);
-
-  useEffect(() => {
-    if (heroPaused || heroChosen) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const id = window.setInterval(() => {
-      if (document.hidden) return;
-      setHeroTab((prev) => {
-        const index = HERO_TABS.findIndex((tab) => tab.id === prev);
-        return HERO_TABS[(index + 1) % HERO_TABS.length].id;
-      });
-    }, 5000);
-    return () => window.clearInterval(id);
-  }, [heroPaused, heroChosen]);
-
-  function chooseHero(index: number, focus = false) {
-    setHeroChosen(true);
-    setHeroTab(HERO_TABS[index].id);
-    if (focus) heroTabButtons.current[index]?.focus();
-  }
-
-  function onHeroKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const index = HERO_TABS.findIndex((tab) => tab.id === heroTab);
-    let next = -1;
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") next = (index + 1) % HERO_TABS.length;
-    else if (event.key === "ArrowLeft" || event.key === "ArrowUp") next = (index - 1 + HERO_TABS.length) % HERO_TABS.length;
-    else if (event.key === "Home") next = 0;
-    else if (event.key === "End") next = HERO_TABS.length - 1;
-    if (next < 0) return;
-    event.preventDefault();
-    chooseHero(next, true);
-  }
 
   useEffect(() => {
     let cancelled = false;
@@ -222,7 +158,7 @@ export default function Home() {
               <span>한 흐름으로.</span>
             </h1>
             <p className={styles.heroDescription}>
-              참가자 모집·승인부터 현장 체크인과 결과 보고서까지, 한곳에서 이어갑니다.
+              QR 입장, 실시간 현황, 결과 보고서까지.
             </p>
             <div className={styles.heroActions}>
               <a className={styles.primaryAction} href={INQUIRY_HREF}>
@@ -231,62 +167,33 @@ export default function Home() {
                   <path d="M4 10h11M10 4l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </a>
-              <a className={styles.secondaryAction} href="#journey">화면 구성 살펴보기 ↓</a>
+              <a className={styles.secondaryAction} href="#journey">한 행사의 흐름 보기 ↓</a>
             </div>
-            <p className={styles.heroNote}>
-              행사 종류·일정·규모를 적을 수 있게 준비합니다.
-            </p>
           </div>
 
-          <div
-            className={styles.heroMedia}
-            onMouseEnter={() => setHeroPaused(true)}
-            onMouseLeave={() => setHeroPaused(false)}
-            onFocus={() => setHeroPaused(true)}
-            onBlur={() => setHeroPaused(false)}
-          >
-            <div className={styles.heroTabs} role="tablist" aria-label="핵심 화면 미리보기" onKeyDown={onHeroKeyDown}>
-              {HERO_TABS.map((tab, index) => (
-                <button
-                  key={tab.id}
-                  ref={(node) => { heroTabButtons.current[index] = node; }}
-                  type="button"
-                  role="tab"
-                  id={`hero-tab-${tab.id}`}
-                  aria-selected={tab.id === heroTab}
-                  aria-controls="hero-panel"
-                  tabIndex={tab.id === heroTab ? 0 : -1}
-                  onClick={() => chooseHero(index)}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-            <section className={styles.consoleEvidence} role="tabpanel" id="hero-panel" aria-labelledby={`hero-tab-${heroTab}`}>
-              {/* A new tab mounts new nodes: nothing that was on screen is stretched or moved. */}
-              <Fragment key={activeHero.id}>
+          {/* One still scene instead of three rotating tabs: the operator's live count with the
+              attendee's ticket laid over it. Nothing moves on its own. */}
+          <div className={styles.heroMedia}>
+            <div className={styles.heroScene}>
+              <section className={styles.consoleEvidence} aria-label="운영자 화면 구성 예시">
                 <div className={styles.windowBar} aria-hidden="true">
                   <i />
                   <i />
                   <i />
-                  <span>{activeHero.label}</span>
+                  <span>운영 현황</span>
                 </div>
-                {/* One fixed stage for every tab: the page below never moves when the tab changes. */}
-                <div className={styles.heroStage} data-kind={activeHero.id === "ticket" ? "phone" : "window"}>
-                  <ProductPreview variant={activeHero.id} />
-                </div>
-                <p className={styles.consoleCaption}>
-                  <strong>{activeHero.caption}</strong>
-                  <span>{activeHero.note}</span>
-                </p>
-              </Fragment>
-            </section>
+                <ProductPreview variant="live" />
+              </section>
+              <div className={styles.heroPhone}><ProductPreview variant="ticket" /></div>
+            </div>
+            <p className={styles.heroSample}>화면 구성 예시 · 합성 데이터</p>
           </div>
 
-          <ul className={styles.factStrip} aria-label="도입 전 핵심 사실">
-            <li><a href="#faq-install">참가자 앱 설치 없음</a></li>
-            <li><a href="#faq-sms">문자 발송 연결 확인</a></li>
-            <li><a href="#faq-portal">고객사 포털 없음</a></li>
+          <ul className={styles.factStrip} aria-label="도입 전 확인">
+            <li className={styles.factLabel}>도입 전 확인</li>
+            <li><a href="#faq-install">참가자 앱 설치 없이 링크로 신청·티켓</a></li>
+            <li><a href="#faq-sms">문자·알림톡은 발송 연결 후 실제 발송</a></li>
+            <li><a href="#faq-portal">고객사 포털은 제공하지 않음</a></li>
           </ul>
         </section>
 

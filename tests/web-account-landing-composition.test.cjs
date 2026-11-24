@@ -46,7 +46,10 @@ test('only an error that leads into a submit is docked with it', () => {
 test('the landing header and hero are one full-width ink band', () => {
   assert.match(landing, /\.header,\s*\n\.hero \{[^}]*background:\s*var\(--ink\)[^}]*box-shadow:\s*0 0 0 100vmax var\(--ink\)[^}]*clip-path:\s*inset\(0 -100vmax\)/su);
   assert.match(landing, /\.brandName::first-letter \{ color: var\(--brand\)/u);
-  assert.match(landing, /\.heroTabs button\[aria-selected="true"\] \{[^}]*background:\s*var\(--paper\)/su);
+  // Reopened 2026-11-25 (hero 가안): the three tabs are gone; sign-in is a text link and the hero is one still scene.
+  assert.match(landing, /\.loginLink \{ border: 0; background: transparent; color: var\(--paper\); text-decoration: underline;/u);
+  assert.match(landing, /\.heroScene \{[^}]*position: relative;/su);
+  assert.doesNotMatch(landing, /heroTabs/u);
   assert.match(landing, /@media \(min-width: 1025px\) \{ \.hero \{ overflow: visible; \} \}/u, 'the glow bleeds only where it cannot cause a sideways scroll');
   assert.match(landing, /@media print \{ \.header, \.hero \{ background: transparent/u, 'print keeps its plain frame');
 });
@@ -55,7 +58,7 @@ test('flows, tokens and the contact rules are unchanged', () => {
   const home = fs.readFileSync(path.join(app, 'page.tsx'), 'utf8');
   // Refreshed 2026-11-24: the header link is plain "로그인" (one shared /login), and the
   // contact address lives in lib/support-contact.ts (shown only after mount, see fce5422).
-  for (const text of ['이메일로 도입 문의', '>로그인</Link>', 'href="/login"', '참가자 앱 설치 없음', '문자 발송 연결 확인', '고객사 포털 없음']) assert.ok(home.includes(text), `${text} stays`);
+  for (const text of ['이메일로 도입 문의', '>로그인</Link>', 'href="/login"', '참가자 앱 설치 없이 링크로 신청·티켓', '문자·알림톡은 발송 연결 후 실제 발송', '고객사 포털은 제공하지 않음']) assert.ok(home.includes(text), `${text} stays`);
   assert.match(fs.readFileSync(path.join(app, '..', 'lib', 'support-contact.ts'), 'utf8'), /contact@eventouch\.co\.kr/u, 'the default contact address stays');
   assert.match(pages.invite, /팀 초대 수락/u);
   assert.match(pages.recover, /비밀번호 재설정/u);
@@ -90,9 +93,10 @@ test('the landing below the hero is interactive, honest and keeps the hero\'s in
 });
 
 test('phone landing previews stay readable: tall hero stage, no clipped offset shadow, one legible phone in the flow stage', () => {
-  // Reopened 2026-11-25 (owner: 랜딩 가독성·모바일 제품 프리뷰). The dark hero identity and the three-tab preview are unchanged.
+  // Reopened 2026-11-25 (owner: 랜딩 가독성·모바일 제품 프리뷰). The dark hero identity is unchanged.
   const sections = fs.readFileSync(path.join(app, 'landing-sections.module.css'), 'utf8');
-  assert.match(landing, /@media \(max-width: 768px\)[\s\S]*?\.consoleEvidence \{\s*box-shadow: 0 10px 30px var\(--shadow-color\);\s*\}[\s\S]*?\.heroMedia \{ --hero-stage-h: 600px; \}/u);
+  // Reopened 2026-11-25 (hero 가안): on a phone the hero is title, one line and the scene; the fixed bar is the only inquiry button.
+  assert.match(landing, /@media \(max-width: 768px\)[\s\S]*?\.heroActions \{ display: none; \}[\s\S]*?\.heroScene \{ --k: 0\.6; height: 540px; \}/u);
   assert.match(sections, /@media \(max-width: 560px\) \{\s*\.flow \{ --flow-stage-h: 520px; --k-duo: 0\.82; --k-pair: 0\.82; \}/u);
   assert.match(sections, /\.stageDuo \.window \{ display: none; \}/u);
   assert.match(sections, /\.stagePair \.phoneCrop:last-child \{ display: none; \}/u);

@@ -180,13 +180,6 @@
   background: var(--surface-muted);
 }
 
-.heroNote {
-  margin: var(--s3) 0 0;
-  color: var(--muted);
-  font-size: var(--small);
-  line-height: 1.5;
-}
-
 .consoleEvidence {
   min-width: 0;
   margin: 0;
@@ -194,10 +187,7 @@
   border: 1px solid var(--line);
   border-radius: var(--r-card);
   background: var(--paper);
-  box-shadow:
-    0 18px 44px var(--shadow-color),
-    10px 10px 0 -3px var(--paper),
-    10px 10px 0 -2px var(--line);
+  box-shadow: 0 30px 70px color-mix(in srgb, var(--ink) 45%, transparent);
 }
 
 .windowBar {
@@ -233,54 +223,6 @@
   font-size: var(--label);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* One fixed stage for every hero tab (console, phone, report): the preview
-   fills it or sits in it, so the copy beside it and the sections below stay
-   where they are when the tab changes. */
-.heroMedia { --hero-stage-h: 520px; }
-
-.heroStage {
-  --pv-h: 100%;
-  position: relative;
-  box-sizing: border-box;
-  height: var(--hero-stage-h);
-  overflow: hidden;
-}
-
-.heroStage > * { height: 100%; }
-
-.heroStage[data-kind="phone"] {
-  padding: var(--s4);
-  background: var(--surface-muted);
-}
-
-.heroStage[data-kind="phone"] > * {
-  width: min(100%, 272px);
-  margin-inline: auto;
-  border: 6px solid var(--stage);
-  border-radius: calc(var(--r-card) * 2);
-  box-shadow: 0 24px 50px -16px color-mix(in srgb, var(--stage) 60%, transparent);
-}
-
-/* Both lines are always there, so the caption is as tall on every tab. */
-.consoleEvidence .consoleCaption {
-  margin: 0;
-  max-width: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s3);
-  min-height: 52px;
-  padding: var(--s3) var(--s4);
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-  font-size: var(--small);
-}
-
-.consoleEvidence .consoleCaption strong {
-  color: var(--ink);
-  font-weight: var(--fw-strong);
 }
 
 /* Honesty strip: the three facts that decide fit, before the fold of detail. */
@@ -539,34 +481,62 @@
   color: var(--on-brand-hover);
 }
 
-/* Hero evidence switcher: one board, three real screens. */
+/* Hero 가안 (2026-11-25, owner choice): one still scene, the operator's live count with the
+   attendee's ticket laid over it. No tabs, nothing rotates. The phone is the same 295 x 560
+   drawing scaled and cropped; it sits over the list rows, never over the entry card. */
 .heroMedia {
   min-width: 0;
 }
 
-.heroTabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-  margin-bottom: var(--s3);
+.heroScene {
+  --k: 0.8;
+  position: relative;
+  height: 560px;
 }
 
-.heroTabs button {
-  min-height: 44px;
-  padding: var(--s2) var(--s4);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-pill);
+.heroScene .consoleEvidence {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(100% - 56px);
+}
+
+.heroPhone {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  box-sizing: content-box;
+  width: calc(295px * var(--k));
+  height: calc(560px * var(--k));
+  overflow: hidden;
+  border: 7px solid var(--stage);
+  border-radius: calc(var(--r-card) * 2);
   background: var(--paper);
-  color: var(--ink);
-  font-size: var(--small);
-  font-weight: var(--fw-strong);
-  cursor: pointer;
+  box-shadow: 0 30px 70px color-mix(in srgb, var(--ink) 50%, transparent);
 }
 
-.heroTabs button[aria-selected="true"] {
-  border-color: var(--brand);
-  background: var(--brand-tint);
-  color: var(--brand-text);
+.heroPhone > [role="img"] {
+  width: 295px;
+  height: 560px;
+  transform: scale(var(--k));
+  transform-origin: top left;
+  pointer-events: none;
+}
+
+.heroSample {
+  margin: var(--s3) 0 0;
+  font-size: var(--small);
+}
+
+.factLabel {
+  display: flex;
+  align-items: center;
+  padding-right: var(--s5);
+  color: var(--brand);
+  font-size: var(--label);
+  font-weight: var(--fw-heavy);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .mobileCta {
@@ -618,17 +588,14 @@
     font-size: var(--body);
   }
 
-  /* Reopened 2026-11-25 (owner: 모바일 제품 프리뷰 가독성): the offset stack shadow ran past the
-     page gutter and read as a clipped edge, and the fixed 520px stage cut the last roster rows. */
-  .consoleEvidence {
-    box-shadow: 0 10px 30px var(--shadow-color);
-  }
-
-  .heroMedia { --hero-stage-h: 600px; }
-
-  .consoleEvidence .consoleCaption {
-    padding: var(--s2) var(--s3);
-  }
+  /* Hero 가안 on a phone: title, one line, then the scene. The inquiry button is the fixed bar
+     below, so the hero carries no button of its own and the product starts high on the screen. */
+  .hero { padding-block: var(--s3) var(--s5); }
+  .heroActions { display: none; }
+  .heroDescription { margin-bottom: 0; font-size: var(--body); }
+  .heroScene { --k: 0.6; height: 540px; }
+  .heroScene .consoleEvidence { width: 100%; }
+  .heroPhone { height: calc(440px * var(--k)); }
 
   .factStrip {
     flex-direction: column;
@@ -691,15 +658,6 @@
   }
 }
 
-@media (max-width: 560px) {
-  .consoleEvidence .consoleCaption {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: var(--s1);
-    min-height: 76px;
-  }
-}
-
 @media (max-width: 360px) {
   .page {
     width: calc(100% - var(--s4));
@@ -741,7 +699,6 @@
   }
 
   .heroActions,
-  .heroTabs,
   .contactDetails button,
   .mobileCta,
   .contactSection .primaryAction {
@@ -765,8 +722,9 @@
 .brand { color: var(--paper); }
 .brandName::first-letter { color: var(--brand); }
 .brandDescription { color: color-mix(in srgb, var(--paper) 72%, transparent); }
-.loginLink { border: 0; background: var(--surface-muted); color: var(--ink); }
-.loginLink:hover { border-color: transparent; background: var(--line); color: var(--ink); }
+/* 가안: sign-in is a text link; the one filled button in the header is 도입 문의. */
+.loginLink { border: 0; background: transparent; color: var(--paper); text-decoration: underline; text-underline-offset: 4px; }
+.loginLink:hover { border-color: transparent; background: color-mix(in srgb, var(--paper) 12%, transparent); color: var(--paper); }
 .header a:focus-visible,
 .header button:focus-visible,
 .hero a:focus-visible,
@@ -775,11 +733,9 @@
 .hero::before { background: radial-gradient(closest-side, color-mix(in srgb, var(--brand) 30%, transparent), transparent); }
 .heroTitle { color: var(--paper); }
 .heroDescription { color: color-mix(in srgb, var(--paper) 72%, transparent); }
-.heroNote { color: color-mix(in srgb, var(--paper) 72%, transparent); }
+.heroSample { color: color-mix(in srgb, var(--paper) 72%, transparent); }
 .secondaryAction { border-color: color-mix(in srgb, var(--paper) 28%, transparent); background: transparent; color: var(--paper); }
 .secondaryAction:hover { border-color: var(--paper); background: color-mix(in srgb, var(--paper) 12%, transparent); }
-.heroTabs button { border-color: color-mix(in srgb, var(--paper) 28%, transparent); background: transparent; color: var(--paper); }
-.heroTabs button[aria-selected="true"] { border-color: var(--paper); background: var(--paper); color: var(--ink); }
 .factStrip { border-top-color: color-mix(in srgb, var(--paper) 14%, transparent); border-bottom: 0; }
 .factStrip li + li { border-left-color: color-mix(in srgb, var(--paper) 14%, transparent); }
 .factStrip a { color: color-mix(in srgb, var(--paper) 88%, transparent); }

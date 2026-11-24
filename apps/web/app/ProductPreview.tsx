@@ -2,7 +2,7 @@ import QRCode from "react-qr-code";
 import { LandingIcon, type LandingIconName } from "./LandingIcons";
 import styles from "./product-preview.module.css";
 
-type Variant = "console" | "home" | "ticket" | "staff" | "report";
+type Variant = "console" | "live" | "home" | "ticket" | "staff" | "report";
 
 // The console menu as the operator sees it today (console-navigation.ts):
 // four labelled groups, 운영 현황 first. Names here must stay product names.
@@ -87,6 +87,34 @@ export default function ProductPreview({ variant }: { variant: Variant }) {
                 </p>
               ))}
             </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Hero 가안 (2026-11-25): the same 운영 현황 without the menu and the count list, so the one
+  // number and the latest entries are drawn large enough to read on a phone.
+  if (variant === "live") {
+    return (
+      <div className={styles.console} role="img" aria-label="운영 현황 구성 예시. 누적 입장 숫자와 최근 입장 기록">
+        <div className={styles.liveCanvas}>
+          <div className={styles.head}>
+            <p className={styles.title}>운영 현황</p>
+            <span className={styles.live}>진행 중</span>
+          </div>
+          <div className={styles.entry}>
+            <div className={styles.entryTop}><span>누적 입장</span></div>
+            <p className={styles.big}><b>221</b><span>명</span><em>/ 269명</em><i className={styles.rate}>82%</i></p>
+            <div className={styles.meter}><i /></div>
+          </div>
+          <div className={styles.recent}>
+            <p className={styles.recentHead}><b>최근 입장</b><span>{RECENT.length}건</span></p>
+            {RECENT.map(([initial, name, time]) => (
+              <p key={name} className={styles.person}>
+                <i>{initial}</i><b>{name}</b><span className={styles.statePill}>입장</span><time>{time}</time>
+              </p>
+            ))}
           </div>
         </div>
       </div>

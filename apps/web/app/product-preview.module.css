@@ -309,6 +309,26 @@
   white-space: nowrap;
 }
 
+/* Hero 가안: menu-less operations card (ProductPreview variant "live"). */
+.liveCanvas {
+  display: grid;
+  align-content: start;
+  gap: var(--s3);
+  padding: var(--s5);
+}
+
+/* Wide placement (hero on a desktop): the card and the list leave the right side to the
+   ticket phone laid over the window. */
+@container (min-width: 480px) {
+  .liveCanvas .entry,
+  .liveCanvas .recent { max-width: 300px; }
+}
+
+@container (max-width: 479px) {
+  .liveCanvas { padding: var(--s4); }
+  .liveCanvas .person:nth-of-type(n + 5) { display: none; }
+}
+
 /* Narrow placements (journey window, phone): drop the menu and stack. */
 @container (max-width: 559px) {
   .workspace { grid-template-columns: minmax(0, 1fr); }

@@ -35,26 +35,23 @@ test('the console preview draws the real menu and an overview built around one e
   for (const label of ['코드 입력', '명단 찾기', '최근 처리']) assert.ok(preview.includes(label), `${label} is on the staff bar`);
 });
 
-test('every hero tab fills one fixed stage so the page below does not move', () => {
+test('the hero is one still scene: the live count with the ticket laid over it, no tabs and nothing rotating', () => {
+  // Reopened 2026-11-25 (owner chose 가안): replaces the three rotating tabs.
   const home = read('page.tsx');
   const css = strip(read('landing.module.css'));
-  assert.match(home, /<ProductPreview variant=\{activeHero\.id\} \/>/u);
-  assert.match(home, /className=\{styles\.heroStage\}/u, 'the preview sits in the stage');
-  assert.match(css, /\.heroStage \{[^}]*\bheight:\s*var\(--hero-stage-h\)/su, 'a height, not a min-height');
-  assert.match(css, /\.heroStage \{[^}]*overflow:\s*hidden/su);
-  assert.doesNotMatch(css, /\.heroStage \{[^}]*min-height/su);
-  assert.match(css, /--hero-stage-h:/u);
-  // The caption under the stage has the same number of lines on every tab.
-  assert.match(css, /\.consoleCaption[^{]*\{[^}]*(min-height|flex-direction: column)/su);
+  assert.match(home, /<ProductPreview variant="live" \/>/u);
+  assert.match(home, /className=\{styles\.heroPhone\}><ProductPreview variant="ticket" \/>/u);
+  assert.doesNotMatch(home, /role="tablist"|role="tab"|setInterval|HERO_TABS/u, 'no tabs and no auto-rotation');
+  assert.match(css, /\.heroScene \{[^}]*\bheight:\s*560px/su, 'a fixed scene height so the page below never moves');
+  assert.match(css, /\.heroPhone \{[^}]*overflow:\s*hidden/su);
+  // The phone sits over the list rows, never over the entry card: the card stops short of it on a wide scene.
+  assert.match(read('product-preview.module.css'), /@container \(min-width: 480px\) \{\s*\.liveCanvas \.entry,\s*\.liveCanvas \.recent \{ max-width: 300px; \}/u);
 });
 
-test('the hero tabs work from the keyboard as one tab stop', () => {
+test('the hero names who must check what before adopting, in sentences that read on their own', () => {
   const home = read('page.tsx');
-  assert.match(home, /role="tablist"[\s\S]*?role="tab"[\s\S]*?aria-selected/u);
-  assert.match(home, /tabIndex=\{tab\.id === heroTab \? 0 : -1\}/u, 'the chosen tab is the only tab stop');
-  assert.match(home, /aria-controls="hero-panel"/u);
-  for (const key of ['ArrowRight', 'ArrowLeft', 'Home', 'End']) assert.ok(home.includes(key), `${key} moves between the tabs`);
-  assert.match(home, /prefers-reduced-motion/u, 'the hero never turns by itself for people who asked for less motion');
+  for (const text of ['도입 전 확인', '참가자 앱 설치 없이 링크로 신청·티켓', '문자·알림톡은 발송 연결 후 실제 발송', '고객사 포털은 제공하지 않음', '한 행사의 흐름 보기', 'QR 입장, 실시간 현황, 결과 보고서까지.']) assert.ok(home.includes(text), `${text} is in the hero`);
+  assert.doesNotMatch(home, /문자 발송 연결 확인|행사 종류·일정·규모를 적을 수 있게 준비합니다|화면 구성 살펴보기/u);
 });
 
 test('the journey keeps one stage height and shows the chosen moment as a caption on small screens', () => {

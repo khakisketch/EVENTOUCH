@@ -39,10 +39,11 @@ test('settings anchor wrappers do not duplicate their named ConsoleSection landm
 });
 
 
-test('landing tab panel uses an allowed native element and mobile inquiry has a landmark', () => {
+test('landing hero scene is a named region and mobile inquiry has a landmark', () => {
+  // Reopened 2026-11-25 (hero 가안): the tab panel is gone; the scene is a labelled section.
   const landing = fs.readFileSync(path.join(__dirname, '../apps/web/app/page.tsx'), 'utf8');
-  assert.match(landing, /<section className=\{styles\.consoleEvidence\} role="tabpanel"/);
-  assert.doesNotMatch(landing, /<figure[^>]*role="tabpanel"/);
+  assert.match(landing, /<section className=\{styles\.consoleEvidence\} aria-label="운영자 화면 구성 예시"/);
+  assert.doesNotMatch(landing, /role="tabpanel"/);
   assert.match(landing, /<nav className=\{styles\.mobileCta\} aria-label="모바일 도입 문의"/);
 });
 
