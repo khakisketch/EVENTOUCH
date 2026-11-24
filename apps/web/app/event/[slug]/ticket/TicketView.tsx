@@ -7,6 +7,7 @@ import QRCode from "react-qr-code";
 import { useScreenWakeLock } from "../../../../lib/use-screen-wake-lock";
 import styles from "./ticket.module.css";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
+import { usePublicOrganizerContact } from "../../../../lib/use-public-organizer-contact";
 import { forgetRecoveredTicket, readRecoveredTicket } from "./recovered-ticket";
 import PublicEventContext from "../PublicEventContext";
 import EventBanner from "../EventBanner";
@@ -190,6 +191,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
   // letting an older ticketRef stand in for the newly verified person.
   const recoveryRef = useRef<{ slug: string; ticket: string }>({ slug: "", ticket: "" });
   const recoveryBlocked = isRecoveryBlocked(useVerificationMode());
+  const organizerContact = usePublicOrganizerContact(slug, recoveryBlocked);
 
   useEffect(() => {
     let cancelled = false;
@@ -494,7 +496,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
         <h1>티켓이 확인되지 않습니다</h1>
         <AttendeeStateMessage kind="info" icon="ticket" className={styles.messageInline} title={!storageAvailable ? "이 화면에서 티켓이 확인되지 않습니다." : "이 브라우저에서 티켓을 찾지 못했습니다."}>
           {!storageAvailable ? null : recoveryBlocked
-            ? noTicketHereNote()
+            ? noTicketHereNote(organizerContact)
             : "신청할 때 쓴 연락처를 인증하면 다시 열 수 있습니다."}
         </AttendeeStateMessage>
         {!storageAvailable ? <p className={styles.ticketIdentityNotice}>브라우저 저장소를 사용할 수 없어 자동으로 티켓을 불러오지 않았습니다. 확인하면 이 브라우저에서 마지막으로 인증한 참가자의 티켓이 열립니다.</p> : null}
@@ -520,7 +522,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
         <AttendeeStateMessage kind="error" className={styles.messageInline} title={state.message}>
           {state.canRecover
             ? `새 티켓 안내 링크를 확인하세요. ${recoveryBlocked
-              ? "새 티켓을 받지 못했다면 행사 주최 측에 문의하세요."
+              ? `새 티켓을 받지 못했다면 행사 주최 측${organizerContact ? `(${organizerContact})` : ""}에 문의하세요.`
               : "링크가 없다면 신청 연락처를 인증해 티켓을 다시 찾을 수 있습니다."}`
             : null}
         </AttendeeStateMessage>
@@ -555,7 +557,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
           <PublicEventContext slug={slug} context={state.eventContext} showDate={false} />
           <p className={styles.ticketEntryState} aria-live="polite" data-tone={usable ? "good" : state.status === "CANCELLED" ? "bad" : "wait"}>{entryLabel(state)}</p>
         </header>
-        <p>신청한 정보를 확인할 수 있습니다. 변경이 필요하면 행사 운영자에게 문의하세요.</p>
+        <p>신청한 정보를 확인할 수 있습니다. 변경이 필요하면 행사 운영자{state.contact ? `(${state.contact})` : ""}에게 문의하세요.</p>
         {state.application.length ? <dl className={styles.applicationList}>
           {state.application.map((row, index) => <div key={`${row.label}-${index}`}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}
         </dl> : <p>표시할 신청 정보가 없습니다.</p>}

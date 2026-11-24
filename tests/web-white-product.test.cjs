@@ -114,7 +114,11 @@ test('the full-product renderer owns isolated fixtures and checks actual loaded 
 for (const [name, route] of [
   ['application-fields', '/console/events/:id/settings/fields'],
   ['account-email', '/account/email'],
+  ['account-password', '/account/password'],
   ['recover', '/recover'],
+  ['help', '/help'],
+  ['terms', '/terms'],
+  ['privacy', '/privacy'],
 ]) {
   test(`the review captures the standalone ${name} screen`, () => {
     const audit = fs.readFileSync(path.join(__dirname, '../scripts/web-white-product-audit.cjs'), 'utf8');

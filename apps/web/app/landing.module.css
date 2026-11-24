@@ -509,6 +509,13 @@
   color: var(--ink);
 }
 
+/* Service links (login, help, terms, privacy) wrap as a group. */
+.footerLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
 /* Header entry CTA sits beside sign-in. */
 .headerCta {
   display: inline-flex;

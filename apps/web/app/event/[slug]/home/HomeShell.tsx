@@ -21,6 +21,7 @@ import { attendeeLook } from "../../../../lib/attendee-look";
 import { readAttendeeTheme } from "../event-theme";
 import { normalizeHomeMenus, type HomeMenus, type HomeProgram } from "../../../../lib/attendee-home-menus";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
+import { usePublicOrganizerContact } from "../../../../lib/use-public-organizer-contact";
 import { useUnsavedNavigationGuard } from "../../../../lib/use-unsaved-navigation-guard";
 import { readGuestReceipts, writeGuestReceipts, type GuestReceiptPointer } from "../../../../lib/receipt-recovery";
 import { boothCanAttempt, boothOperatingStatus, formatBoothScheduleTime, isBoothContextChanged } from "../../../../lib/booth-availability";
@@ -350,6 +351,7 @@ export default function HomeShell({ slug }: { slug: string }) {
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
   const recoveryBlocked = isRecoveryBlocked(useVerificationMode());
+  const organizerContact = usePublicOrganizerContact(slug, recoveryBlocked);
   const ticketRef = useRef<string>("");
   const ticketSlugRef = useRef(slug);
   const currentContextRef = useRef<LoadedTicketContext | null>(null);
@@ -1170,7 +1172,7 @@ export default function HomeShell({ slug }: { slug: string }) {
           <h1 className={styles.stateTitle}>{title}</h1>
           <AttendeeStateMessage kind={state.reason === "transient" ? "error" : "info"} title={state.message}>
             {state.reason === "ticket-invalid" && recoveryBlocked
-              ? noTicketHereNote()
+              ? noTicketHereNote(organizerContact)
               : state.reason === "event-missing"
                 ? "문자나 안내문에 적힌 주소를 다시 확인하거나, 행사 주최 측에 문의해 주세요."
                 : null}
@@ -1341,11 +1343,12 @@ function NeedTicket({ slug }: { slug: string }) {
   // until it does the link stays so a working path is never hidden by a
   // failed health read.
   const recoveryBlocked = isRecoveryBlocked(useVerificationMode());
+  const organizerContact = usePublicOrganizerContact(slug, recoveryBlocked);
   return (
     <section className={styles.needTicket}>
       <AttendeeStateMessage kind="info" icon="ticket" title="이 브라우저에서 티켓을 찾지 못했습니다.">
         {recoveryBlocked
-          ? noTicketHereNote()
+          ? noTicketHereNote(organizerContact)
           : "신청한 티켓을 확인하면 이 참여를 이어서 할 수 있어요."}
       </AttendeeStateMessage>
       <p className={styles.needTicketAction}>

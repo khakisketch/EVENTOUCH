@@ -1,0 +1,348 @@
+/* Reading frame for /help, /terms and /privacy. Tokens only. */
+.page {
+  min-height: 100svh;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2) var(--s4);
+  width: min(100%, var(--web-content-max));
+  margin: 0 auto;
+  padding: var(--s4) var(--s4);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  display: inline-flex;
+  min-height: var(--control-min-size);
+  align-items: center;
+  color: var(--ink);
+  font-family: var(--display-font);
+  font-size: var(--text-lg);
+  font-weight: var(--fw-heavy);
+  letter-spacing: -0.025em;
+  text-decoration: none;
+}
+
+.docNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
+}
+
+.docNav a {
+  display: inline-flex;
+  min-height: var(--control-min-size);
+  align-items: center;
+  padding: 0 var(--s2);
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
+  text-decoration: none;
+}
+
+.docNav a:hover {
+  color: var(--ink);
+}
+
+.docNav a[aria-current="page"] {
+  border-bottom-color: var(--ink);
+  color: var(--ink);
+}
+
+.main {
+  width: min(100%, var(--web-content-max));
+  margin: 0 auto;
+  padding: var(--s6) var(--s4) var(--s8);
+}
+
+.main:focus {
+  outline: none;
+}
+
+.draft {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s2);
+  margin: 0 0 var(--s5);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--warning-line);
+  border-radius: var(--r-ctl);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--text-sm);
+  line-height: var(--lh-body);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-2xl);
+  font-weight: var(--fw-heavy);
+  letter-spacing: var(--ls-heading);
+  line-height: var(--lh-tight);
+  word-break: keep-all;
+}
+
+.lead {
+  max-width: 40em;
+  margin: var(--s3) 0 var(--s6);
+  color: var(--muted);
+  font-size: var(--body);
+  line-height: var(--lh-body);
+  word-break: keep-all;
+}
+
+.lead p {
+  margin: 0 0 var(--s2);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 15rem) minmax(0, 40em);
+  gap: var(--s7);
+  align-items: start;
+}
+
+.toc {
+  position: sticky;
+  top: var(--s5);
+  padding-top: var(--s2);
+  border-top: 2px solid var(--ink);
+}
+
+.tocTitle {
+  margin: var(--s3) 0 var(--s2);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: var(--fw-strong);
+  letter-spacing: 0.06em;
+}
+
+.toc ol {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: toc;
+}
+
+.toc li {
+  counter-increment: toc;
+}
+
+.toc a {
+  display: flex;
+  min-height: var(--control-min-size);
+  align-items: center;
+  gap: var(--s2);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: var(--lh-tight);
+  text-decoration: none;
+  word-break: keep-all;
+}
+
+.toc a::before {
+  content: counter(toc);
+  flex: none;
+  min-width: 1.5em;
+  color: var(--muted);
+  font-weight: var(--fw-strong);
+}
+
+.toc a:hover {
+  text-decoration: underline;
+}
+
+.body {
+  min-width: 0;
+}
+
+.section {
+  padding-top: var(--s5);
+  scroll-margin-top: var(--s4);
+}
+
+.section + .section {
+  margin-top: var(--s5);
+  border-top: 1px solid var(--line);
+}
+
+.section h2 {
+  margin: 0 0 var(--s3);
+  font-size: var(--text-xl);
+  font-weight: var(--fw-heavy);
+  letter-spacing: var(--ls-heading);
+  line-height: var(--lh-tight);
+  word-break: keep-all;
+}
+
+.section h3 {
+  margin: var(--s4) 0 var(--s2);
+  font-size: var(--text-lg);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-tight);
+}
+
+.section p,
+.section li,
+.section dd {
+  font-size: var(--body);
+  line-height: var(--lh-body);
+  word-break: keep-all;
+}
+
+.section p {
+  margin: 0 0 var(--s3);
+}
+
+.section ul,
+.section ol {
+  margin: 0 0 var(--s3);
+  padding-left: var(--s5);
+}
+
+.section li {
+  margin-bottom: var(--s2);
+}
+
+.section a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.note {
+  margin: 0 0 var(--s3);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--info-line);
+  border-radius: var(--r-ctl);
+  background: var(--info-soft);
+  color: var(--info);
+  font-size: var(--text-sm);
+  line-height: var(--lh-body);
+}
+
+.note p,
+.note li {
+  font-size: var(--text-sm);
+}
+
+.note > :last-child {
+  margin-bottom: 0;
+}
+
+/* Label and value pairs (what is processed, why, for how long). */
+.facts {
+  display: grid;
+  gap: 0;
+  margin: 0 0 var(--s3);
+}
+
+.facts > div {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s3) 0;
+  border-top: 1px solid var(--line);
+}
+
+.facts > div:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.facts dt {
+  font-size: var(--body);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-tight);
+}
+
+.facts dd {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* Frequently asked questions. */
+.faq {
+  border-top: 1px solid var(--line);
+}
+
+.faq:last-of-type {
+  margin-bottom: var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+.faq summary {
+  display: flex;
+  min-height: var(--control-min-size);
+  align-items: center;
+  padding: var(--s2) 0;
+  font-size: var(--body);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-body);
+  cursor: pointer;
+  word-break: keep-all;
+}
+
+.faq[open] summary {
+  color: var(--ink);
+}
+
+.faq > div {
+  padding: 0 0 var(--s2);
+}
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s2) var(--s4);
+  width: min(100%, var(--web-content-max));
+  margin: 0 auto;
+  padding: var(--s4);
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.foot a {
+  color: var(--ink);
+}
+
+.top a:focus-visible,
+.toc a:focus-visible,
+.foot a:focus-visible,
+.section a:focus-visible,
+.faq summary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 860px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s5);
+  }
+
+  .toc {
+    position: static;
+  }
+
+  .toc ol {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--s4);
+  }
+}
+
+@media (max-width: 480px) {
+  .toc ol {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

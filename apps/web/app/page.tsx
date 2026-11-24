@@ -11,11 +11,11 @@ import LandingPageDemo from "./LandingPageDemo";
 import LandingCompare from "./LandingCompare";
 import { LandingIcon } from "./LandingIcons";
 import { CountUp, Reveal } from "./LandingMotion";
+import { SUPPORT_EMAIL as CONTACT_EMAIL } from "../lib/support-contact";
 
 // Service entry: signed-in operators return to their work surface, everyone
 // else sees the public landing. Attendees enter through their event link.
 // Inquiries stay email-only; there is no server-backed proposal form.
-const CONTACT_EMAIL = "contact@eventouch.co.kr";
 const INQUIRY_SUBJECT = "EVENTOUCH 도입 문의";
 const INQUIRY_BODY =
   "행사 종류:\n일정:\n예상 규모(인원):\n연락처(성함/전화):\n궁금한 점:\n";
@@ -412,7 +412,7 @@ export default function Home() {
             </details>
             <details className={styles.faqItem} id="faq-portal">
               <summary>고객사 담당자도 로그인해 사용할 수 있나요?</summary>
-              <p>고객사 포털은 제공하지 않습니다. 고객사 정보는 행사 운영사가 내부 기록으로 관리합니다.</p>
+              <p>고객사 포털은 제공하지 않습니다. 고객사 정보는 행사를 운영하는 조직이 내부 기록으로 관리합니다.</p>
             </details>
           </Reveal>
         </section>
@@ -442,7 +442,12 @@ export default function Home() {
 
       <footer className={styles.footer}>
         <span>EVENTOUCH · 행사 운영 워크스페이스</span>
-        <span><Link href="/login">로그인</Link> · 이용약관·개인정보처리방침 준비 중</span>
+        <nav className={styles.footerLinks} aria-label="서비스 안내">
+          <Link href="/login">로그인</Link>
+          <Link href="/help">도움말·문의</Link>
+          <Link href="/terms">이용약관</Link>
+          <Link href="/privacy">개인정보처리방침</Link>
+        </nav>
       </footer>
 
       <nav className={styles.mobileCta} aria-label="모바일 도입 문의">

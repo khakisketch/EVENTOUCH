@@ -34,7 +34,7 @@ test('registration hides the dead-end link when recovery is blocked', () => {
     2,
     'duplicate and changed-result guidance each provide an available-mode recovery link'
   );
-  assert.match(form, /signupSuperseded[\s\S]*?recoveryBlocked \? \([\s\S]*?행사 주최 측에 문의하세요[\s\S]*?ticket\/recover/u, 'changed-result guidance also gates recovery');
+  assert.match(form, /signupSuperseded[\s\S]*?recoveryBlocked \? \([\s\S]*?organizerContactLine\(recoveryContact\)[\s\S]*?ticket\/recover/u, 'changed-result guidance also gates recovery');
   assert.match(form, /organizerContactLine\(recoveryContact\)/u, 'blocked duplicate offers the contact, not a tab to look for');
   assert.doesNotMatch(form, /브라우저 탭/u, 'no tab boundary is promised');
   assert.match(guidance, /value \? `문의: \$\{value\}` : fallback/u, 'only a visible contact is shown');
@@ -46,7 +46,7 @@ test('attendee home gates every recovery entry on availability', () => {
   const home = read('app/event/[slug]/home/HomeShell.tsx');
   assert.match(home, /useVerificationMode\(\)/u, 'home resolves the transport mode');
   assert.match(home, /recoveryBlocked \? null : \(/u, 'need-ticket link steps aside when blocked');
-  assert.match(home, /noTicketHereNote\(\)/u, 'blocked guidance is the shared note');
+  assert.match(home, /noTicketHereNote\(organizerContact\)/u, 'blocked guidance is the shared note');
   assert.match(guidance, /신청을 완료한 기기의 같은 브라우저에서 열어 주세요/u, 'blocked guidance names the browser limit');
 });
 

@@ -20,6 +20,7 @@ import BottomAction from "../ui/BottomAction";
 import { attendeeLook } from "../../../../lib/attendee-look";
 import { readAttendeeTheme, type AttendeeTheme } from "../event-theme";
 import { isRecoveryBlocked, useVerificationMode } from "../../../../lib/use-verification-mode";
+import { usePublicOrganizerContact } from "../../../../lib/use-public-organizer-contact";
 import { readGuestReceipts, writeGuestReceipts, type GuestReceiptPointer } from "../../../../lib/receipt-recovery";
 import { confirmsGuestCommand, confirmsGuestPhotoUpload } from "../../../../lib/guest-command-result";
 import { useUnsavedNavigationGuard } from "../../../../lib/use-unsaved-navigation-guard";
@@ -264,6 +265,7 @@ export default function EngageClient({ slug }: { slug: string }) {
   // Which programs were already finished when the page first rendered them (folded below the ones to do).
   const foldedAtOpenRef = useRef<Set<string> | null>(null);
   const recoveryBlocked = isRecoveryBlocked(useVerificationMode());
+  const organizerContact = usePublicOrganizerContact(slug, recoveryBlocked);
 
   useEffect(() => {
     const value = new URLSearchParams(window.location.search).get("program") ?? "";
@@ -1199,7 +1201,7 @@ export default function EngageClient({ slug }: { slug: string }) {
           <h2>티켓이 확인되지 않습니다</h2>
           <AttendeeStateMessage kind="info" icon="ticket" title="참여 콘텐츠에는 본인 티켓이 필요합니다.">
             {recoveryBlocked
-              ? noTicketHereNote()
+              ? noTicketHereNote(organizerContact)
               : "이 브라우저에서 티켓을 찾지 못했습니다. 신청할 때 쓴 연락처를 인증해 티켓을 다시 연결하세요."}
           </AttendeeStateMessage>
           <p className={styles.actions}>

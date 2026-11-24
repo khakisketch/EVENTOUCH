@@ -699,7 +699,8 @@ export default function RegisterForm(initial: Props) {
               정보 수집 안내에 동의합니다 (필수)
             </label>
             <p className="preserve-lines">{consentText}</p>
-            <p className="consent-meta">동의 버전 {consentVersion} · 동의 시각과 함께 기록되며, 행사 종료 후 파기 기준은 행사 주최 측에 확인하세요.</p>
+            <p className="consent-meta">동의 버전 {consentVersion} · 동의 시각과 함께 기록되며, 행사 종료 후 파기 기준은 행사 주최 측{recoveryContact ? `(${recoveryContact})` : ""}에 확인하세요.</p>
+            <p className="consent-meta"><ProductLink variant="ghost" href="/privacy" target="_blank" rel="noopener noreferrer">개인정보처리방침 (새 탭)</ProductLink></p>
             {failure?.field === "consent" ? <p id="consent-error" role="alert">{failure.message}</p> : null}
           </div>
         </section>
@@ -720,7 +721,7 @@ export default function RegisterForm(initial: Props) {
       {verificationRequired && !grant && !signupSuperseded ? (
         <p className="notice" role="status">신청하려면 위에서 연락처 인증을 완료하세요.</p>
       ) : null}
-      {verificationRequired && recoveryBlocked ? <AttendeeStateMessage kind="error" title="현재 연락처 인증을 사용할 수 없습니다.">행사 주최 측에 문의하세요.</AttendeeStateMessage> : null}
+      {verificationRequired && recoveryBlocked ? <AttendeeStateMessage kind="error" title="현재 연락처 인증을 사용할 수 없습니다.">{organizerContactLine(recoveryContact)}</AttendeeStateMessage> : null}
       {retryPending ? (
         <section className="registration-retry" role="alert" tabIndex={-1} ref={retryNoticeRef}>
           <h2>신청 결과를 확인하지 못했습니다</h2>
@@ -734,7 +735,7 @@ export default function RegisterForm(initial: Props) {
           <h2>이전 신청 정보를 확인해 주세요</h2>
           <p>신청이 처리된 뒤 참가 정보가 변경되었습니다.</p>
           {recoveryBlocked ? (
-            <p>{recoveryContact ? `문의: ${recoveryContact}` : "행사 주최 측에 문의하세요."}</p>
+            <p>{organizerContactLine(recoveryContact)}</p>
           ) : <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket/recover`}>내 티켓 찾기</ProductLink>}
         </section>
       ) : null}
