@@ -35,6 +35,7 @@ const check = (name, condition) => { assert.ok(condition, name); checks.push(nam
       await page.goto(`${f.baseUrl}/console`, { waitUntil: 'networkidle' });
       await page.getByRole('button', { name:'새 행사 만들기', exact:true }).click();
       const dialog = page.getByRole('dialog');
+      await dialog.evaluate(el => Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => undefined)))); // measure after the open animation settles (it scales the box mid-flight)
       const advanced = dialog.locator('details[data-create-settings]');
       check(`event optional setup starts closed at ${size.width}x${size.height}`, !await advanced.evaluate(el => el.open));
       const upFront = await dialog.locator('input:not([type="radio"]):visible,select:visible').evaluateAll(els => els.map(el => el.id));
@@ -113,7 +114,7 @@ const check = (name, condition) => { assert.ok(condition, name); checks.push(nam
     check('desktop sheet hugs the right edge, 440-480px wide', Boolean(sheetBox) && Math.abs(sheetBox.x + sheetBox.width - 1440) < 2 && sheetBox.width >= 440 && sheetBox.width <= 480);
     await panel.getByRole('heading', { name: '신청 정보' }).focus(); await page.keyboard.press('Escape');
     await panel.waitFor({ state: 'detached' }); await page.waitForFunction(label => document.activeElement?.getAttribute('aria-label') === label, await trigger.getAttribute('aria-label')); check('detail Escape returns focus to its row', await trigger.evaluate(el => el === document.activeElement));
-    await trigger.click(); await a11y(page, 'desktop inspector'); await page.screenshot({ path: path.join(out, 'roster-desktop.png') });
+    await trigger.click(); await page.waitForTimeout(600); /* let the sheet's open fade finish: axe reads mid-fade colors */ await a11y(page, 'desktop inspector'); await page.screenshot({ path: path.join(out, 'roster-desktop.png') });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForFunction(() => document.querySelector('[role="dialog"]')?.getAttribute('aria-modal') === 'true');
     check('phone detail is modal', await page.evaluate(() => document.body.style.overflow === 'hidden'));
@@ -298,6 +299,7 @@ const check = (name, condition) => { assert.ok(condition, name); checks.push(nam
     await list.goto(`${base}/participants`,{waitUntil:'networkidle'});
     await list.getByRole('button',{name:'참가자 추가',exact:true}).click();
     const manual=list.getByRole('dialog',{name:'참가자 추가'});
+    await manual.evaluate(el=>Promise.all(el.getAnimations({subtree:true}).map(a=>a.finished.catch(()=>undefined)))); // measure after the open animation settles
     const fieldGeometry=await Promise.all([manual.locator('#participant-add-name').boundingBox(),manual.locator('label[for="participant-add-phone"]').boundingBox()]);
     check('manual registration leaves room between a focused field and the next label', fieldGeometry.every(Boolean) && fieldGeometry[1].y-(fieldGeometry[0].y+fieldGeometry[0].height)>=8);
     // On a phone the shared dialog footer stacks its actions full width; a short label like "등록"
@@ -325,7 +327,7 @@ const check = (name, condition) => { assert.ok(condition, name); checks.push(nam
     await list.keyboard.press('Escape');
     await list.setViewportSize({width:1280,height:900});
     const leavePrompt=list.waitForEvent('dialog');
-    const leaveClick=list.getByRole('link',{name:'공지·안내',exact:true}).click();
+    const leaveClick=list.getByRole('link',{name:'운영 현황',exact:true}).first().click(); // Reopened 2026-11-24: 행사 준비 group is collapsed here; 운영 현황 stays visible
     const leaveDialog=await leavePrompt;
     check('leaving warns that an uncertain registration cannot be rechecked elsewhere', leaveDialog.message().includes('등록 결과가 아직 확인되지 않았습니다'));
     await leaveDialog.dismiss(); await leaveClick;

@@ -53,7 +53,10 @@ test('the landing header and hero are one full-width ink band', () => {
 
 test('flows, tokens and the contact rules are unchanged', () => {
   const home = fs.readFileSync(path.join(app, 'page.tsx'), 'utf8');
-  for (const text of ['이메일로 도입 문의', '운영자·스태프 로그인', 'contact@eventouch.co.kr', '참가자 앱 설치 없음', '문자 발송 연결 확인', '고객사 포털 없음']) assert.ok(home.includes(text), `${text} stays`);
+  // Refreshed 2026-11-24: the header link is plain "로그인" (one shared /login), and the
+  // contact address lives in lib/support-contact.ts (shown only after mount, see fce5422).
+  for (const text of ['이메일로 도입 문의', '>로그인</Link>', 'href="/login"', '참가자 앱 설치 없음', '문자 발송 연결 확인', '고객사 포털 없음']) assert.ok(home.includes(text), `${text} stays`);
+  assert.match(fs.readFileSync(path.join(app, '..', 'lib', 'support-contact.ts'), 'utf8'), /contact@eventouch\.co\.kr/u, 'the default contact address stays');
   assert.match(pages.invite, /팀 초대 수락/u);
   assert.match(pages.recover, /비밀번호 재설정/u);
 });

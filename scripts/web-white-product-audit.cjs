@@ -169,7 +169,8 @@ async function main() {
           }
           return { iconRight: icon?.right, labelLeft: label?.left, labelWidth: label?.width };
         }));
-        check(`${name}@${width}: toolbar icons share the label row`, geometry.length === 2 && geometry.every(item => item.iconRight <= item.labelLeft + 1 && item.labelWidth >= 20), geometry);
+        // Reopened 2026-11-21 (시안 A): phones fold 명단 가져오기 into the ⋯ menu, leaving one visible toolbar button.
+        check(`${name}@${width}: toolbar icons share the label row`, geometry.length === (width <= 640 ? 1 : 2) && geometry.every(item => item.iconRight <= item.labelLeft + 1 && item.labelWidth >= 20), geometry);
       }
       if (name === 'attendee') {
         const geometry = await page.locator('nav[aria-label="참가 메뉴"] button').evaluateAll(buttons => buttons.map(button => {
@@ -408,7 +409,7 @@ async function main() {
         return route.continue();
       });
       await page.goto(roster, { waitUntil: 'domcontentloaded' });
-      await page.getByText('참가자 목록을 불러오고 있습니다.', { exact: true }).waitFor();
+      await page.getByText('참가자 목록을 불러오고 있습니다.', { exact: true }).last().waitFor(); // the other match is the visually hidden live status
       await render(page, 'roster-loading', width);
       mode = 'error'; release();
       await page.getByRole('button', { name: '다시 불러오기', exact: true }).waitFor();

@@ -69,6 +69,8 @@ async function main() {
       await page.locator('#campaign-title').fill(`합성 예약 ${timezoneId}`);
       await page.locator('#campaign-body').fill('실제로 전달하지 않는 합성 안내입니다.');
       await messageStep(page, 3);
+      // Reopened 2026-11-24 (owner decision 11): 미연동 기본값은 모의 발송, 이 감사는 실제 요청 경로를 본다.
+      await page.getByRole('checkbox', { name: /^모의 발송으로 기록/ }).uncheck();
       // Reopened 2026-11-24 (시안 A): the 시점 pill opens a panel with the 지금/행사 기준/날짜·시각 지정 radio
       // group; the datetime field exists only after 날짜·시각 지정 is chosen, here by keyboard.
       await openMessagePanel(page, 'when');
@@ -184,7 +186,7 @@ async function main() {
     phase = 'unconfirmed retry survives invalid stored schedule';
     const recoveryRow = page.locator('#campaign-tz-recovery');
     await recoveryRow.getByRole('button', { name: '재시도', exact: true }).click();
-    await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '재시도한다', exact: true }).click();
+    await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '재시도하기', exact: true }).click();
     await recoveryRow.getByRole('button', { name: '같은 요청 다시 시도', exact: true }).waitFor();
     const changed = await read();
     const record = changed.messages.find(m => m.id === 'tz-recovery');
@@ -197,7 +199,7 @@ async function main() {
     await page.getByRole('button', { name: '상태 새로고침', exact: true }).click();
     await recoveryRow.getByText('예약 시각 확인 필요', { exact: true }).waitFor();
     await recoveryRow.getByRole('button', { name: '같은 요청 다시 시도', exact: true }).click();
-    await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '재시도한다', exact: true }).click();
+    await page.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '재시도하기', exact: true }).click();
     await page.getByText(/모의 실행 결과/).waitFor();
     assert.equal(retries.length, 2);
     assert.equal(retries[0].commandId, retries[1].commandId);

@@ -198,10 +198,11 @@ async function main() {
         const presets = page.getByRole('group', { name: '빠른 상태 보기', exact: true });
         const tools = page.locator('summary[aria-label="내보내기·가져오기"]');
         const add = page.getByRole('button', { name: '참가자 추가', exact: true });
-        const controls = await Promise.all([tools.boundingBox(), add.boundingBox(), page.getByRole('button', { name: '명단 가져오기', exact: true }).boundingBox()]);
-        check(`mobile roster keeps lookup controls together and touch sized at ${width}`,
-          controls.every(box => box && box.width >= 44 && box.height >= 44 && box.x >= 0 && box.x + box.width <= width)
-          && Math.max(...controls.map(box => box.y)) - Math.min(...controls.map(box => box.y)) <= 52, controls);
+        // Reopened 2026-11-21 (시안 A): phones fold 명단 가져오기 into the ⋯ menu, so the visible controls are the menu and 참가자 추가.
+        const controls = await Promise.all([tools.boundingBox(), add.boundingBox()]);
+        // 참가자 추가 is the bottom-docked primary on phones, so the pair is no longer one row; each stays touch sized and inside the viewport.
+        check(`mobile roster controls stay touch sized and inside the viewport at ${width}`,
+          controls.every(box => box && box.width >= 44 && box.height >= 44 && box.x >= 0 && box.x + box.width <= width), controls);
         // Reopened 2026-11-20: phones keep the same count-tab row, scrolling inside its own box.
         const presetBox = await presets.boundingBox();
         check(`mobile count tabs stay inside the viewport at ${width}`, presetBox && presetBox.x >= 0 && presetBox.x + presetBox.width <= width, presetBox);
@@ -258,7 +259,7 @@ async function main() {
     await page.getByRole('checkbox', { name: `${first.name} 선택`, exact: true }).waitFor();
     const firstRow = rowFor(first.name);
     await act(roster, () => firstRow.getByRole('button', { name: '승인', exact: true }).click());
-    await page.getByText(`${first.name} 상태를 참가 확정`, { exact: false }).waitFor();
+    await page.getByText(`${first.name} 상태를 ‘참가 확정’`, { exact: false }).waitFor(); // notice wording since 2026-11-2x: 상태를 ‘참가 확정’으로 바꿨습니다
     check('single approval persisted', (await bootstrap()).workspaces[f.eventId].participants.find(p => p.id === first.id).status === 'APPROVED');
     await act(roster, () => page.getByRole('checkbox', { name: `${first.name} 선택`, exact: true }).check());
     if (PHASE === 'after') {
@@ -294,7 +295,7 @@ async function main() {
       const detail = page.getByRole('dialog');
       await detail.getByRole('combobox', { name: `${first.name} 상태 변경`, exact: true }).selectOption('CANCELLED');
       check('cancel remains explicit before write', (await bootstrap()).workspaces[f.eventId].participants.find(p => p.id === first.id).status === 'APPROVED');
-      await detail.getByRole('button', { name: '취소', exact: true }).click();
+      await detail.getByRole('button', { name: '돌아가기', exact: true }).click(); // the cancel confirm's dismiss label is 돌아가기
       await page.keyboard.press('Escape');
       check('cancel review dismissal preserves selection', (await page.locator('#roster-selection-count').textContent()).includes('선택 2명'));
     }
@@ -727,7 +728,7 @@ async function main() {
     const eventBasePath = `/console/events/${f.eventId}`;
     const approvedDestinations = [
       {label:'운영 현황',href:eventBasePath},
-      ...[['참가자 명단','participants'],['메시지','messages'],['참가자 페이지','page'],['공지·안내','content'],['참여 이벤트','programs'],['입장·스태프','operations'],['행사 설정','settings'],['현장 모드','live'],['결과 보고서','reports'],['경품 지급','rewards'],['현장 사진','photos']].map(([label,route])=>({label,href:`${eventBasePath}/${route}`})),
+      ...[['참가자 명단','participants'],['메시지','messages'],['참가자 화면','page'] /* Reopened 2026-11-20: 참가자 페이지·공지·안내·참여 이벤트 share one 참가자 화면 rail entry */,['입장·스태프','operations'],['행사 설정','settings'],['현장 모드','live'],['결과 보고서','reports'],['경품 지급','rewards'],['현장 사진','photos']].map(([label,route])=>({label,href:`${eventBasePath}/${route}`})),
     ];
 
     check(
@@ -739,7 +740,10 @@ async function main() {
         && hubDestinations.every((entry, i) => entry.label.replace(/\d+$/u, '') === approvedDestinations[i].label && entry.href !== null && new URL(entry.href, f.baseUrl).pathname === approvedDestinations[i].href),
       hubDestinations,
     );
-    check('rail grouping chrome carries no fake controls', await page.locator('.desktop-side-nav .nav-event-card, .desktop-side-nav .nav-section-label').evaluateAll(nodes => nodes.length > 0 && nodes.every(e => e.querySelector('a, button, [tabindex]') === null && !e.hasAttribute('tabindex'))));
+    check('rail grouping chrome carries no fake controls', await page.locator('.desktop-side-nav .nav-event-card, .desktop-side-nav .nav-section-label').evaluateAll(nodes => nodes.length > 0 && nodes.every(e => !e.hasAttribute('tabindex') && (e.matches('.nav-event-card')
+      // Reopened 2026-11-20: the event card hosts the real 다른 행사 switcher; it may hold real buttons/links only, never fake tab stops.
+      ? [...e.querySelectorAll('[tabindex]')].every(el => el.matches('a, button') || el.getAttribute('tabindex') === '-1')
+      : e.querySelector('a, button, [tabindex]') === null))));
     await page.goto(base + '/participants?status=PENDING');
     // Bulk scope names its filter-wide meaning in the accessible
     // description (roster-select-all-help); the visible label is concise.

@@ -69,5 +69,6 @@ test('primary-hover-uses-the-existing-high-contrast-foreground-token', () => {
 test('anonymous-landing-header-links-keep-touch-size-on-small-and-tablet-screens', () => {
   const source = read('landing.module.css');
   assert.match(source, /\.brand\s*\{[^}]*min-height:\s*44px/s);
-  assert.match(source, /\.siteNav a\s*\{[^}]*min-height:\s*44px/s);
+  // Refreshed 2026-11-24: the header has no .siteNav; its login link is .loginLink.
+  assert.match(source, /\.loginLink\s*\{[^}]*min-height:\s*44px/s);
 });

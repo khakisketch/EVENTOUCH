@@ -130,6 +130,9 @@ async function main() {
     // loaded): reveal older entries through the real 더 보기 control before
     // asserting their labels. Bounded: at most two expansions cover all 20.
     const expandActivityFor = async (text) => {
+      // Reopened 2026-11-16 (팀·권한 탭3): activity lives under the 연동·활동 tab.
+      await page.getByRole('tab', { name: '연동·활동' }).click();
+      await page.locator('#team-activity-more, [aria-label="최근 활동 목록"]').first().waitFor({ timeout: UI_TIMEOUT });
       for (let attempt = 0; attempt < 3; attempt += 1) {
         if ((await page.getByText(text, { exact: false }).count()) > 0) return;
         const more = page.locator('#team-activity-more');
@@ -166,12 +169,14 @@ async function main() {
       counts.labels += 1;
       await shot('states-team-labels', width);
 
+      await page.getByRole('tab', { name: '구성원' }).click(); // back to the member list for the contact checks
+      await page.locator('#team-members').waitFor({ timeout: UI_TIMEOUT });
       // --- Team: contact wrap invariants via per-character line rects. ---
       // Owner plus the long-hash probe must wrap only at safe points with
       // @domain on one line; the overlong-domain probe must never overflow.
       async function wrapReport(needle) {
         return page.evaluate((target) => {
-          const el = [...document.querySelectorAll('[class*=memberContact]')]
+          const el = [...document.querySelectorAll('[class*=personContact]')]
             .find((node) => node.textContent.includes(target));
           if (!el) return { found: false };
           const containerWidth = el.getBoundingClientRect().width;
@@ -243,8 +248,8 @@ async function main() {
         counts.states += 1;
         await shot('states-photos-uploaded', width);
       } else {
-        // An earlier pass already uploaded: the archive persists instead.
-        await act(() => page.locator('ul[class*=photoGrid] li').first().waitFor({ timeout: UI_TIMEOUT }));
+        // An earlier pass already uploaded: the archive persists instead (gallery tiles with a non-empty count).
+        await act(() => page.locator('[class*=tileCount]:not([data-empty])').first().waitFor({ timeout: UI_TIMEOUT }));
         const storedPhotos = (await f.harness.database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [f.eventId])).rows[0].payload.evidencePhotos;
         assert.ok(storedPhotos.length >= 1, 'uploaded photo persists across widths');
         counts.states += 1;
@@ -291,12 +296,12 @@ async function main() {
       // Reopened 2026-11-24: 진행 중에는 설정 3단계가 접혀 있어 앵커로 펼친 상태에서 배지와 44px 대상을 본다.
       await page.goto(`${f.baseUrl}/console/events/${f.eventId}/operations#ops-desks`, { waitUntil: 'networkidle' });
       await page.locator('#ops-desks').waitFor({ timeout: UI_TIMEOUT });
-      for (const [text, tone] of [['가동 중', 'good'], ['중지됨', 'muted'], ['대기', 'wait'], ['진행', 'good'], ['종료', 'muted']]) {
-        const badge = page.locator('section span[data-tone]').filter({ hasText: text }).first();
-        await act(() => badge.waitFor({ timeout: UI_TIMEOUT }));
-        assert.equal(await badge.getAttribute('data-tone'), tone, `${text} carries tone ${tone}`);
-        counts.badges += 1;
-      }
+      // Reopened 2026-11-24 (진행 중 데스크 보드): state is a tone dot/tile (on/off) next to explicit text,
+      // not a text badge. Assert the text state and the tone carriers instead.
+      await act(() => page.getByText('가동 중', { exact: false }).first().waitFor({ timeout: UI_TIMEOUT }));
+      const tones = await page.locator('#ops-desks ~ * [data-tone], [data-tone]').evaluateAll(nodes => [...new Set(nodes.map(node => node.getAttribute('data-tone')))]);
+      assert.ok(tones.includes('on'), `an open desk carries tone on (saw ${tones.join(',')})`);
+      counts.badges += 1;
       const smallTargets = await page.locator('#ops-board, #ops-desks, #ops-booths, #ops-staff').evaluateAll((roots) => {
         const bad = [];
         for (const root of roots) {
@@ -307,6 +312,8 @@ async function main() {
             if (el.classList.contains('sr-only') || el.getAttribute('aria-hidden') === 'true') continue;
             const rect = el.getBoundingClientRect();
             if (rect.width === 0 && rect.height === 0) continue;
+            // A native checkbox/radio is operated through its 44px+ label row.
+            if (el.matches('input[type="checkbox"], input[type="radio"]') && (el.closest('label')?.getBoundingClientRect().height ?? 0) >= 44) continue;
             if (rect.height < 44) bad.push(`${el.tagName}.${el.className} ${Math.round(rect.height)}px`);
           }
         }
