@@ -288,7 +288,8 @@ async function main() {
       await shot('states-import-preview', width);
 
       // --- Operations: explicit state badges with tones; 44px targets. ---
-      await page.goto(`${f.baseUrl}/console/events/${f.eventId}/operations`, { waitUntil: 'networkidle' });
+      // Reopened 2026-11-24: 진행 중에는 설정 3단계가 접혀 있어 앵커로 펼친 상태에서 배지와 44px 대상을 본다.
+      await page.goto(`${f.baseUrl}/console/events/${f.eventId}/operations#ops-desks`, { waitUntil: 'networkidle' });
       await page.locator('#ops-desks').waitFor({ timeout: UI_TIMEOUT });
       for (const [text, tone] of [['가동 중', 'good'], ['중지됨', 'muted'], ['대기', 'wait'], ['진행', 'good'], ['종료', 'muted']]) {
         const badge = page.locator('section span[data-tone]').filter({ hasText: text }).first();
@@ -296,7 +297,7 @@ async function main() {
         assert.equal(await badge.getAttribute('data-tone'), tone, `${text} carries tone ${tone}`);
         counts.badges += 1;
       }
-      const smallTargets = await page.locator('#ops-desks, #ops-booths, #ops-staff').evaluateAll((roots) => {
+      const smallTargets = await page.locator('#ops-board, #ops-desks, #ops-booths, #ops-staff').evaluateAll((roots) => {
         const bad = [];
         for (const root of roots) {
           const section = root.closest('section') || root;

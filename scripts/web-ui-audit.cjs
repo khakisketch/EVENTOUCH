@@ -223,7 +223,7 @@ const check = (name, condition) => { assert.ok(condition, name); checks.push(nam
     check('choosing channels never executes a write', choiceWrites===0);
     await choices.close();
     const ops = await context.newPage(); ops.on('pageerror',error=>errors.push(error.message));
-    await ops.goto(`${base}/operations`,{waitUntil:'networkidle'}); await ops.getByRole('button',{name:'데스크 추가',exact:true}).click();
+    await ops.goto(`${base}/operations#ops-desks`,{waitUntil:'networkidle'}); await ops.getByRole('button',{name:'데스크 추가',exact:true}).click();
     await chooseRadio(ops,'desk-action','OUT'); await chooseRadio(ops,'desk-mode','tablet');
     check('desk direction and display are independent single choices', await ops.locator('#desk-action input:checked').inputValue()==='OUT' && await ops.locator('#desk-mode input:checked').inputValue()==='tablet');
     await a11y(ops,'desk saved choices');

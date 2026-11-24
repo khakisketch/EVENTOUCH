@@ -70,7 +70,8 @@ async function main() {
       if (prior.length === 2 && !key.endsWith('부분 응답')) return route.fulfill({ status: 403, contentType: 'application/json', body: '{"error":"접근을 확인하세요"}' });
       return route.continue();
     });
-    await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/operations`, { waitUntil: 'networkidle' });
+    // Reopened 2026-11-24: 진행 중에는 설정 3단계가 접혀 있어 #ops-desks 앵커로 펼친 채 시작한다.
+    await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/operations#ops-desks`, { waitUntil: 'networkidle' });
     if (!before && !beforeMap) {
       phase = 'operation sections and keyboard navigation';
       const sections = page.locator('[data-workspace-section^="ops-"]:visible');
@@ -78,7 +79,8 @@ async function main() {
       const basic = ['ops-desks', 'ops-staff', 'ops-scan'];
       const boothSettings = ['ops-booths', 'ops-booth-mode', 'ops-booth-map'];
       const all = [...basic, ...boothSettings];
-      const sectionIds = () => sections.evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-labelledby')));
+      // 진행 중 데스크 보드(ops-board)는 설정 구역이 아니라 목록에서 뺀다.
+      const sectionIds = () => sections.evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-labelledby')).filter(id => id !== 'ops-board'));
       await page.getByRole('heading', { name: '입장 데스크 만들기', exact: true }).waitFor();
       assert.deepEqual(await sectionIds(), all);
       let navigationWrites = 0;
@@ -106,7 +108,7 @@ async function main() {
       assert.equal(navigationWrites, 0, 'section navigation leaves the workspace unchanged');
       page.off('request', countWrite);
       await page.setViewportSize({ width: 1280, height: 900 });
-      await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/operations`);
+      await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/operations#ops-desks`);
       const featureCases = [
         { features: [], sections: basic },
         { features: ['poll'], sections: basic },

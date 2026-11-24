@@ -224,6 +224,99 @@
 .phoneButtons i { display: grid; place-items: center; height: 54px; border: 1px solid var(--line-strong); border-radius: var(--r-ctl); font-size: var(--text-md); font-style: normal; font-weight: var(--fw-strong); }
 .optionalNote { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin: 0; color: var(--muted); font-size: var(--text-sm); }
 
+/* 진행 중 데스크 보드 (Reopened 2026-11-24, owner: 진행 중 데스크 보드): 데스크 하나가 카드 하나.
+   처리 수는 그 데스크의 숫자라 큰 숫자 띠가 아니다. 담당이 없는 카드는 호박색(작업 대기),
+   중지된 카드는 불투명도가 아니라 muted 글자로 낮춘다. 카드 전체가 열기 버튼이고,
+   가동 스위치와 배정 버튼은 그 위에 겹쳐 놓는다(버튼 안에 버튼을 두지 않는다). */
+.deskBoard { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); margin: 0; padding: 0; list-style: none; }
+.deskCard {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface-work);
+  transition: border-color 0.12s;
+}
+.deskCard:hover { border-color: var(--line-strong); }
+.deskCard[data-gap="true"] { border-color: var(--warning-line); background: var(--warning-soft); }
+.deskCard[data-gap="true"]:hover { border-color: var(--warning); }
+.cardOpen {
+  display: grid;
+  gap: var(--s2);
+  width: 100%;
+  padding: var(--s4) var(--s5);
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cardHead { display: flex; align-items: center; gap: var(--s2); min-width: 0; min-height: 44px; padding-right: var(--s8); }
+.cardDot { flex: none; width: var(--s2); height: var(--s2); border-radius: 50%; background: var(--line-strong); }
+.cardDot[data-tone="on"] { background: var(--success); }
+.cardDot[data-tone="warn"] { background: var(--warning); }
+.cardName { min-width: 0; font-size: var(--text-lg); font-weight: var(--fw-strong); letter-spacing: var(--ls-heading); overflow-wrap: anywhere; word-break: keep-all; }
+.cardNote { flex: none; color: var(--muted); font-size: var(--text-sm); font-weight: var(--fw-strong); }
+.cardStat { display: flex; align-items: baseline; gap: var(--s2); }
+.cardNum { font-size: var(--text-num); font-weight: var(--fw-heavy); letter-spacing: var(--ls-num); line-height: 1; font-variant-numeric: tabular-nums; }
+.cardUnit { color: var(--muted); font-size: var(--text-md); font-weight: var(--fw-strong); }
+.cardUnknown { color: var(--muted); font-size: var(--text-xl); font-weight: var(--fw-heavy); letter-spacing: var(--ls-heading); line-height: 1; }
+.cardMore { display: inline-flex; align-items: center; gap: var(--s1); margin-left: auto; color: var(--muted); font-size: var(--text-sm); font-weight: var(--fw-strong); }
+.cardMore svg { width: var(--s4); height: var(--s4); transition: transform 0.12s; }
+.cardOpen:hover .cardMore { color: var(--ink); }
+.cardOpen:hover .cardMore svg { transform: translateX(var(--s1)); }
+.cardMeta { color: var(--muted); font-size: var(--text-sm); }
+.cardFoot {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: calc(44px + var(--s3));
+  margin-top: var(--s2);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-strong);
+}
+.deskCard[data-gap="true"] .cardFoot { padding-right: calc(var(--s8) + var(--s5)); border-top-color: var(--warning-line); }
+.cardStaff { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cardNone { color: var(--warning); }
+.cardControl { position: absolute; top: var(--s4); right: var(--s5); display: inline-flex; align-items: center; justify-content: flex-end; min-width: 44px; min-height: 44px; }
+.cardAssign { position: absolute; right: var(--s5); bottom: var(--s4); }
+.deskCard[data-dim="true"] .cardName,
+.deskCard[data-dim="true"] .cardNum,
+.deskCard[data-dim="true"] .cardStaff { color: var(--muted); }
+
+/* 접힌 설정 두 줄: 설정 3단계(펼치면 세 단계 카드가 그대로), 스태프 로그인 주소. */
+.setupFolds { display: grid; gap: var(--s3); margin-top: var(--s5); }
+.setupFold { min-width: 0; }
+.foldSummary,
+.addressRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 52px;
+  padding: var(--s2) var(--s4) var(--s2) var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface-work);
+  color: var(--ink);
+}
+.foldSummary { cursor: pointer; list-style: none; transition: border-color 0.12s; }
+.foldSummary::-webkit-details-marker { display: none; }
+.foldSummary:hover { border-color: var(--line-strong); }
+.foldText { flex: 1 1 auto; min-width: 0; color: var(--muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.foldText b { color: var(--ink); font-weight: var(--fw-strong); }
+.foldState { flex: none; color: var(--success); font-size: var(--text-sm); font-weight: var(--fw-strong); }
+.foldState[data-state="todo"] { color: var(--warning); }
+.foldChevron { display: inline-flex; flex: none; color: var(--line-strong); transition: transform 0.12s; }
+.foldChevron svg { width: var(--s5); height: var(--s5); }
+.setupFold[open] .foldChevron { transform: rotate(90deg); }
+.foldBody { display: grid; gap: var(--s6); margin-top: var(--s4); }
+.addressRow { flex-wrap: wrap; padding-block: var(--s1); }
+.addressRow > [data-product-action] { flex: none; margin-left: auto; white-space: nowrap; }
+.addressCode { padding: var(--s1) var(--s2); border-radius: var(--r-ctl); background: var(--surface-sunken); color: var(--ink); font-family: var(--mono-font); overflow-wrap: anywhere; }
+
 /* Before-the-day presets start folded (draws setup-details same grammar): the
    summary always names the current value so a folded row still answers "what is
    it now". They sit side by side as two setting cards. */
@@ -262,12 +355,21 @@
   .locationTile { width: 40px; height: 40px; }
   .presetGrid { grid-template-columns: minmax(0, 1fr); gap: var(--s4); margin-top: var(--s5); }
 }
+@media (max-width: 768px) {
+  .deskBoard { grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
+  .cardOpen { padding-inline: var(--s4); }
+  .cardControl, .cardAssign { right: var(--s4); }
+  .deskCard[data-gap="true"] .cardFoot { padding-right: calc(var(--s8) + var(--s4)); }
+  .foldSummary, .addressRow { padding-left: var(--s4); }
+  .foldDetail { display: none; }
+}
 @media (max-width: 760px) {
   .scanStep { grid-template-columns: minmax(0, 1fr); }
   /* The phone preview is decorative: phones skip it so the three steps stay short. */
   .scanPhone { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .locationOpen, .locationChevron, .presetFold { transition: none; }
+  .locationOpen, .locationChevron, .presetFold, .deskCard, .cardMore svg, .foldSummary, .foldChevron { transition: none; }
+  .cardOpen:hover .cardMore svg { transform: none; }
   .locationOpen:hover .locationChevron { transform: none; }
 }

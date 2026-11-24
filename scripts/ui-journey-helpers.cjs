@@ -183,9 +183,17 @@ async function settleLayout(page) {
 
 // Reopened 2026-11-20: 입장·스태프의 데스크·부스 행은 상세 시트를 여는 버튼 하나만 가진다(행 안의 '편집' 버튼과 '부스' 탭이 사라짐).
 // 편집은 상세 시트의 '<종류> 편집'에서 연다. kind는 '데스크' 또는 '부스'.
+// Reopened 2026-11-24 (진행 중 데스크 보드): while the event is LIVE the setup steps are folded under the
+// board; open that fold first. It is a no-op in every other stage, where the steps are always open.
+async function openSetupFold(page) {
+  const summary = page.locator('summary', { hasText: '설정 3단계' });
+  if (await summary.count() && !(await summary.evaluate((node) => node.parentElement.open))) await summary.click();
+}
+
 async function openLocationEditor(page, kind, hasText) {
+  await openSetupFold(page);
   await page.locator('li').filter({ hasText }).locator('button[class*="locationOpen"]').first().click();
   await page.getByRole('button', { name: `${kind} 편집`, exact: true }).click();
 }
 
-module.exports = { closeSettingsBasics, openLocationEditor, settleLayout, openStudioPanel, selectDrawStage, openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, openMessagePanel, closeMessagePanel, openMessageMore, openMessagePreview, closeMessagePreview, openTemplatePicker, chooseScheduleDate, openRecipientList, waitForDialogExitFocus };
+module.exports = { closeSettingsBasics, openLocationEditor, openSetupFold, settleLayout, openStudioPanel, selectDrawStage, openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, openMessagePanel, closeMessagePanel, openMessageMore, openMessagePreview, closeMessagePreview, openTemplatePicker, chooseScheduleDate, openRecipientList, waitForDialogExitFocus };

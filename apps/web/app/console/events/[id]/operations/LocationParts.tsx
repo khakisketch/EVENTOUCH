@@ -2,6 +2,7 @@ import { Switch } from "@astryxdesign/core/Switch";
 import type { ReactNode } from "react";
 import ConsoleAvatar from "../../../console-ui/ConsoleAvatar";
 import { ChevronRightIcon } from "../../../console-ui/ConsoleIcons";
+import ProductButton from "../../../../ui/ProductButton";
 import StatusPill from "../../../console-ui/StatusPill";
 import { BoothIcon, DeskIcon, TabletIcon } from "./OpsIcons";
 import styles from "./operations.module.css";
@@ -107,4 +108,80 @@ export function RunSwitch({ name, on, disabled, reason, onToggle }: DeskSwitchPr
 /** Booth schedule state: the shared pill (dot plus word), never colour alone. */
 export function StatusDot({ tone, children }: { tone: "good" | "wait" | "muted"; children: ReactNode }) {
   return <StatusPill tone={tone === "good" ? "ok" : tone === "wait" ? "info" : "neutral"} size="sm" dot>{children}</StatusPill>;
+}
+
+type DeskCardProps = {
+  name: string;
+  /** Quiet word after the name: the exit direction, or a desk whose setup needs a look. */
+  note: string | null;
+  tone: "on" | "off" | "warn";
+  dim: boolean;
+  /** People processed at this desk, or null while the entry records cannot be read. */
+  count: number | null;
+  /** "방금" / "N분 전" / a clock time; null when nothing was processed yet. */
+  last: string | null;
+  staff: Staffer[];
+  onOpen: () => void;
+  onAssign: () => void;
+  assignDisabled: boolean;
+  assignReason?: string;
+  /** The run switch; it sits outside the opening button. */
+  control: ReactNode;
+};
+
+/**
+ * 진행 중 데스크 보드의 카드 하나(2026-11-24). 카드 전체가 데스크 상세를 열고, 가동 스위치와
+ * (담당이 없을 때) 배정 버튼은 열기 버튼 밖에 겹쳐 놓는다. 담당이 없으면 호박색이다.
+ */
+export function DeskCard({ name, note, tone, dim, count, last, staff, onOpen, onAssign, assignDisabled, assignReason, control }: DeskCardProps) {
+  const gap = staff.length === 0;
+  const lastLine = count === null ? null : last ? `마지막 처리 ${last}` : "아직 처리 기록이 없습니다";
+  return (
+    <li className={styles.deskCard} data-gap={gap ? "true" : undefined} data-dim={dim ? "true" : undefined}>
+      <button type="button" className={styles.cardOpen} onClick={onOpen}>
+        <span className={styles.cardHead}>
+          <span className={styles.cardDot} data-tone={tone} aria-hidden="true" />
+          <strong className={styles.cardName}>{name}</strong>
+          {note ? <span className={styles.cardNote}>{note}</span> : null}
+        </span>
+        <span className={styles.cardStat}>
+          {count === null ? (
+            <span className={styles.cardUnknown}>확인 불가</span>
+          ) : (
+            <>
+              <b className={styles.cardNum}>{count}</b>
+              <span className={styles.cardUnit}>명 처리</span>
+            </>
+          )}
+          <span className={styles.cardMore} aria-hidden="true">상세<ChevronRightIcon /></span>
+        </span>
+        {lastLine ? <span className={styles.cardMeta}>{lastLine}</span> : null}
+        <span className={styles.cardFoot}>
+          {gap ? (
+            <span className={styles.cardNone}>스태프가 없습니다</span>
+          ) : (
+            <>
+              <ConsoleAvatar name={staff[0].name} tone="ok" size="sm" />
+              <span className={styles.cardStaff}>{staff[0].name}{staff.length > 1 ? ` 외 ${staff.length - 1}명` : ""}</span>
+            </>
+          )}
+        </span>
+        <span className="sr-only">상세 보기</span>
+      </button>
+      <span className={styles.cardControl}>{control}</span>
+      {gap ? (
+        <ProductButton
+          type="button"
+          variant="secondary"
+          className={styles.cardAssign}
+          disabled={assignDisabled}
+          title={assignDisabled ? assignReason : undefined}
+          aria-label={`${name} 배정`}
+          onClick={onAssign}
+        >
+          배정
+        </ProductButton>
+      ) : null}
+    </li>
+  );
 }

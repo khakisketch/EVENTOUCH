@@ -258,10 +258,19 @@ async function main() {
       await context.close();
     });
 
-    await step('입장·스태프: 세 단계, 전광판 출력과 요약 카드는 이 화면에 없다', async () => {
+    await step('입장·스태프: 진행 중에는 데스크 보드와 접힌 설정, 전광판 출력과 요약 카드는 이 화면에 없다', async () => {
       await page.goto(`${base}/operations`);
       await page.getByRole('heading', { level: 1, name: '입장·스태프' }).waitFor();
+      // Reopened 2026-11-24 (owner: 진행 중 데스크 보드): LIVE shows one card per desk and folds the three steps.
+      await page.getByRole('heading', { name: '데스크 보드' }).waitFor();
+      assert.ok(await page.getByRole('button', { name: /명 처리|확인 불가/ }).count(), '데스크 카드(처리 수)');
+      assert.equal(await page.locator('#ops-desks').isVisible(), false, '진행 중에는 설정 3단계가 접혀 있다');
+      await page.locator('summary', { hasText: '설정 3단계' }).click();
       for (const step of ['입장 데스크 만들기', '스태프 배정', '스태프 폰에서 스캔']) await page.getByRole('heading', { name: step }).waitFor();
+      // A deep link on a setup anchor opens the folded steps and lands on it.
+      await page.goto('about:blank');
+      await page.goto(`${base}/operations#ops-staff`);
+      await page.locator('#ops-staff').waitFor({ state: 'visible' });
       const text = await page.locator('main').innerText();
       assert.doesNotMatch(text, /전광판 출력/);
       assert.equal(await page.locator('#ops-display-pick').count(), 0);

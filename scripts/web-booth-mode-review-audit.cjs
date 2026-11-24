@@ -137,7 +137,7 @@ async function main() {
     const limited = await browser.newContext({ viewport: { width: 390, height: 900 }, locale: 'ko-KR' });
     await limited.addCookies([{ name: restrictedCookie[0], value: restrictedCookie.slice(1).join('='), url: f.baseUrl }]);
     const restrictedPage = await limited.newPage();
-    await restrictedPage.goto(`${f.baseUrl}/console/events/${f.eventId}/operations`);
+    await restrictedPage.goto(`${f.baseUrl}/console/events/${f.eventId}/operations#ops-booth-mode`);
     const restrictedSection = restrictedPage.locator(':is(section,[role=region])[aria-labelledby="ops-booth-mode"]');
     if (!(await restrictedSection.locator('details').evaluate(el => el.open))) await restrictedSection.locator('summary').click();
     assert.equal(await restrictedSection.getByRole('button', { name: '참가자 셀프 스캔' }).isDisabled(), true, 'onsite-only manager cannot change booth mode');

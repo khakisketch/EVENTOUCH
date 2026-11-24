@@ -901,7 +901,7 @@ async function main() {
       const { context, page } = await newOperatorPage();
       attachErrorListeners(page, task, baseUrl);
       try {
-        await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/operations`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/operations#ops-desks`, { waitUntil: 'networkidle', timeout: 30000 });
         await page.locator('#ops-desks').waitFor({ state: 'visible', timeout: 15000 });
         await verifySkipLink(page, task);
         await installScrollCounter(page);
@@ -945,8 +945,9 @@ async function main() {
       const { context, page } = await newOperatorPage();
       attachErrorListeners(page, task, baseUrl);
       try {
-        await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/operations`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/operations#ops-staff`, { waitUntil: 'networkidle', timeout: 30000 });
         // 현장 운영 is one board now: every section is on the page, so there is no tab to pick.
+        // (진행 중에는 설정 3단계가 접혀 있어 앵커가 펼친다.)
         await page.locator('#ops-staff').waitFor({ state: 'visible', timeout: 15000 });
         await verifySkipLink(page, task);
         await installScrollCounter(page);

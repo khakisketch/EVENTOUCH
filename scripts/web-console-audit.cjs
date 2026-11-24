@@ -60,7 +60,7 @@ const SCREENS = [
   { key: 'participants', path: '/console/events/:id/participants', title: '참가자 명단', scope: 'event', marker: { css: 'input[placeholder*="이름·소속·연락처 검색"]' } },
   { key: 'import', path: '/console/events/:id/participants/import', title: '명단 가져오기', scope: 'event', marker: { css: '#participant-import-file-heading' } },
   { key: 'messages', path: '/console/events/:id/messages', title: '메시지 발송', scope: 'event', marker: { css: '#history-heading' } },
-  { key: 'operations', path: '/console/events/:id/operations', title: '입장·스태프', scope: 'event', marker: { css: '#ops-desks' } },
+  { key: 'operations', path: '/console/events/:id/operations', title: '입장·스태프', scope: 'event', marker: { css: '#ops-board, #ops-desks' } }, // 진행 중에는 데스크 보드가, 그 밖에는 1단계가 먼저 보인다
   { key: 'live', path: '/console/events/:id/live', title: '현장 모드', scope: 'event', marker: { css: '[data-live-room]' } },
   { key: 'programs', path: '/console/events/:id/programs', title: '참여 이벤트', scope: 'event', marker: { role: 'button', name: '이벤트 만들기' } },
   { key: 'draws', path: '/console/events/:id/draws', title: '추첨·투표', scope: 'event', marker: { css: 'section[aria-label="무대"]' } },
@@ -411,8 +411,10 @@ async function assertResponseLossRetry(page, helpers, baseUrl, eventId, eventNam
   // inline: an editor that opens in place instead of a dialog (공지·안내). It has no Escape dismissal;
   // success is its save notice rather than the dialog closing.
   inline = null,
+  // Reopened 2026-11-24: a hash that opens a folded section (진행 중 설정 3단계) before the first click.
+  hash = '',
 }) {
-  await page.goto(`${baseUrl}${screenPath(screen, eventId)}`, { waitUntil: 'networkidle', timeout: 30000 });
+  await page.goto(`${baseUrl}${screenPath(screen, eventId)}${hash}`, { waitUntil: 'networkidle', timeout: 30000 });
   await page.waitForTimeout(800);
   await assertConsoleScreen(page, screen, eventId, eventName);
   const before = await readRecords();
@@ -1731,6 +1733,7 @@ async function main() {
           label: 'writes/response-loss-desk',
           screen: SCREENS.find((screen) => screen.key === 'operations'),
           openName: '데스크 추가',
+          hash: '#ops-desks',
           fields: [{ selector: '#desk-name', value: deskName }],
           submitName: '데스크 저장',
           routePattern: '**/api/events/*/commands',
@@ -1760,7 +1763,7 @@ async function main() {
       const context = await ownerCtxFor({ width: 1280, height: 900 });
       const page = await context.newPage();
       try {
-        await page.goto(`${baseUrl}/console/events/${eventId}/operations`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.goto(`${baseUrl}/console/events/${eventId}/operations#ops-desks`, { waitUntil: 'networkidle', timeout: 30000 });
         await assertConsoleScreen(page, SCREENS.find((screen) => screen.key === 'operations'), eventId, eventName);
         await page.getByRole('button', { name: '데스크 추가' }).click();
         const addDialog = page.getByRole('dialog');
@@ -1781,7 +1784,8 @@ async function main() {
         await chooseRadio(editDialog, 'desk-mode', 'tablet');
         if (await editDialog.locator('#desk-direction-confirm').count()) throw new Error('direction confirmation shown without a change');
         await editDialog.getByRole('button', { name: '데스크 저장' }).click();
-        const edited = page.getByRole('listitem').filter({ hasText: `${deskName} 수정` }).first();
+        // 진행 중에는 보드 카드와 설정 목록 행이 같은 이름을 가진다. 방향·화면 방식·가동 문구는 목록 행에 있다.
+        const edited = page.getByRole('listitem').filter({ hasText: `${deskName} 수정` }).filter({ has: page.locator('button[class*="locationOpen"]') }).first();
         await edited.waitFor({ timeout: 10000 });
         const editedText = await edited.innerText();
         if (!editedText.includes('태블릿') || !editedText.includes('가동 중')) throw new Error(`edit lost mode or open state: ${editedText}`);
@@ -1815,11 +1819,13 @@ async function main() {
       const context = await ownerCtxFor({ width: 1280, height: 900 });
       const page = await context.newPage();
       try {
-        await page.goto(`${baseUrl}/console/events/${eventId}/operations`, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.goto(`${baseUrl}/console/events/${eventId}/operations#ops-booth-map`, { waitUntil: 'networkidle', timeout: 30000 });
         await assertConsoleScreen(page, SCREENS.find((screen) => screen.key === 'operations'), eventId, eventName);
         if (!await page.locator('#ops-booth-map').count()) throw new Error('booth map section missing');
         // 현장 운영 is one board: the map section is on the page, folded.
-        await page.locator('[data-workspace-section="ops-booth-map"] summary').click();
+        // Reopened 2026-11-24: the #ops-booth-map hash already unfolds the map (and the live setup fold), so click the summary only when it is still folded.
+        const mapSection = page.locator('[data-workspace-section="ops-booth-map"]');
+        if (!await mapSection.locator('input[type="file"]').isVisible()) await mapSection.locator('summary').click();
         // `headingId` labels the section; the file input lives inside it.
         // A sandboxed browser may not share the host's /tmp namespace.
         await page.locator('[data-workspace-section="ops-booth-map"] input[type="file"]').setInputFiles({
@@ -2373,7 +2379,7 @@ async function main() {
         }
         // Operations console stays read-only: the reason shows and the
         // mutation buttons render disabled, never enabled.
-        await staffPage.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/operations`, { waitUntil: 'networkidle', timeout: 30000 });
+        await staffPage.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/operations#ops-desks`, { waitUntil: 'networkidle', timeout: 30000 });
         await staffPage.getByText('현장 운영을 변경할 운영 권한이 없습니다.', { exact: false }).first().waitFor({ timeout: 15000 });
         const deskAdd = staffPage.getByRole('button', { name: '데스크 추가' });
         if (!await deskAdd.count()) throw new Error('operations desk section missing for staff read');

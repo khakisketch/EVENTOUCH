@@ -49,7 +49,8 @@ test("same-day and before-the-day sections split through one summary slot", () =
 
 test("presets start folded with current values and anchor recovery", () => {
   const source = ops();
-  assert.equal(source.match(/<details/g)?.length ?? 0, 2, "only the two presets fold");
+  // Reopened 2026-11-24 (owner: 진행 중 데스크 보드): the live-only setup fold is the third disclosure.
+  assert.equal(source.match(/<details/g)?.length ?? 0, 3, "only the two presets and the live setup fold fold");
   assert.match(source, /<summary className=\{styles\.presetSummary\} data-disclosure-indicator="">인증 방식 · \{modeValueLabel\}<\/summary>/u);
   assert.match(source, /<summary className=\{styles\.presetSummary\} data-disclosure-indicator="">부스 지도 · \{mapStatusText\}<\/summary>/u);
   assert.match(source, /미게시/u, "an unposted map reads as 미게시 while folded");

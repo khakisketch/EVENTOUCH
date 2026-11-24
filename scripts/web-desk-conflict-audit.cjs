@@ -54,8 +54,8 @@ const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
       }
       return route.continue();
     });
-    await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/operations`, { waitUntil: 'networkidle' });
-    const row = page.getByRole('listitem').filter({ hasText: '합성 입장 데스크' }).first();
+    await page.goto(`${fixture.baseUrl}/console/events/${fixture.eventId}/operations#ops-desks`, { waitUntil: 'networkidle' });
+    const row = page.getByRole('listitem').filter({ hasText: '합성 입장 데스크' }).filter({ has: page.locator('button[class*="locationOpen"]') }).first() /* Reopened 2026-11-24: 진행 중에는 보드 카드도 같은 이름이라 설정 목록 행만 고른다 */;
     // Reopened 2026-11-20: 데스크 행은 상세 시트를 여는 버튼 하나와 가동 스위치만 가진다(행 안의 '편집'·'가동 시작'·'가동 중지' 버튼이 사라짐).
     // 편집은 상세 시트의 '데스크 편집'에서, 가동은 '<이름> 가동' 스위치로(중지는 확인 한 단계 뒤) 같은 동작을 검증한다.
     const openDeskEditor = async (target) => {
@@ -122,7 +122,7 @@ const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
     phase = 'stale toggle cannot turn on changed direction';
     const changed = await command('desk.save', { id, name: '합성 작성 중인 이름', action: 'OUT', mode: 'desk', open: false, confirmDirectionChange: true });
     assert.equal(changed.status, 200);
-    const staleRow = page.getByRole('listitem').filter({ hasText: '합성 작성 중인 이름' }).first();
+    const staleRow = page.getByRole('listitem').filter({ hasText: '합성 작성 중인 이름' }).filter({ has: page.locator('button[class*="locationOpen"]') }).first();
     await runSwitch(staleRow).click();
     await page.getByRole('heading', { name: '다른 작업에서 데스크 상태가 변경됐습니다' }).waitFor();
     assert.equal((await current(id)).open, false);
@@ -146,7 +146,7 @@ const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
     assert.equal((await current(id)).name, '합성 응답 유실');
 
     phase = 'partial success does not settle desk start';
-    const repairedRow = page.getByRole('listitem').filter({ hasText: '합성 응답 유실' }).first();
+    const repairedRow = page.getByRole('listitem').filter({ hasText: '합성 응답 유실' }).filter({ has: page.locator('button[class*="locationOpen"]') }).first();
     await repairedRow.waitFor();
     commandFault = 'partial-open';
     await runSwitch(repairedRow).click();
@@ -182,7 +182,7 @@ const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
       [fixture.eventId, JSON.stringify([{ id: legacyId, open: false }])]
     );
     await page.reload({ waitUntil: 'networkidle' });
-    const legacyRow = page.getByRole('listitem').filter({ hasText: '이름 확인 필요' }).first();
+    const legacyRow = page.getByRole('listitem').filter({ hasText: '이름 확인 필요' }).filter({ has: page.locator('button[class*="locationOpen"]') }).first();
     await legacyRow.waitFor();
     await legacyRow.getByText('방향 확인 필요').waitFor();
     assert.equal(await runSwitch(legacyRow).isDisabled(), true);
@@ -206,7 +206,7 @@ const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
       [fixture.eventId, JSON.stringify([{ id: badModeId, name: '합성 화면 방식 오류', action: 'IN', mode: 'unknown', open: false }])]
     );
     await page.reload({ waitUntil: 'networkidle' });
-    const badModeRow = page.getByRole('listitem').filter({ hasText: '합성 화면 방식 오류' }).first();
+    const badModeRow = page.getByRole('listitem').filter({ hasText: '합성 화면 방식 오류' }).filter({ has: page.locator('button[class*="locationOpen"]') }).first();
     await badModeRow.getByText('화면 방식 확인 필요', { exact: false }).waitFor();
     assert.equal(await runSwitch(badModeRow).isDisabled(), true);
     await openDeskEditor(badModeRow);

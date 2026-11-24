@@ -65,7 +65,7 @@ async function main() {
     // 한 줄(LedgerRow)이고 전광판 출력·게시 내리기·게시 검토는 열린 편집기(#content-panel form) 안에 있다.
     const openNotice = title => page.locator('li').filter({ hasText: title }).first().getByRole('button').first().click();
     const noticeEditor = () => page.locator('#content-panel form');
-    const go = async (suffix, marker) => { await page.goto(f.baseUrl + base + suffix); await page.locator(marker).waitFor(); };
+    const go = async (suffix, marker) => { await page.goto(f.baseUrl + base + suffix); await page.locator(marker).first().waitFor(); };
     const shot = async (name, fullPage = false) => { await page.screenshot({ path: path.join(out, `${name}.png`), fullPage }); };
     const rowFor = title => page.locator('li').filter({ has: page.getByRole('heading', { name: title, exact: true }) }).last();
     const failedRowAction = async id => {
@@ -93,7 +93,7 @@ async function main() {
     // Fresh before/after full renders at both required widths, before writes.
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
-      for (const [suffix, marker, name] of [['/content', '#content-panel', 'content'], ['/operations', '#ops-desks', 'operations'], ['/messages', '#history-heading', 'messages']]) {
+      for (const [suffix, marker, name] of [['/content', '#content-panel', 'content'], ['/operations', '#ops-board, #ops-desks', 'operations'], ['/messages', '#history-heading', 'messages']]) {
         await go(suffix, marker);
         await shot(`${name}-${width}`, true);
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${name} overflow`);
@@ -125,7 +125,8 @@ async function main() {
       assert.equal((await boot()).workspaces[f.eventId].display.noticeId, notice.id);
     });
     for (const [kind, target, title] of [['DESK', desk, '동문 입장 데스크'], ['BOOTH', booth, '체험 부스']]) {
-      await go('/operations', '#ops-desks');
+      // Reopened 2026-11-24: 진행 중에는 배정 목록이 접혀 있어 #ops-staff 앵커로 펼친다.
+      await go('/operations#ops-staff', '#ops-desks');
       await measure(`${kind.toLowerCase()}-assign`, async act => {
         if (before) {
           await act(() => page.getByRole('link', { name: '스태프 배정', exact: true }).click());

@@ -26,8 +26,8 @@ import DeviceFrame from "../../../console-ui/DeviceFrame";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import uiStyles from "../../../console-ui/console-ui.module.css";
 import styles from "./operations.module.css";
-import { LocationRow, RunSwitch, StaffFaces, StatusDot, type Staffer } from "./LocationParts";
-import { CheckIcon, CopyIcon, PlusIcon } from "../../../console-ui/ConsoleIcons";
+import { DeskCard, LocationRow, RunSwitch, StaffFaces, StatusDot, type Staffer } from "./LocationParts";
+import { CheckIcon, ChevronRightIcon, CopyIcon, PlusIcon } from "../../../console-ui/ConsoleIcons";
 import { CrewIcon } from "./OpsIcons";
 import { consoleFetch } from "../../../../../lib/console-api";
 import { fitImage } from "../../../../../lib/image-fit";
@@ -36,6 +36,7 @@ import { abandonOperatorAttempt, acknowledgeOperatorReceipt, confirmsOperationsC
 import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib/operator-receipts";
 import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 import { boothScheduleTime } from "../../../../../lib/booth-availability";
+import { cancelledParticipantIds, deskBoardStats, processedAgo, type DeskBoardStats } from "../../../../../lib/desk-board";
 
 type Desk = { id: string; name: string | null; action: string | null; mode: string; open: boolean };
 type DeskConflict = { kind: "edit" | "toggle"; id: string; latest: Desk | null; loading: boolean; error: string | null; incomplete?: boolean };
@@ -101,6 +102,8 @@ type State =
       booths: Booth[];
       assignments: Assignment[];
       accounts: Account[];
+      // 진행 중 데스크 보드의 처리 수·마지막 처리(출입 기록에서 계산, 읽을 수 없으면 available:false).
+      deskStats: DeskBoardStats;
     };
 
 type Failure = { message: string; field?: string };
@@ -195,10 +198,52 @@ function boothScheduleNeedsReview(start: string, end: string): boolean {
 // while programmatic jumps — which fire none of them — keep the chosen
 // section without any timeout.
 
+// 진행 중 보드 아래에 접혀 있는 설정 구역의 앵커(딥링크·팀 화면 핸드오프).
+const SETUP_ANCHORS = new Set(["ops-desks", "ops-staff", "ops-scan", "ops-booths", "ops-booth-mode", "ops-booth-map"]);
+
 function StepPill({ n, tone, children }: { n: number; tone: "ok" | "warn" | "todo" | "wait" | "day"; children: ReactNode }) {
   // ok = done, warn/todo = work waiting on a person (amber), wait/day = not yet (quiet).
   const pillTone = tone === "ok" ? "ok" : tone === "warn" || tone === "todo" ? "wait" : "neutral";
   return <StatusPill tone={pillTone} className={styles.stepPill}><b className={styles.stepNo} aria-hidden="true">{n}</b>{children}</StatusPill>;
+}
+
+/**
+ * 진행 중에는 설정 3단계가 접힌 한 줄(펼치면 세 단계 카드가 그대로)과 로그인 주소 한 줄로 내려간다.
+ * 준비·종료·보관 단계는 접지 않고 children을 그대로 보여 준다.
+ */
+function SetupFold({ live, open, onToggle, remaining, address, copied, onCopy, children }: {
+  live: boolean;
+  open: boolean;
+  onToggle: (open: boolean) => void;
+  remaining: number;
+  address: string;
+  copied: boolean;
+  onCopy: () => void;
+  children: ReactNode;
+}) {
+  if (!live) return <>{children}</>;
+  return (
+    <div className={styles.setupFolds}>
+      <details className={styles.setupFold} open={open} onToggle={(event) => onToggle((event.target as HTMLDetailsElement).open)}>
+        <summary className={styles.foldSummary}>
+          <span className={styles.foldText}>
+            <b>설정 3단계</b>
+            <span className={styles.foldDetail}> · 데스크 만들기, 스태프 배정, 스캔 안내</span>
+          </span>
+          <span className={styles.foldState} data-state={remaining ? "todo" : "done"}>{remaining ? `${remaining}단계 남음` : "모두 완료"}</span>
+          <span className={styles.foldChevron} aria-hidden="true"><ChevronRightIcon /></span>
+        </summary>
+        <div className={styles.foldBody}>{children}</div>
+      </details>
+      <div className={styles.addressRow}>
+        <span className={styles.foldText}>
+          <b>스태프 로그인 주소</b>
+          <span> · <code className={styles.addressCode}>{address}</code></span>
+        </span>
+        <ProductButton type="button" variant="ghost" icon={copied ? <CheckIcon /> : <CopyIcon />} aria-label="스태프 로그인 주소 복사" onClick={onCopy}>{copied ? "복사했습니다" : "복사"}</ProductButton>
+      </div>
+    </div>
+  );
 }
 
 export default function OperationsWorkspace({ eventId }: { eventId: string }) {
@@ -233,6 +278,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const [assignPreset, setAssignPreset] = useState<{ type?: string; targetId?: string; accountId?: string } | null>(null);
   const [detail, setDetail] = useState<{ type: "DESK" | "BOOTH"; id: string } | null>(null);
   const [deskStopPending, setDeskStopPending] = useState<Desk | null>(null);
+  // 중지 확인은 누른 자리(진행 중 보드 또는 설정의 목록)에 뜬다.
+  const [deskStopOrigin, setDeskStopOrigin] = useState<"board" | "list">("list");
   // Team handoff notice (UI only): names why a requested ?assignAccount=
   // did not open the dialog. Reads, never writes.
   const [assignHandoffNotice, setAssignHandoffNotice] = useState<string | null>(null);
@@ -259,6 +306,17 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   // a viewport change never overwrites that choice, and unsaved work keeps
   // its preset open.
   const [presetOpen, setPresetOpen] = useState({ mode: false, map: false });
+  // 진행 중에는 설정 3단계가 접힌 한 줄로 내려간다. 앵커로 들어오면 펼친다.
+  const [setupOpen, setSetupOpen] = useState(false);
+  const liveBoard = state.kind === "ready" && state.stage === "LIVE";
+  // "N분 전" 표시용 시계. 서버 시각이 아니라 화면 표시용이라 30초마다만 갱신한다.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!liveBoard) return undefined;
+    setNowMs(Date.now());
+    const timer = window.setInterval(() => setNowMs(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, [liveBoard]);
 
   // An unconfirmed write keeps its exact payload and id. New writes stay
   // blocked until status is checked, the same request is retried, or the
@@ -353,6 +411,9 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               booths?: unknown;
               assignments?: unknown;
               checks?: unknown;
+              participants?: unknown;
+              checksAvailable?: unknown;
+              reportSourceAvailability?: unknown;
               visits?: unknown;
               boothVisitsAvailable?: unknown;
               stampMode?: unknown;
@@ -428,6 +489,19 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
               }];
             })
           : [];
+        // Same readability rule as 운영 현황: operators read the report source flag, a staff projection
+        // reads its own flag, and a list with a malformed row is not a record to count from.
+        const canManageChecks = Array.isArray(bootstrap.accounts) && bootstrap.accounts.some((item) =>
+          item && typeof item === "object" && ["AGENCY", "MANAGER"].includes(text((item as Record<string, unknown>).role)));
+        const sourceAvailability = workspace.reportSourceAvailability && typeof workspace.reportSourceAvailability === "object"
+          ? workspace.reportSourceAvailability as Record<string, unknown>
+          : null;
+        const deskStats = deskBoardStats(
+          workspace.checks,
+          canManageChecks ? sourceAvailability?.checks === true : workspace.checksAvailable === true,
+          desks,
+          cancelledParticipantIds(workspace.participants),
+        );
         const features = Array.isArray(event.features)
           ? event.features.filter((feature): feature is string => typeof feature === "string")
           : [];
@@ -527,6 +601,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           booths,
           assignments,
           accounts,
+          deskStats,
         });
       } catch {
         if (!cancelled) {
@@ -554,11 +629,19 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       } else if (hash === "#ops-booth-map") {
         setPresetOpen((prev) => (prev.map ? prev : { ...prev, map: true }));
       }
+      // 진행 중 보드 아래의 접힌 설정: 설정 앵커를 가리키면 펼치고 그 자리로 스크롤한다.
+      const anchor = hash.slice(1);
+      if (liveBoard && SETUP_ANCHORS.has(anchor)) {
+        setSetupOpen(true);
+        window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+          document.getElementById(anchor)?.scrollIntoView({ block: "start" });
+        }));
+      }
     };
     applyHash();
     window.addEventListener("hashchange", applyHash);
     return () => window.removeEventListener("hashchange", applyHash);
-  }, []);
+  }, [liveBoard]);
 
   // Event switch resets the handoff slice (never a key remount): a stale
   // handoff notice or an already-consumed marker from the previous event
@@ -1135,6 +1218,24 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
     ...desks.filter((desk) => !staffAt("DESK", desk.id).length).map((desk) => ({ type: "DESK" as const, id: desk.id, name: desk.name || "이름 확인 필요" })),
     ...(stampEnabled ? booths.filter((booth) => !staffAt("BOOTH", booth.id).length).map((booth) => ({ type: "BOOTH" as const, id: booth.id, name: booth.name })) : []),
   ];
+  const deskStopConfirm = deskStopPending ? (
+    <ConsoleConfirm
+      summary={`${deskStopPending.name || "데스크"}를 중지할까요? 중지하면 이 데스크로 입장·퇴장을 처리할 수 없습니다.`}
+      confirmLabel="가동 중지"
+      busy={busy}
+      onConfirm={() => {
+        const desk = deskStopPending;
+        setDeskStopPending(null);
+        void runCommand(
+          "desk.set-open",
+          { id: desk.id, open: false, expectedOpen: desk.open,
+            expectedDesk: { name: desk.name, action: desk.action, mode: desk.mode, open: desk.open } },
+          `${desk.name || "데스크"}를 중지했습니다.`
+        );
+      }}
+      onCancel={() => setDeskStopPending(null)}
+    />
+  ) : null;
   // A preset holding unsaved work or a pending confirmation stays open even
   // when folded: the folded summary already names the state, but the
   // recovery action lives in the body.
@@ -1296,6 +1397,76 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
       {pendingOperation && !((deskOpen && pendingOperation.command === "desk.save") || (boothOpen && pendingOperation.command === "booth.save") || (assignOpen && pendingOperation.command === "staff.assign")) ? operationRecovery() : null}
       {otherOperationReceipt ? <ConsoleFeedback kind="warning">이전 현장 운영 요청의 처리 결과를 화면 위에서 먼저 확인하세요. 서버 확인은 요청을 다시 보내지 않습니다.</ConsoleFeedback> : null}
 
+      {liveBoard ? (
+        <ConsoleSection
+          headingId="ops-board"
+          title="데스크 보드"
+          description={!state.deskStats.available
+            ? "출입 기록을 확인할 수 없어 처리 수를 표시하지 않습니다."
+            : desks.length
+              ? `${deskOpenCount} / ${desks.length} 가동${gapTargets.some((target) => target.type === "DESK") ? ` · 담당 필요 ${gapTargets.filter((target) => target.type === "DESK").length}곳` : ""}`
+              : undefined}
+          className={styles.anchorSection}
+        >
+          {desks.length ? (
+            <ul className={styles.deskBoard}>
+              {desks.map((desk) => {
+                const deskIncomplete = !desk.name?.trim() || !["IN", "OUT"].includes(desk.action || "") || !["desk", "tablet"].includes(desk.mode);
+                const deskStaff = staffAt("DESK", desk.id);
+                const deskLabel = desk.name || "이름 확인이 필요한 데스크";
+                const toggleBlocked = busy || onsiteBlocked || Boolean(deskConflict) || (!desk.open && deskIncomplete);
+                const tally = state.deskStats.available ? state.deskStats.byDesk[desk.id] ?? { count: 0, lastAt: null } : null;
+                return (
+                  <DeskCard
+                    key={desk.id}
+                    name={desk.name || "이름 확인 필요"}
+                    note={deskIncomplete ? "정보 확인 필요" : desk.action === "OUT" ? "퇴장" : null}
+                    tone={deskIncomplete ? "warn" : desk.open ? "on" : "off"}
+                    dim={!desk.open}
+                    count={tally ? tally.count : null}
+                    last={tally ? processedAgo(tally.lastAt, nowMs) : null}
+                    staff={deskStaff}
+                    onOpen={() => setDetail({ type: "DESK", id: desk.id })}
+                    onAssign={() => { setAssignPreset({ type: "DESK", targetId: desk.id }); setAssignOpen(true); setFailure(null); }}
+                    assignDisabled={busy || onsiteBlocked}
+                    assignReason={onsiteBlocked ? onsiteNoWriteReason : undefined}
+                    control={(
+                      <RunSwitch
+                        name={deskLabel}
+                        on={desk.open}
+                        disabled={toggleBlocked}
+                        reason={onsiteBlocked ? onsiteNoWriteReason : !desk.open && deskIncomplete ? "이름과 방향·화면 방식을 먼저 확인하세요" : undefined}
+                        onToggle={() => {
+                          if (desk.open) { setDeskStopOrigin("board"); setDeskStopPending(desk); return; }
+                          void runCommand(
+                            "desk.set-open",
+                            { id: desk.id, open: true, expectedOpen: desk.open,
+                              expectedDesk: { name: desk.name, action: desk.action, mode: desk.mode, open: desk.open } },
+                            `${desk.name || "데스크"}를 가동했습니다.`
+                          );
+                        }}
+                      />
+                    )}
+                  />
+                );
+              })}
+            </ul>
+          ) : (
+            <ConsoleEmptyState title="등록된 데스크가 없습니다" description="아래 설정 3단계에서 데스크를 만드세요." />
+          )}
+          {deskStopOrigin === "board" ? deskStopConfirm : null}
+        </ConsoleSection>
+      ) : null}
+
+      <SetupFold
+        live={liveBoard}
+        open={setupOpen}
+        onToggle={setSetupOpen}
+        remaining={(desks.length ? 0 : 1) + (assignableTargets > 0 && !gapTargets.length ? 0 : 1)}
+        address={typeof window === "undefined" ? "/staff" : `${window.location.host}/staff`}
+        copied={staffLinkCopied}
+        onCopy={() => void copyStaffLink()}
+      >
       <div className={styles.steps}>
           <ConsoleSection
             headingId="ops-desks"
@@ -1351,7 +1522,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                           disabled={toggleBlocked}
                           reason={onsiteBlocked ? onsiteNoWriteReason : !desk.open && deskIncomplete ? "이름과 방향·화면 방식을 먼저 확인하세요" : undefined}
                           onToggle={() => {
-                            if (desk.open) { setDeskStopPending(desk); return; }
+                            if (desk.open) { setDeskStopOrigin("list"); setDeskStopPending(desk); return; }
                             void runCommand(
                               "desk.set-open",
                               { id: desk.id, open: true, expectedOpen: desk.open,
@@ -1368,24 +1539,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             ) : (
               <ConsoleEmptyState title="등록된 데스크가 없습니다" description="진행 중 전환에는 데스크와 스태프 배정이 필요합니다." />
             )}
-            {deskStopPending ? (
-              <ConsoleConfirm
-                summary={`${deskStopPending.name || "데스크"}를 중지할까요? 중지하면 이 데스크로 입장·퇴장을 처리할 수 없습니다.`}
-                confirmLabel="가동 중지"
-                busy={busy}
-                onConfirm={() => {
-                  const desk = deskStopPending;
-                  setDeskStopPending(null);
-                  void runCommand(
-                    "desk.set-open",
-                    { id: desk.id, open: false, expectedOpen: desk.open,
-                      expectedDesk: { name: desk.name, action: desk.action, mode: desk.mode, open: desk.open } },
-                    `${desk.name || "데스크"}를 중지했습니다.`
-                  );
-                }}
-                onCancel={() => setDeskStopPending(null)}
-              />
-            ) : null}
+            {liveBoard && deskStopOrigin === "board" ? null : deskStopConfirm}
           </ConsoleSection>
 
           <ConsoleSection
@@ -1748,6 +1902,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         </ConsoleSection>
       ) : null}
       </div>
+      </SetupFold>
 
       {deskOpen ? (
         <DeskDialog

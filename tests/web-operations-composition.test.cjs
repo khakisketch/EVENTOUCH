@@ -7,11 +7,16 @@
 // 입장·스태프 and reads as three steps (desks, staff on duty, scanning on the staff
 // phone) with booths optional; the 전광판 출력 block and the two-card KPI strip are
 // gone (the display moved to 현장 모드, big-number strips stay off work screens).
-// Source-only: rendering rides the real browser check.
+// Reopened 2026-11-24 (owner: 진행 중 데스크 보드): while the event is LIVE the page opens on a
+// desk board (one card per desk) and the three setup steps fold to one line; before and
+// after the event the three numbered steps are unchanged.
+// Source-only except the desk-board arithmetic, which runs the real module.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const vm = require("node:vm");
+const ts = require("../apps/web/node_modules/typescript");
 
 const DIR = path.join(__dirname, "..", "apps", "web", "app", "console", "events", "[id]", "operations");
 const read = (name) => fs.readFileSync(path.join(DIR, name), "utf8");
@@ -80,4 +85,113 @@ test("approved operations design stays locked", () => {
   // Dim rows stay readable: muted text, never reduced opacity.
   assert.match(css, /\.locationDim \.locationText strong\s*\{[^}]*color:\s*var\(--muted\)/su);
   assert.doesNotMatch(css, /\.location[A-Za-z]*\s*\{[^}]*opacity/su);
+});
+
+// Reopened 2026-11-24 (owner: 진행 중 데스크 보드)
+test("live stage opens on a desk board and folds the setup steps", () => {
+  const ops = read("OperationsWorkspace.tsx");
+  const parts = read("LocationParts.tsx");
+  const css = read("operations.module.css");
+
+  // The board exists only while LIVE; every other stage keeps the three numbered steps unchanged.
+  assert.match(ops, /const liveBoard = state\.kind === "ready" && state\.stage === "LIVE"/u);
+  assert.match(ops, /\{liveBoard \? \(\s*<ConsoleSection\s+headingId="ops-board"\s+title="데스크 보드"/u, "the board only renders while LIVE");
+  assert.match(ops, /<SetupFold\s+live=\{liveBoard\}/u);
+  assert.match(ops, /if \(!live\) return <>\{children\}<\/>;/u, "preparing, ended and archived stages render the steps as before");
+  assert.equal(ops.match(/headingId="ops-desks"/g)?.length, 1, "the three steps are rendered once, folded or not");
+
+  // One card per desk, the whole card opens the existing detail, the switch and the stop confirm are reused.
+  assert.match(ops, /<ul className=\{styles\.deskBoard\}>/u);
+  assert.match(ops, /<DeskCard[\s\S]*?onOpen=\{\(\) => setDetail\(\{ type: "DESK", id: desk\.id \}\)\}/u);
+  assert.match(ops, /<DeskCard[\s\S]*?<RunSwitch[\s\S]*?setDeskStopPending\(desk\)/u, "the card's switch reuses the confirm-before-stop flow");
+  assert.equal(ops.match(/confirmLabel="가동 중지"/g)?.length, 1, "one stop confirmation serves both lists");
+  assert.match(ops, /setAssignPreset\(\{ type: "DESK", targetId: desk\.id \}\)/u, "배정 on a card reuses the assignment dialog");
+  assert.match(parts, /export function DeskCard/u);
+  assert.match(parts, /<button type="button" className=\{styles\.cardOpen\} onClick=\{onOpen\}>/u);
+  assert.match(parts, /명 처리/u);
+  assert.match(parts, /마지막 처리 \$\{last\}/u);
+  assert.match(parts, /스태프가 없습니다/u);
+  assert.match(parts, /외 \$\{staff\.length - 1\}명/u, "several staff read as the first name plus a count");
+  assert.match(parts, /variant="secondary"[\s\S]*?className=\{styles\.cardAssign\}/u, "the card's 배정 is a white button, not a primary");
+  assert.doesNotMatch(parts.slice(parts.indexOf("export function DeskCard")), /variant="primary"/u, "a card never carries the page's primary");
+  assert.match(ops, /variant=\{gapTargets\.length && !archived \? "primary" : "ghost"\}/u, "the header 스태프 배정 stays the only primary");
+  assert.doesNotMatch(parts, /접속 중|online/u, "no presence indicator: the server records none");
+  // Buttons never nest: the switch and 배정 sit beside the opening button, not inside it.
+  const cardOpen = parts.slice(parts.indexOf("<button type=\"button\" className={styles.cardOpen}"), parts.indexOf("</button>", parts.indexOf("className={styles.cardOpen}")));
+  assert.doesNotMatch(cardOpen.slice(cardOpen.indexOf(">") + 1), /<ProductButton|<Switch|<RunSwitch|<button/u, "no control nests inside the opening button");
+  assert.match(css, /\.deskBoard\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/su, "two columns on desktop");
+  assert.match(css, /@media \(max-width: 768px\)\s*\{[^}]*\.deskBoard\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/su, "one column on phones");
+  assert.match(css, /\.deskCard\[data-gap="true"\]\s*\{[^}]*border-color:\s*var\(--warning-line\)[^}]*background:\s*var\(--warning-soft\)/su, "a desk with no one on duty is amber");
+  assert.match(css, /\.deskCard\[data-dim="true"\] \.cardName[\s\S]*?color:\s*var\(--muted\)/u, "a stopped desk is muted text");
+  assert.doesNotMatch(css, /\.(deskCard|card[A-Za-z]*)\b[^{]*\{[^}]*opacity/su, "no dimming by opacity");
+  assert.match(css, /\.cardNum\s*\{[^}]*font-size:\s*var\(--text-num\)/su, "the per-desk figure uses the number token");
+  assert.doesNotMatch(css, /\.deskBoard[^{]*\{[^}]*(?:display:\s*flex)/su, "desks are never merged into one summary strip");
+
+  // Setup folds to two quiet lines; anchors still work while folded.
+  assert.match(ops, /<details className=\{styles\.setupFold\} open=\{open\}/u, "the fold is a native disclosure");
+  assert.match(ops, /설정 3단계/u);
+  assert.match(ops, /\? `\$\{remaining\}단계 남음` : "모두 완료"/u);
+  assert.match(ops, /스태프 로그인 주소/u);
+  assert.match(ops, /aria-label="스태프 로그인 주소 복사"/u);
+  assert.match(ops, /onClick=\{onCopy\}/u);
+  assert.match(css, /\.foldSummary,\s*\.addressRow\s*\{[^}]*min-height:\s*52px/su, "the folded rows keep the touch target");
+  assert.match(ops, /const SETUP_ANCHORS = new Set\(\["ops-desks", "ops-staff", "ops-scan", "ops-booths", "ops-booth-mode", "ops-booth-map"\]\)/u);
+  assert.match(ops, /liveBoard && SETUP_ANCHORS\.has\(anchor\)[\s\S]*?setSetupOpen\(true\)[\s\S]*?scrollIntoView/u, "a hash on a setup anchor opens the fold and scrolls to it");
+  assert.match(ops, /\}, \[liveBoard\]\);/u, "the hash is applied again once the live workspace has loaded");
+  assert.match(ops, /\{stampEnabled \? \(\s*<ConsoleSection\s+headingId="ops-booths"/u, "booths stay on the setup side and only with 부스 인증 on");
+
+  // Entry records that cannot be read are never turned into numbers.
+  assert.match(ops, /deskBoardStats\(\s*workspace\.checks,\s*canManageChecks \? sourceAvailability\?\.checks === true : workspace\.checksAvailable === true,/u, "the same readability rule as 운영 현황");
+  assert.match(ops, /count=\{tally \? tally\.count : null\}/u);
+  assert.match(parts, /확인 불가/u);
+  assert.match(ops, /출입 기록을 확인할 수 없어 처리 수를 표시하지 않습니다/u);
+});
+
+function loadDeskBoard() {
+  const source = fs.readFileSync(path.join(__dirname, "..", "apps", "web", "lib", "desk-board.ts"), "utf8");
+  const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
+  const sandbox = { exports: {}, module: { exports: {} } };
+  vm.runInNewContext(js, { ...sandbox, Intl, Date }, { filename: "desk-board.ts" });
+  return sandbox.exports;
+}
+
+test("desk board counts follow the entry-count rules of 운영 현황", () => {
+  const { deskBoardStats, cancelledParticipantIds, processedAgo } = loadDeskBoard();
+  const desks = [{ id: "d1", action: "IN" }, { id: "d2", action: "IN" }, { id: "d3", action: "OUT" }];
+  const at = (minutes) => new Date(Date.UTC(2026, 10, 24, 5, 0) + minutes * 60000).toISOString();
+  const checks = [
+    { id: "c1", participantId: "p1", action: "IN", deskId: "d1", at: at(1) },
+    { id: "c2", participantId: "p1", action: "IN", deskId: "d1", at: at(5) }, // same person twice at one desk: one person
+    { id: "c3", participantId: "p2", action: "IN", deskId: "d1", at: at(9), corrected: true }, // corrected away: not counted, not "last"
+    { id: "c4", participantId: "p3", action: "IN", deskId: "d1", at: at(3) },
+    { id: "c5", participantId: "p4", action: "IN", deskId: "d1", at: at(4) }, // cancelled participant
+    { id: "c6", participantId: "p1", action: "OUT", deskId: "d1", at: at(7) }, // an exit is the last processing, not an entry
+    { id: "c7", participantId: "p5", action: "IN", deskId: "d2", at: at(2) },
+    { id: "c8", participantId: "p5", action: "OUT", deskId: "d3", at: at(8) },
+    { id: "c9", participantId: "p6", action: "IN", deskId: "gone", at: at(9) }, // no such desk
+    { id: "", participantId: "p7", action: "IN", deskId: "d2", at: at(9) }, // no id: not a usable record
+  ];
+  const cancelled = cancelledParticipantIds([{ id: "p4", status: "CANCELLED" }, { id: "p1", status: "APPROVED" }]);
+  assert.deepEqual([...cancelled], ["p4"]);
+  const stats = deskBoardStats(checks, true, desks, cancelled);
+  assert.equal(stats.available, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(stats.byDesk.d1)), { count: 2, lastAt: at(7) });
+  assert.deepEqual(JSON.parse(JSON.stringify(stats.byDesk.d2)), { count: 1, lastAt: at(2) });
+  assert.deepEqual(JSON.parse(JSON.stringify(stats.byDesk.d3)), { count: 1, lastAt: at(8) }, "an exit desk counts exits");
+  assert.deepEqual(JSON.parse(JSON.stringify(deskBoardStats([], true, desks).byDesk.d1)), { count: 0, lastAt: null });
+
+  // Unreadable records never become numbers.
+  assert.deepEqual(JSON.parse(JSON.stringify(deskBoardStats(checks, false, desks))), { available: false });
+  assert.deepEqual(JSON.parse(JSON.stringify(deskBoardStats(undefined, true, desks))), { available: false });
+  assert.deepEqual(JSON.parse(JSON.stringify(deskBoardStats([...checks, "broken"], true, desks))), { available: false });
+
+  // "방금", "N분 전", "N시간 전", then a clock time.
+  const now = Date.parse(at(0)) + 3 * 60 * 60000;
+  assert.equal(processedAgo(new Date(now - 20000).toISOString(), now), "방금");
+  assert.equal(processedAgo(new Date(now + 60000).toISOString(), now), "방금", "a clock a little ahead never shows a negative age");
+  assert.equal(processedAgo(new Date(now - 5 * 60000).toISOString(), now), "5분 전");
+  assert.equal(processedAgo(new Date(now - 125 * 60000).toISOString(), now), "2시간 전");
+  assert.match(processedAgo(new Date(now - 7 * 3600000).toISOString(), now), /^\d{2}:\d{2}$|^\d+\. \d+\. \d{2}:\d{2}$|^\d+월 \d+일 \d{2}:\d{2}$/u);
+  assert.equal(processedAgo(null, now), null);
+  assert.equal(processedAgo("not a date", now), null);
 });

@@ -717,8 +717,9 @@ async function main() {
     check('preset anchor opens its controls', await page.locator(':is(section,[role=region])[aria-labelledby="ops-booth-mode"] details').evaluate(e => e.open));
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(base + '/operations');
-    await page.locator('#ops-desks').waitFor();
-    check('desktop presets start folded', await page.locator('main details').evaluateAll(nodes => nodes.length === 2 && nodes.every(e => !e.open)));
+    // Reopened 2026-11-24: 진행 중에는 데스크 보드가 먼저 보이고 설정 3단계도 접힌 details 하나다(프리셋 2개 + 접힌 설정 1개).
+    await page.locator('#ops-board, #ops-desks').first().waitFor();
+    check('desktop presets start folded', await page.locator('main details').evaluateAll(nodes => nodes.length >= 2 && nodes.length <= 3 && nodes.every(e => !e.open)));
     // Every permitted destination is available without opening another group.
     const hubLabels = await page.locator('.desktop-side-nav .console-nav-group > .nav-section-label').allTextContents();
     check('event rail keeps four work groups (운영·행사 준비·당일·결과)', hubLabels.join('|') === '운영|행사 준비|당일|결과', hubLabels);
