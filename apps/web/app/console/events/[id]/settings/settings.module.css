@@ -207,6 +207,12 @@
   padding: var(--s1) var(--s3);
 }
 
+/* The verification note belongs to the last checkbox, so it sits right under it. */
+.policyList > .policyHelp {
+  margin: 0;
+  padding: 0 var(--s3) var(--s2) calc(var(--s3) + var(--s5));
+}
+
 .policyList > .check + .check {
   border-top: 1px solid var(--line);
 }
@@ -565,13 +571,17 @@
 
 /* A sidebar-width workspace cannot fit a date beside two native time
    inputs. Keep the date on its own row before their paired time row. */
-@media (max-width: 1024px) {
-  div.scheduleFields { grid-template-columns: minmax(0, 1fr); }
-}
+/* Reopened 2026-11-24: in the basics drawer the date takes its own row and
+   start/end are two equal columns under it (a native time input clipped to
+   "09:0(" when it shared a row with the date). */
+div.scheduleFields { grid-template-columns: minmax(0, 1fr); }
 
 @media (max-width: 640px) {
   .twoCols {
     grid-template-columns: 1fr;
+  }
+  .scheduleFields .twoCols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

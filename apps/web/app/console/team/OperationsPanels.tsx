@@ -64,11 +64,11 @@ function formatTime(value: string): string {
 function verificationLabel(mode: string): string {
   switch (mode) {
     case "solapi":
-      return "실발송 (Solapi)";
+      return "실제 발송 (Solapi 연동)";
     case "mock":
-      return "모의 발송 (코드 실전송 없음)";
+      return "시험 모드 (실제 문자는 가지 않습니다)";
     default:
-      return "미설정 (인증 요청 거부)";
+      return "설정 안 됨 (인증번호를 보낼 수 없어 신청이 막힙니다)";
   }
 }
 
@@ -313,7 +313,7 @@ export default function OperationsPanels() {
             </div>
             <div>
               <dt>문자·알림톡(현재 조직)</dt>
-              <dd>{directory.connected ? `연결됨${directory.provider ? ` (${directory.provider})` : ""}${directory.sender ? ` · 발신 ${directory.sender}` : ""}` : directory.orgIsolated ? "미연동 · 새 운영사는 모의 기록만 사용합니다" : "미연동 (연결 필요 상태로 기록됩니다)"}</dd>
+              <dd>{directory.connected ? `연결됨${directory.provider ? ` (${directory.provider})` : ""}${directory.sender ? ` · 발신 ${directory.sender}` : ""}` : directory.orgIsolated ? "미연동 · 새 운영사는 모의 기록만 사용합니다" : "미연동 · 발송 수단이 연결될 때까지 메시지는 ‘연결 필요’로 기록됩니다"}</dd>
             </div>
             <div>
               <dt>현재 운영사 발송 대기</dt>
@@ -326,16 +326,16 @@ export default function OperationsPanels() {
           <p className="notice" role="status">현재 조직의 연동 상태를 불러오고 있습니다.</p>
         )}
         {!health ? (
-          <p className="notice" role="status">서버 처리 상태를 불러오고 있습니다.</p>
+          <p className="notice" role="status">발송 설정 상태를 불러오고 있습니다.</p>
         ) : (
           <dl className="client-meta">
             <div>
-              <dt>참가자 인증번호(서버 전역)</dt>
+              <dt>참가자 인증번호 발송 (모든 조직 공통)</dt>
               <dd>{verificationLabel(health.verification)}</dd>
             </div>
           </dl>
         )}
-        <p className="landing-note">자격증명·발신번호·승인 템플릿은 서버 환경에서 관리하며 화면에 입력하지 않습니다.</p>
+        <p className="landing-note">자격증명·발신번호·승인 템플릿은 서비스 관리자가 서버에 설정하며 이 화면에서는 입력하지 않습니다.</p>
       </ConsoleSection>
       <ConsoleSection headingId="operations-activity" title="최근 활동" surface="plain" width="full">
         {!audit ? (

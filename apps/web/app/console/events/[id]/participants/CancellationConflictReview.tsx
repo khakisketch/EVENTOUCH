@@ -55,7 +55,7 @@ export default function CancellationConflictReview({ eventId, participantId, onR
       const person = people[0], fingerprint = text(person?.cancellationConflictReview);
       if (!response.ok || people.length !== 1 || !person || person.cancelled !== true ||
           !["APPROVED", "PENDING", "WAITLIST"].includes(text(person.status)) || !/^[a-f0-9]{64}$/.test(fingerprint)) {
-        throw new Error("취소 기록이나 참가자 정보를 확인할 수 없습니다. 최신 명단을 확인하거나 시스템 관리자에게 문의하세요.");
+        throw new Error("취소 기록이나 참가자 정보를 확인할 수 없습니다. 최신 명단을 확인하거나 조직 관리자에게 문의하세요.");
       }
       if (!active.current || controller.signal.aborted) return;
       setSnapshot({ id: participantId, name: text(person.name), company: text(person.company), phone: text(person.phone),
@@ -105,7 +105,7 @@ export default function CancellationConflictReview({ eventId, participantId, onR
         attemptRef.current = null; setPending(null);
         if (definite) { setSnapshot(null); setConfirmed(false); }
         setError(response.status === 400 && (body?.field === "command" || body?.error === "지원하지 않는 참가자 작업입니다")
-          ? "현재 서버에서는 취소 기록을 확인할 수 없습니다. 시스템 관리자에게 서버 업데이트를 문의하세요."
+          ? "현재 서버에서는 취소 기록을 확인할 수 없습니다. 조직 관리자에게 서버 업데이트를 문의하세요."
           : text(body?.error) || "참가 취소 기록을 확인하지 못했습니다."); return;
       }
       const review = record(body?.review);

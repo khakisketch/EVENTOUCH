@@ -292,6 +292,10 @@ export default function ConsoleHome() {
   });
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  // Only the organization owner may create events (the server answers 403 to
+  // anyone else). null = not known yet or the check failed: the button stays
+  // usable and the server's refusal is shown in the dialog.
+  const [canCreate, setCanCreate] = useState<boolean | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [receiptNotice, setReceiptNotice] = useState<string | null>(null);
@@ -478,6 +482,15 @@ export default function ConsoleHome() {
         }
         setState({ kind: "ready", events, clients });
         setRefreshError(null);
+        try {
+          const meRes = await consoleFetch("/api/auth/me", { cache: "no-store" });
+          const me = meRes.ok ? (await meRes.json().catch(() => null)) as { user?: { role?: unknown; orgOwner?: unknown } | null } | null : null;
+          if (!cancelled && me?.user && typeof me.user === "object") {
+            setCanCreate(me.user.role === "AGENCY" || me.user.orgOwner === true);
+          }
+        } catch {
+          // Unknown stays null: the server still refuses a non-owner.
+        }
       } catch {
         if (!cancelled) {
           const message = "연결하지 못했습니다. 다시 시도하세요.";
@@ -726,14 +739,18 @@ export default function ConsoleHome() {
     <ConsolePage
       pageId="events"
       headerActions={
-        <ProductButton
-          type="button"
-          className={`button button-primary ${styles.createTrigger}`}
-          onClick={() => setCreateOpen(true)}
-          icon={<PlusIcon />}
-        >
-          새 행사 만들기
-        </ProductButton>
+        canCreate === false ? (
+          <p className={styles.createDenied} role="note">조직 소유자만 새 행사를 만들 수 있습니다.</p>
+        ) : (
+          <ProductButton
+            type="button"
+            className={`button button-primary ${styles.createTrigger}`}
+            onClick={() => setCreateOpen(true)}
+            icon={<PlusIcon />}
+          >
+            새 행사 만들기
+          </ProductButton>
+        )
       }
       feedback={refreshError || receiptNotice ? <>
         {refreshError ? <ConsoleFeedback kind="error">{refreshError} 이전 목록은 유지됩니다. <ProductButton className="button button-secondary" type="button" onClick={() => setReloadTick((tick) => tick + 1)}>다시 불러오기</ProductButton></ConsoleFeedback> : null}
@@ -879,7 +896,14 @@ export default function ConsoleHome() {
           <ConsoleEmptyState
             titleAs="h3"
             title="아직 등록된 행사가 없습니다"
-            description="새 행사를 만들면 일정과 참가 접수 준비를 시작할 수 있습니다."
+            description={canCreate === false
+              ? "조직 소유자에게 행사 생성을 요청하세요. 행사가 만들어지면 담당으로 지정된 뒤 이곳에서 볼 수 있습니다."
+              : "새 행사를 만들면 일정과 참가 접수 준비를 시작할 수 있습니다."}
+            action={canCreate === false ? undefined : (
+              <ProductButton type="button" variant="ghost" icon={<PlusIcon />} onClick={() => setCreateOpen(true)}>
+                첫 행사 만들기
+              </ProductButton>
+            )}
           />
         ) : !visibleEvents.length ? (
           <ConsoleEmptyState

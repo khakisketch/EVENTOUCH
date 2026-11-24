@@ -261,7 +261,7 @@ test('csv export guards formulas and matches the visible filter', () => {
   assert.match(exportHelper, /'\$\{cell\}/u, 'formula-leading cells get the text marker');
   assert.match(list, /participantExportRows\(orderedPeople, state\.publishedFields/u);
   assert.match(list, /CSV 내보내기 · 검색·필터 결과 \$\{visiblePeople\.length\}명/u, 'export accessible name retains the exact filtered count');
-  assert.match(list, /EVENTOUCH_participants\.csv/u);
+  assert.match(list, /participantExportFilename\(state\.eventName, "csv"\)/u);
 });
 
 test('roster controls have concise unique names rather than including every option', () => {

@@ -1163,7 +1163,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
       meta={eventMeta} badges={stageBadges} headerActions={headerActions}
       feedback={linkNotice || (overview.participantsAvailable && overview.cancellationReview > 0) || !overview.participantsAvailable || !overview.checksAvailable || !overview.modulesAvailable ? <>
         {linkNotice ? <ConsoleFeedback kind="info">{linkNotice}</ConsoleFeedback> : null}
-        {overview.canManageEvent && (!overview.participantsAvailable || !overview.checksAvailable || !overview.modulesAvailable) ? <ConsoleFeedback kind="warning">{[!overview.participantsAvailable ? "참가자" : "", !overview.checksAvailable ? "출입 기록" : "", !overview.modulesAvailable ? "참여 콘텐츠" : ""].filter(Boolean).join(" · ")} 자료를 확인할 수 없어 일부 현황을 표시할 수 없습니다. 새로고침해도 계속되면 시스템 관리자에게 문의하세요.</ConsoleFeedback> : null}
+        {overview.canManageEvent && (!overview.participantsAvailable || !overview.checksAvailable || !overview.modulesAvailable) ? <ConsoleFeedback kind="warning">{[!overview.participantsAvailable ? "참가자" : "", !overview.checksAvailable ? "출입 기록" : "", !overview.modulesAvailable ? "참여 콘텐츠" : ""].filter(Boolean).join(" · ")} 자료를 확인할 수 없어 일부 현황을 표시할 수 없습니다. 새로고침해도 계속되면 조직 관리자에게 문의하세요.</ConsoleFeedback> : null}
         {overview.participantsAvailable && overview.cancellationReview > 0 ? <ConsoleFeedback kind="warning">취소 기록과 신청 상태가 다른 {overview.cancellationReview}명이 등록 집계에 포함돼 있습니다. 참가 여부를 확인해야 하며 승인 상태·입장 집계에도 반영될 수 있습니다. {finished ? "종료 이후에는 참가자 상태를 변경할 수 없습니다. " : ""}<Link href={`${base}/participants?ticket=review`}>티켓 확인 필요 명단 보기</Link></ConsoleFeedback> : null}
       </> : undefined}>
       <div className={overview.canManageEvent ? [styles.overviewCanvas, styles.cardDeck, boardStage ? board.boardLayout : "", currentStage === "LIVE" ? styles.liveOverview : "", currentStage === "ARCHIVED" ? styles.overviewArchived : ""].filter(Boolean).join(" ") : styles.overviewSingle} data-stage={preparing ? "prep" : live ? "live" : "done"}>
@@ -1368,7 +1368,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         )}
       >
         {refreshing ? <p className={styles.refreshStatus} role="status">최신 운영 현황을 불러오고 있습니다.</p> : null}
-        {!overview.checksAvailable ? <ConsoleEmptyState kind="error-soft" title="출입 기록을 확인할 수 없습니다" description="새로고침해도 계속되면 시스템 관리자에게 문의하세요." /> : overview.recent.length ? (
+        {!overview.checksAvailable ? <ConsoleEmptyState kind="error-soft" title="출입 기록을 확인할 수 없습니다" description="새로고침해도 계속되면 조직 관리자에게 문의하세요." /> : overview.recent.length ? (
           <ul className={styles.activityList}>
             {overview.recent.map((check) => {
               const when = checkClock(check.at, now);

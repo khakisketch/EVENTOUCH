@@ -38,8 +38,10 @@ test("the add dialog keeps the working fields first and names the collection mod
 
 test("an empty roster names the ways to fill it instead of only waiting", () => {
   const list = read("apps/web/app/console/events/[id]/participants/ParticipantList.tsx");
-  assert.match(list, /참가자 추가로 한 명씩 등록하거나 명단 가져오기로 여러 명을 등록하세요/u);
-  assert.match(list, /행사 설정의 참가 접수를 열어 주세요/u);
+  // Reopened 2026-11-24 (P8): the empty roster leads with 명단 가져오기, then 한 명 추가, and the intake link
+  // appears only when intake is really open.
+  assert.match(list, /명단 가져오기로 여러 명을 한 번에 등록하거나, 한 명씩 추가하세요/u);
+  assert.match(list, /행사 설정에서 접수를 열어야 합니다/u);
   assert.match(list, /참가 신청 링크 복사/u);
 });
 

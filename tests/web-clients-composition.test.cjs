@@ -36,7 +36,8 @@ test("approved clients design stays locked", () => {
   // File state is a StatusPill (dot plus the word); color is never the only signal.
   assert.match(row, /<StatusPill tone=\{client\.logoFileId \? "ok" : "neutral"\} size="sm" dot>/u);
   assert.match(row, /<StatusPill tone=\{client\.docFileId \? "ok" : "neutral"\} size="sm" dot>/u);
-  assert.match(row, /className="sr-only"> \{client\.logoFileId \? "등록됨" : "없음"\}/u);
+  // Reopened 2026-11-24 (P18): the chip says its state in visible words (로고 등록됨 / 로고 없음).
+  assert.match(row, /로고 \{client\.logoFileId \? "등록됨" : "없음"\}/u);
   assert.doesNotMatch(css, /\.clientAvatar|\.clientFiles > span/u, "avatar and pill shapes live in console-ui now");
 
   // One orange action on the page; the count stays, the section title is assistive-only.

@@ -10,7 +10,7 @@ const source = fs.readFileSync(path.join(__dirname, '../apps/web/lib/participant
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const moduleRef = { exports: {} };
 vm.runInThisContext(`(function(exports, module) { ${compiled} })`)(moduleRef.exports, moduleRef);
-const { exportFields, exportAnswers, exportFieldsComplete, exportParticipantComplete, participantExportRows, participantCsv } = moduleRef.exports;
+const { exportFields, exportAnswers, exportFieldsComplete, exportParticipantComplete, participantExportRows, participantCsv, participantExportFilename, csvPhone } = moduleRef.exports;
 
 function fixture() {
   const fields = exportFields([
@@ -67,7 +67,9 @@ test('CSV neutralizes formulas including whitespace and quotes without losing ro
   assert.ok(csv.startsWith('\uFEFF'));
   assert.match(csv, /'  =1\+1/);
   assert.match(csv, /'\=HYPERLINK\(""https:\/\/example\.invalid""\)/);
-  assert.match(csv, /01012345678/);
+  // Reopened 2026-11-24 (P12): a bare 01012345678 loses its 0 in Excel; the hyphenated form stays text.
+  assert.match(csv, /010-1234-5678/);
+  assert.doesNotMatch(csv, /,01012345678,/);
   assert.match(csv, /000123/);
 });
 
@@ -85,4 +87,25 @@ test('XLSX keeps phone and employee number as text and never creates formulas', 
   assert.equal(sheet.A2.f, undefined);
   assert.equal(sheet.I2.t, 's');
   assert.equal(sheet.I2.f, undefined);
+});
+
+test('CSV phone numbers keep their leading 0 in Excel without a formula wrapper', () => {
+  assert.equal(csvPhone('01012345678'), '010-1234-5678');
+  assert.equal(csvPhone('0111234567'), '011-123-4567');
+  assert.equal(csvPhone('021234567'), '021234567', 'a landline is left as it is');
+  assert.equal(csvPhone(''), '');
+  const csv = participantCsv([['이름', '소속', '연락처'], ['가', '나', '01012345678'], ['다', '라', '=1+1']]);
+  assert.match(csv, /^\uFEFF이름,소속,연락처\r\n가,나,010-1234-5678\r\n다,라,'=1\+1$/);
+  assert.doesNotMatch(csv, /="/);
+  // The header row is not a phone cell.
+  assert.match(participantCsv([['01012345678', 'x', 'y']]), /^\uFEFF01012345678,x,y$/);
+});
+
+test('export file name carries the event name and the day, and drops characters a file system rejects', () => {
+  const day = new Date(2026, 10, 24, 9, 30);
+  assert.equal(participantExportFilename('2027 파트너 컨퍼런스', 'xlsx', day), '2027 파트너 컨퍼런스_참가자명단_20261124.xlsx');
+  assert.equal(participantExportFilename('A/B: "행사"?*<>|', 'csv', day), 'A B 행사_참가자명단_20261124.csv');
+  assert.equal(participantExportFilename('  ..  ', 'csv', day), '행사_참가자명단_20261124.csv');
+  assert.equal(participantExportFilename('가'.repeat(100), 'xlsx', day), `${'가'.repeat(60)}_참가자명단_20261124.xlsx`);
+  assert.doesNotMatch(participantExportFilename('x\u0000y\ty', 'csv', day), /[\u0000-\u001f]/u);
 });

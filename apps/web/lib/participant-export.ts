@@ -90,11 +90,41 @@ export function participantExportRows(people: ExportPerson[], fields: ExportFiel
   ];
 }
 
+// Excel reads an all-digit CSV cell as a number and drops the leading 0 of a
+// phone number. A hyphenated number stays text, needs no formula wrapper and
+// still imports back (the import screen reads digits only).
+export function csvPhone(value: string): string {
+  const digits = value.trim();
+  if (/^010\d{8}$/.test(digits)) return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  if (/^01[16789]\d{7,8}$/.test(digits)) return `${digits.slice(0, 3)}-${digits.slice(3, digits.length - 4)}-${digits.slice(-4)}`;
+  return value;
+}
+
+// 연락처 is the third column of participantExportRows; the header row is left alone.
+const PHONE_COLUMN = 2;
+
 export function participantCsv(rows: string[][]): string {
-  return "\uFEFF" + rows.map((row) => row.map((cell) => {
+  return "\uFEFF" + rows.map((row, rowIndex) => row.map((raw, columnIndex) => {
+    const cell = rowIndex > 0 && columnIndex === PHONE_COLUMN ? csvPhone(raw) : raw;
     // Excel and other spreadsheet importers can evaluate attacker-controlled
     // text as a formula. Prefix even after leading whitespace/control chars.
     const safe = /^[\s\uFEFF]*[=+\-@]/u.test(cell) || /^[\t\r\n]/u.test(cell) ? `'${cell}` : cell;
     return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
   }).join(",")).join("\r\n");
+}
+
+// `{행사명}_참가자명단_{YYYYMMDD}.{ext}`: the event name keeps a downloaded file
+// recognisable among several events. Characters a file system rejects are
+// dropped, and a name that is empty afterwards falls back to a generic word.
+export function participantExportFilename(eventName: string, extension: "csv" | "xlsx", now: Date = new Date()): string {
+  const cleaned = eventName
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\\/:*?"<>|\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^\.+|[. ]+$/g, "")
+    .slice(0, 60)
+    .trim();
+  const day = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  return `${cleaned || "행사"}_참가자명단_${day}.${extension}`;
 }

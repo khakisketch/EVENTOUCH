@@ -253,7 +253,7 @@ export default function FieldsWorkspace({ eventId }: { eventId: string }) {
     {needsRefresh && !refreshingOther ? <ConsoleFeedback kind="warning">최신 신청 항목을 불러온 뒤 변경할 수 있습니다. <ProductButton type="button" className="button button-secondary" onClick={() => { setRefreshingOther(true); void load(true).then((ok) => { if (ok) setNeedsRefresh(false); }).finally(() => setRefreshingOther(false)); }}>다시 불러오기</ProductButton></ConsoleFeedback> : null}
   </>}>
     <ConsoleSection headingId="application-fields-heading" title="항목 관리" heading="rule">
-      <p className={styles.help}>항목 변경은 초안에 저장됩니다. 참가 신청 화면에는 참가 접수에서 양식을 게시한 뒤 적용됩니다. 초안 {state.formVersion} · 게시 {state.publishedVersion || "없음"}</p>
+      <p className={styles.help}>항목 변경은 초안에 저장됩니다. 참가 신청 화면에는 참가 접수에서 양식을 게시한 뒤 적용됩니다. 저장된 수정 {state.formVersion}건 · {state.publishedVersion ? `게시됨 ${state.publishedVersion}회` : "아직 게시 안 함"}</p>
       <p className={styles.help}>이름과 연락처는 필수입니다. 항목을 제외해도 기존 답변은 즉시 삭제되지 않지만 새 양식과 내보내기에서는 빠질 수 있습니다.</p>
       {conflict ? <section className={styles.recovery} aria-labelledby="field-conflict-heading">
         <h3 id="field-conflict-heading" className={styles.editorTitle}>신청 항목이 변경됐습니다</h3>

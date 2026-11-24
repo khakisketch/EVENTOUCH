@@ -126,7 +126,7 @@ type BasicsConflict = { latest: Basics | null; loading: boolean; error: string |
 type FeaturesConflict = { latest: string[] | null; loading: boolean; error: string | null };
 
 const BASIC_COMPARISON_FIELDS: Array<{ key: keyof Basics; label: string }> = [
-  { key: "name", label: "행사명" }, { key: "slug", label: "주소" }, { key: "clientId", label: "고객사" },
+  { key: "name", label: "행사명" }, { key: "slug", label: "참가자 페이지 주소" }, { key: "clientId", label: "고객사" },
   { key: "date", label: "날짜" }, { key: "start", label: "시작" }, { key: "end", label: "종료" },
   { key: "capacity", label: "정원" },
   { key: "approvalRequired", label: "참가 승인" }, { key: "allowReentry", label: "재입장" },
@@ -1369,7 +1369,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   const stagePrecondition = nextStage === "LIVE" && (state.deskCount === 0 || state.deskAssignmentCount === 0)
     ? "진행 중 전환에는 등록 데스크와 데스크 배정이 필요합니다. 배정은 출근 확인이 아닙니다."
     : archiveDataUnavailable
-      ? `${archiveUnavailableNames} 상태를 확인할 수 없어 보관할 수 없습니다. 다시 확인해도 계속되면 시스템 관리자에게 문의하세요.`
+      ? `${archiveUnavailableNames} 상태를 확인할 수 없어 보관할 수 없습니다. 다시 확인해도 계속되면 조직 관리자에게 문의하세요.`
     : nextStage === "ARCHIVED" && (state.registrationOpen || state.openModules > 0)
       ? "보관하려면 접수를 닫고 진행 중인 참여 콘텐츠를 모두 닫아야 합니다."
       : null;
@@ -1393,6 +1393,12 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
   // be pressed, with the reason inline. form.close stays available so the
   // archive precondition can still be met from ENDED.
   const endedPublishBlocked = currentStage === "ENDED";
+  // 기획 단계에서는 양식을 게시해도 공개 접수가 열리지 않는다(접수 플래그만 켜지고
+  // 운영 준비로 바뀌면 열린다). 그래서 띠·목차·버튼이 "접수 중"이라 말하지 않는다.
+  const intakeWaiting = currentStage === "DRAFT" && state.registrationOpen;
+  const publishLabel = currentStage === "DRAFT"
+    ? (intakeWaiting && intakeDirty ? "변경 게시" : "양식 게시")
+    : !state.registrationOpen ? "양식 게시·접수 열기" : intakeDirty ? "변경 게시" : "양식 다시 게시";
   const endedPublishReason = "종료된 행사에서는 양식을 게시할 수 없습니다. 접수를 닫은 뒤 보관하세요.";
   const settingsNoWriteReason = "행사 정보 변경 권한이 없습니다. 필요하면 담당 행사 운영자에게 요청하세요.";
   const intakeNoWriteReason = "접수 게시·마감은 참가자 쓰기 권한이 필요합니다. 행사 정보 권한과는 별개이며, 필요하면 담당 행사 운영자에게 요청하세요.";
@@ -1567,7 +1573,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
       <SettingsToc items={[
         { id: "basics", label: "기본 정보", hint: `정원 ${state.basics.capacity === "0" ? "제한 없음" : `${state.basics.capacity}명`}`, tone: "ok", dirty: Boolean(basicsDirty), onSelect: () => setBasicsOpen(true), disabled: archived || !canWriteSettings },
         { id: "stage", label: "진행 단계", hint: stageText, tone: "ok", href: "#settings-stage" },
-        { id: "intake", label: "참가 접수", hint: state.registrationOpen ? "접수 중" : "접수 닫힘", note: recoveryGap ? "확인할 안내 1건" : undefined, tone: recoveryGap ? "attention" : state.registrationOpen ? "ok" : "neutral", dirty: Boolean(intakeDirty), href: "#settings-intake" },
+        { id: "intake", label: "참가 접수", hint: intakeWaiting ? "양식 게시됨 · 접수 대기" : state.registrationOpen ? "접수 중" : "접수 닫힘", note: recoveryGap ? "확인할 안내 1건" : undefined, tone: recoveryGap ? "attention" : state.registrationOpen ? "ok" : "neutral", dirty: Boolean(intakeDirty), href: "#settings-intake" },
         { id: "features", label: "운영 기능", hint: `${featureOnCount}개 켜짐`, note: `나머지 ${featureTotal - featureOnCount}개 꺼짐`, tone: "neutral", dirty: Boolean(featuresDirty), href: "#settings-features" },
       ]} />
       <div className={styles.main}>
@@ -1585,6 +1591,22 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               정원 {state.basics.capacity === "0" ? "제한 없음" : `${state.basics.capacity}명`}
               {savedPolicyFlags().length ? ` · ${savedPolicyFlags().join(" · ")}` : ""}
             </p>
+            {!state.venueName ? (
+              // 장소는 이 드로어가 아니라 공지·안내의 장소 안내에서 입력한다. 기능이
+              // 꺼져 있으면 그 화면에서 입력할 수 없으므로 켜는 곳을 알려 준다.
+              (features ?? state.features).includes("venue") ? (
+                <p className={styles.help}>
+                  장소가 아직 없습니다. 공지·안내의 장소 안내에서 입력하세요.{" "}
+                  {canWriteEvent(capabilities, "venue.save")
+                    ? <ProductLink variant="ghost" href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 입력하기</ProductLink>
+                    : null}
+                </p>
+              ) : (
+                <p className={styles.help}>
+                  장소를 입력하려면 장소 안내를 켜야 합니다. <a href="#settings-features">운영 기능에서 켜기</a>
+                </p>
+              )
+            ) : null}
           </div>
           <div className={styles.cardEdit}>
             <ProductButton
@@ -1682,7 +1704,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
                 {nextStage === "ENDED" ? (
                   <p className={styles.help}>
                     종료하면 참가자 변경이 막힙니다. 승인 대기 등 필요한 참가자 처리는 종료 전에 마치세요.
-                    결과 보고서는 생성 시점 값으로 고정됩니다. 종료 뒤 마감 집계를 생성·검토하고 동결할 수 있으며, 편집이나 공유 완료 기록만으로 집계가 갱신되지는 않습니다.
+                    결과 보고서는 생성 시점 값으로 고정됩니다. 종료 뒤 마감 집계를 생성·검토하고 확정(수정 잠금)할 수 있으며, 편집이나 공유 완료 기록만으로 집계가 갱신되지는 않습니다.
                   </p>
                 ) : null}
               </StageTransitionConfirmation>
@@ -1753,7 +1775,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               />
             </div>
             <div>
-              <label htmlFor="set-slug">주소 코드</label>
+              <label htmlFor="set-slug">참가자 페이지 주소 코드</label>
               <input
                 id="set-slug"
                 type="text"
@@ -1834,13 +1856,14 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           </div>
           <div className={uiStyles.formGrid}>
             <div>
-              <label htmlFor="set-capacity">정원 (0=제한 없음)</label>
+              <label htmlFor="set-capacity">정원</label>
               <input
                 id="set-capacity"
                 type="number"
                 min={0}
                 inputMode="numeric"
-                value={basics.capacity}
+                placeholder="제한 없음"
+                value={basics.capacity === "0" ? "" : basics.capacity}
                 onChange={(event) => setBasics({ ...basics, capacity: event.target.value })}
                 aria-invalid={invalid("capacity") || undefined}
                 aria-describedby={describedBy("capacity") || undefined}
@@ -1875,8 +1898,8 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             />
             참가 신청 전 연락처 인증 필요
           </label>
+          <p className={`${styles.help} ${styles.policyHelp}`}>인증번호는 신청자의 휴대전화로 발송됩니다. 발송 준비가 안 된 상태에서는 신청이 막히므로, 먼저 인증번호 1건을 테스트하세요.</p>
           </div>
-          <p className={styles.help}>인증번호는 신청자의 휴대전화로 발송됩니다. 발송 준비가 안 된 상태에서는 신청이 막히므로, 먼저 인증번호 1건을 테스트하세요.</p>
           </div>
           {failure && failure.field !== "serverUnsupported" && failure.field !== "consentText" ? (
             <p role="alert" className={styles.fieldError}>{failure.message}</p>
@@ -1950,8 +1973,14 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           <p className={styles.intakeSummary}>
             {currentStage === "READY" || currentStage === "LIVE" ? (
               <>현재 {state.registrationOpen ? "접수 중" : "접수 닫힘"} · 게시된 양식 버전 {state.publishedVersion}</>
+            ) : currentStage === "DRAFT" ? (
+              // 기획 단계는 공개 접수가 열리지 않는다. 게시한 양식은 "접수 대기"로
+              // 말하고, 단계를 운영 준비로 바꾸면 열린다는 다음 행동을 함께 적는다.
+              state.registrationOpen
+                ? <>양식 게시됨 · 접수 대기 (행사 단계를 운영 준비로 바꾸면 열립니다)</>
+                : <>현재 접수 닫힘 · {state.publishedVersion ? `게시된 양식 ${state.publishedVersion}회차` : "아직 게시한 양식이 없습니다"}</>
             ) : (
-              // DRAFT/ENDED cannot publicly accept no matter the flag, so the
+              // ENDED cannot publicly accept no matter the flag, so the
               // stored line names itself as a setting; the acceptance line
               // below carries the honest public state.
               <>현재 {state.registrationOpen ? "접수 중" : "접수 닫힘"} (설정) · 게시된 양식 버전 {state.publishedVersion}</>
@@ -2079,7 +2108,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               title={archived ? archivedReason : !canWriteIntake ? intakeNoWriteReason : endedPublishBlocked ? endedPublishReason : undefined}
               onClick={requestFormPublish}
             >
-              {busy ? "처리 중입니다" : !state.registrationOpen ? "양식 게시·접수 열기" : intakeDirty ? "변경 게시" : "양식 게시·접수 열기"}
+              {busy ? "처리 중입니다" : publishLabel}
             </ProductButton>
             {!state.registrationOpen ? (
               <p role="status" className={styles.help}>

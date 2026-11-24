@@ -22,10 +22,14 @@ export default function LoginForm() {
   const searchParams = useSearchParams();
   const requestedNext = searchParams.get("next");
   const safeRequested = safeNextPath(requestedNext);
+  // A screen that met a 401 sends the operator here with expired=1.
+  const sessionExpired = searchParams.get("expired") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  // An empty field is stopped here, before anything is sent to the server.
+  const [fieldError, setFieldError] = useState<{ field: "email" | "password"; message: string } | null>(null);
   const failureRef = useRef<HTMLParagraphElement>(null);
   const [submitting, setSubmitting] = useState(false);  const [checkingSession, setCheckingSession] = useState(true);
   // A slow or hung /auth/me must never trap the operator on a spinner: the
@@ -187,6 +191,17 @@ export default function LoginForm() {
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (submitGateRef.current || submitting) return;
+    const missing = !email.trim()
+      ? { field: "email" as const, message: "이메일을 입력하세요." }
+      : !password
+        ? { field: "password" as const, message: "비밀번호를 입력하세요." }
+        : null;
+    setFieldError(missing);
+    if (missing) {
+      setFailure(null);
+      window.requestAnimationFrame(() => document.getElementById(missing.field === "email" ? "login-email" : "login-password")?.focus());
+      return;
+    }
     submitGateRef.current = true;
     // Move the epoch so a still-pending /auth/me read can no longer
     // redirect over this submit's navigation.
@@ -268,6 +283,13 @@ export default function LoginForm() {
 
   return (
     <>
+      {sessionExpired ? (
+        <p className="auth-help" role="status">
+          로그인이 만료되었습니다. {safeRequested ? "다시 로그인하면 이 화면으로 돌아옵니다." : "다시 로그인하세요."}
+        </p>
+      ) : safeRequested ? (
+        <p className="auth-help" role="status">로그인하면 요청하신 화면으로 돌아갑니다.</p>
+      ) : null}
       {checkingSession ? (
         <p className="auth-help" role="status">로그인 상태를 확인하고 있습니다. 입력은 바로 시작할 수 있습니다.</p>
       ) : null}
@@ -292,8 +314,11 @@ export default function LoginForm() {
           type="email"
           autoComplete="username"
           value={email}
-          onChange={(event) => setEmail(event.target.value)}
+          aria-invalid={fieldError?.field === "email" || undefined}
+          aria-describedby={fieldError?.field === "email" ? "login-email-error" : undefined}
+          onChange={(event) => { setEmail(event.target.value); if (fieldError?.field === "email") setFieldError(null); }}
         />
+        {fieldError?.field === "email" ? <p id="login-email-error" role="alert" className="auth-field-error">{fieldError.message}</p> : null}
       </div>
       <div className="form-field">
         <label htmlFor="login-password">비밀번호</label>
@@ -302,8 +327,11 @@ export default function LoginForm() {
           type={showPassword ? "text" : "password"}
           autoComplete="current-password"
           value={password}
-          onChange={(event) => setPassword(event.target.value)}
+          aria-invalid={fieldError?.field === "password" || undefined}
+          aria-describedby={fieldError?.field === "password" ? "login-password-error" : undefined}
+          onChange={(event) => { setPassword(event.target.value); if (fieldError?.field === "password") setFieldError(null); }}
         /><ProductButton variant="ghost" type="button" aria-controls="login-password" aria-pressed={showPassword} onClick={() => setShowPassword((value) => !value)}>{showPassword ? "숨기기" : "보기"}</ProductButton></div>
+        {fieldError?.field === "password" ? <p id="login-password-error" role="alert" className="auth-field-error">{fieldError.message}</p> : null}
       </div>
       {failure ? <p role="alert" ref={failureRef} tabIndex={-1}>{failure}</p> : null}
       <ProductButton variant="primary" type="submit" disabled={submitting}>

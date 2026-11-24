@@ -49,8 +49,10 @@ test('intake gate: stored line names itself a setting outside READY/LIVE', () =>
   assert.match(text, /currentStage === "READY" \|\| currentStage === "LIVE"/);
   // Established READY/LIVE wording stays verbatim for the flows asserting on it.
   assert.match(text, /현재 \{state\.registrationOpen \? "접수 중" : "접수 닫힘"\} · 게시된 양식 버전 \{state\.publishedVersion\}/);
-  // DRAFT/ENDED qualify the same numbers as a stored setting, so a flagged
-  // intake never reads as public acceptance.
+  // Reopened 2026-11-24: DRAFT says "접수 대기" instead of a stored setting;
+  // ENDED keeps qualifying the numbers as a setting, so a flagged intake never
+  // reads as public acceptance.
+  assert.match(text, /currentStage === "DRAFT" \? \(/);
   assert.match(text, /\(설정\) · 게시된 양식 버전 \{state\.publishedVersion\}/);
 });
 

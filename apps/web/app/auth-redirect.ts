@@ -51,9 +51,13 @@ export function loginHref(next: unknown): string {
   return safe ? `/login?next=${encodeURIComponent(safe)}` : "/login";
 }
 
+// A loaded screen calls this when the server answers 401: the session ended
+// (timeout or sign-out elsewhere). `expired=1` lets /login say so instead of
+// showing a bare form. Invitation links use loginHref, which has no such flag.
 export function loginHrefForLocation(pathname: string, search = ""): string {
   const current = `${pathname}${search}`;
-  return loginHref(safeNextPath(current) ?? current);
+  const base = loginHref(safeNextPath(current) ?? current);
+  return `${base}${base.includes("?") ? "&" : "?"}expired=1`;
 }
 
 // Authenticated but org-unselected (multi-membership without an active

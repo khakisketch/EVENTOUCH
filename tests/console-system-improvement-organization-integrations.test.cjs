@@ -87,9 +87,9 @@ test('team panel sources messaging display from the current-org directory', () =
   assert.match(PANELS, /문자·알림톡\(현재 조직\)/, 'messaging row names its org scope');
   assert.match(PANELS, /현재 조직의 연동 상태를 확인할 수 없습니다/, 'directory failure degrades explicitly');
   assert.doesNotMatch(PANELS, /health\.messaging \? `연결됨/, 'legacy health state never renders as the org connection');
-  assert.match(PANELS, /참가자 인증번호\(서버 전역\)/, 'verification row names its global scope');
+  assert.match(PANELS, /참가자 인증번호 발송 \(모든 조직 공통\)/, 'verification row names its global scope');
   assert.match(PANELS, /consoleFetch\("\/api\/bootstrap"/, 'organization-wide audit context read is kept');
-  assert.match(PANELS, /자격증명·발신번호·승인 템플릿은 서버 환경에서 관리하며 화면에 입력하지 않습니다/, 'credential note is kept');
+  assert.match(PANELS, /자격증명·발신번호·승인 템플릿은 서비스 관리자가 서버에 설정하며 이 화면에서는 입력하지 않습니다/, 'credential note is kept');
   assert.doesNotMatch(PANELS, /method: "POST"/, 'panels stay read-only: no org settings writes');
 });
 

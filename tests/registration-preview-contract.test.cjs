@@ -68,7 +68,7 @@ test('operator form preview uses the attendee field order and real disabled cont
   assert.match(html, /aria-hidden="true"/);
 
   const published = renderToStaticMarkup(React.createElement(Preview, { ...props, draftVersion: 2 }));
-  assert.match(published, /<small class="phoneStatus">게시 2차<\/small>/);
+  assert.match(published, /<small class="phoneStatus">게시됨 2회<\/small>/);
   assert.match(published, /<label[^>]*>소속<span[^>]*> \(선택\)<\/span><\/label>/);
   assert.doesNotMatch(published, /소속 기관/);
 

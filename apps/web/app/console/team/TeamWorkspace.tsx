@@ -30,6 +30,7 @@ import consoleUiStyles from "../console-ui/console-ui.module.css";
 import teamStyles from "./team.module.css";
 import OperationsPanels from "./OperationsPanels";
 import { consoleFetch, invalidateConsoleReads } from "../../../lib/console-api";
+import { roParticle } from "../../../lib/korean-particle";
 import { acknowledgeOperatorReceipt, confirmsInvitation, getOperatorContextSnapshot, isOrganizationContextBlock, noteCommittedOperatorRoleChange, operatorFetch, refreshOperatorContext } from "../../../lib/operator-context";
 import { forgetOperatorReceipt } from "../../../lib/operator-receipts";
 import { useOrganizationReceipts } from "../../../lib/use-organization-receipts";
@@ -66,7 +67,25 @@ type Invitation = {
   expiresAt: string;
 };
 
-type TeamEvent = { id: string; name: string; stage: string };
+type TeamEvent = { id: string; name: string; stage: string; date?: string };
+
+// The event an operator most likely means when the permission tab opens: the
+// one running now, else the nearest upcoming one, else the most recent. Closed
+// events (종료·보관) are only a fallback when nothing else exists.
+function closestEventId(events: TeamEvent[]): string {
+  if (events.length === 1) return events[0].id;
+  const open = events.filter((item) => item.stage !== "ENDED" && item.stage !== "ARCHIVED");
+  const pool = open.length ? open : events;
+  const live = pool.find((item) => item.stage === "LIVE");
+  if (live) return live.id;
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const dated = pool.filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item.date ?? ""));
+  const upcoming = dated.filter((item) => (item.date as string) >= todayKey).sort((a, b) => (a.date as string).localeCompare(b.date as string));
+  if (upcoming[0]) return upcoming[0].id;
+  const recent = [...dated].sort((a, b) => (b.date as string).localeCompare(a.date as string));
+  return (recent[0] ?? pool[0])?.id ?? "";
+}
 
 type TeamMembership = { accountId: string; eventId: string; write?: unknown };
 
@@ -416,7 +435,7 @@ export default function TeamWorkspace() {
           ? rawEvents.flatMap((item) => {
               const event = record(item);
               if (!event || typeof event.id !== "string" || !event.id) return [];
-              return [{ id: event.id, name: text(event.name) || event.id, stage: text(event.stage).toUpperCase() }];
+              return [{ id: event.id, name: text(event.name) || event.id, stage: text(event.stage).toUpperCase(), date: text(event.date) }];
             })
           : [];
         // Stored membership grants ride through verbatim for the owner-only
@@ -989,7 +1008,7 @@ function EventPermissionEditor({
   memberships: TeamMembership[];
   onChanged: (message: string) => void;
 }) {
-  const [eventId, setEventId] = useState(events.length === 1 && events[0] ? events[0].id : "");
+  const [eventId, setEventId] = useState(() => closestEventId(events));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<string[]>([]);
   // The drawer shows three levels first; the eight scopes open only on request.
@@ -1867,7 +1886,7 @@ const OrgRoleEditorPanel = forwardRef<RoleEditorHandle, {
         void refreshOperatorContext();
         return;
       }
-      onDone(`${account.name}님의 조직 역할을 ${roleLabel(roleDraft)}(으)로 바꿨습니다. 행사별 쓰기 권한은 바뀌지 않았습니다.`);
+      onDone(`${account.name}님의 조직 역할을 ‘${roleLabel(roleDraft)}’${roParticle(roleLabel(roleDraft))} 바꿨습니다. 행사별 쓰기 권한은 바뀌지 않았습니다.`);
     } catch (error) {
       if (isOrganizationContextBlock(error)) {
         if (!hadUncertainAttempt) {
@@ -1896,7 +1915,7 @@ const OrgRoleEditorPanel = forwardRef<RoleEditorHandle, {
     return (
       <div className={teamStyles.assignPanel} id={`org-role-panel-${account.id}`}>
         <p className={teamStyles.assignLead} role="status">
-          {account.name}님의 운영사 역할을 {roleLabel(roleDraft)}(으)로 바꿨습니다. 계속하려면 위의 운영사 문맥 안내에서 현재 역할을 확인하세요.
+          {account.name}님의 운영사 역할을 ‘{roleLabel(roleDraft)}’{roParticle(roleLabel(roleDraft))} 바꿨습니다. 계속하려면 위의 운영사 문맥 안내에서 현재 역할을 확인하세요.
         </p>
         {failure ? <ConsoleFeedback kind="error">{failure}</ConsoleFeedback> : null}
       </div>
@@ -1967,7 +1986,7 @@ const OrgRoleEditorPanel = forwardRef<RoleEditorHandle, {
       </ConsoleFormActions>
       {confirming ? (
         <ConsoleConfirm
-          summary={confirmLines(`${account.name}님의 조직 역할을 ${roleLabel(account.role)}에서 ${roleLabel(roleDraft)}(으)로 바꿉니다.\n\n이 운영사(${orgName || orgId})에만 적용되며, 다른 조직·로그인·비밀번호에는 영향이 없습니다.${isSelf ? `\n본인 계정입니다. 계속하면 이 화면의 권한도 함께 바뀝니다.${confirmForeignRef.current > 0 ? ` 현재 진행 중이거나 결과 미확인인 작업 ${confirmForeignRef.current}건이 있습니다.` : ""}` : ""}`)}
+          summary={confirmLines(`${account.name}님의 조직 역할을 ‘${roleLabel(account.role)}’에서 ‘${roleLabel(roleDraft)}’${roParticle(roleLabel(roleDraft))} 바꿉니다.\n\n이 운영사(${orgName || orgId})에만 적용되며, 다른 조직·로그인·비밀번호에는 영향이 없습니다.${isSelf ? `\n본인 계정입니다. 계속하면 이 화면의 권한도 함께 바뀝니다.${confirmForeignRef.current > 0 ? ` 현재 진행 중이거나 결과 미확인인 작업 ${confirmForeignRef.current}건이 있습니다.` : ""}` : ""}`)}
           confirmLabel={retryable ? "같은 요청으로 다시 시도" : "역할을 바꾼다"}
           busy={busy}
           onConfirm={() => void run()}
@@ -2396,7 +2415,7 @@ function InviteDialog({
     <ConsoleDialog
       title="구성원 초대"
       titleId="invite-title"
-      description={inviteUncertain ? "결과 확인 전까지 초대 정보를 유지합니다. 초대 링크는 한 번만 표시됩니다." : "초대 링크는 발급 시 한 번만 표시됩니다. 역할과 적용 범위를 확인한 뒤 초대하세요."}
+      description={inviteUncertain ? "결과 확인 전까지 초대 정보를 유지합니다. 초대 링크는 한 번만 표시됩니다." : "초대 링크는 발급 시 한 번만 표시됩니다. 이메일은 발송되지 않으니 링크를 직접 전달하세요. 역할과 적용 범위를 확인한 뒤 초대하세요."}
       onClose={onClose}
       busy={submitting || checkingInvite}
       canClose={canCloseInviteDialog}
@@ -2461,6 +2480,16 @@ function InviteDialog({
           </p>
         ) : null}
         {role === "MANAGER" ? (
+          <p className={teamStyles.assignLead} role="note">
+            조직 구성원은 지정된 행사의 명단·콘텐츠·메시지 등을 운영합니다. 행사별 권한은 초대한 뒤 팀·권한에서 정합니다.
+          </p>
+        ) : null}
+        {role === "STAFF" ? (
+          <p className={teamStyles.assignLead} role="note">
+            현장 스태프는 배정된 행사의 입장 확인 화면만 사용합니다. 명단 수정이나 설정은 볼 수 없습니다.
+          </p>
+        ) : null}
+        {role === "MANAGER" ? (
           <div className={consoleUiStyles.field}>
             <label htmlFor="invite-event">담당 행사 (선택)</label>
             <select
@@ -2470,8 +2499,8 @@ function InviteDialog({
               disabled={submitting || checkingInvite || inviteUncertain || agencyStaged !== null}
             >
               <option value="">지정하지 않음</option>
-              {events.map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
+              {sortTeamEventsForAssign(events).map((item) => (
+                <option key={item.id} value={item.id}>{teamEventOptionLabel(item)}</option>
               ))}
             </select>
           </div>

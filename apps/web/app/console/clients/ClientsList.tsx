@@ -28,6 +28,7 @@ import CountTabs from "../console-ui/CountTabs";
 import { UNCONFIRMED_WRITE_CLOSE_MESSAGE, useConsoleDraftGuard } from "../console-draft-guard";
 import consoleUiStyles from "../console-ui/console-ui.module.css";
 import styles from "./clients.module.css";
+import { fitImage } from "../../../lib/image-fit";
 
 type Client = {
   id: string;
@@ -47,6 +48,8 @@ type Draft = { id: string; name: string; contact: string; email: string };
 type AttachmentAttempt = {
   client: Client; kind: "logo" | "doc"; file: File;
   uploadCommandId: string; linkCommandId: string; fileId: string; uncertain: boolean;
+  // The logo was shrunk in the browser before upload.
+  shrunk?: boolean;
 };
 
 const EMPTY_DRAFT: Draft = { id: "", name: "", contact: "", email: "" };
@@ -350,11 +353,21 @@ export default function ClientsList() {
       setFormError({ field: null, message: "사업자등록증은 PDF로 올려주세요." });
       return;
     }
-    if (file.size > 600000) {
+    // A phone photo is usually over the limit: shrink a logo here instead of
+    // refusing it. A PDF cannot be shrunk, so it keeps the plain size limit.
+    let upload = file;
+    if (kind === "logo") {
+      const fitted = await fitImage(file);
+      if ("error" in fitted) {
+        setFormError({ field: null, message: fitted.error });
+        return;
+      }
+      upload = fitted.file;
+    } else if (file.size > 600000) {
       setFormError({ field: null, message: "600KB 이하 파일을 올려주세요." });
       return;
     }
-    const attempt: AttachmentAttempt = { client, kind, file, uploadCommandId: randomCommandId(), linkCommandId: randomCommandId(), fileId: "", uncertain: false };
+    const attempt: AttachmentAttempt = { client, kind, file: upload, shrunk: upload !== file, uploadCommandId: randomCommandId(), linkCommandId: randomCommandId(), fileId: "", uncertain: false };
     pendingAttachmentRef.current = attempt;
     setPendingAttachment({ ...attempt });
     await runAttachment(attempt);
@@ -409,7 +422,7 @@ export default function ClientsList() {
       }
       pendingAttachmentRef.current = null;
       setPendingAttachment(null);
-      setNotice(attempt.kind === "logo" ? "로고를 등록했습니다." : "사업자등록증을 등록했습니다.");
+      setNotice(attempt.kind === "logo" ? `로고를 등록했습니다.${attempt.shrunk ? " 큰 이미지는 자동으로 줄여 올렸습니다." : ""}` : "사업자등록증을 등록했습니다.");
       await load();
     } catch (error) {
       if (!attempt.uncertain && !attempt.fileId && isOrganizationContextBlock(error)) {
@@ -514,7 +527,7 @@ export default function ClientsList() {
         ) : null}
         <div className={styles.fileText}>
           <strong>{noun} <StatusPill tone={fileId ? "ok" : "neutral"} size="sm">{fileId ? "등록됨" : "등록 안 됨"}</StatusPill></strong>
-          {fileId ? null : <span>{kind === "logo" ? "JPG·PNG·WebP, 600KB 이하" : "PDF, 600KB 이하"}</span>}
+          {fileId ? null : <span>{kind === "logo" ? "JPG·PNG·WebP · 큰 이미지는 자동으로 줄여 올립니다" : "PDF, 600KB 이하"}</span>}
         </div>
         {kind === "doc" && fileId ? <a className={styles.fileAction} href={url}>보기</a> : null}
         <label className={styles.fileAction} data-disabled={filesLocked || undefined}>
@@ -669,10 +682,10 @@ export default function ClientsList() {
                 </p>
                 <p className={styles.clientFiles}>
                   <StatusPill tone={client.logoFileId ? "ok" : "neutral"} size="sm" dot>
-                    로고<span className="sr-only"> {client.logoFileId ? "등록됨" : "없음"}</span>
+                    로고 {client.logoFileId ? "등록됨" : "없음"}
                   </StatusPill>
                   <StatusPill tone={client.docFileId ? "ok" : "neutral"} size="sm" dot>
-                    사업자등록증<span className="sr-only"> {client.docFileId ? "등록됨" : "없음"}</span>
+                    사업자등록증 {client.docFileId ? "등록됨" : "없음"}
                   </StatusPill>
                 </p>
                 <span className={styles.clientArrow} aria-hidden="true"><ChevronRightIcon /></span>

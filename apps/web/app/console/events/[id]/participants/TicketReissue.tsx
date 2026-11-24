@@ -101,7 +101,7 @@ export default function TicketReissue({ eventId, slug, eventName, person, resume
         }
         else if (prior || response.status >= 500 || [408, 425, 429].includes(response.status)) uncertain();
         else if (response.status === 400 && (body?.field === "command" || body?.error === "지원하지 않는 참가자 작업입니다")) {
-          setError("현재 서버에서는 티켓 상태를 확인해 재발급할 수 없습니다. 시스템 관리자에게 업데이트를 문의하세요.");
+          setError("현재 서버에서는 티켓 상태를 확인해 재발급할 수 없습니다. 조직 관리자에게 업데이트를 문의하세요.");
         }
         else setError(typeof body?.error === "string" ? body.error : "티켓을 재발급하지 못했습니다.");
         return;

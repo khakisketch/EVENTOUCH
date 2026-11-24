@@ -149,8 +149,9 @@ test('CSV filename preserves mapping, quoting and physical row numbers across ad
   const results = [];
   for (const type of ['text/csv', 'text/plain', '', 'application/vnd.ms-excel']) {
     const world = runtime({ submittingRef: { current: false }, importLocked: false, fileReadingRef: { current: false }, fileReadIdRef: { current: 0 }, extraFields: [] });
-    stateSetters(world.sandbox, ['readingFile', 'fileError', 'fileName', 'headers', 'dataRows', 'preview', 'phoneReviewed', 'errorsOpen', 'committed', 'fileKind', 'map', 'extraMap']);
-    world.functions(IMPORT, ['readFile', 'previewFor', 'stripBom', 'parseCsv', 'parseTxt', 'normalizePhone', 'validateRows', 'detectColumns', 'detectExtraColumns', 'readAnswer', 'parseChecked', 'headerParts'], ['MAX_BYTES', 'MAX_ROWS', 'HEADER_WORDS', 'EMPTY_MAP', 'CHECKED_WORDS', 'UNCHECKED_WORDS']);
+    stateSetters(world.sandbox, ['readingFile', 'fileError', 'fileName', 'headers', 'dataRows', 'preview', 'phoneReviewed', 'errorsOpen', 'committed', 'fileKind', 'map', 'extraMap', 'groupColumn']);
+    // Reopened 2026-11-24: the import reads a 그룹 column and flags non-mobile numbers, so those helpers and limits load too.
+    world.functions(IMPORT, ['readFile', 'previewFor', 'stripBom', 'parseCsv', 'parseTxt', 'normalizePhone', 'isKoreanMobile', 'validateRows', 'detectColumns', 'detectGroupColumn', 'detectExtraColumns', 'readAnswer', 'parseChecked', 'headerParts'], ['MAX_BYTES', 'MAX_ROWS', 'MAX_GROUP', 'GROUP_WORDS', 'OVER_LIMIT_MESSAGE', 'HEADER_WORDS', 'EMPTY_MAP', 'CHECKED_WORDS', 'UNCHECKED_WORDS']);
     const content = 'phone,name,company\r\n01000009999,"Synthetic, Name","Fixture\nCompany"\r\ninvalid,Bad,Other';
     await world.sandbox.readFile({ name: 'participants.CSV', type, size: content.length, text: async () => content });
     results.push(plain({ kind: world.sandbox.fileKind, map: world.sandbox.map, rows: world.sandbox.dataRows, preview: world.sandbox.preview, error: world.sandbox.fileError }));

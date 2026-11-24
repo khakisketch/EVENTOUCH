@@ -40,7 +40,7 @@ test('web-participant-row-reuse-prefills-name-company-only-and-guards-dirty-form
   const reuseStart = list.indexOf('function reuseForNewRegistration');
   const reuseEnd = list.indexOf('const [addBusy, setAddBusy]', reuseStart);
   const reuse = list.slice(reuseStart, reuseEnd === -1 ? undefined : reuseEnd);
-  assert.match(reuse, /name: person\.name, phone: "", company: person\.company, email: "", registrationType: "ONSITE"/);
+  assert.match(reuse, /name: person\.name, phone: "", company: person\.company, email: "", registrationType: addDefaultType/);
   assert.doesNotMatch(reuse, /person\.phone|person\.email|consent|ticket|everIn|reward/i);
   // Dirty or outcome-unknown forms are never overwritten: the guard reopens
   // the pending work with its receipt intact instead of replacing it.
@@ -105,7 +105,7 @@ test('web-participant-roster-is-compact-with-coherent-columns', () => {
   assert.match(list, /styles\.participantIdentity/);
   assert.match(list, /maskPhone/);
   assert.match(list, /\*\*\*\*/);
-  assert.match(list, /EVENTOUCH_participants\.csv/);
+  assert.match(list, /participantExportFilename\(state\.eventName, "csv"\)/);
   // Permission-specific actions are preserved, not cut.
   assert.match(list, /"승인"/);
   assert.match(list, /승인 중/);

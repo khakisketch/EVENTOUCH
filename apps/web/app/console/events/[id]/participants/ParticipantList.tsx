@@ -12,7 +12,8 @@ import { consoleFetch, subscribeConsoleFreshness } from "../../../../../lib/cons
 import { abandonOperatorAttempt } from "../../../../../lib/operator-context";
 import { forgetOperatorReceipt } from "../../../../../lib/operator-receipts";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
-import { exportAnswers, exportFields, exportFieldsComplete, exportParticipantComplete, participantCsv, participantExportRows, type ExportField } from "../../../../../lib/participant-export";
+import { roParticle } from "../../../../../lib/korean-particle";
+import { exportAnswers, exportFields, exportFieldsComplete, exportParticipantComplete, participantCsv, participantExportFilename, participantExportRows, type ExportField } from "../../../../../lib/participant-export";
 import { attendanceNeedsReview } from "../../../../../lib/attendance-state.cjs";
 import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 import ConsolePage from "../../../console-ui/ConsolePage";
@@ -108,6 +109,9 @@ type ListState =
       eventMeta: ConsoleEventMeta;
       eventStage: string;
       eventSlug: string;
+      // Public intake is really open: the form is published (registrationOpen)
+      // and the stage lets it accept (READY or LIVE).
+      intakeOpen: boolean;
       people: Person[];
       publishedFields: ExportField[];
       exportIssue: "fields" | "roster" | "answers" | null;
@@ -280,6 +284,18 @@ function isKnownStatus(status: string): status is (typeof STATUSES)[number] {
 // Approval-time identity check: names collide, so the row carries the
 // company and a masked contact next to the name. Full digits stay in the
 // CSV export and the server, never on this screen.
+// Name, company and phone text match as typed. A query made only of digits and
+// phone separators ("010-1234", "010 1234 5678") is also compared by digits, so
+// the hyphens or spaces an operator types or pastes do not hide the person.
+function matchesRosterQuery(person: { name: string; company: string; phone: string }, search: string): boolean {
+  if (!search) return true;
+  const haystack = `${person.name} ${person.company} ${person.phone}`.toLocaleLowerCase("ko-KR");
+  if (haystack.includes(search)) return true;
+  if (!/^[\d\s\-().+]+$/.test(search)) return false;
+  const digits = search.replace(/\D/g, "");
+  return digits.length > 0 && person.phone.replace(/\D/g, "").includes(digits);
+}
+
 function maskPhone(phone: string): string {
   const digits = phone.replace(/\D/g, "");
   if (digits.length < 8) return "연락처 확인 필요";
@@ -322,6 +338,7 @@ function presenceSentence(person: { inside: boolean; everIn: boolean; status: st
   if (person.presenceUnknown) return "현재 위치를 알 수 없습니다.";
   if (person.inside === true) return "지금 행사장 안에 있습니다.";
   if (person.everIn === true) return "입장했다가 퇴장했습니다.";
+  if (person.status === "CANCELLED") return "신청이 취소되어 출입 대상이 아닙니다.";
   return person.status === "APPROVED" ? "아직 입장한 기록이 없습니다." : "참가 확정 전이라 출입 대상이 아닙니다.";
 }
 
@@ -436,6 +453,12 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   // Cancelling a registration voids the ticket, so it is confirmed in place
   // like every other irreversible command in the console.
   const [cancelConfirm, setCancelConfirm] = useState<{ id: string; name: string } | null>(null);
+  // The cancel review opens inside the details sheet, often below the fold on a phone.
+  useEffect(() => {
+    if (!cancelConfirm) return;
+    const frame = window.requestAnimationFrame(() => document.getElementById("roster-cancel-confirm")?.scrollIntoView({ block: "nearest" }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [cancelConfirm]);
   // Row details open on demand on every viewport; the one-tap approval
   // stays directly visible on PENDING rows.
   const [toolsOpenId, setToolsOpenId] = useState<string | null>(null);
@@ -473,11 +496,17 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   // Adding one participant by hand is a first-class way to work, not a
   // side door: no file, no import wizard.
   const [addOpen, setAddOpen] = useState(false);
-  const [addDraft, setAddDraft] = useState({ name: "", phone: "", company: "", email: "", registrationType: "ONSITE" });
+  // 사전 등록 is the default before the event runs; during it, people are added at the door.
+  const addDefaultType = state.kind === "ready" && state.eventStage.toUpperCase() !== "LIVE" ? "PRE" : "ONSITE";
+  const [addDraft, setAddDraft] = useState({ name: "", phone: "", company: "", email: "", registrationType: addDefaultType });
+  useEffect(() => {
+    setAddDraft((draft) => draft.registrationType !== addDefaultType && !draft.name && !draft.phone && !draft.company && !draft.email
+      ? { ...draft, registrationType: addDefaultType } : draft);
+  }, [addDefaultType]);
   // Reuse source label: the opened form names whose name/company it started
   // from. Cleared on close and on proven create; never stored or sent.
   const [reuseFrom, setReuseFrom] = useState<string | null>(null);
-  const addDirty = addDraft.name.trim() !== "" || addDraft.phone.trim() !== "" || addDraft.company.trim() !== "" || addDraft.email.trim() !== "" || addDraft.registrationType !== "ONSITE";
+  const addDirty = addDraft.name.trim() !== "" || addDraft.phone.trim() !== "" || addDraft.company.trim() !== "" || addDraft.email.trim() !== "" || addDraft.registrationType !== addDefaultType;
   // An existing row seeds ONLY name + company into a new registration.
   // Phone, email, consent, ticket, attendance, rewards, results and files
   // are never copied; the operator types the contact fresh. A dirty or
@@ -503,7 +532,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       return;
     }
     pendingAddRef.current = null;
-    setAddDraft({ name: person.name, phone: "", company: person.company, email: "", registrationType: "ONSITE" });
+    setAddDraft({ name: person.name, phone: "", company: person.company, email: "", registrationType: addDefaultType });
     setAddError(null);
     setReuseFrom(person.name);
     setAddOpen(true);
@@ -843,10 +872,10 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         rosterUnavailableRef.current = true;
         setRosterUnavailable(true);
         if (keepReady) {
-          setRefreshError("참가자 명단을 확인할 수 없어 이전에 확인한 목록을 표시합니다. 내려받기는 최신 명단 확인 후 이용할 수 있습니다. 다시 시도해도 계속되면 시스템 관리자에게 문의하세요.");
+          setRefreshError("참가자 명단을 확인할 수 없어 이전에 확인한 목록을 표시합니다. 내려받기는 최신 명단 확인 후 이용할 수 있습니다. 다시 시도해도 계속되면 조직 관리자에게 문의하세요.");
           return false;
         }
-        setState({ kind: "failed", message: "참가자 명단을 완전히 확인할 수 없습니다. 다시 시도해도 계속되면 시스템 관리자에게 문의하세요." });
+        setState({ kind: "failed", message: "참가자 명단을 완전히 확인할 수 없습니다. 다시 시도해도 계속되면 조직 관리자에게 문의하세요." });
         setRefreshError(null);
         return false;
       }
@@ -931,6 +960,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         // exports and CSV stay available on every stage.
         eventStage: typeof event?.stage === "string" ? event.stage : "",
         eventSlug,
+        intakeOpen: workspace.registrationOpen === true && ["READY", "LIVE"].includes(typeof event?.stage === "string" ? event.stage.toUpperCase() : ""),
         people,
         publishedFields,
         exportIssue,
@@ -1197,7 +1227,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       pendingAddRef.current = null;
       setAddUnconfirmed(false);
       const added = typeof data?.participant?.name === "string" ? data.participant.name : name;
-      setAddDraft({ name: "", phone: "", company: "", email: "", registrationType: "ONSITE" });
+      setAddDraft({ name: "", phone: "", company: "", email: "", registrationType: addDefaultType });
       setReuseFrom(null);
       setAddOpen(false);
       setApprovedHandoffIds(null);
@@ -1310,7 +1340,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       setStatusRetry(null);
       setStatusFeedbackId(null);
       setApprovedHandoffIds(null);
-      setNotice(`${person.name} 상태를 ${statusLabel(status)}(으)로 바꿨습니다.${status === "APPROVED" && person.ticketNeedsExplicitReissue ? " 기존 티켓은 무효 상태입니다. 새 티켓을 발급해 전달하세요." : ""}`);
+      setNotice(`${person.name} 상태를 ‘${statusLabel(status)}’${roParticle(statusLabel(status))} 바꿨습니다.${status === "APPROVED" && person.ticketNeedsExplicitReissue ? " 기존 티켓은 무효 상태입니다. 새 티켓을 발급해 전달하세요." : ""}`);
       await load(true);
     } catch {
       attempt.uncertain = true;
@@ -1375,10 +1405,14 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       </ConsolePage>
     );
   }
+  // A duplicate-contact refusal names who already holds the number, so the operator
+  // can open that person instead of guessing.
+  const addPhoneDigits = addDraft.phone.replace(/\D/g, "");
+  const existingForAdd = addError?.field === "phone" && addPhoneDigits
+    ? state.people.find((person) => person.phone.replace(/\D/g, "") === addPhoneDigits) ?? null : null;
   const search = query.trim().toLocaleLowerCase("ko-KR");
   const visiblePeople = state.people.filter((person) => {
-    const haystack = `${person.name} ${person.company} ${person.phone}`.toLocaleLowerCase("ko-KR");
-    const matchesQuery = !search || haystack.includes(search);
+    const matchesQuery = matchesRosterQuery(person, search);
     const matchesGroup = !groupFilter || person.group === groupFilter;
     return matchesQuery && matchesGroup && matchesAttendance(person, attendanceFilter) && (!statusFilter || person.status === statusFilter) &&
       (!ticketFilter || (person.status.toUpperCase() !== "CANCELLED" && ["expired", "revoked", "unavailable", "unknown", "cancelled"].includes(person.ticketReview)));
@@ -1429,8 +1463,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   // a second filter system. Counts ignore status/attendance so the chips
   // show the distribution instead of echoing their own filter.
   const presetBase = state.people.filter((person) => {
-    const haystack = `${person.name} ${person.company} ${person.phone}`.toLocaleLowerCase("ko-KR");
-    return (!search || haystack.includes(search)) && (!groupFilter || person.group === groupFilter);
+    return matchesRosterQuery(person, search) && (!groupFilter || person.group === groupFilter);
   });
   const presetCounts = {
     all: presetBase.length,
@@ -1633,7 +1666,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       pendingGroupRef.current = null;
       setGroupUncertain(false);
       setApprovedHandoffIds(null);
-      setNotice(`${attempt.ids.length}명을 ${attempt.group}(으)로 지정했습니다.`);
+      setNotice(`${attempt.ids.length}명을 ‘${attempt.group}’ 그룹${roParticle("그룹")} 지정했습니다.`);
       setSelectedIds((current) => current.filter((id) => !attempt.ids.includes(id)));
       setGroupDialogOpen(false);
       groupBaselineRef.current = null;
@@ -1747,7 +1780,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   function exportCsv() {
     if (state.kind !== "ready" || rosterUnavailableRef.current || state.exportIssue) return;
     const rows = participantExportRows(orderedPeople, state.publishedFields, statusLabel);
-    downloadExport(new Blob([participantCsv(rows)], { type: "text/csv;charset=utf-8" }), "EVENTOUCH_participants.csv");
+    downloadExport(new Blob([participantCsv(rows)], { type: "text/csv;charset=utf-8" }), participantExportFilename(state.eventName, "csv"));
   }
   async function exportXlsx() {
     if (exportGateRef.current || exporting || state.kind !== "ready" || rosterUnavailableRef.current || state.exportIssue) return;
@@ -1770,7 +1803,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       const book = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(book, sheet, "참가자");
       const bytes: ArrayBuffer = XLSX.write(book, { bookType: "xlsx", type: "array" });
-      downloadExport(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), "EVENTOUCH_participants.xlsx");
+      downloadExport(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), participantExportFilename(state.eventName, "xlsx"));
     } catch {
       setFailure("엑셀 파일을 만들지 못했습니다. 다시 시도하거나 CSV로 내려받으세요.");
     } finally { exportGateRef.current = false; setExporting(false); }
@@ -2050,7 +2083,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       feedback={
         <>
           {state.exportIssue ? <ConsoleFeedback kind="warning" id="roster-export-unavailable">
-            {state.exportIssue === "fields" ? "게시된 신청 항목을 확인할 수 없어" : state.exportIssue === "roster" ? "참가자 명단의 전체 범위를 확인할 수 없어" : "일부 참가자의 신청 정보를 확인할 수 없어"} 명단을 내려받을 수 없습니다. 다시 확인해도 계속되면 시스템 관리자에게 문의하세요.{" "}
+            {state.exportIssue === "fields" ? "게시된 신청 항목을 확인할 수 없어" : state.exportIssue === "roster" ? "참가자 명단의 전체 범위를 확인할 수 없어" : "일부 참가자의 신청 정보를 확인할 수 없어"} 명단을 내려받을 수 없습니다. 다시 확인해도 계속되면 조직 관리자에게 문의하세요.{" "}
             <ProductButton type="button" className="button button-secondary" disabled={refreshing} onClick={() => void refreshQuietly()}>{refreshing ? "확인 중…" : "다시 확인"}</ProductButton>
           </ConsoleFeedback> : null}
           {unresolvedRosterReceipt ? <ConsoleFeedback kind="warning">이전 참가자 작업의 결과를 위의 처리 결과 확인에서 확인한 뒤 같은 종류의 새 작업을 할 수 있습니다.</ConsoleFeedback> : null}
@@ -2341,7 +2374,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   {canAssignGroup ? <td className={styles.selectColumn}><label className={styles.participantSelectTarget}>
                     <input type="checkbox" className={styles.participantSelect} aria-label={`${person.name} 선택`} checked={effectiveSelection.includes(person.id)} onChange={() => togglePerson(person.id)} />
                   </label></td> : null}
-                  <td><span className={styles.nameCell}><ConsoleAvatar name={person.name} tone={avatarTone(person.status)} /><span className={styles.tableIdentity}><strong id={`roster-name-desktop-${person.id}`}>{person.name}</strong><small>{person.company || "소속 미입력"}</small>{emailLooksValid(person.email) ? null : <small className={styles.ticketReviewLabel}>이메일 확인 필요</small>}</span></span></td>
+                  <td><span className={styles.nameCell}><ConsoleAvatar name={person.name} tone={avatarTone(person.status)} /><span className={styles.tableIdentity}><span className={styles.nameLine}><strong id={`roster-name-desktop-${person.id}`}>{person.name}</strong>{emailLooksValid(person.email) ? null : <small className={styles.ticketReviewLabel}>이메일 확인 필요</small>}</span><small>{person.company || "소속 미입력"}</small></span></span></td>
                   <td className={styles.rosterContact}>{maskPhone(person.phone)}</td><td className={styles.rosterGroup}>{person.group || "미지정"}</td>
                   <td><StatusPill className={styles.participantStatus} tone={statusTone(person.status)}>{statusLabel(person.status)}</StatusPill>{["PENDING", "WAITLIST"].includes(person.status) && person.ticketReview === "cancelled" ? <small className={styles.ticketReviewLabel}>취소 상태 확인 필요</small> : null}{["PENDING", "WAITLIST"].includes(person.status) && person.ticketNeedsExplicitReissue ? <small className={styles.ticketReviewLabel}>승인 후 티켓 재발급 필요</small> : null}</td>
                   <td><span className={person.inside ? styles.presenceInside : styles.presence}>{presenceLabel(person)}</span></td>
@@ -2383,9 +2416,11 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                     </label>
                   ) : null}
                   <span className={styles.participantSummary}>
-                    <strong className={styles.participantName} id={`roster-name-mobile-${person.id}`}>{person.name}</strong>
+                    <span className={styles.nameLine}>
+                      <strong className={styles.participantName} id={`roster-name-mobile-${person.id}`}>{person.name}</strong>
+                      {emailLooksValid(person.email) ? null : <small className={styles.ticketReviewLabel}>이메일 확인 필요</small>}
+                    </span>
                     <small className={styles.participantIdentity}>{[identityOrg(person), presenceLabel(person)].filter(Boolean).join(" · ")}</small>
-                    {emailLooksValid(person.email) ? null : <small className={styles.ticketReviewLabel}>이메일 확인 필요</small>}
                     {ticketFilter || (["PENDING", "WAITLIST"].includes(person.status) && person.ticketReview === "cancelled") ? <small className={styles.ticketReviewLabel}>{ticketReviewLabel(person.ticketReview)}</small> : null}
                     {["PENDING", "WAITLIST"].includes(person.status) && person.ticketNeedsExplicitReissue ? <small className={styles.ticketReviewLabel}>승인 후 티켓 재발급 필요</small> : null}
                   </span>
@@ -2482,7 +2517,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                     </section>
                     {selectedPerson.ticketReview !== "valid" && (selectedPerson.ticketReview !== "cancelled" || selectedPerson.status.toUpperCase() !== "CANCELLED") ? <p role="note" id={`ticket-state-note-${selectedPerson.id}`}>
                       {selectedPerson.ticketReview === "expired" ? "티켓이 만료됐습니다." : selectedPerson.ticketReview === "revoked" ? "티켓이 철회됐습니다." : selectedPerson.ticketReview === "cancelled" ? "신청 상태와 취소 기록이 일치하지 않습니다." : "티켓 상태를 확인할 수 없습니다."}
-                      {selectedPerson.ticketReview === "unknown" ? " 최신 목록을 새로고침한 뒤 다시 확인하세요." : selectedPerson.ticketReview === "cancelled" ? selectedPerson.cancellationConflictReview && canResolveCancellationConflict && !participantsLocked ? " 참가자의 의사를 확인한 뒤 아래에서 기록을 검토하세요." : " 행사 담당자나 시스템 관리자에게 확인하세요." : canReissueTicket && !participantsLocked ? " 필요하면 아래 티켓 재발급을 이용하세요." : " 행사 담당자에게 확인하세요."}
+                      {selectedPerson.ticketReview === "unknown" ? " 최신 목록을 새로고침한 뒤 다시 확인하세요." : selectedPerson.ticketReview === "cancelled" ? selectedPerson.cancellationConflictReview && canResolveCancellationConflict && !participantsLocked ? " 참가자의 의사를 확인한 뒤 아래에서 기록을 검토하세요." : " 행사 담당자나 조직 관리자에게 확인하세요." : canReissueTicket && !participantsLocked ? " 필요하면 아래 티켓 재발급을 이용하세요." : " 행사 담당자에게 확인하세요."}
                     </p> : null}
                     <section className={styles.consentRecord} aria-label="정보 수집 동의 기록">
                       <h4>정보 수집 동의</h4>
@@ -2593,10 +2628,11 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                     ) : null}
                   </div>
                   {cancelConfirm?.id === selectedPerson.id ? (
-                    <div className={styles.rowConfirm}>
+                    <div className={styles.rowConfirm} id="roster-cancel-confirm">
                       <ConsoleConfirm
                         summary={`${cancelConfirm.name}님의 신청을 취소하면 발급된 티켓은 무효화됩니다. ${selectedPerson.ticketReview === "cancelled" ? "취소 기록을 확인하기 전에는 다시 승인할 수 없습니다." : "되돌리려면 다시 승인해야 합니다."}`}
-                        confirmLabel="신청 취소"
+                        confirmLabel="신청 취소하기"
+                        cancelLabel="돌아가기"
                         busy={savingId === selectedPerson.id}
                         onConfirm={() => {
                           const target = selectedPerson;
@@ -2673,11 +2709,21 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         <ConsoleEmptyState
           titleAs="h3"
           title="아직 등록된 참가자가 없습니다."
-          description="참가자 추가로 한 명씩 등록하거나 명단 가져오기로 여러 명을 등록하세요. 참가자가 스스로 신청하게 하려면 행사 설정의 참가 접수를 열어 주세요."
+          description={state.intakeOpen
+            ? "명단 가져오기로 여러 명을 한 번에 등록하거나, 참가 신청 링크를 보내 참가자가 직접 신청하게 하세요."
+            : "명단 가져오기로 여러 명을 한 번에 등록하거나, 한 명씩 추가하세요. 참가자가 직접 신청하게 하려면 행사 설정에서 접수를 열어야 합니다."}
           action={canMutateStatus ? (
-            <ProductButton type="button" className="button button-secondary" onClick={copyRegistrationLink} icon={<CopyIcon />}>
-              참가 신청 링크 복사
-            </ProductButton>
+            <span className={styles.emptyActions}>
+              <ProductButton type="button" variant="secondary" onClick={() => setImportOpen(true)} icon={<UploadIcon />}>
+                명단 가져오기
+              </ProductButton>
+              <ProductButton type="button" variant="ghost" onClick={() => { setAddError(addUnconfirmed ? { message: "등록 결과가 확인되지 않았습니다. 같은 요청으로 다시 확인하세요.", field: null } : null); setAddOpen(true); }} icon={<PlusIcon />} disabled={unconfirmedAdd}>
+                한 명 추가
+              </ProductButton>
+              {state.intakeOpen
+                ? <ProductButton type="button" variant="ghost" onClick={copyRegistrationLink} icon={<CopyIcon />}>참가 신청 링크 복사</ProductButton>
+                : <small className={styles.emptyNote}>접수를 열면 참가 신청 링크를 쓸 수 있어요.</small>}
+            </span>
           ) : undefined}
         />
       )}
@@ -2767,7 +2813,11 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
               options={[{ value: "ONSITE", label: "현장 등록" }, { value: "PRE", label: "사전 등록" }]}
               hint="사전 등록은 이름이 이미 정해진 명단, 현장 등록은 당일 현장에서 추가하는 참가자입니다." />
             </fieldset>
-            {addError ? <ConsoleFeedback kind="error">{addError.message}</ConsoleFeedback> : null}
+            {!addDraft.name.trim() || !addDraft.phone.trim() ? (
+              <p className={styles.addHint} role="status">{!addDraft.name.trim() ? "이름을 입력하면 등록할 수 있어요." : "연락처를 입력하면 등록할 수 있어요."}</p>
+            ) : null}
+            {addError ? <ConsoleFeedback kind="error">{addError.message}{existingForAdd ? <>{" "}이미 등록된 사람은 {existingForAdd.name} ({maskPhone(existingForAdd.phone)})입니다.{" "}
+              <ProductButton type="button" variant="ghost" onClick={() => { setAddOpen(false); setAddError(null); setReuseFrom(null); inspectorReturnFocusRef.current = null; setToolsOpenId(existingForAdd.id); }}>보기</ProductButton></> : null}</ConsoleFeedback> : null}
           </ValidatedForm>
         </ConsoleDialog>
       ) : null}

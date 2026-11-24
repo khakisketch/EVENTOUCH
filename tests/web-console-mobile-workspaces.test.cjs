@@ -85,7 +85,7 @@ test('mobile-workspaces: CSV and import ride one compact secondary pair', () => 
   // secondary, never a tall full-width primary ahead of the list.
   assert.match(list, /data-toolbar-inline/u, 'utilities opt into the paired inline group');
   assert.match(list, /CSV 내보내기 · 검색·필터 결과 \$\{visiblePeople\.length\}명/u, 'export accessible name retains its exact filtered count');
-  assert.match(list, /EVENTOUCH_participants\.csv/u, 'download target stays');
+  assert.match(list, /participantExportFilename\(state\.eventName, "csv"\)/u, 'download target stays');
   assert.match(list, /<ImportWizard eventId=\{eventId\}/u, 'import route stays');
   assert.match(list, /명단 가져오기/u, 'import action stays and matches its destination');
   assert.doesNotMatch(list, /button-primary" href=\{`\/console\/events\/\$\{encodeURIComponent\(eventId\)\}\/participants\/import`\}/u, 'import is no longer a full-width primary');

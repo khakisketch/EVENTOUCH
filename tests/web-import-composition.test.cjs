@@ -30,7 +30,7 @@ test('import is a drop area, then one review screen: no step line, no separate m
 test('the review answers with a number, a distribution bar, a sample and tinted problem cards', () => {
   assert.match(wizard, /등록할 수 있어요/u);
   assert.match(wizard, /styles\.heroNumber/u);
-  assert.match(wizard, /role="img" aria-label=\{`바로 등록 \$\{cleanCount\}명, 등록 후 확인 \$\{preview\.emailReview\.length\}명, 제외 \$\{preview\.errors\.length\}행`\}/u);
+  assert.match(wizard, /role="img" aria-label=\{`바로 등록 \$\{cleanCount\}명, 등록 후 확인 \$\{checkCount\}명, 제외 \$\{preview\.errors\.length\}행`\}/u);
   assert.match(wizard, /preview\.valid\.slice\(0, 3\)/u);
   assert.match(wizard, /aria-label="적용될 값 미리보기"/u);
   assert.match(wizard, /data-tone="check"/u);
@@ -141,8 +141,8 @@ test('a name column is never guessed from values and no column serves two fields
 function loadExtras() {
   const source = fs.readFileSync(wizardPath, 'utf8');
   const tree = ts.createSourceFile('ImportWizard.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  const names = ['parseExtraFields', 'detectExtraColumns', 'parseChecked', 'readAnswer', 'validateRows', 'headerParts', 'normalizePhone'];
-  const constants = ['OWN_FIELD_IDS', 'CHECKED_WORDS', 'UNCHECKED_WORDS'];
+  const names = ['parseExtraFields', 'detectExtraColumns', 'parseChecked', 'readAnswer', 'validateRows', 'headerParts', 'normalizePhone', 'isKoreanMobile', 'detectGroupColumn'];
+  const constants = ['OWN_FIELD_IDS', 'CHECKED_WORDS', 'UNCHECKED_WORDS', 'MAX_GROUP', 'GROUP_WORDS'];
   const found = new Map();
   (function visit(node) {
     if (ts.isFunctionDeclaration(node) && names.includes(node.name?.text)) found.set(node.name.text, node.getText(tree));
@@ -156,7 +156,7 @@ function loadExtras() {
   for (const name of [...constants, ...names]) assert.ok(found.has(name), `declaration ${name}`);
   const code = ts.transpileModule([...constants, ...names].map((n) => found.get(n)).join('\n'), { compilerOptions: { target: 'ES2020' } }).outputText;
   const sandbox = {};
-  vm.runInNewContext(`${code}\nglobalThis.api = { parseExtraFields, detectExtraColumns, parseChecked, readAnswer, validateRows };`, sandbox);
+  vm.runInNewContext(`${code}\nglobalThis.api = { parseExtraFields, detectExtraColumns, parseChecked, readAnswer, validateRows, detectGroupColumn };`, sandbox);
   return sandbox.api;
 }
 const extras = loadExtras();
@@ -243,4 +243,51 @@ test('a bad answer is a row error with its file row, and does not poison the dup
     { row: 4, reason: '식사 선택을(를) 입력하세요' },
   ]);
   assert.deepEqual(out.valid.map((row) => row.line), [3], 'the first row failed on its answer, so the same phone on row 3 is not a duplicate');
+});
+
+// Reopened 2026-11-24 (전수 점검 P1/P2): columns without a field were dropped
+// silently, and a nine-digit number counted as "바로 등록". 그룹 is a fifth
+// column the server already accepts; a non-mobile number registers but is listed.
+test('unmapped columns are announced, 그룹 can be connected, and a non-mobile number is checked after registering', () => {
+  assert.match(wizard, /가져오지 않는 열 \{skippedColumns\.length\}개/u);
+  assert.match(wizard, /aria-label="그룹에 연결할 열"/u);
+  assert.match(wizard, /const MAX_GROUP = 80/u);
+  assert.match(wizard, /연락처 \{preview\.phoneCheck\.length\}건은 휴대폰 번호 형식이 아니에요/u);
+});
+
+test('a 9-digit number is not "바로 등록" and the server 9~15 digit rule is untouched', () => {
+  const source = fs.readFileSync(wizardPath, 'utf8');
+  const tree = ts.createSourceFile('ImportWizard.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const wanted = ['isKoreanMobile', 'normalizePhone'];
+  const parts = [];
+  (function visit(node) {
+    if (ts.isFunctionDeclaration(node) && wanted.includes(node.name?.text)) parts.push(node.getText(tree));
+    ts.forEachChild(node, visit);
+  })(tree);
+  const code = ts.transpileModule(parts.join('\n'), { compilerOptions: { target: 'ES2020' } }).outputText;
+  const box = {};
+  vm.runInNewContext(`${code}\nglobalThis.f = { isKoreanMobile, normalizePhone };`, box);
+  const { isKoreanMobile, normalizePhone } = box.f;
+  assert.equal(isKoreanMobile(normalizePhone('010-1234-5678')), true);
+  assert.equal(isKoreanMobile(normalizePhone('10-1234-5678')), true, 'a dropped leading 0 is restored first');
+  assert.equal(isKoreanMobile(normalizePhone('011-123-4567')), true);
+  assert.equal(isKoreanMobile(normalizePhone('010-1234-56')), false, 'nine digits');
+  assert.equal(isKoreanMobile(normalizePhone('02-123-4567')), false, 'a landline');
+  assert.equal(isKoreanMobile(normalizePhone('+1 415 555 0100')), false);
+});
+
+test('the 그룹 column is found by header, carried on the row, and capped at the server limit', () => {
+  assert.equal(extras.detectGroupColumn(['이름', '연락처', '그룹'], new Set(['0', '1'])), '2');
+  assert.equal(extras.detectGroupColumn(['이름', '연락처', '식사 구분', '직책'], new Set(['0', '1'])), '', 'unknown headers are not guessed');
+  assert.equal(extras.detectGroupColumn(['그룹', '이름'], new Set(['0'])), '', 'a taken column is not reused');
+  const out = plain(extras.validateRows(rows(['김하늘', '01012345678', 'VIP'], ['이서준', '01012345679', '']), BASE, undefined, '2'));
+  assert.equal(out.valid[0].group, 'VIP');
+  assert.equal(Object.hasOwn(out.valid[1], 'group'), false, 'an empty cell leaves the server default');
+  const long = plain(extras.validateRows(rows(['김하늘', '01012345678', 'x'.repeat(81)]), BASE, undefined, '2'));
+  assert.match(long.errors[0].reason, /그룹이 80자를 초과합니다/);
+  const dup = plain(extras.validateRows(rows(['김하늘', '01012345678'], ['이서준', '010-1234-5678']), BASE));
+  assert.match(dup.errors[0].reason, /파일 2행과 같은 연락처/);
+  const odd = plain(extras.validateRows(rows(['김하늘', '010-1234-56']), BASE));
+  assert.equal(odd.valid.length, 1, 'the server 9~15 digit rule still accepts it');
+  assert.deepEqual(odd.phoneCheck.map((item) => item.row), [2]);
 });

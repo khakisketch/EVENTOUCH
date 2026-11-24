@@ -35,12 +35,15 @@ type ExtraField = { id: string; label: string; type: "text" | "email" | "select"
 type ExtraMap = Record<string, string>;
 type Answers = Record<string, string | boolean>;
 type ExtraImport = { fields: ExtraField[]; map: ExtraMap };
-type ValidRow = { name: string; phone: string; email: string; company: string; line: number; answers?: Answers };
+type ValidRow = { name: string; phone: string; email: string; company: string; line: number; answers?: Answers; group?: string };
 type ImportRow = { cells: string[]; line: number };
 type RowError = { row: number; reason: string };
 type PhoneReview = { row: number; name: string; phone: string; raw: string };
 type EmailReview = { row: number; name: string; email: string };
-type ImportPreview = { valid: ValidRow[]; errors: RowError[]; phoneReview: PhoneReview[]; emailReview: EmailReview[] };
+// A number that is not a Korean mobile number (01x, 10~11 digits). The server
+// still accepts 9~15 digits, so the row registers and is listed for a check.
+type PhoneCheck = { row: number; name: string; phone: string };
+type ImportPreview = { valid: ValidRow[]; errors: RowError[]; phoneReview: PhoneReview[]; emailReview: EmailReview[]; phoneCheck: PhoneCheck[] };
 
 type GateState =
   | { kind: "loading" }
@@ -50,6 +53,7 @@ type GateState =
 const MAX_BYTES = 1048576;
 const MAX_ROWS = 1000;
 const MAX_WORKBOOK_COLUMNS = 256;
+const OVER_LIMIT_MESSAGE = "한 번에 1,000명까지 가져올 수 있어요. 1,000명씩 나눠 올리세요. 이미 올린 연락처는 중복으로 표시됩니다.";
 const FIELDS: Array<{ id: keyof ImportMap; label: string; required: boolean }> = [
   { id: "name", label: "이름", required: true },
   { id: "phone", label: "연락처", required: true },
@@ -65,6 +69,10 @@ const HEADER_WORDS: Record<keyof ImportMap, string[]> = {
   company: ["소속", "소속명", "회사", "회사명", "기관", "기관명", "단체", "부서", "소속회사", "소속기관", "company", "org", "organization", "affiliation"],
 };
 const EMPTY_MAP: ImportMap = { name: "", phone: "", email: "", company: "" };
+// 그룹 is a fifth column the server accepts per row (default 일반). It lives
+// beside the four standard fields so their detection stays unchanged.
+const GROUP_WORDS = ["그룹", "참가그룹", "참가자그룹", "group", "분류"];
+const MAX_GROUP = 80;
 const NO_EXTRA_FIELDS: ExtraField[] = [];
 // Ids the standard columns (and the answers carrier) own; never an extra field.
 const OWN_FIELD_IDS = new Set(["name", "phone", "email", "company", "group", "answers"]);
@@ -103,6 +111,12 @@ function detectColumns(headers: string[], rows: ImportRow[]): ImportMap {
   byShape("phone", (value) => /^[\d\s\-().+]+$/.test(value) && /^\d{9,15}$/.test(normalizePhone(value)));
   byShape("email", (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value));
   return next;
+}
+
+// The 그룹 column by header word, among columns the standard fields left free.
+function detectGroupColumn(headers: string[], taken: Set<string>): string {
+  const at = headers.findIndex((head, index) => !taken.has(String(index)) && headerParts(head).some((part) => GROUP_WORDS.includes(part)));
+  return at >= 0 ? String(at) : "";
 }
 
 // The event's extra form fields, read defensively from the bootstrap draft form.
@@ -252,7 +266,7 @@ async function parseWorkbook(buffer: ArrayBuffer): Promise<{ headers: string[]; 
   const sheet = workbook.Sheets[sheetName];
   const bounds = XLSX.utils.decode_range(sheet["!fullref"] || sheet["!ref"] || "A1");
   if (bounds.e.r > MAX_ROWS) {
-    throw new Error("엑셀 첫 시트는 헤더와 1~1,000개 데이터 행으로 정리하세요. 뒤쪽 빈 행도 확인하세요.");
+    throw new Error("한 번에 1,000명까지 가져올 수 있어요. 1,000명씩 나눠 올리세요. 이미 올린 연락처는 중복으로 표시됩니다. 뒤쪽 빈 행도 확인하세요.");
   }
   if (bounds.e.c - bounds.s.c + 1 > MAX_WORKBOOK_COLUMNS) {
     throw new Error("엑셀은 256열 이하로 정리하세요. 사용하지 않는 뒤쪽 열을 제거하세요.");
@@ -267,7 +281,7 @@ async function parseWorkbook(buffer: ArrayBuffer): Promise<{ headers: string[]; 
       ) }))
     .filter((row) => row.cells.some((cell) => cell.trim()));
   if (rows.length < 2 || rows.length > MAX_ROWS + 1) {
-    throw new Error("헤더와 1~1,000개 데이터 행이 필요합니다.");
+    throw new Error(rows.length > MAX_ROWS + 1 ? OVER_LIMIT_MESSAGE : "제목 줄과 데이터 행이 1개 이상 필요합니다.");
   }
   const head = rows.shift()?.cells ?? [];
   return { headers: head, rows };
@@ -300,16 +314,23 @@ function normalizePhone(value: string): string {
   return digits;
 }
 
+// Korean mobile numbers: 01 + one digit + 7~8 digits (10~11 digits in all).
+function isKoreanMobile(digits: string): boolean {
+  return /^01[016789]\d{7,8}$/.test(digits);
+}
+
 function validateRows(
   dataRows: ImportRow[],
   map: ImportMap,
-  extra?: ExtraImport
+  extra?: ExtraImport,
+  groupColumn = ""
 ): ImportPreview {
   const valid: ValidRow[] = [];
   const errors: RowError[] = [];
   const phoneReview: PhoneReview[] = [];
   const emailReview: EmailReview[] = [];
-  const seen = new Set<string>();
+  const phoneCheck: PhoneCheck[] = [];
+  const seen = new Map<string, number>();
   dataRows.forEach(({ cells: cols, line }) => {
     const get = (key: keyof ImportMap) =>
       map[key] === "" ? "" : (cols[Number(map[key])] ?? "").trim();
@@ -320,6 +341,7 @@ function validateRows(
     const phone = normalizePhone(rawPhone);
     const email = get("email");
     const company = get("company");
+    const group = groupColumn ? (cols[Number(groupColumn)] ?? "").trim() : "";
     if (!name) {
       errors.push({ row: line, reason: "이름을 입력하세요" });
       return;
@@ -340,6 +362,10 @@ function validateRows(
       errors.push({ row: line, reason: `소속이 200자를 초과합니다(${company.length}자)` });
       return;
     }
+    if (group.length > MAX_GROUP) {
+      errors.push({ row: line, reason: `그룹이 ${MAX_GROUP}자를 초과합니다(${group.length}자)` });
+      return;
+    }
     // Answers for the extra form fields this file carries. A field with no
     // column is left out entirely (never "required"), so a form field the file
     // does not include cannot block every row.
@@ -356,19 +382,23 @@ function validateRows(
         if (result.value !== "") collected[field.id] = result.value;
       }
     }
-    if (seen.has(phone)) {
-      errors.push({ row: line, reason: "파일 안에서 연락처가 중복됩니다" });
+    const firstLine = seen.get(phone);
+    if (firstLine !== undefined) {
+      errors.push({ row: line, reason: `파일 ${firstLine}행과 같은 연락처입니다` });
       return;
     }
-    seen.add(phone);
-    valid.push({ name, phone, email, company, line, ...(Object.keys(collected).length ? { answers: collected } : {}) });
+    seen.set(phone, line);
+    valid.push({ name, phone, email, company, line, ...(group ? { group } : {}), ...(Object.keys(collected).length ? { answers: collected } : {}) });
     // A spreadsheet drops the first 0 of a numeric cell. The number is restored
     // and listed so the operator can see exactly what changed (never silent).
     if (phone !== rawPhone.replace(/\D/g, "")) phoneReview.push({ row: line, name, phone, raw: rawPhone });
+    // A number outside the Korean mobile shape (for example 010-1234-56, nine
+    // digits) is registered like a malformed email and listed for a check.
+    if (!isKoreanMobile(phone)) phoneCheck.push({ row: line, name, phone });
     // A malformed email does not block registration; the roster flags it for review.
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) emailReview.push({ row: line, name, email });
   });
-  return { valid, errors, phoneReview, emailReview };
+  return { valid, errors, phoneReview, emailReview, phoneCheck };
 }
 
 function downloadCsv(filename: string, rows: string[][]) {
@@ -413,6 +443,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
   const [fileKind, setFileKind] = useState<"csv" | "txt" | null>(null);
   const [map, setMap] = useState<ImportMap>({ ...EMPTY_MAP });
   const [extraMap, setExtraMap] = useState<ExtraMap>({});
+  const [groupColumn, setGroupColumn] = useState("");
   const extraFields = gate.kind === "ready" ? gate.extraFields : NO_EXTRA_FIELDS;
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [, setPhoneReviewed] = useState(false);
@@ -466,6 +497,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
     setFileName(null);
     setMap({ ...EMPTY_MAP });
     setExtraMap({});
+    setGroupColumn("");
     setPreview(null);
     setPhoneReviewed(false);
     setErrorsOpen(false);
@@ -601,16 +633,18 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
         const parsed = await parseWorkbook(await file.arrayBuffer());
         if (fileReadIdRef.current !== readId) return;
         if (!parsed.rows.length || parsed.rows.length > MAX_ROWS) {
-          throw new Error("1~1,000개 데이터 행이 필요합니다.");
+          throw new Error(parsed.rows.length > MAX_ROWS ? OVER_LIMIT_MESSAGE : "데이터 행이 1개 이상 필요합니다.");
         }
         const next = detectColumns(parsed.headers, parsed.rows);
-        const nextExtra = detectExtraColumns(parsed.headers, extraFields, new Set(Object.values(next).filter(Boolean)));
+        const nextGroup = detectGroupColumn(parsed.headers, new Set(Object.values(next).filter(Boolean)));
+        const nextExtra = detectExtraColumns(parsed.headers, extraFields, new Set([...Object.values(next).filter(Boolean), nextGroup].filter(Boolean)));
         setHeaders(parsed.headers);
         setDataRows(parsed.rows);
         setFileKind("csv");
         setMap(next);
         setExtraMap(nextExtra);
-        previewFor(parsed.rows, next, nextExtra);
+        setGroupColumn(nextGroup);
+        previewFor(parsed.rows, next, nextExtra, nextGroup);
         setFileName(file.name);
         return;
       }
@@ -620,7 +654,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
       if (looksTxt) {
         const parsed = parseTxt(text);
         if (!parsed.rows.length || parsed.rows.length > MAX_ROWS) {
-          throw new Error("1~1,000개 데이터 행이 필요합니다.");
+          throw new Error(parsed.rows.length > MAX_ROWS ? OVER_LIMIT_MESSAGE : "데이터 행이 1개 이상 필요합니다.");
         }
         setHeaders(parsed.headers);
         setDataRows(parsed.rows);
@@ -628,22 +662,25 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
         const txtMap = { name: "0", phone: "1", email: "2", company: "3" };
         setMap(txtMap);
         setExtraMap({});
-        previewFor(parsed.rows, txtMap, {});
+        setGroupColumn("");
+        previewFor(parsed.rows, txtMap, {}, "");
         setFileName(file.name);
       } else {
         const rows = parseCsv(text);
         if (rows.length < 2 || rows.length > MAX_ROWS + 1) {
-          throw new Error("헤더와 1~1,000개 데이터 행이 필요합니다.");
+          throw new Error(rows.length > MAX_ROWS + 1 ? OVER_LIMIT_MESSAGE : "제목 줄과 데이터 행이 1개 이상 필요합니다.");
         }
         const head = rows.shift()?.cells ?? [];
         const next = detectColumns(head, rows);
-        const nextExtra = detectExtraColumns(head, extraFields, new Set(Object.values(next).filter(Boolean)));
+        const nextGroup = detectGroupColumn(head, new Set(Object.values(next).filter(Boolean)));
+        const nextExtra = detectExtraColumns(head, extraFields, new Set([...Object.values(next).filter(Boolean), nextGroup].filter(Boolean)));
         setHeaders(head);
         setDataRows(rows);
         setFileKind("csv");
         setMap(next);
         setExtraMap(nextExtra);
-        previewFor(rows, next, nextExtra);
+        setGroupColumn(nextGroup);
+        previewFor(rows, next, nextExtra, nextGroup);
         setFileName(file.name);
       }
     } catch (error) {
@@ -661,7 +698,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
     }
   }
 
-  function previewFor(rows: ImportRow[], nextMap: ImportMap, nextExtra: ExtraMap) {
+  function previewFor(rows: ImportRow[], nextMap: ImportMap, nextExtra: ExtraMap, nextGroup: string) {
     setPhoneReviewed(false);
     setErrorsOpen(false);
     if (nextMap.name === nextMap.phone && nextMap.name !== "") {
@@ -670,12 +707,12 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
       return;
     }
     setFileError(null);
-    setPreview(validateRows(rows, nextMap, extraFields.length ? { fields: extraFields, map: nextExtra } : undefined));
+    setPreview(validateRows(rows, nextMap, extraFields.length ? { fields: extraFields, map: nextExtra } : undefined, nextGroup));
   }
 
-  function buildPreview(nextMap: ImportMap, nextExtra: ExtraMap) {
+  function buildPreview(nextMap: ImportMap, nextExtra: ExtraMap, nextGroup: string = groupColumn) {
     if (importLocked || fileReadingRef.current) return;
-    previewFor(dataRows, nextMap, nextExtra);
+    previewFor(dataRows, nextMap, nextExtra, nextGroup);
   }
 
   async function commit() {
@@ -838,7 +875,18 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
     : null;
   const missingLabel = missingField === "name" ? "이름" : "연락처";
   const missingUse = missingField === "name" ? "이름으로" : "연락처로";
-  const usedColumns = new Set([...Object.values(map), ...Object.values(extraMap)].filter(Boolean));
+  const usedColumns = new Set([...Object.values(map), ...Object.values(extraMap), groupColumn].filter(Boolean));
+  // Columns the file has but no field reads: they are never imported, so the
+  // operator is told instead of finding them missing later. Fully empty
+  // columns are not worth a line.
+  const skippedColumns = headers && fileKind !== "txt"
+    ? headers.flatMap((head, index) => {
+        if (usedColumns.has(String(index))) return [];
+        const title = head.trim();
+        if (!title && !dataRows.some((row) => (row.cells[index] ?? "").trim())) return [];
+        return [title || `열 ${index + 1}`];
+      })
+    : [];
   // Required form fields the file has no column for: their answer stays empty.
   const unmappedRequired = extraFields.filter((field) => field.required && !extraMap[field.id]);
   const reviewing = Boolean(headers && preview && !missingField);
@@ -854,7 +902,9 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
     const hit = suggestCompany(from, companyCounts);
     return hit ? [{ from, to: hit.company, rows: fileCompanyCounts.get(from) ?? 0, toCount: hit.count }] : [];
   });
-  const cleanCount = preview ? preview.valid.length - preview.emailReview.length : 0;
+  // A row can need both an email and a phone check; it counts once.
+  const checkCount = preview ? new Set([...preview.emailReview.map((item) => item.row), ...preview.phoneCheck.map((item) => item.row)]).size : 0;
+  const cleanCount = preview ? preview.valid.length - checkCount : 0;
   const commitDisabled = committing || checkingImport || otherImportReceipt || !preview?.valid.length || stageBlocked;
 
   function changeColumn(field: keyof ImportMap, value: string) {
@@ -863,10 +913,27 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
     buildPreview(next, extraMap);
   }
 
+  function changeGroupColumn(value: string) {
+    setGroupColumn(value);
+    buildPreview(map, extraMap, value);
+  }
+
   function changeExtraColumn(fieldId: string, value: string) {
     const next = { ...extraMap, [fieldId]: value };
     setExtraMap(next);
     buildPreview(map, next);
+  }
+
+  // The excluded rows with their original cells and the reason, so the operator
+  // can fix them in the same file layout and import them again.
+  function downloadExcludedRows() {
+    if (!preview || !headers) return;
+    const reasons = new Map(preview.errors.map((item) => [item.row, item.reason]));
+    const body = dataRows.filter((row) => reasons.has(row.line)).map((row) => [
+      ...headers.map((_, index) => row.cells[index] ?? ""),
+      reasons.get(row.line) ?? "",
+    ]);
+    downloadCsv("가져오기_제외된_행.csv", [[...headers, "제외 사유"], ...body]);
   }
 
   const listHref = `/console/events/${encodeURIComponent(eventId)}/participants`;
@@ -958,8 +1025,14 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
                     }}
                   />
                 </label>
-                <p className={styles.fileMeta}>
-                  <span>CSV·TXT·XLS·XLSX · 최대 1MB, 1,000행. 첫 행은 제목 줄로 읽습니다. TXT는 한 줄에 한 명: 이름, 연락처, 이메일(선택), 소속(선택). 이메일이 없으면 쉼표·탭으로 구분하고 이메일 칸을 비우세요(예: 홍길동,01012345678,,회사명). 띄어쓰기만으로는 소속을 구분할 수 없습니다.</span>
+                <div className={styles.fileMeta}>
+                  <div>
+                    엑셀(XLS·XLSX)과 CSV 파일을 읽어요. 최대 1MB, 1,000행이고 첫 행은 제목 줄로 읽습니다. 이름·연락처·이메일·소속·그룹 열은 제목으로 찾아 연결합니다.
+                    <details className={styles.txtRules}>
+                      <summary>TXT 파일로 가져오려면</summary>
+                      TXT는 한 줄에 한 명: 이름, 연락처, 이메일(선택), 소속(선택). 이메일이 없으면 쉼표·탭으로 구분하고 이메일 칸을 비우세요(예: 홍길동,01012345678,,회사명). 띄어쓰기만으로는 소속을 구분할 수 없습니다.
+                    </details>
+                  </div>
                   <ProductButton
                     type="button"
                     variant="ghost"
@@ -975,7 +1048,7 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
                   >
                     양식 CSV 받기
                   </ProductButton>
-                </p>
+                </div>
               </>
             )}
           </ConsoleSection>
@@ -1011,14 +1084,14 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
                 <div className={styles.hero} data-empty={preview.valid.length ? undefined : "true"} role="status">
                   <h3 className={styles.heroLabel}>{preview.valid.length ? "등록할 수 있어요" : "등록할 수 있는 행이 없어요"}</h3>
                   <p className={styles.heroNumber}><b>{preview.valid.length}</b><span>명</span></p>
-                  <div className={styles.bar} role="img" aria-label={`바로 등록 ${cleanCount}명, 등록 후 확인 ${preview.emailReview.length}명, 제외 ${preview.errors.length}행`}>
+                  <div className={styles.bar} role="img" aria-label={`바로 등록 ${cleanCount}명, 등록 후 확인 ${checkCount}명, 제외 ${preview.errors.length}행`}>
                     {cleanCount ? <i data-kind="clean" style={{ flexGrow: cleanCount }} /> : null}
-                    {preview.emailReview.length ? <i data-kind="check" style={{ flexGrow: preview.emailReview.length }} /> : null}
+                    {checkCount ? <i data-kind="check" style={{ flexGrow: checkCount }} /> : null}
                     {preview.errors.length ? <i data-kind="skip" style={{ flexGrow: preview.errors.length }} /> : null}
                   </div>
                   <p className={styles.legend}>
                     <span data-kind="clean">바로 등록<b>{cleanCount}</b></span>
-                    <span data-kind="check">등록 후 확인<b>{preview.emailReview.length}</b></span>
+                    <span data-kind="check">등록 후 확인<b>{checkCount}</b></span>
                     <span data-kind="skip">제외<b>{preview.errors.length}</b></span>
                   </p>
                 </div>
@@ -1074,6 +1147,17 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
                   </div>
                 ) : null}
 
+                {preview.phoneCheck.length ? (
+                  <div className={styles.notice} data-tone="check">
+                    <h4>연락처 {preview.phoneCheck.length}건은 휴대폰 번호 형식이 아니에요</h4>
+                    <p>숫자 자리가 모자라거나 휴대폰 번호(01로 시작하는 10~11자리)가 아닙니다. 참가자는 그대로 등록하니, 번호가 맞는지 확인하세요. 틀렸다면 등록 후 참가자 상세에서 고칠 수 있습니다.</p>
+                    <ul className={styles.chips} aria-label="휴대폰 번호 형식이 아닌 연락처 목록">
+                      {preview.phoneCheck.slice(0, 5).map((item) => <li key={item.row}>파일 {item.row}행 · {item.name} <small>{formatPhone(item.phone)}</small></li>)}
+                    </ul>
+                    {preview.phoneCheck.length > 5 ? <p className={styles.moreNote}>외 {preview.phoneCheck.length - 5}건</p> : null}
+                  </div>
+                ) : null}
+
                 {companySuggestions.length ? (
                   <fieldset className={styles.notice} data-tone="check">
                     <legend><h4>비슷한 소속 {companySuggestions.length}건이 있어요</h4></legend>
@@ -1098,6 +1182,9 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
                     <p>오류 행은 제외되며 원본 파일에서 수정 후 다시 가져올 수 있습니다.</p>
                     <ProductButton type="button" variant="ghost" aria-expanded={errorsOpen} aria-controls="participant-import-errors" onClick={() => setErrorsOpen((open) => !open)}>
                       {errorsOpen ? "오류 행 접기" : `오류 ${preview.errors.length}행 보기`}
+                    </ProductButton>
+                    <ProductButton type="button" variant="ghost" icon={<DownloadIcon />} onClick={() => downloadExcludedRows()}>
+                      제외된 행 CSV로 받기
                     </ProductButton>
                     {errorsOpen ? (
                       <ul id="participant-import-errors" className={styles.errorList} aria-label="가져오기 오류 목록">
@@ -1132,6 +1219,22 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
                       </select>
                     </label>
                   ))}
+                  {fileKind !== "txt" ? (
+                    <label className={styles.mapChip} data-empty={groupColumn ? undefined : "true"}>
+                      <span>그룹</span>
+                      <select
+                        aria-label="그룹에 연결할 열"
+                        value={groupColumn}
+                        disabled={importLocked}
+                        onChange={(event) => changeGroupColumn(event.target.value)}
+                      >
+                        <option value="">사용 안 함</option>
+                        {headers.map((head, index) => (
+                          <option key={index} value={String(index)}>{head || `열 ${index + 1}`}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
                   {fileKind !== "txt" ? extraFields.map((field) => (
                     <label key={`extra-${field.id}`} className={styles.mapChip} data-empty={extraMap[field.id] ? undefined : "true"}>
                       <span>{field.label}</span>
@@ -1149,6 +1252,9 @@ export default function ImportWizard({ eventId, onDismiss, onCommitted, knownCom
                     </label>
                   )) : null}
                 </div>
+                {skippedColumns.length ? (
+                  <p className={styles.mapNote}>가져오지 않는 열 {skippedColumns.length}개: {skippedColumns.slice(0, 8).join(", ")}{skippedColumns.length > 8 ? ` 외 ${skippedColumns.length - 8}개` : ""}. 이 열의 내용은 등록되지 않습니다.</p>
+                ) : null}
                 {unmappedRequired.length ? (
                   <ConsoleFeedback kind="info">
                     필수 신청 항목 {unmappedRequired.map((field) => field.label).join("·")}은(는) 연결된 열이 없어 가져온 참가자의 답이 비어 있습니다. 파일에 같은 제목의 열을 넣거나, 가져온 뒤 참가자 정보에서 채울 수 있습니다.

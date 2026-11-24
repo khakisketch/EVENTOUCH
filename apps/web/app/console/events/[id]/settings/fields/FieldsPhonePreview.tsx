@@ -77,7 +77,7 @@ export default function FieldsPhonePreview({ eventName, publishedFields, draftFi
     <div className={styles.previewRail}>
       <div className={styles.previewHead}>
         <p className={styles.previewCaption}>참가자 신청 화면 미리보기</p>
-        <small className={styles.phoneStatus}>{isPublished ? `게시 ${publishedVersion}차` : "게시 전 초안"}</small>
+        <small className={styles.phoneStatus}>{isPublished ? `게시됨 ${publishedVersion}회` : "아직 게시 전"}</small>
       </div>
       <nav className={styles.previewModes} aria-label="신청서 미리보기 선택">
         <ProductButton type="button" variant="ghost" aria-pressed={isPublished} onClick={() => setMode("published")}>현재 게시본</ProductButton>
@@ -187,7 +187,7 @@ export default function FieldsPhonePreview({ eventName, publishedFields, draftFi
       <p className={styles.previewNote}>
         {isPublished
           ? publishedFields && publishedVersion > 0 ? "참가자에게 현재 공개된 항목과 순서입니다." : "현재 게시본을 사용할 수 없습니다."
-          : `초안 버전 ${draftVersion} · 저장 전 입력도 표시합니다.`}
+          : `저장된 수정 ${draftVersion}건 · 저장 전 입력도 표시합니다.`}
       </p>
     </div>
   );

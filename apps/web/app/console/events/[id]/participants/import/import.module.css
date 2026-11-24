@@ -232,6 +232,7 @@
 /* Column match: chips that are the selects. A chip says the field and the
    file column it reads; pressing it changes the column in place. */
 .mapLine { margin-top: var(--s4); padding-top: var(--s3); border-top: 1px solid var(--line); }
+.mapNote { margin: var(--s3) 0 0; color: var(--muted); font-size: var(--small); line-height: 1.55; word-break: keep-all; overflow-wrap: break-word; }
 .mapTitle { margin: 0 0 var(--s2); color: var(--muted); font-size: var(--small); font-weight: var(--fw-strong); letter-spacing: 0.02em; }
 .mapChips { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .mapChip {
@@ -323,3 +324,6 @@ fieldset.notice > legend + * { clear: both; }
    role but show a border, so 양식 CSV 받기 and 참가자 목록으로 read as buttons. */
 .outlinedAction { min-height: 44px; padding-inline: var(--s3); border: 1px solid var(--line-strong); border-radius: var(--r-ctl); background: var(--surface-work); }
 .outlinedAction:hover { background: var(--surface-muted); }
+
+.txtRules { margin-top: var(--s2); }
+.txtRules summary { cursor: pointer; color: var(--muted); font-weight: var(--fw-strong); min-height: 44px; display: flex; align-items: center; }

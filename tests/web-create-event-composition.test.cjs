@@ -30,7 +30,7 @@ test("name, date, time and customer are all up front; the rest folds into extra 
 test("the name is a title input with an address line; the removed progress format is gone", () => {
   assert.match(dialog, /className=\{styles\.createTitle\}/u);
   assert.match(dialog, /placeholder="행사 이름"/u);
-  assert.match(dialog, /참가자 주소 <strong>\/event\/\{addressSlug\}<\/strong>/u);
+  assert.match(dialog, /참가자 페이지 주소 <strong>\/event\/\{addressSlug\}<\/strong>/u);
   // The address line shows while typing (not on blur) so it never shifts the
   // form under a click on the fold's summary; the shown code is the sent one.
   assert.match(dialog, /const addressSlug = slug \|\| \(name\.trim\(\) \? suggestedSlug\(name, fallbackSlugRef\.current\) : ""\)/u);
@@ -67,4 +67,29 @@ test("the mode choice is a segmented bar over native radios and the dialog keeps
   assert.match(css, /\.quickPick label:has\(:checked\)\s*\{[^}]*background:\s*var\(--ink\)/su, "selected chips are ink, not orange");
   assert.doesNotMatch(css.slice(css.indexOf(".quickPick {"), css.indexOf(".createFlag {")), /var\(--brand\)/u);
   assert.match(css, /\.createForm \.createTitle\s*\{[^}]*border-bottom:\s*2px solid/su, "the title input has no box");
+});
+
+// Reopened 2026-11-24 (전수 점검 P6): a name that starts with a year made
+// /event/2027, and a three-letter piece made a guessable address. Short or
+// all-digit pieces now fall back to the random code; the retry rule is unchanged.
+test("the suggested address is a random code when the Latin piece is short or digits only", () => {
+  const vm = require("node:vm");
+  const ts = require(path.join(__dirname, "..", "apps", "web", "node_modules", "typescript"));
+  const tree = ts.createSourceFile("CreateEventDialog.tsx", dialog, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let source = "";
+  (function visit(node) {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === "suggestedSlug") source = node.getText(tree);
+    ts.forEachChild(node, visit);
+  })(tree);
+  assert.ok(source, "suggestedSlug exists");
+  const box = {};
+  vm.runInNewContext(`${ts.transpileModule(source, { compilerOptions: { target: "ES2020" } }).outputText}\nglobalThis.f = suggestedSlug;`, box);
+  const slug = box.f;
+  assert.equal(slug("2027 파트너 컨퍼런스", "event-x7k2"), "event-x7k2");
+  assert.equal(slug("AI 포럼", "event-x7k2"), "event-x7k2");
+  assert.equal(slug("2027", "event-x7k2"), "event-x7k2");
+  assert.equal(slug("Partner Conf 2027", "event-x7k2"), "partner-conf-2027");
+  assert.equal(slug("2027 Partner Day", "event-x7k2"), "2027-partner-day");
+  assert.match(dialog, /참가자 페이지 주소 코드/u);
+  assert.match(dialog, /ref=\{formFailureRef\}/u, "a failure with no field is shown at the top of the form and scrolled into view");
 });

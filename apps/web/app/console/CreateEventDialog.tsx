@@ -60,7 +60,9 @@ function suggestedSlug(name: string, fallback: string): string {
     .replace(/[^a-z0-9-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 30);
-  if (attempt.length >= 3) return attempt;
+  // A short or all-digit piece ("2027 …" becomes "2027", "AI 포럼" becomes "ai")
+  // makes a poor, guessable address; those names get the random code instead.
+  if (attempt.length >= 4 && /[a-z]/.test(attempt)) return attempt;
   return fallback;
 }
 
@@ -267,6 +269,10 @@ export default function CreateEventDialog({
   // fire two fetches. Shared dialog dismissal consults the same ref.
   const submitGateRef = useRef(false);
   const nameRef = useRef<HTMLInputElement>(null);
+  // A failure that names no field (a server refusal such as missing
+  // permission) sits at the top of the form; bring it into view so it is
+  // not hidden under a long form or a sticky footer.
+  const formFailureRef = useRef<HTMLParagraphElement>(null);
   const initialFields = useRef(JSON.stringify([name, slug, clientId, date, start, end, capacity]));
   const dirty = JSON.stringify([name, slug, clientId, date, start, end, capacity]) !== initialFields.current;
   // The last applied prefill (or the blank draft) is the baseline a mode or
@@ -529,6 +535,17 @@ export default function CreateEventDialog({
       setSubmitting(false);
     }
   }
+
+  useEffect(() => {
+    if (!failure || failure.field) return;
+    const frame = requestAnimationFrame(() => {
+      const note = formFailureRef.current;
+      if (!note) return;
+      note.scrollIntoView({ block: "nearest" });
+      note.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [failure]);
 
   useEffect(() => {
     if (!failure?.field) return;
@@ -859,6 +876,7 @@ export default function CreateEventDialog({
           {otherClientReceipt || otherEventReceipt ? <p role="alert">이전 생성·저장 요청을 먼저 확인하세요. 창을 닫으면 상단에서 서버 처리 여부를 확인할 수 있습니다.</p> : null}
           {pendingClientRef.current ? <p role="alert">고객사 등록 결과를 먼저 확인하세요. 추가 설정에서 고객사 등록 화면으로 돌아갈 수 있습니다.</p> : null}
           <div className={styles.createMain}>
+          {failure && !failure.field ? <p role="alert" ref={formFailureRef} tabIndex={-1}>{failure.message}</p> : null}
           {eventUncertain ? <p role="status">결과를 확인할 때까지 원래 입력 내용을 유지합니다.</p> : null}
           {canOfferCopy ? (
             <fieldset className={styles.modeGroup} disabled={submitting || clientSaving || eventUncertain || checkingResult}>
@@ -936,7 +954,7 @@ export default function CreateEventDialog({
             ) : null}
             {addressSlug ? (
               <p className={styles.createAddr}>
-                참가자 주소 <strong>/event/{addressSlug}</strong>
+                참가자 페이지 주소 <strong>/event/{addressSlug}</strong>
                 <button type="button" className={styles.addrChange} disabled={submitting || checkingResult || eventUncertain} onClick={() => {
                   setAdvancedOpen(true);
                   requestAnimationFrame(() => document.getElementById("create-slug")?.focus());
@@ -1039,7 +1057,7 @@ export default function CreateEventDialog({
             </div>
           )}
           <details data-create-settings className={styles.createAdvanced} open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}>
-            <summary>추가 설정 <span className={styles.slugHint}>시간 직접 입력 · 정원 · 주소</span></summary>
+            <summary>추가 설정 <span className={styles.slugHint}>시간 직접 입력 · 정원 · 참가자 페이지 주소</span></summary>
             <div className={ui.formStack}>
               <div className={ui.formGrid}>
                 <div>
@@ -1090,7 +1108,7 @@ export default function CreateEventDialog({
                 {invalid("capacity") ? <p role="alert">{failure?.message}</p> : null}
               </div>
               <div>
-                <label htmlFor="create-slug">주소 코드</label>
+                <label htmlFor="create-slug">참가자 페이지 주소 코드</label>
                 <input
                   id="create-slug"
                   type="text"
@@ -1111,7 +1129,6 @@ export default function CreateEventDialog({
               </div>
             </div>
           </details>
-          {failure && !failure.field ? <p role="alert">{failure.message}</p> : null}
           </div>
           <aside className={styles.createSummary} aria-label="만들어질 행사">
             <h4 className={styles.createSummaryHead}>만들어질 행사</h4>

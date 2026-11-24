@@ -79,7 +79,13 @@ test('intake reads as a status band plus the participant form', () => {
   // The publish button stays visible because application fields change on
   // their own page: even a clean consent may need a publish (a version
   // conflict then surfaces in review). Unpublished edits rename it 변경 게시.
-  assert.match(workspace, /!state\.registrationOpen \? "양식 게시·접수 열기" : intakeDirty \? "변경 게시" : "양식 게시·접수 열기"/u);
+  // Reopened 2026-11-24 (전수 점검 P5): in 기획 the intake stays closed after a
+  // publish, so the button is "양식 게시" and the band says "접수 대기"; an open
+  // intake with nothing changed offers "양식 다시 게시" instead of repeating 열기.
+  assert.match(workspace, /\? \(intakeWaiting && intakeDirty \? "변경 게시" : "양식 게시"\)/u);
+  assert.match(workspace, /!state\.registrationOpen \? "양식 게시·접수 열기" : intakeDirty \? "변경 게시" : "양식 다시 게시"/u);
+  assert.match(workspace, /양식 게시됨 · 접수 대기 \(행사 단계를 운영 준비로 바꾸면 열립니다\)/u);
+  assert.match(workspace, /hint: intakeWaiting \? "양식 게시됨 · 접수 대기"/u);
   assert.match(workspace, /void runCommand\("form\.close"/u);
 });
 
