@@ -816,12 +816,24 @@
 .historyFilters input::placeholder { color: var(--muted); opacity: 1; }
 .historyFilters > span { color: var(--ink); font-size: var(--small); font-weight: var(--fw-strong); font-variant-numeric: tabular-nums; }
 .historyDetails { border: 0; }
-.historyDetails > summary { font-size: var(--small); }
+/* Reopened 2026-11-24 (M11): the fold control reads as a plain link button, not an accent-colored label. */
+.historyDetails > summary { font-size: var(--small); color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+/* The destructive action stays well away from 상세 so a tap on one cannot land on the other. */
+.campaignActions [data-product-variant="destructive"] { margin-inline: var(--s3); }
+.scheduledBody { display: grid; gap: var(--s2); }
+.scheduledBody h4 { margin: 0; font-size: var(--small); }
+.scheduledBody .finalBody { margin: 0; padding: var(--s3); border: 1px solid var(--line); border-radius: var(--radius-medium); background: var(--paper); }
+.manualRunNote { margin: var(--s2) 0 0; color: var(--ink); font-size: var(--small); word-break: keep-all; overflow-wrap: break-word; }
+.manualRunNote strong { font-weight: var(--fw-strong); }
 .historyScroll { min-width: 0; border-block: 1px solid var(--line); background: var(--paper); }
-.historyTable { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--small); font-variant-numeric: tabular-nums; }
+.historyTable { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: var(--small); font-variant-numeric: tabular-nums; }
 .historyTable th, .historyTable td { text-align: left; vertical-align: middle; padding: var(--s2) var(--s3); border-bottom: 1px solid var(--line); }
 .historyTable th { background: var(--surface-muted); color: var(--muted); font-size: var(--label); font-weight: var(--fw-strong); letter-spacing: .06em; white-space: nowrap; }
-.historyTable th:first-child { width: 24%; }
+.historyTable th:first-child { width: 22%; }
+.historyTable th:nth-child(2) { width: 12%; }
+.historyTable th:nth-child(3) { width: 9%; }
+.historyTable th:nth-child(4) { width: 17%; }
+.historyTable th:nth-child(5) { width: 18%; }
 .historyIdentity { min-width: 0; }
 .historyIdentity h3 { margin: 0; font-family: var(--body-font); font-size: var(--body-work); font-weight: var(--fw-strong); overflow-wrap: anywhere; }
 .historyIdentity small, .historyTime small { display: block; margin-top: var(--s1); color: var(--muted); font-size: var(--label); }
@@ -1384,7 +1396,8 @@
 .sendArea { display: grid; gap: var(--s3); margin-top: var(--s5); padding-top: var(--s4); border-top: 1px solid var(--line); }
 .sendArea .simulateOption { margin: 0; }
 .sendMeta { display: grid; gap: var(--s2); min-width: 0; }
-.sendDock { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; justify-content: flex-end; gap: var(--s2); padding: var(--s3) 0 max(var(--s3), env(safe-area-inset-bottom, 0px)); background: var(--paper); }
+.sendDockReason { flex: 1 1 100%; text-align: right; margin: 0; color: var(--muted); font-size: var(--small); word-break: keep-all; }
+.sendDock { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s2); padding: var(--s3) 0 max(var(--s3), env(safe-area-inset-bottom, 0px)); background: var(--paper); }
 .previewOpen { display: none; min-height: var(--control-min-size); padding: 0 var(--s4); border: 1px solid var(--line-strong); border-radius: var(--r-ctl); background: var(--paper); color: var(--ink); font: inherit; font-size: var(--text-md); font-weight: var(--fw-strong); cursor: pointer; }
 .previewOpen:focus-visible, .previewClose:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
@@ -1419,3 +1432,10 @@
   .keepTogether { white-space: normal; }
   .pill { max-width: 100%; text-align: left; line-height: var(--lh-tight); padding-block: var(--s2); }
 }
+
+/* Reopened 2026-11-24 (M10): variable chips under the template body insert at the caret. */
+.varChips { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s2); }
+.varChip { min-height: 44px; padding: 0 var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius-medium); background: var(--paper); color: var(--ink); font: inherit; font-size: var(--small); font-weight: var(--fw-strong); cursor: pointer; }
+.varChip:hover:not(:disabled) { background: var(--surface-muted); }
+.varChip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.varChip:disabled { cursor: not-allowed; opacity: .6; }

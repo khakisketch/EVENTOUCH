@@ -60,7 +60,7 @@ test('nonempty composer input requires an in-place overwrite confirm first', () 
   assert.match(SOURCE, /setReloadPending\(\{ id: campaign\.id \}\)/u);
   assert.match(SOURCE, /작성 중인 발송 내용·선택이 교체됩니다/u);
   assert.match(SOURCE, /바로 발송되지 않습니다/u);
-  assert.match(SOURCE, /confirmLabel="불러온다"/u);
+  assert.match(SOURCE, /confirmLabel="불러오기"/u);
   assert.match(SOURCE, /<ConsoleConfirm/u);
   assert.match(SOURCE, /onConfirm=\{\(\) => applyFailedReload\(campaign\)\}/u);
   assert.match(SOURCE, /onCancel=\{\(\) => setReloadPending\(null\)\}/u);
@@ -206,7 +206,7 @@ test('overwrite confirm stays disabled while any action or upload runs', () => {
   const failedBlockStart = SOURCE.indexOf('{reloadable ? (');
   assert.ok(failedBlockStart !== -1, 'expected the reloadable details');
   const failedBlock = SOURCE.slice(failedBlockStart, failedBlockStart + 2400);
-  assert.match(failedBlock, /confirmLabel="불러온다"/u);
+  assert.match(failedBlock, /confirmLabel="불러오기"/u);
   assert.match(failedBlock, /busy=\{busyAction !== null \|\| uploadingImage\}/u);
   assert.doesNotMatch(failedBlock, /busy=\{false\}/u);
 });

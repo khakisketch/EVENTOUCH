@@ -36,6 +36,7 @@ import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import { consoleFetch, subscribeConsoleFreshness } from "../../../../../lib/console-api";
 import { hasValidScheduledInstant, isOverdueManualMessage, messageNeedsAttention } from "../../../../../lib/message-attention";
 import { canWriteEvent } from "../../../../../lib/event-capabilities";
+import { fitImage, formatImageBytes } from "../../../../../lib/image-fit";
 import { abandonOperatorAttempt, acknowledgeOperatorReceipt, confirmsCharsetReviewedMessageCreate, confirmsProviderCheck, confirmsTemplateSave, confirmsTemplateArchive, isOrganizationContextBlock } from "../../../../../lib/operator-context";
 import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib/operator-receipts";
 import { useEventReceipts } from "../../../../../lib/use-event-receipts";
@@ -43,6 +44,9 @@ import uiStyles from "../../../console-ui/console-ui.module.css";
 import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, PencilIcon, PlusIcon, XIcon } from "../../../console-ui/ConsoleIcons";
 import AutoNotifyPanel, { type AutoNotifyRules } from "./AutoNotifyPanel";
 import styles from "./MessagingWorkspace.module.css";
+
+// Provider MMS photo limit (JPEG). Photos above it are shrunk in the browser first.
+const MMS_IMAGE_MAX_BYTES = 200000;
 
 type Template = {
   id: string;
@@ -275,7 +279,7 @@ const FIELD_LABELS: Record<string, string> = {
   name: "템플릿 이름",
   channel: "메시지 채널",
   body: "메시지 내용",
-  solapiTemplateId: "Solapi 승인 템플릿 ID",
+  solapiTemplateId: "공급사 승인 ID",
   title: "발송 제목",
   templateId: "승인된 알림톡 템플릿",
   imageFileId: "첨부 이미지",
@@ -438,21 +442,26 @@ function campaignCreateSummary(args: {
   scheduleStatus: string;
   scheduleMode: "MANUAL" | "AUTO";
   smsFallback: boolean;
+  bodyFirstLine?: string;
 }): string {
+  // One block so the operator sees who gets what before the long notices: count, channel, first line.
+  const firstLine = (args.bodyFirstLine || "").trim();
+  const digest = `받는 사람 ${args.count}명 · ${channelLabel(args.isMms ? "MMS" : args.channel || "SMS")}${firstLine ? ` · “${firstLine.length > 40 ? `${firstLine.slice(0, 40)}…` : firstLine}”` : ""}\n`;
   const fallbackLine = args.channel === "ALIMTALK" && !args.simulate ? `\n${args.smsFallback ? ALIMTALK_FALLBACK_NOTICE : ALIMTALK_NO_FALLBACK_NOTICE}` : "";
   if (args.scheduled) {
-    const execution = args.simulate
+    const manualRun = args.simulate || args.scheduleMode !== "AUTO";
+    const execution = `${manualRun ? "예약됨 · 직접 실행 필요\n" : ""}${args.simulate
       ? "모의 예약은 시각 이후 직접 실행하며, 실행해도 수신자에게 전달되지 않습니다."
-      : `${args.scheduleMode === "AUTO" ? "자동 실행" : "수동 실행"} · ${args.scheduleStatus} ${scheduleModeNotice(args.scheduleMode)} 발송 후에는 되돌릴 수 없습니다.`;
-    return `선택 ${args.count}명에게 ${args.simulate ? "모의 예약" : "예약"} 등록을 진행할까요?\n\n예약 시각: ${formatDate(args.scheduledAt)}\n${execution}${args.isMms && !args.simulate ? " MMS 사진 문자로 발송되며 별도 요금이 발생합니다." : ""}${args.riskLine}${fallbackLine}`;
+      : `${args.scheduleMode === "AUTO" ? "자동 실행" : "수동 실행"} · ${args.scheduleStatus} ${scheduleModeNotice(args.scheduleMode)} 발송 후에는 되돌릴 수 없습니다.`}`;
+    return `선택 ${args.count}명에게 ${args.simulate ? "모의 예약" : "예약"} 등록을 진행할까요?\n\n${digest}예약 시각: ${formatDate(args.scheduledAt)}\n${execution}${args.isMms && !args.simulate ? " MMS 사진 문자로 발송되며 별도 요금이 발생합니다." : ""}${args.riskLine}${fallbackLine}`;
   }
   if (args.simulate) {
-    return `선택 ${args.count}명에게 모의 발송 기록을 진행할까요?\n\n모의 발송은 실제로 전달되지 않습니다.${args.riskLine}${fallbackLine}`;
+    return `선택 ${args.count}명에게 모의 발송 기록을 진행할까요?\n\n${digest}모의 발송은 실제로 전달되지 않습니다.${args.riskLine}${fallbackLine}`;
   }
   if (args.isMms) {
-    return `선택 ${args.count}명에게 발송 요청을 진행할까요?\n\nMMS 사진 문자로 발송을 시도합니다. 별도 요금이 발생하며 발송은 되돌릴 수 없습니다.${args.riskLine}${fallbackLine}`;
+    return `선택 ${args.count}명에게 발송 요청을 진행할까요?\n\n${digest}MMS 사진 문자로 발송을 시도합니다. 별도 요금이 발생하며 발송은 되돌릴 수 없습니다.${args.riskLine}${fallbackLine}`;
   }
-  return `선택 ${args.count}명에게 발송 요청을 진행할까요?\n\n공급사가 연결되어 있으면 즉시 실제 발송을 시도합니다. 발송은 되돌릴 수 없습니다.${args.riskLine}${fallbackLine}`;
+  return `선택 ${args.count}명에게 발송 요청을 진행할까요?\n\n${digest}공급사가 연결되어 있으면 즉시 실제 발송을 시도합니다. 발송은 되돌릴 수 없습니다.${args.riskLine}${fallbackLine}`;
 }
 
 function retrySummary(campaign: Campaign, label: "retry" | "execute"): string {
@@ -655,16 +664,21 @@ function scheduledInstant(value: string): string | null {
   return Number.isFinite(instant.getTime()) ? instant.toISOString() : null;
 }
 
+// One readable date style for people (Reopened 2026-11-24, M12): "1월 15일 (금) 오후 6:00",
+// with the year only when it is not this year (Korea time).
+function formatHumanInstant(at: Date): string {
+  const part = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", ...options }).format(at);
+  const year = part({ year: "numeric" });
+  const thisYear = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", year: "numeric" }).format(new Date());
+  return `${year === thisYear ? "" : `${year} `}${part({ month: "long", day: "numeric", weekday: "short" })} ${part({ hour: "numeric", minute: "2-digit", hour12: true })}`;
+}
+
 function formatDate(value: string): string {
   if (!value) return "기록 시각 확인 중";
   if (!hasExplicitTimeZone(value)) return `시간대 미기록 · 원본 ${value} (확인 필요)`;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return `기록 시각 확인 필요 · 원본 ${value}`;
-  return `${new Intl.DateTimeFormat("ko-KR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Asia/Seoul",
-  }).format(date)} (한국 시간)`;
+  return formatHumanInstant(date);
 }
 
 function formatScheduledInput(value: string): string {
@@ -676,12 +690,7 @@ function formatScheduledInput(value: string): string {
 // "1월 15일 (금) 오후 6:00", with the year only when it is not this year (Korea time).
 function formatWhenShort(value: string): string {
   const instant = scheduledInstant(value);
-  if (!instant) return "";
-  const at = new Date(instant);
-  const part = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", ...options }).format(at);
-  const year = part({ year: "numeric" });
-  const thisYear = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", year: "numeric" }).format(new Date());
-  return `${year === thisYear ? "" : `${year} `}${part({ month: "long", day: "numeric", weekday: "short" })} ${part({ hour: "numeric", minute: "2-digit", hour12: true })}`;
+  return instant ? formatHumanInstant(new Date(instant)) : "";
 }
 
 function formatSavedSchedule(value: string): string {
@@ -871,14 +880,16 @@ class CommandFailure extends Error {
   }
 }
 
-function MessageWorkbench({ history, composer, templates, autoNotify, composerOpen, templateAttention }: { history: ReactNode; composer: ReactNode; templates: ReactNode; autoNotify: ReactNode; composerOpen: boolean; templateAttention: boolean }) {
+const TEMPLATE_VARIABLE_NAMES = ["이름", "행사명", "행사일", "티켓링크", "럭키번호"] as const;
+
+function MessageWorkbench({ history, composer, templates, autoNotify, composerOpen, templateAttention, onTabChange }: { history: ReactNode; composer: ReactNode; templates: ReactNode; autoNotify: ReactNode; composerOpen: boolean; templateAttention: boolean; onTabChange?: () => void }) {
   useEffect(() => { if (composerOpen) requestConsoleTask("history-heading"); }, [composerOpen]);
   return <>
     <div className={styles.inkTabs} hidden={composerOpen}><ConsoleSectionNav mode="tabs" label="메시지 업무" initialId="history-heading" items={[
       { id: "history-heading", label: "발송 기록" },
       { id: "templates-heading", label: templateAttention ? "템플릿 관리 · 확인 필요" : "템플릿 관리" },
       { id: "auto-notify-heading", label: "자동 안내" },
-    ]} /></div>
+    ]} onNavigate={onTabChange} /></div>
     {history}{composer}{templates}{autoNotify}
   </>;
 }
@@ -1299,15 +1310,29 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   // bytes never travel through the command path.
   async function uploadMmsImage(file: File) {
     if (inFlightRef.current || mmsUploadGateRef.current || (mmsUploadRef.current && mmsUploadRef.current.file !== file)) return;
-    if (file.size > 200 * 1024) {
-      setCampaignFieldError({ field: "imageFileId", message: "MMS 이미지는 JPG 200KB 이하만 가능합니다." });
-      return;
+    // Retrying the same upload reuses the already-fitted file and its command id.
+    let target = file;
+    if (!mmsUploadRef.current) {
+      mmsUploadGateRef.current = true;
+      setUploadingImage(true);
+      setCampaignFieldError(null);
+      try {
+        const fit = await fitImage(file, MMS_IMAGE_MAX_BYTES, { requireJpeg: true });
+        if (activeMessageEventRef.current !== eventId) return;
+        if ("error" in fit) {
+          const tooBig = fit.error.includes("줄이지 못") || fit.error.includes("너무 큽니다");
+          setCampaignFieldError({ field: "imageFileId", message: tooBig
+            ? `내 파일 ${formatImageBytes(file.size)} · ${formatImageBytes(MMS_IMAGE_MAX_BYTES)} 이하로 줄이지 못했습니다. 더 작은 사진을 선택해 주세요.`
+            : fit.error });
+          return;
+        }
+        target = fit.file;
+      } finally {
+        mmsUploadGateRef.current = false;
+        if (activeMessageEventRef.current === eventId) setUploadingImage(false);
+      }
     }
-    if (file.type !== "image/jpeg") {
-      setCampaignFieldError({ field: "imageFileId", message: "MMS 이미지는 JPG 형식을 사용하세요." });
-      return;
-    }
-    const attempt = mmsUploadRef.current ?? { eventId, file, commandId: commandId(), uncertain: false };
+    const attempt = mmsUploadRef.current ?? { eventId, file: target, commandId: commandId(), uncertain: false };
     mmsUploadRef.current = attempt;
     mmsUploadGateRef.current = true;
     setUploadingImage(true);
@@ -1699,7 +1724,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       templateDraft.channel !== editingTemplate.channel ||
       templateDraft.body !== editingTemplate.body ||
       templateDraft.solapiTemplateId !== editingTemplate.solapiTemplateId
-    : JSON.stringify(templateDraft) !== JSON.stringify(EMPTY_TEMPLATE);
+    // Reopened 2026-11-24 (M10): only typed values count as work in progress. Picking the 알림톡 radio alone does not.
+    : templateDraft.name !== EMPTY_TEMPLATE.name || templateDraft.body !== EMPTY_TEMPLATE.body || templateDraft.solapiTemplateId !== EMPTY_TEMPLATE.solapiTemplateId;
   const composeDirty =
     campaignDraft.title !== "" ||
     campaignDraft.body !== "" ||
@@ -2055,6 +2081,18 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     window.setTimeout(() => document.getElementById("recipient-status-filter")?.focus(), 0);
   }
 
+  // Inserts {{name}} at the caret of the template body (end of text when nothing is focused).
+  function insertTemplateVariable(name: string) {
+    const area = document.getElementById("template-body") as HTMLTextAreaElement | null;
+    const token = `{{${name}}}`;
+    const start = area ? area.selectionStart : templateDraft.body.length;
+    const end = area ? area.selectionEnd : templateDraft.body.length;
+    const next = `${templateDraft.body.slice(0, start)}${token}${templateDraft.body.slice(end)}`;
+    if (next.length > 2000) return;
+    setTemplateDraft({ ...templateDraft, body: next });
+    window.requestAnimationFrame(() => { area?.focus(); area?.setSelectionRange(start + token.length, start + token.length); });
+  }
+
   function openTemplateManager() {
     if (inFlightRef.current || uploadingImage) return;
     focusHistoryOnCloseRef.current = false;
@@ -2209,7 +2247,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     if (isAlimtalk && !boundTemplate?.solapiTemplateId) {
       setCampaignFieldError({
         field: "templateId",
-        message: "알림톡은 Solapi 승인 ID가 있는 템플릿을 선택해야 합니다.",
+        message: "알림톡을 쓰려면 승인된 템플릿을 선택해야 합니다.",
       });
       return;
     }
@@ -2217,7 +2255,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     if (isMms && !campaignDraft.imageFileId) {
       setCampaignFieldError({
         field: "imageFileId",
-        message: "MMS는 JPG 이미지(200KB 이하)를 첨부해야 합니다.",
+        message: "사진 문자는 사진을 첨부해야 합니다.",
       });
       return;
     }
@@ -2284,12 +2322,13 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
         scheduleStatus: state.kind === "ready" ? scheduleServerStatus(state.messageSchedule) : "이 서버의 예약 실행 설정을 확인할 수 없습니다.",
         scheduleMode: campaignDraft.scheduleMode,
         smsFallback: campaignDraft.smsFallback,
+        bodyFirstLine: previewMessageExample(campaignDraft.body, state.kind === "ready" ? state.eventName : "", state.kind === "ready" ? state.eventDate : "").split("\n").find((line) => line.trim()) || "",
       }),
       confirmLabel: scheduledCampaign
-        ? "예약 등록한다"
+        ? "예약 등록"
         : campaignDraft.simulate
-          ? "모의 발송을 기록한다"
-          : "발송 요청한다",
+          ? "모의 발송 기록"
+          : "발송 요청",
     });
   }
 
@@ -2359,8 +2398,10 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       setCampaignNotice(
         createdStatus === "SCHEDULED"
           ? pending.payload.simulate === true
-            ? "모의 예약을 등록했습니다. 예약 시각 이후 이 화면에서 발송 실행을 눌러야 하며, 실행해도 수신자에게 전달되지 않습니다."
-            : `예약 등록했습니다. ${scheduleModeNotice(created.scheduleMode === "AUTO" ? "AUTO" : "MANUAL")}`
+            ? "모의 예약을 등록했습니다 · 직접 실행 필요. 예약 시각이 지나면 발송 기록에서 ‘발송 실행’을 눌러 주세요. 실행해도 수신자에게 전달되지 않습니다."
+            : created.scheduleMode === "AUTO"
+              ? "예약 등록했습니다. 예약 시각이 되면 자동으로 발송을 시도합니다."
+              : "예약 등록했습니다 · 직접 실행 필요. 예약 시각이 지나면 발송 기록에서 ‘발송 실행’을 눌러 주세요."
           : createdStatus === "SIMULATED"
             ? "모의 발송을 기록했습니다. 수신자에게 전달되지 않았습니다."
             : "발송 요청을 기록했습니다. 결과는 아래 발송 기록에서 확인하세요."
@@ -2979,6 +3020,11 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   const attentionCampaigns = state.campaigns.filter((campaign) => needsAttention(campaign, nowMs) || blockedById.has(campaign.id));
   const scheduledCount = state.campaigns.filter((campaign) => campaign.status === "SCHEDULED").length;
   const overdueCampaigns = state.campaigns.filter((campaign) => isOverdue(campaign, nowMs));
+  // Reservations that only run when someone presses 발송 실행 (manual or simulated) and are already due.
+  // A reminder the operator scheduled by hand (title carries the purpose label; automatic ones end with "(자동)").
+  const scheduledManualReminders = state.campaigns.filter((campaign) => campaign.status === "SCHEDULED" && campaign.title.includes("리마인드") && !campaign.title.includes("(자동)")).length;
+  const autoReminderOn = state.autoNotify.reminder?.enabled === true;
+  const manualOverdueCampaigns = overdueCampaigns.filter((campaign) => campaign.simulate || campaign.scheduleMode !== "AUTO");
   const historyScope = attentionOnly ? attentionCampaigns : state.campaigns;
   const historySearch = historyQuery.trim().toLocaleLowerCase("ko-KR");
   const visibleCampaigns = historyScope.filter((campaign) =>
@@ -3021,6 +3067,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   const howJosa = campaignDraft.channel === "ALIMTALK" ? "으로" : "로";
   const whenLabel = scheduleBadInput ? "시각 확인 필요" : campaignDraft.scheduled
     ? formatWhenShort(campaignDraft.scheduled) || "시각 확인 필요" : "지금 바로";
+  // Approved = an alimtalk template that carries the provider's approval id and is not archived.
+  const approvedAlimtalkTemplates = state.templates.filter(template => template.channel === "ALIMTALK" && Boolean(template.solapiTemplateId) && !template.archived);
+  const alimtalkNeedsTemplate = campaignDraft.channel === "ALIMTALK" && !approvedAlimtalkTemplates.some(template => template.id === selectedTemplateId);
   const templatePickerNode = (
     <div>
                     <div className={styles.templatePickerLabel}><label htmlFor="campaign-template">저장한 템플릿</label><ProductButton type="button" className={styles.textButton} variant="ghost" disabled={busyAction !== null || uploadingImage} onClick={openTemplateManager}>템플릿 관리</ProductButton></div>
@@ -3042,6 +3091,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                         </option>
                       ))}
                     </select>
+                    {campaignDraft.channel === "ALIMTALK" && approvedAlimtalkTemplates.length === 0 ? (
+                      <p className={styles.help} id="campaign-template-empty" role="note">승인된 알림톡 템플릿이 없습니다. <ProductButton type="button" className={styles.textButton} variant="ghost" disabled={busyAction !== null || uploadingImage} onClick={openTemplateManager}>템플릿 관리에서 등록하세요</ProductButton></p>
+                    ) : null}
                     {campaignFieldError?.field === "templateId" ? <p className={styles.fieldError} id="campaign-template-error" role="alert">{campaignFieldError.message}</p> : null}
                     {pendingTemplateUse ? <ConsoleConfirm
                       summary={confirmLines(`〈${pendingTemplateUse.name}〉 문구로 작성 내용을 바꿀까요?\n\n현재 문구가 교체됩니다. 수신자·제목·사진은 유지되며 발송되지는 않습니다.`)}
@@ -3202,18 +3254,28 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
           <details className={`${styles.templateDetails} ${styles.connectionDetails} ${state.integrations.connected ? styles.connectionOk : newOrgSimOnly ? styles.connectionSim : styles.connectionOff}`}>
             <summary data-disclosure-indicator="">발송 연결 · {state.integrations.connected ? "연결됨" : "미연동 · 실제 전달 안 됨"}</summary>
             <p className={styles.help}>
-              발송 상태는 공급사 응답을 기준으로 표시합니다.{" "}
               {state.integrations.connected
-                ? `현재 조직 발송 연결: 발신 ${state.integrations.sender || "설정됨"}${state.integrations.provider ? ` (${state.integrations.provider})` : ""}. 모의 발송은 전달되지 않습니다.`
+                ? "문자는 연결된 발송 업체를 통해 실제로 발송됩니다."
                 : newOrgSimOnly
-                  ? "현재 조직 발송 연결: 새 운영사에는 발송 수단이 없으므로 모의 기록만 남습니다. 실제 발송으로 자동 전환되지 않습니다."
-                  : "현재 조직 발송 연결: 공급사가 연결되지 않았습니다. 요청은 연결 필요 상태로 기록됩니다(모의 기록이 아닙니다). 실제로 전달되지 않습니다."}
+                  ? "아직 발송이 연결되지 않아 모의 기록만 남습니다. 실제로 전달되지 않습니다."
+                  : "아직 발송이 연결되지 않았습니다. 요청은 ‘연결 필요’로 남고 실제로 전달되지 않습니다."}
             </p>
-            <p className={styles.help}>{scheduleServerStatus(state.messageSchedule)} 현재 서버 기준이며 점검 완료가 실제 발송이나 수신을 뜻하지 않습니다.</p>
+            <details className={styles.moreDetails}>
+              <summary data-disclosure-indicator="">자세히</summary>
+              <p className={styles.help}>
+                발송 상태는 공급사 응답을 기준으로 표시합니다.{" "}
+                {state.integrations.connected
+                  ? `현재 조직 발송 연결: 발신 ${state.integrations.sender || "설정됨"}${state.integrations.provider ? ` (${state.integrations.provider})` : ""}. 모의 발송은 전달되지 않습니다.`
+                  : newOrgSimOnly
+                    ? "현재 조직 발송 연결: 새 운영사에는 발송 수단이 없으므로 모의 기록만 남습니다. 실제 발송으로 자동 전환되지 않습니다."
+                    : "현재 조직 발송 연결: 공급사가 연결되지 않았습니다. 요청은 연결 필요 상태로 기록됩니다(모의 기록이 아닙니다). 실제로 전달되지 않습니다."}
+              </p>
+              <p className={styles.help}>{scheduleServerStatus(state.messageSchedule)} 이 상태는 지금 시점의 설정이며, 점검이 끝났다고 해서 실제 발송이나 수신이 됐다는 뜻은 아닙니다.</p>
+            </details>
           </details>
 
 
-          <MessageWorkbench composerOpen={composerOpen} templateAttention={Boolean(pendingTemplate)} composer={(
+          <MessageWorkbench composerOpen={composerOpen} templateAttention={Boolean(pendingTemplate)} onTabChange={() => setCampaignFeedback(null)} composer={(
           <div id="message-composer" hidden={!composerOpen}>
           <ConsoleSection
             headingId="campaign-heading"
@@ -3226,7 +3288,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 setHistoryOpen(true);
                 requestConsoleTask("history-heading");
                 window.history.replaceState(window.history.state, "", "#history-heading");
-              }}>발송 기록 보기</ProductButton><small id="compose-return-help">입력·선택 유지</small></div>}
+              }}>발송 기록 보기</ProductButton><small id="compose-return-help">작성 중인 내용은 그대로 남아 있습니다</small></div>}
             >
               <ValidatedForm className={uiStyles.formStack} onSubmit={requestCampaignCreate}>
                 {/* Reopened 2026-11-24 (owner: 시안 A): one sentence names who/how/when, the purpose chips load text,
@@ -3253,6 +3315,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                         <span className={styles.keepTogether}><button type="button" id="campaign-how-pill" className={styles.pill} aria-expanded={openPanel === "how"} aria-controls="campaign-how-panel" onClick={() => togglePanel("how")}>{howLabel}</button>{howJosa}</span>{" "}
                         <span className={styles.keepTogether}><button type="button" id="campaign-when-pill" className={styles.pill} data-empty={scheduleBadInput ? "true" : undefined} aria-expanded={openPanel === "when"} aria-controls="campaign-schedule" onClick={() => togglePanel("when")}>{whenLabel}</button>{scheduledDraft ? "에" : ""} 보냅니다</span>
                       </p>
+                      {scheduledDraft && campaignDraft.scheduleMode === "MANUAL" && !scheduleBadInput ? (
+                        <p className={styles.manualRunNote} id="campaign-manual-run" role="note"><strong>예약됨 · 직접 실행 필요</strong> 예약 시각이 지나면 발송 기록에서 ‘발송 실행’을 눌러야 보내집니다.</p>
+                      ) : null}
                       {reloadSummary ? (
                         <ConsoleFeedback kind="info" id="campaign-reload-summary">{reloadSummary}</ConsoleFeedback>
                       ) : null}
@@ -3511,6 +3576,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     {composeNotice ? <p className={styles.composeNotice} role="status">{composeNotice}</p> : null}
                     <div className={styles.composeContent}>
                       <h3 className={styles.fieldLabel} id="campaign-content" tabIndex={-1}>무엇을 보낼까요</h3>
+                      {loadedPurpose?.key === "reminder" && autoReminderOn ? (
+                        <ConsoleFeedback kind="warning" id="campaign-auto-reminder-overlap">자동 리마인드가 이미 켜져 있습니다. 같은 문자가 두 번 갈 수 있어요. 자동 안내에서 확인하세요.</ConsoleFeedback>
+                      ) : null}
                       <div className={styles.purposeLoader} role="group" aria-labelledby="campaign-purpose-label">
                     <p id="campaign-purpose-label" className={styles.purposeLabel}>목적으로 불러오기</p>
                     <div className={styles.purposeChips}>
@@ -3542,8 +3610,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   />
                   {campaignFieldError?.field === "body" ? <p className={styles.fieldError} id="campaign-body-error" role="alert">{campaignFieldError.message}</p> : null}
                   <p id="campaign-body-length" className={contentIssue?.field === "body" ? styles.fieldError : styles.help}>
-                    {campaignDraft.channel === "ALIMTALK" ? `원문 ${bodyMeasure.characters.toLocaleString("ko-KR")}자 · 알림톡 최대 1,000자` : `원문 ${bodyMeasure.bytes.toLocaleString("ko-KR")}byte · 문자 최대 2,000byte`}
-                    {bodyMeasure.personalized ? " · 개인화 후 길이와 문자 유형은 수신자별로 확인합니다." : campaignDraft.channel === "SMS" ? ` · ${bodyMeasure.bytes <= 90 ? "단문 SMS" : "장문 LMS"}로 자동 결정` : ""}
+                    {campaignDraft.channel === "ALIMTALK" ? `원문 ${bodyMeasure.characters.toLocaleString("ko-KR")}자 · 알림톡 최대 1,000자` : `${bodyMeasure.characters.toLocaleString("ko-KR")}자 · 한글 45자(영문 90자)까지는 단문 SMS, 넘으면 장문 LMS(한글 약 1,000자까지)`}
+                    {bodyMeasure.personalized ? " · 개인화 후 길이와 문자 유형은 수신자별로 확인합니다." : campaignDraft.channel === "SMS" ? ` · 지금은 ${bodyMeasure.bytes <= 90 ? "단문 SMS" : "장문 LMS"}로 보냅니다` : ""}
                   </p>
                   {state.integrations.provider === "solapi" && !campaignDraft.simulate && (campaignDraft.channel !== "ALIMTALK" || campaignDraft.smsFallback) ? <p className={styles.help}>문자로 보낼 수 없는 일부 이모지·제어문자를 확인합니다. 개인화 후 내용과 예약 시점의 수신자 정보도 발송 전에 다시 확인합니다. 다른 문자까지 모두 전달된다는 보장은 아닙니다.</p> : null}
                   {charsetIssue && !campaignFieldError ? <p className={styles.fieldError} role="status">{charsetIssue.message}</p> : null}
@@ -3569,11 +3637,11 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                         {campaignDraft.channel !== "ALIMTALK" ? templatePickerNode : null}
                         {campaignDraft.channel !== "ALIMTALK" ? (
                           <div className={styles.sendBlock} data-message-attachment>
-                    <label htmlFor="campaign-image">사진 첨부 (선택 · JPG 200KB 이하)</label>
+                    <label htmlFor="campaign-image">사진 첨부 (선택 · 사진은 자동으로 줄여서 첨부합니다)</label>
                     <input
                       id="campaign-image"
                       type="file"
-                      accept="image/jpeg"
+                      accept="image/jpeg,image/png,image/webp"
                       disabled={uploadingImage || messagesLocked}
                       title={messagesLocked ? messagesLockReason : undefined}
                       aria-invalid={campaignFieldError?.field === "imageFileId"}
@@ -3589,7 +3657,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     />
                     <p className={styles.help} id="campaign-image-help">
                       {uploadingImage
-                        ? "이미지를 올리는 중입니다."
+                        ? "사진을 준비해 올리는 중입니다."
                         : campaignDraft.imageFileId
                           ? `첨부됨: ${campaignDraft.imageName || "사진 1장"} · MMS는 별도 요금이 발생합니다.`
                           : "사진 없이 보내면 SMS/LMS가 자동 결정됩니다. 첨부하면 MMS로 전환됩니다."}
@@ -3628,7 +3696,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     </div>
                     <div className={styles.phone} data-channel={campaignDraft.channel}>
                       <div className={styles.phoneBar} aria-hidden="true"><span>{scheduledDraft ? "예약" : "지금"}</span><span>●●● ▮</span></div>
-                      {campaignDraft.channel === "ALIMTALK" ? <div className={styles.kakaoExampleHeader}>카카오 알림톡 도착 예시</div> : <div className={styles.phoneWho}><b>{state.integrations.connected && state.integrations.sender ? state.integrations.sender : "발신 번호"}</b><span>문자 메시지</span></div>}
+                      {campaignDraft.channel === "ALIMTALK" ? <div className={styles.kakaoExampleHeader}>{alimtalkNeedsTemplate ? "카카오 알림톡" : "카카오 알림톡 도착 예시"}</div> : <div className={styles.phoneWho}>{state.integrations.connected && state.integrations.sender ? <b>{state.integrations.sender}</b> : null}<span>문자 메시지</span></div>}
                       <div className={styles.thread}>
                         <small>{scheduledDraft ? whenLabel : "받는 즉시"}</small>
                         {campaignDraft.channel === "MMS" && campaignDraft.imageFileId ? <div className={styles.attachmentPreview}>
@@ -3636,7 +3704,8 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                       {imagePreviewFailed ? <p className={styles.help}>첨부 사진 미리보기를 불러오지 못했습니다. <ProductButton type="button" className={styles.textButton} variant="ghost" onClick={() => { setImagePreviewFailed(false); setImagePreviewRevision(value => value + 1); }}>사진 다시 보기</ProductButton></p> : null}
                     </div> : null}
                         <p className={`${styles.bubble} ${campaignDraft.channel === "ALIMTALK" ? styles.kakaoBubble : ""}`} id="message-draft-preview">
-                          {campaignDraft.body ? previewMessageParts(campaignDraft.body, state.eventName, state.eventDate) : <span className={styles.bubbleEmpty}>내용을 쓰면 받는 사람 화면에 이렇게 보입니다.</span>}
+                          {alimtalkNeedsTemplate ? <span className={styles.bubbleEmpty}>승인된 알림톡 템플릿을 고르면 받는 사람 화면 예시가 보입니다.</span>
+                            : campaignDraft.body ? previewMessageParts(campaignDraft.body, state.eventName, state.eventDate) : <span className={styles.bubbleEmpty}>내용을 쓰면 받는 사람 화면에 이렇게 보입니다.</span>}
                         </p>
                       </div>
                     </div>
@@ -3688,6 +3757,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     </div>
                 </div>
                 <div className={styles.sendDock}>
+                      {selectedCount === 0 && !messagesLocked ? <p className={styles.sendDockReason} id="campaign-submit-reason">받는 사람을 고르면 발송 검토를 누를 수 있습니다.</p> : null}
                       <button type="button" id="message-preview-open" className={styles.previewOpen} aria-expanded={previewOpen} onClick={openPreview}>미리보기</button>
                       <ProductButton
                     id="campaign-submit"
@@ -3798,7 +3868,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   </div>
                   {templateDraft.channel === "ALIMTALK" ? (
                     <div>
-                      <label htmlFor="template-solapi-id">Solapi 승인 템플릿 ID</label>
+                      <label htmlFor="template-solapi-id">공급사 승인 ID (Solapi)</label>
                       <input
                         id="template-solapi-id"
                         maxLength={120}
@@ -3823,8 +3893,11 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                       aria-describedby={templateFieldError?.field === "body" ? "template-body-error template-variables" : "template-variables"}
                       onChange={(event) => setTemplateDraft({ ...templateDraft, body: event.target.value })}
                     />
-                    <p className={styles.help} id="template-variables">사용 가능 변수: &#123;&#123;이름&#125;&#125;, &#123;&#123;행사명&#125;&#125;, &#123;&#123;행사일&#125;&#125;, &#123;&#123;티켓링크&#125;&#125;, &#123;&#123;럭키번호&#125;&#125; · 럭키번호는 추첨·투표에서 먼저 발급하세요.</p>
-                    {templateDraft.channel === "ALIMTALK" ? <p className={styles.help}>Solapi에서 승인받은 ID와 문구를 확인해 등록하세요. 승인 문구의 {"#{이름}"} 같은 변수는 위의 {"{{이름}}"} 형식으로 입력하며, 변수명은 제공된 개인화 정보와 같아야 합니다.</p> : null}
+                    <div className={styles.varChips} role="group" aria-label="변수 넣기">
+                      {TEMPLATE_VARIABLE_NAMES.map(name => <button key={name} type="button" className={styles.varChip} disabled={messagesLocked || templateRecoveryLocked || busyAction === "template" || Boolean(editingTemplate?.archived)} onClick={() => insertTemplateVariable(name)}>{`{{${name}}}`}</button>)}
+                    </div>
+                    <p className={styles.help} id="template-variables">위 변수를 누르면 커서 위치에 들어갑니다. 받는 사람마다 이름·행사 정보로 바뀝니다. 럭키번호는 추첨·투표에서 먼저 발급하세요.</p>
+                    {templateDraft.channel === "ALIMTALK" ? <p className={styles.help}>공급사(Solapi)에서 승인받은 ID와 문구를 확인해 등록하세요. 승인 문구의 {"#{이름}"} 같은 변수는 위의 {"{{이름}}"} 형식으로 입력하며, 변수명은 제공된 개인화 정보와 같아야 합니다.</p> : null}
                     {templateFieldError?.field === "body" ? <p className={styles.fieldError} id="template-body-error" role="alert">{templateFieldError.message}</p> : null}
                   </div>
                   {templateFieldError && !FIELD_LABELS[templateFieldError.field] ? <p className={styles.fieldError} role="alert">{templateFieldError.message}</p> : null}
@@ -3846,7 +3919,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 rules={state.autoNotify}
                 canWrite={state.canWriteMessages && !messagesLocked && busyAction === null}
                 active={state.integrations.connected && state.messageSchedule?.autoConfigured === true}
-                serverNote={`${state.integrations.connected ? "" : "발송 연결이 없어 지금은 보내지 않습니다. "}${scheduleServerStatus(state.messageSchedule)} 켜 두면 서버가 같은 확인(연락처·문자 글자·티켓 링크)을 거쳐 보냅니다.`}
+                serverNote={`${state.integrations.connected ? "" : "발송 연결이 없어 지금은 보내지 않습니다. "}${scheduleServerStatus(state.messageSchedule)} 켜 두면 보내기 전에 연락처·문자 글자·티켓 링크를 확인한 뒤 보냅니다.`}
+                preview={(body) => previewMessageParts(body, state.eventName, state.eventDate)}
+                scheduledReminders={scheduledManualReminders}
                 onSaved={() => void refresh(true)}
               />
             )} history={(
@@ -3906,6 +3981,12 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
               <summary>
                 {historyOpen ? "기록 목록 접기" : `기록 목록 펼치기 (${visibleCampaigns.length}건)`}
               </summary>
+            {!attentionOnly && manualOverdueCampaigns.length ? (
+              <ConsoleFeedback kind="warning" id="message-overdue-alert">
+                예약 시각이 지났지만 아직 실행하지 않은 발송이 {manualOverdueCampaigns.length}건 있습니다. 기록에서 ‘발송 실행’을 눌러야 보내집니다.{" "}
+                <ProductButton type="button" className={styles.textButton} variant="ghost" onClick={() => { setAttentionOnly(true); setHistoryStatus("ALL"); setHistoryQuery(""); setHistoryLimit(10); }}>확인 필요한 발송 보기</ProductButton>
+              </ConsoleFeedback>
+            ) : null}
             {attentionOnly ? (
               <div className={styles.attentionFilter}>
                 <p role="status">발송 확인이 필요한 발송만 보고 있습니다 · {visibleCampaigns.length}건{overdueCampaigns.length ? ` · 실행 시점 지난 예약 ${overdueCampaigns.length}건 포함` : ""}</p>
@@ -3957,7 +4038,10 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                               <StatusPill tone="wait">{campaign.simulate ? "실행 시점 지남·수동 실행 필요" : "실행 시점 지남·상태 확인"}</StatusPill>
                             ) : null}
                             {campaign.status === "SCHEDULED" && campaign.simulate ? (
-                              <StatusPill tone="neutral">모의 예약·전달 없음</StatusPill>
+                              <><StatusPill tone="neutral">모의 예약·전달 없음</StatusPill><StatusPill tone="neutral">직접 실행 필요</StatusPill></>
+                            ) : null}
+                            {campaign.status === "SCHEDULED" && !campaign.simulate && campaign.scheduleMode !== "AUTO" && !overdue ? (
+                              <StatusPill tone="neutral">예약됨 · 직접 실행 필요</StatusPill>
                             ) : null}
                             {["SCHEDULED", "NEEDS_CONNECTION"].includes(campaign.status) && invalidSchedule ? (
                               <StatusPill tone="wait">예약 시각 확인 필요</StatusPill>
@@ -4008,11 +4092,12 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                             )}
                             confirmLabel={
                               historyPending.kind === "cancel"
-                                ? campaign.status === "SCHEDULED" ? "예약을 취소한다" : "발송 요청을 취소한다"
+                                ? campaign.status === "SCHEDULED" ? "예약 취소하기" : "발송 요청 취소하기"
                                 : historyPending.kind === "execute"
-                                  ? "실행한다"
-                                  : "재시도한다"
+                                  ? "실행하기"
+                                  : "재시도하기"
                             }
+                            cancelLabel={historyPending.kind === "cancel" ? "유지" : undefined}
                             busy={busyAction === `retry:${campaign.id}` || busyAction === `cancel:${campaign.id}`}
                             onConfirm={() => {
                               const pending = historyPending;
@@ -4064,6 +4149,11 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                         {campaign.mmsUnsupported ? <p className={styles.campaignHint} role="note">현재 발송 연결은 사진 문자를 지원하지 않아 발송하지 않았습니다. 사진 문자 발송이 가능한 연결을 확인하세요.</p> : null}
                         {campaign.personalizedTextTooLongCount > 0 ? <p className={styles.campaignHint} role="note">수신자 {campaign.personalizedTextTooLongCount}명의 개인화된 문자 내용이 발송 한도를 넘어 전송하지 않았습니다. 내용을 줄인 뒤 다시 검토하세요.</p> : null}
                         {campaign.smsTextProblemCount > 0 || campaign.smsTextProblemUnknown ? <p className={styles.campaignHint} role="note">{campaign.smsTextProblemUnknown ? "수신자별 문자 내용을 확인할 수 없어 발송을 보류했습니다." : `수신자 ${campaign.smsTextProblemCount}명의 문자에 지원하지 않는 문자 또는 제어문자가 있어 발송을 보류했습니다.`} {reloadable ? "기존 발송의 내용과 대상을 불러와 수정한 뒤 새 요청으로 검토하세요." : "기존 내용을 확인하고, 접수 여부가 불확실하면 공급사에서 먼저 확인하세요."}</p> : null}
+                        {campaign.status === "SCHEDULED" && campaign.body ? <div className={styles.scheduledBody}>
+                          <h4>예약된 내용</h4>
+                          <p className={styles.finalBody}>{previewMessageParts(campaign.body, state.eventName, state.eventDate)}</p>
+                          <p className={styles.campaignHint}>받는 사람마다 이름 등이 바뀌는 부분은 강조해 예시로 보여 드립니다. 내용을 바꾸려면 예약을 취소한 뒤 새로 작성하세요.</p>
+                        </div> : null}
                         {(charsetBlocked || campaign.submissionUnconfirmed || campaign.deliveryUnconfirmed || campaign.status === "CANCELLED") && campaign.body ? <details className={styles.deliveries}><summary>기존 내용 보기</summary><p className={styles.finalBody}>{campaign.body}</p>{!reloadable ? <p className={styles.campaignHint}>접수 여부를 확인할 수 없으면 공급사에서 먼저 확인하세요. 이 내용 보기는 발송하지 않습니다.</p> : null}</details> : null}
                         {reloadable ? (
                           <>
@@ -4073,7 +4163,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                             {reloadPending?.id === campaign.id ? (
                               <ConsoleConfirm
                                 summary={confirmLines(`〈${campaign.title}〉 내용을 작성 중인 화면에 불러올까요?\n\n작성 중인 발송 내용·선택이 교체됩니다. 예약 시각은 다시 지정해야 하며, 바로 발송되지 않습니다.`)}
-                                confirmLabel="불러온다"
+                                confirmLabel="불러오기"
                                 // Nonmodal confirm: stay disabled while any
                                 // action or upload runs so the overwrite
                                 // cannot race a competing submit. The
@@ -4103,7 +4193,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                             : blocked.reason === "TICKET_RECIPIENTS_UNAVAILABLE" ? "수신자와 티켓 상태를 확인할 수 없습니다. 기존 요청을 취소하고 대상을 다시 선택하세요."
                             : blocked.reason === "SMS_CHARSET_UNSUPPORTED" ? `수신자 ${blocked.missing}명의 문자에 지원하지 않는 문자 또는 제어문자가 있습니다. ${campaign.status === "SCHEDULED" ? "예약을 취소한 뒤 안전하게 확인된 경우에만 내용·대상을 불러올 수 있습니다." : "기존 발송 요청의 내용을 확인하고, 접수 여부가 불확실하면 공급사에서 먼저 확인하세요."}`
                             : blocked.reason === "SMS_CHARSET_REVIEW_UNAVAILABLE" ? "수신자별 문자 내용을 확인할 수 없습니다. 기존 내용을 확인하고 운영 담당자와 대상을 다시 확인하세요. 접수 여부가 불확실하면 공급사에서 먼저 확인하세요."
-                            : blocked.reason === "AUDIT_UNAVAILABLE" ? "행사 활동 기록을 확인할 수 없어 예약 발송과 취소를 할 수 없습니다. 시스템 관리자에게 문의하세요."
+                            : blocked.reason === "AUDIT_UNAVAILABLE" ? "행사 활동 기록을 확인할 수 없어 예약 발송과 취소를 할 수 없습니다. 조직 관리자에게 문의하세요."
                             : blocked.reason === "INVALID_SCHEDULE" ? "예약 시각을 확인할 수 없습니다. 예약을 취소하고 다시 등록하세요."
                             : blocked.reason === "NO_PUBLIC_ORIGIN" ? "티켓 링크의 공개 주소가 설정되지 않았습니다. 운영 담당자에게 공개 주소 설정을 요청하세요."
                             : "발송을 실행하기 전 확인이 필요합니다. 발송 상태를 확인하고 운영 담당자에게 문의하세요."}
@@ -4128,7 +4218,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                                 <li key={`${delivery.participantId}-${index}`}>
                                   <span className={styles.deliveryName}>{delivery.name || "이름 미등록"}</span>
                                   <StatusPill tone={statusTone(delivery.status)}>{delivery.manualProviderReview ? `운영자 기록 · ${delivery.manualProviderReview === "ACCEPTED" ? "공급사 접수" : "공급사 미접수"}` : delivery.status === "SENT" && campaign.providerKind !== "solapi" ? "전달 근거 미확인" : delivery.resultMatchUnconfirmed ? "결과 연결 미확인" : deliveryStatusLabel(delivery.status)}</StatusPill>
-                                  <time dateTime={delivery.at || undefined}>{formatDate(delivery.at)}</time>
+                                  {campaign.status === "SCHEDULED" && hasValidScheduledInstant(campaign.scheduled)
+                                    ? <time dateTime={campaign.scheduled}>예약 {formatDate(campaign.scheduled)}</time>
+                                    : <time dateTime={delivery.at || undefined}>{formatDate(delivery.at)}</time>}
                                   {campaign.genericTransport && campaign.genericSubmissionUnconfirmed && campaign.genericAttemptActive !== false && delivery.status === "SENDING" ? <LockedProviderReference name={delivery.name} phone={delivery.snapshotPhone} reference={delivery.reference} /> : null}
                                   {campaign.genericTransport && campaign.genericAttemptActive === false && delivery.status === "SENDING" && !delivery.manualProviderReview && !messagesLocked && !(providerCheck?.payload.id === campaign.id && providerCheck.payload.participantId === delivery.participantId) ? <ProductButton id={`provider-check-trigger-${campaign.id}-${delivery.participantId}`} type="button" variant="secondary" disabled={Boolean(providerCheck) || otherHistoryReceipt || busyAction !== null} onClick={() => {
                                     setProviderCheck({ eventId, id: commandId(), name: delivery.name, uncertain: false, payload: { id: campaign.id, participantId: delivery.participantId, outcome: "ACCEPTED", expectedSubmissionId: campaign.submissionId } });

@@ -83,7 +83,7 @@ test('scheduling names the chosen execution mode and a separate simulated path',
   assert.match(SOURCE, /실행해도 수신자에게 전달되지 않습니다/u);
   assert.match(SOURCE, /createdStatus/u);
   assert.match(SOURCE, /연결 필요 상태로 기록됩니다\(모의 기록이 아닙니다\)/u);
-  assert.match(SOURCE, /Solapi 승인/u);
+  assert.match(SOURCE, /공급사 승인 ID/u);
 });
 
 test('scheduled and blocked sends can be cancelled, accepted sends cannot', () => {

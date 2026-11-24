@@ -11,7 +11,7 @@ export function messageContentIssue(
 ): { field: string; message: string } | null {
   if (template?.archived) return { field: "templateId", message: "보관된 템플릿입니다. 복원하거나 다른 템플릿을 선택하세요." };
   if (draft.channel === "ALIMTALK") {
-    if (!template || template.channel !== "ALIMTALK" || !template.solapiTemplateId) return { field: "templateId", message: "알림톡은 Solapi 승인 ID가 있는 템플릿을 선택해야 합니다." };
+    if (!template || template.channel !== "ALIMTALK" || !template.solapiTemplateId) return { field: "templateId", message: "알림톡을 쓰려면 승인된 템플릿을 선택해야 합니다." };
     if (draft.body.trim() !== template.body.trim()) return { field: "templateId", message: "알림톡 문구가 선택한 템플릿과 다릅니다. 최신 템플릿을 다시 선택하세요." };
   }
   const tokens = draft.body.match(/\{\{[^{}]*\}\}/g) ?? [];
@@ -21,6 +21,6 @@ export function messageContentIssue(
   // A token can shrink or expand. Never reject a variable-bearing message on
   // its raw size; the provider validates the final text for each recipient.
   if (!measure.personalized && (draft.channel === "ALIMTALK" ? measure.characters > 1000 : measure.bytes > 2000)) return { field: "body", message: draft.channel === "ALIMTALK" ? "알림톡은 1,000자 이내로 작성된 승인 템플릿을 선택하세요." : "문자 내용이 2,000byte를 넘었습니다. 내용을 줄여 주세요. 한글은 보통 1자에 2byte입니다." };
-  if (draft.channel === "MMS" && !draft.imageFileId) return { field: "imageFileId", message: "MMS는 JPG 이미지(200KB 이하)를 첨부해야 합니다." };
+  if (draft.channel === "MMS" && !draft.imageFileId) return { field: "imageFileId", message: "사진 문자는 사진을 첨부해야 합니다." };
   return null;
 }

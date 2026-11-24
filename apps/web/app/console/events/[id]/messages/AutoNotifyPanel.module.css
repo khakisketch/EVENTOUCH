@@ -29,6 +29,35 @@
   font-weight: var(--fw-strong);
 }
 
+.headStatus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s2);
+}
+
+.preview {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-medium);
+  background: var(--surface-muted);
+  font-size: var(--small);
+}
+
+.preview span {
+  color: var(--muted);
+  font-size: var(--label);
+}
+
+.preview p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .help {
   margin: 0;
   color: var(--muted);

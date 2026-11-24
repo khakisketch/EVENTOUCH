@@ -130,11 +130,14 @@ test('web-attendee-verification-precedes-signup-and-recovery-without-accounts', 
   const page = read('app/event/[slug]/register/page.tsx');
   assert.match(page, /verificationRequired/);
   assert.match(page, /이미 신청했다면 내 티켓 찾기/);
-  assert.match(page, /현재 신청을 받지 않습니다/);
+  // Reopened 2026-11-24: the closed page names its own reason (see web-public-registration-stage-gate).
+  assert.match(page, /availability\.title/);
   assert.match(page, /loadVerificationMode/);
   assert.match(page, /VerificationUnavailable/);
   const unavailable = read('app/event/[slug]/VerificationUnavailable.tsx');
-  assert.match(unavailable, /실제 문자로 전송되지 않습니다/);
+  // The attendee is told what cannot be done, not which transport sits behind it ("모의 발송", "문자 발송 설정").
+  assert.match(unavailable, /인증 문자를 보낼 수 없어 연락처 확인을 마칠 수 없습니다/);
+  assert.doesNotMatch(unavailable, /모의 발송|문자 발송 설정|eyebrow/);
   // Recovery reconnects by verified number; the session cookie set by the
   // server does the rest. No account, no stored secret on the device.
   const recover = read('app/event/[slug]/ticket/recover/RecoverForm.tsx');
@@ -157,9 +160,11 @@ test('web-attendee-verification-precedes-signup-and-recovery-without-accounts', 
   assert.match(view, /ticket\/recover/);
   assert.match(view, /연락처 인증으로 티켓 다시 찾기/);
   assert.match(view, /신청 연락처 인증으로 다시 연결/);
-  assert.match(view, /신청을 완료한 브라우저 탭/);
+  // Reopened 2026-11-24: the boundary is the browser that registered, not the tab (see attendee-guidance.ts).
+  assert.match(view, /noTicketHereNote\(\)/);
+  assert.match(read('app/event/[slug]/attendee-guidance.ts'), /같은 브라우저에서 열어 주세요/);
   // The recovery note stays a quiet footnote; the wording changed with it.
-  assert.match(view, /이 탭에서 티켓을 확인할 수 있습니다/);
+  assert.match(view, /이 브라우저에서는 티켓을 다시 열 수 있습니다/);
   const event = read('app/event/[slug]/page.tsx');
   // 표현 고정 갱신(2026-10-25 외부 대면 마감): 조건+행동 한 레이블의 가운데점
   // 제거. ux-copy — 같은 단어, 390px 줄바꿈 noise 감소. 동작 계약 변경 없음.
@@ -286,7 +291,8 @@ test('web-ticket-keeps-the-bearer-out-of-history-and-persistent-storage', () => 
   assert.match(view, /대기 명단에 등록되어 있습니다/);
   assert.match(view, /참여 콘텐츠 보기/);
   assert.match(view, /\/engage/);
-  assert.match(view, /이 브라우저에 티켓이 보관되어 있지 않습니다/);
+  // Reopened 2026-11-24: "이 브라우저에서 티켓을 찾지 못했습니다" (the browser is the boundary, see attendee-guidance).
+  assert.match(view, /이 브라우저에서 티켓을 찾지 못했습니다/);
   // Entry tone follows usability, and the failure is announced.
   assert.match(view, /data-tone/);
   // Reopened 2026-11-20: the failure is an AttendeeStateMessage (error kind announces as role=alert).
@@ -571,7 +577,7 @@ test('web-invite-accept-and-team-reset-cover-invitation-only-accounts', () => {
   assert.match(ops, /최근 활동/);
   assert.match(ops, /로그인 보호 상태/);
   assert.match(ops, /성공한 로그인은 기록하지 않으므로/);
-  assert.match(ops, /화면에 입력하지 않습니다/);
+  assert.match(ops, /이 화면에서는 입력하지 않습니다/);
   assert.doesNotMatch(ops, /localStorage/);
   assert.doesNotMatch(ops, /sessionStorage/);
   const shell = read('app/console/ConsoleShell.tsx');
@@ -606,7 +612,7 @@ test('web-participant-status-goes-through-the-operator-command-path', () => {
   assert.match(list, /발급된 티켓은 무효화/);
   assert.match(list, /\*\*\*\*/);
   // Export stays client-side; import lives behind the management gate.
-  assert.match(list, /EVENTOUCH_participants\.csv/);
+  assert.match(list, /participantExportFilename\(state\.eventName, "csv"\)/);
   assert.match(list, /<ImportWizard eventId=\{eventId\}/);
   // Group assignment and reward registration live on the rows, scoped to
   // the visible selection; both ride the command path.
@@ -741,7 +747,9 @@ test('web-messaging-uses-operator-commands-and-keeps-ticket-bearers-out-of-histo
   assert.match(messaging, /MMS · 사진/);
   assert.match(messaging, /campaign-image/);
   assert.match(messaging, /imageFileId/);
-  assert.match(messaging, /200KB/);
+  // Reopened 2026-11-24: the 200KB limit is now a constant and the photo is shrunk to it in the browser.
+  assert.match(messaging, /MMS_IMAGE_MAX_BYTES = 200000/);
+  assert.match(messaging, /fitImage\(file, MMS_IMAGE_MAX_BYTES, \{ requireJpeg: true \}\)/);
   assert.match(messaging, /별도 요금/);
 });
 
