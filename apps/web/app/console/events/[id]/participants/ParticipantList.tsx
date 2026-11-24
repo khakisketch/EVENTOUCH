@@ -46,6 +46,7 @@ import BulkCancelDialog from "./BulkCancelDialog";
 import TicketReissue from "./TicketReissue";
 import PersonErase from "./PersonErase";
 import ReviewedExit from "./ReviewedExit";
+import { EntryNoticeButton, EntryOutcome, EntrySheetBlock, entryState, readEntryDesks, readEntryRecords, useOnsiteEntry, type EntryContext, type EntryDesk, type EntryRecords } from "./OnsiteEntry";
 import CancellationConflictReview from "./CancellationConflictReview";
 import CountTabs from "../../../console-ui/CountTabs";
 import ConsoleAvatar from "../../../console-ui/ConsoleAvatar";
@@ -123,6 +124,9 @@ type ListState =
       userId: string;
       memberships: Membership[];
       rewardFeature: boolean;
+      // 현장 입장 처리 (2026-11-24): open IN desks and the latest entry per person; null = not readable.
+      entryDesks: EntryDesk[] | null;
+      entryRecords: EntryRecords | null;
     };
 
 const STATUSES = ["PENDING", "APPROVED", "WAITLIST", "CANCELLED"] as const;
@@ -571,6 +575,20 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   const pendingGroupRef = useRef<GroupAttempt | null>(null);
   const groupExecutionRef = useRef<{ eventId: string; commandId: string } | null>(null);
   const pendingRewardRef = useRef<{ fingerprint: string; commandId: string; target: Person; name: string; method: string; uncertain: boolean } | null>(null);
+  // 현장 입장 처리 (2026-11-24): the person just registered at the door, so the success notice can
+  // offer 바로 입장 처리. Tied to the notice text: any other notice makes the button go away.
+  const [noticeEntry, setNoticeEntry] = useState<{ id: string; notice: string } | null>(null);
+  const entry = useOnsiteEntry({
+    eventId,
+    gate: writeBusyRef,
+    onRefresh: () => load(true),
+    onDone: (info) => {
+      setFailure(null);
+      setApprovedHandoffIds(null);
+      setNoticeEntry(null);
+      setNotice(`${info.name}님을 입장 처리했습니다 · ${info.deskName}`);
+    },
+  });
   const eventReceipts = useEventReceipts(eventId);
   const externalReceipt = (command: string, ownIds: Array<string | undefined>) => eventReceipts.some((item) => item.command === command && !ownIds.includes(item.commandId));
   const unconfirmedAdd = externalReceipt("participant.create", [pendingAddRef.current?.commandId]);
@@ -581,6 +599,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   const unconfirmedUpdate = externalReceipt("participant.update", []);
   const unconfirmedTicket = externalReceipt("ticket.reissue", []) || externalReceipt("ticket.reissue-reviewed", []);
   const unconfirmedExit = externalReceipt("check.reviewed-exit", []);
+  // Another screen's unresolved scan blocks only the entry buttons, not the whole roster.
+  const unconfirmedEntry = externalReceipt("check.scan", [entry.pending?.commandId]);
   const unconfirmedReconciliation = externalReceipt("check.reconcile", []);
   const unconfirmedCancellationConflict = externalReceipt("participant.resolve-cancellation-conflict", []);
   const unresolvedRosterReceipt = unconfirmedAdd || unconfirmedStatus || unconfirmedGroup || unconfirmedReward || unconfirmedUpdate || unconfirmedTicket || unconfirmedExit || unconfirmedReconciliation || unconfirmedCancellationConflict;
@@ -672,6 +692,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
     setGroupUncertain(false);
     setRewardUncertain(false);
     setNotice(null);
+    setNoticeEntry(null);
     setFailure(null);
     setFetchedAt(null);
     setRefreshError(null);
@@ -975,6 +996,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
         userId: myId,
         memberships,
         rewardFeature: features.includes("reward"),
+        entryDesks: readEntryDesks(workspace),
+        entryRecords: readEntryRecords(workspace),
       });
       setFetchedAt(Date.now());
       rosterGenerationRef.current += 1;
@@ -1232,12 +1255,16 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       }
       pendingAddRef.current = null;
       setAddUnconfirmed(false);
+      const addedId = data.participant.id;
+      const addedOnsite = addDraft.registrationType === "ONSITE" && state.kind === "ready" && state.eventStage.toUpperCase() === "LIVE" &&
+        (data.participant as { status?: unknown }).status === "APPROVED";
       const added = typeof data?.participant?.name === "string" ? data.participant.name : name;
       setAddDraft({ name: "", phone: "", company: "", email: "", registrationType: addDefaultType });
       setReuseFrom(null);
       setAddOpen(false);
       setApprovedHandoffIds(null);
       setNotice(`${added}님을 등록했습니다.`);
+      setNoticeEntry(addedOnsite ? { id: addedId, notice: `${added}님을 등록했습니다.` } : null);
       await load(true);
     } catch {
       if (pendingAddRef.current) {
@@ -1843,6 +1870,9 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
   const canWriteReward = canWriteEvent(capabilities, "reward.create");
   const canReviewExit = canWriteEvent(capabilities, "check.reviewed-exit") && state.eventStage.toUpperCase() === "LIVE";
   const stageKey = state.eventStage.toUpperCase();
+  // 현장 입장 처리: the same grant the server asks for check.scan ("onsite"); the stage, status and desk
+  // rules are explained per person by entryState and enforced by the server.
+  const entryContext: EntryContext = { eventId, stage: stageKey, canScan: canWriteEvent(capabilities, "check.scan"), desks: state.entryDesks, records: state.entryRecords };
   const participantsLocked = stageKey === "ENDED" || stageKey === "ARCHIVED";
   const archived = stageKey === "ARCHIVED";
   const canMutateStatus = canWriteRoster && !participantsLocked;
@@ -2108,8 +2138,14 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   </ProductLink>
                 </>
               ) : null}
+              {noticeEntry && notice === noticeEntry.notice ? (() => {
+                const justAdded = state.people.find((item) => item.id === noticeEntry.id);
+                return justAdded ? <EntryNoticeButton person={justAdded} state={entryState(justAdded, entryContext)} entry={entry}
+                  locked={receiptRefreshLock || unconfirmedEntry} /> : null;
+              })() : null}
             </ConsoleFeedback>
           ) : null}
+          {entry.outcome && !(sheetOpen && selectedPerson?.id === entry.outcome.participantId) ? <EntryOutcome entry={entry} /> : null}
           {bulkRetry ? (
             <ConsoleFeedback kind="error" id="roster-bulk-retry-message">
               {bulkRetry.message} 이전 {bulkRetry.attempt.sourceStatus === "WAITLIST" ? "대기자 확정" : "승인"} 요청 {bulkRetry.attempt.ids.length}명
@@ -2481,8 +2517,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
           {sheetOpen && selectedPerson ? (
             <ConsoleDialog presentation="drawer" title={selectedPerson.name} titleId={`participant-details-${selectedPerson.id}`}
               description={[identityOrg(selectedPerson), maskPhone(selectedPerson.phone)].filter(Boolean).join(" · ")}
-              initialFocusRef={sheetNavFocusRef.current ? sheetNavFocusRef : inspectorHeadingRef} busy={savingId === selectedPerson.id} onClose={closeInspector}
-              footer={<ProductButton type="button" className="button button-secondary" disabled={savingId === selectedPerson.id} onClick={closeInspector}>닫기</ProductButton>}>
+              initialFocusRef={sheetNavFocusRef.current ? sheetNavFocusRef : inspectorHeadingRef} busy={savingId === selectedPerson.id || entry.busy} onClose={closeInspector}
+              footer={<ProductButton type="button" className="button button-secondary" disabled={savingId === selectedPerson.id || entry.busy} onClick={closeInspector}>닫기</ProductButton>}>
               <div className={styles.rosterSheet} onKeyDown={sheetArrowKeys}>
                 <>
                   <div className={styles.sheetNav}>
@@ -2503,6 +2539,8 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                       {savingId === selectedPerson.id ? (selectedPerson.status === "WAITLIST" ? "확정 중…" : "승인 중…") : (selectedPerson.status === "WAITLIST" ? "참가 확정" : "참가 승인")}
                     </ProductButton>
                   ) : null}
+                  <EntrySheetBlock person={selectedPerson} state={entryState(selectedPerson, entryContext)} entry={entry} eventId={eventId}
+                    locked={receiptRefreshLock || unconfirmedEntry || savingId === selectedPerson.id} />
                   <div className={styles.participantDetails}>
                     <section className={styles.sheetSection} aria-label="연락처와 이메일">
                       <h3 ref={inspectorHeadingRef} tabIndex={-1}>신청 정보</h3>

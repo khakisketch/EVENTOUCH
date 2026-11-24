@@ -14,7 +14,8 @@ const list = fs.readFileSync(path.join(ROOT, 'apps/web/app/console/events/[id]/p
 
 test('roster presets reuse the select setters and stay discoverable', () => {
   assert.match(list, /ariaLabel="빠른 상태 보기"/u, 'presets are a labelled group (CountTabs renders aria-pressed buttons)');
-  assert.match(list, /value=\{ticketFilter \? null : rosterPresets\.find\(\(preset\) => statusFilter === preset\.status && attendanceFilter === preset\.attendance\)\?\.key \?\? null\}/u, 'active tracking includes both original filters; a ticket filter presses no tab, never 전체');
+  // Reopened 2026-11-24: an extra 출입 filter on top of a status keeps that status tab lit (the old find alone lit nothing).
+  assert.match(list, /value=\{ticketFilter \? null : \(rosterPresets\.find\(\(preset\) => statusFilter === preset\.status && attendanceFilter === preset\.attendance\)[\s\S]{0,160}\?\? rosterPresets\.find\(\(preset\) => statusFilter === preset\.status && preset\.attendance === ""\)\)\?\.key \?\? null\}/u, 'active tracking includes both original filters; a ticket filter presses no tab, never 전체');
   assert.match(list, /function applyRosterPreset\(preset: RosterPreset\) \{\s*setStatusFilter\(preset\.status\);\s*setAttendanceFilter\(preset\.attendance\);\s*setTicketFilter\(""\);\s*\}/u, 'presets write through the same setters and clear the ticket-only filter');
   for (const [key, status, attendance] of [['pending', 'PENDING', ''], ['approved', 'APPROVED', ''], ['not-entered', 'APPROVED', 'NOT_ENTERED'], ['all', '', '']]) {
     assert.match(list, new RegExp(`key: "${key}", label: "[^"]+", status: "${status}", attendance: "${attendance}"`, 'u'), `${key} preset keeps its filter pair`);

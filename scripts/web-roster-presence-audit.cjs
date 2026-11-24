@@ -58,6 +58,8 @@ async function main() {
     assert.equal(await statusSelect.getAttribute('aria-describedby'), 'roster-inspector-status-error');
     await statusSelect.focus();
     await page.keyboard.press('Tab');
+    // Reopened 2026-11-24 (policy decision 4): the 개인정보 삭제 zone is the last control of the sheet, so it sits between the status select and 닫기 in Tab order.
+    if (await dialog.getByRole('button', { name: /^개인정보 삭제/ }).evaluate(el => el === document.activeElement).catch(() => false)) await page.keyboard.press('Tab');
     assert.equal(await dialog.getByRole('button', { name: '닫기', exact: true }).evaluate(el => el === document.activeElement), true);
     for (const width of [1280, 390, 320]) {
       await page.setViewportSize({ width, height: 900 });
@@ -71,7 +73,7 @@ async function main() {
     await dialog.getByLabel(`${person.name} 상태 변경`).selectOption('CANCELLED');
     const cancelResponse = page.waitForResponse(response => response.url().endsWith(`/api/events/${f.eventId}/commands`) &&
       response.request().method() === 'POST' && response.request().postDataJSON()?.payload?.status === 'CANCELLED');
-    await dialog.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '신청 취소', exact: true }).click();
+    await dialog.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '신청 취소하기', exact: true }).click();
     assert.equal((await cancelResponse).status(), 409);
     await dialog.getByRole('alert').getByText(/먼저 퇴장/).waitFor();
     assert.equal((await read()).participants.find(p => p.id === person.id).status, 'APPROVED');

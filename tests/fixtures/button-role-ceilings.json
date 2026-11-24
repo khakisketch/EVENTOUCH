@@ -23,6 +23,7 @@
   "console/events/[id]/page/ThemeWorkspace.tsx": 18,
   "console/events/[id]/participants/BulkCancelDialog.tsx": 8,
   "console/events/[id]/participants/CancellationConflictReview.tsx": 2,
+  "console/events/[id]/participants/OnsiteEntry.tsx": 1,
   "console/events/[id]/participants/ParticipantEditor.tsx": 6,
   "console/events/[id]/participants/ParticipantList.tsx": 35,
   "console/events/[id]/participants/ReviewedExit.tsx": 4,

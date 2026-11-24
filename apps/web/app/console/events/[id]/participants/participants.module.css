@@ -329,9 +329,9 @@
    identity block beside the avatar; everything else stacks under it. */
 :global(.dialog)[role="dialog"]:has(> .rosterSheet) {
   /* Fixed rows so the close footer can sit on the sheet's bottom edge
-     (row 8 absorbs the free height). */
+     (row 9 absorbs the free height). Row 6 is 현장 입장 처리 (2026-11-24). */
   grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: auto auto auto auto auto auto auto 1fr auto;
+  grid-template-rows: auto auto auto auto auto auto auto auto 1fr auto;
   column-gap: var(--s3);
   row-gap: 0;
   align-content: stretch;
@@ -360,7 +360,7 @@
   overflow-wrap: anywhere;
 }
 :global(.dialog)[role="dialog"]:has(> .rosterSheet) > :global(.dialog-actions) {
-  grid-area: 9 / 1 / 10 / -1;
+  grid-area: 10 / 1 / 11 / -1;
   position: sticky;
   bottom: calc(var(--s4) * -1);
   z-index: 2;
@@ -373,10 +373,11 @@
 .rosterSheet > * { grid-column: 1 / -1; min-width: 0; }
 .rosterSheet > .sheetBadges { grid-row: 4; margin-top: var(--s3); }
 .rosterSheet > .sheetPrimary { grid-row: 5; margin-top: var(--s3); }
-.rosterSheet > .participantDetails { grid-row: 6; margin-top: var(--s2); }
-.rosterSheet > .rowConfirm { grid-row: 7; }
+.rosterSheet > .entryBlock { grid-row: 6; margin-top: var(--s3); }
+.rosterSheet > .participantDetails { grid-row: 7; margin-top: var(--s2); }
+.rosterSheet > .rowConfirm { grid-row: 8; }
 /* 되돌릴 수 없는 개인정보 삭제는 시트의 맨 아래 칸에 둔다(2026-11-24 결정 4). */
-.rosterSheet > .eraseZone { grid-row: 8; }
+.rosterSheet > .eraseZone { grid-row: 9; }
 .sheetNav {
   grid-row: 1;
   position: sticky;
@@ -494,3 +495,16 @@
   margin: 0;
   padding-left: var(--s4);
 }
+
+/* Reopened 2026-11-24 (owner: 현장 등록 직후 입장 처리). The sheet's one primary action sits right under
+   the status pill for an approved person who is not inside yet; a person already inside gets one quiet line,
+   and a person who cannot be entered gets the reason in one line. */
+.entryBlock { display: grid; gap: var(--s2); min-width: 0; }
+.entryAction { width: 100%; min-height: 48px; }
+.entryDone { margin: 0; color: var(--success); font-size: var(--body); font-weight: var(--fw-strong); word-break: keep-all; overflow-wrap: anywhere; }
+.entryReason, .entryDeskNote { margin: 0; color: var(--muted); font-size: var(--small); word-break: keep-all; overflow-wrap: anywhere; }
+.entryDeskPick { display: grid; gap: var(--s1); color: var(--muted); font-size: var(--small); }
+.entryDeskPick select { width: 100%; min-height: 44px; }
+.entryLink, .entryRetry { min-height: 44px; padding-inline: var(--s2); font-weight: var(--fw-strong); }
+.entryNoticeAction { min-height: 44px; }
+.entryNoticeDesk { color: var(--muted); font-size: var(--small); }

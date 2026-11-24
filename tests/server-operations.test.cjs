@@ -1630,6 +1630,68 @@ test('check-scan-by-participant-id-retry-with-same-command-id-is-idempotent', as
   assert.equal(reused.status, 409);
 });
 
+test('an operator admits a walk-in registered at the door by participant id, no assignment (2026-11-24)', async () => {
+  const event = await createFixture({ participants: [] });
+  // The console flow: register on site, then check the same person in by id at an open IN desk.
+  const created = await operatorCommand(event.id, 'participant.create', {
+    name: '현장 등록 참가자', phone: '01055550001', registrationType: 'ONSITE',
+  });
+  assert.equal(created.status, 201, JSON.stringify(created.json));
+  assert.equal(created.json.participant.status, 'APPROVED');
+  const personId = created.json.participant.id;
+  assert.ok(personId, 'the create response carries the new participant id');
+
+  const payload = { deskId: event.deskIn, participantId: personId, expectedAction: 'IN' };
+  const checkId = commandId();
+  const entered = await operatorCommand(event.id, 'check.scan', payload, { id: checkId });
+  assert.equal(entered.status, 200, JSON.stringify(entered.json));
+  assert.deepEqual(entered.json, { name: '현장 등록 참가자', id: personId, action: 'IN', reentry: false, rewards: [], checkId });
+  let state = await readWorkspace(event.id);
+  assert.equal(state.participants.find((item) => item.id === personId).inside, true);
+  assert.equal(state.checks.length, 1);
+  assert.equal(state.checks[0].deskId, event.deskIn);
+  assert.equal(state.checks[0].actor, accountIds.manager, 'the record names the operator account');
+
+  // A lost answer is retried with the same command id: replayed, never recorded twice.
+  const replay = await operatorCommand(event.id, 'check.scan', payload, { id: checkId });
+  assert.equal(replay.status, 200);
+  assert.equal(replay.json.checkId, checkId);
+  assert.equal((await readWorkspace(event.id)).checks.length, 1);
+
+  // A second attempt with a new id is a user-readable rejection, not a second entry.
+  const again = await operatorCommand(event.id, 'check.scan', payload);
+  assert.equal(again.status, 409);
+  assert.equal(again.json.code, 'ALREADY_CHECKED_IN');
+  assert.match(again.json.error, /이미 입장/);
+  assert.equal((await readWorkspace(event.id)).checks.length, 1);
+
+  // A closed desk is refused with its own code; the roster must offer only open IN desks.
+  const second = await operatorCommand(event.id, 'participant.create', {
+    name: '현장 등록 두 번째', phone: '01055550002', registrationType: 'ONSITE',
+  });
+  assert.equal(second.status, 201);
+  assert.equal((await operatorCommand(event.id, 'desk.set-open', { id: event.deskIn, open: false })).status, 200);
+  const closed = await operatorCommand(event.id, 'check.scan', { ...payload, participantId: second.json.participant.id });
+  assert.equal(closed.status, 409);
+  assert.equal(closed.json.code, 'DESK_CLOSED');
+  // An exit desk is not an entry desk: expectedAction guards a desk that changed direction.
+  const wrongDirection = await operatorCommand(event.id, 'check.scan', { deskId: event.deskOut, participantId: second.json.participant.id, expectedAction: 'IN' });
+  assert.equal(wrongDirection.status, 409);
+  assert.equal(wrongDirection.json.code, 'DESK_ACTION_CHANGED');
+  state = await readWorkspace(event.id);
+  assert.equal(state.participants.find((item) => item.id === second.json.participant.id).inside, false);
+
+  // A manager without the 현장 데스크 (onsite) grant cannot admit anyone.
+  await harness.database.query(
+    'UPDATE memberships SET write_permissions = $3::jsonb WHERE account_id = $1 AND event_id = $2',
+    [accountIds.manager, event.id, JSON.stringify(['participants'])]
+  );
+  assert.equal((await operatorCommand(event.id, 'desk.set-open', { id: event.deskIn, open: true })).status, 403);
+  const denied = await operatorCommand(event.id, 'check.scan', { ...payload, participantId: second.json.participant.id });
+  assert.equal(denied.status, 403);
+  assert.equal((await readWorkspace(event.id)).checks.length, 1);
+});
+
 test('manager-membership-is-required-for-operation-setup-and-archived-event-writes', async () => {
   const event = await createFixture({ stage: 'ARCHIVED' });
   const archived = await operatorCommand(event.id, 'desk.save', {
