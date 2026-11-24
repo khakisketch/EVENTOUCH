@@ -195,3 +195,11 @@ test("desk board counts follow the entry-count rules of 운영 현황", () => {
   assert.equal(processedAgo(null, now), null);
   assert.equal(processedAgo("not a date", now), null);
 });
+
+test("the desk run switch keeps a 44px operable area around its 40x24 track", () => {
+  // Reopened 2026-11-25: the Astryx switch input is only 40x24, below the touch floor on a tablet or phone.
+  const parts = read("LocationParts.tsx");
+  const css = read("operations.module.css");
+  assert.match(parts, /className=\{styles\.runSwitch\}/);
+  assert.match(css, /\.runSwitch\.runSwitch :global\(\.astryx-switch-field\) input\[role="switch"\][^}]*width: 44px;[^}]*height: 44px/su);
+});

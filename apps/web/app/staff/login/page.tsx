@@ -11,5 +11,6 @@ export default async function StaffLoginPage({
   const resolved = await searchParams;
   const raw = Array.isArray(resolved.next) ? resolved.next[0] : resolved.next;
   const safe = safeNextPath(raw);
-  redirect(safe ? `/login?next=${encodeURIComponent(safe)}` : "/login");
+  // Without a ?next= this is a staff bookmark: keep the staff wording on /login.
+  redirect(`/login?next=${encodeURIComponent(safe ?? "/staff")}`);
 }

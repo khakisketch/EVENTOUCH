@@ -93,15 +93,18 @@ type DeskSwitchProps = {
 };
 
 export function RunSwitch({ name, on, disabled, reason, onToggle }: DeskSwitchProps) {
+  // The visible track is 40x24; the wrapper grows the operable area to the 44px touch floor.
   return (
-    <Switch
-      label={`${name} 가동`}
-      isLabelHidden
-      value={on}
-      isDisabled={disabled}
-      disabledMessage={disabled ? reason : undefined}
-      onChange={() => onToggle()}
-    />
+    <span className={styles.runSwitch}>
+      <Switch
+        label={`${name} 가동`}
+        isLabelHidden
+        value={on}
+        isDisabled={disabled}
+        disabledMessage={disabled ? reason : undefined}
+        onChange={() => onToggle()}
+      />
+    </span>
   );
 }
 

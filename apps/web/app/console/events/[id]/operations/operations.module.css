@@ -283,6 +283,11 @@
 .cardNone { color: var(--warning); }
 .cardControl { position: absolute; top: var(--s4); right: var(--s5); display: inline-flex; align-items: center; justify-content: flex-end; min-width: 44px; min-height: 44px; }
 .cardAssign { position: absolute; right: var(--s5); bottom: var(--s4); }
+/* 가동 스위치: 보이는 트랙은 40x24지만 눌리는 영역은 44px 바닥을 채운다. */
+.runSwitch { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
+.runSwitch.runSwitch :global(.astryx-switch-field) input[role="switch"] {
+  top: 50%; left: 50%; right: auto; bottom: auto; width: 44px; height: 44px; margin: 0; transform: translate(-50%, -50%); cursor: pointer;
+}
 .deskCard[data-dim="true"] .cardName,
 .deskCard[data-dim="true"] .cardNum,
 .deskCard[data-dim="true"] .cardStaff { color: var(--muted); }

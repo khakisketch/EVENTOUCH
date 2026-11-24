@@ -157,7 +157,8 @@ test('every non-redirect application page has an actual capture destination', ()
   assert.deepEqual(missing(destinations), [], 'a parent screen is not coverage for a standalone page');
   const withoutRecovery = new Set(destinations); withoutRecovery.delete('/recover');
   assert.ok(missing(withoutRecovery).includes('/recover'), 'the coverage gate detects a missing real destination');
-  assert.match(read('staff/login/page.tsx'), /redirect\(safe \? `\/login\?next=/);
+  // Reopened 2026-11-24: a bare /staff/login bookmark now keeps the staff wording (next=/staff).
+  assert.match(read('staff/login/page.tsx'), /redirect\(`\/login\?next=\$\{encodeURIComponent\(safe \?\? "\/staff"\)\}`\)/);
 });
 
 test('overview role check follows the live primary contract instead of an always-orange approval', () => {
