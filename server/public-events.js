@@ -460,7 +460,8 @@ function publicWorkspace(value, event, participant = null) {
   const venueVisible = venueEnabled && object(object(source.pageExperience).published).showVenue !== false;
   const publishedVenueMap = venueVisible && /^[A-Za-z0-9_-]{1,160}$/.test(venueFileId) && venueMapAlt.trim()
     ? { image: { fileId: venueFileId }, alt: venueMapAlt } : null;
-  const desks = array(source.desks).map((desk) => pick(desk, ['id', 'name', 'action']));
+  // Attendee pages never need desk records; a desk is only named by its own poster.
+  const desks = [];
   const booths = array(source.booths).map((booth) => pick(booth, [
     'id', 'name', 'zone', 'status', 'capacity', 'limit', 'used', 'startsAt', 'endsAt',
   ]));

@@ -9,6 +9,7 @@ const { publicOrigin } = require('../public-origin');
 const { managerWriteAllowed } = require('../event-permissions');
 const { createAttendeeAccess, normalizePhone: attendeePhone } = require('../attendees');
 const { arrivalReview, deskTakesArrivals, recordArrival } = require('../arrivals');
+const { createGate } = require('../event-queue');
 const { ERASED_NAME, anonymizeParticipant, eraseWorkspaceCopies, redactReceiptResult } = require('../participant-erasure');
 const { ticketExpiry, TICKET_TOKEN } = require('../ticket-lifetime');
 const { cancellationConflictFingerprint, cancellationConflictIdentity } = require('../cancellation-conflict-review');
@@ -748,6 +749,9 @@ function createParticipantCommands(database) {
     });
   }
 
+  // Half the default pool: signups keep moving while the desks keep their connections.
+  const signupGate = createGate({ width: 5 });
+
   async function signup({ slug, commandId: id, input, cookieHeader }) {
     const eventSlug = clean(slug, 100);
     try {
@@ -759,7 +763,8 @@ function createParticipantCommands(database) {
     }
     const formInput = object(input);
     const signupPhone = normalizedPhone(formInput.phone);
-    const result = await mutate({
+    // Signups for one event wait their turn here, not on a held database connection.
+    const result = await signupGate(eventSlug, () => mutate({
       ref: 'slug',
       value: eventSlug,
       commandId: id,
@@ -799,7 +804,7 @@ function createParticipantCommands(database) {
           },
         };
       },
-    });
+    }));
     return result;
   }
 

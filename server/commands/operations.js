@@ -1464,14 +1464,4 @@ function createOperationsCommands(database) {
   };
 }
 
-// A poster arrival at a desk that hands nothing over: the participant's own arrival is the
-// entry, with the same scan rules, recorded under the participant.
-async function appendSelfCheck(client, workspace, event, { person, desk, id, now }) {
-  const scanned = scan(workspace, event, { id: person.id }, { deskId: desk.id, participantId: person.id, expectedAction: 'IN' }, null, { trusted: true });
-  scanned.row.id = id;
-  scanned.row.at = now;
-  workspace.checks.unshift(scanned.row);
-  await projectCheckinRecord(client, event.id, scanned.row);
-}
-
-module.exports = { createOperationsCommands, COMMANDS, appendSelfCheck };
+module.exports = { createOperationsCommands, COMMANDS };

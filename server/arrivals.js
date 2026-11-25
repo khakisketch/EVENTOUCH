@@ -46,6 +46,9 @@ function arrivalReview(workspace, person, checkIndex) {
   if (status === 'PENDING') return 'PENDING';
   if (status === 'WAITLIST') return 'WAITLIST';
   if (status !== 'APPROVED') return 'STATUS';
+  // The entry scan refuses an expired ticket, so no tag is printed for one.
+  const expiry = clean(person.ticketExpiresAt, 64);
+  if (expiry && !(Date.parse(expiry) > Date.now())) return 'EXPIRED';
   if (!['FREE', 'PAID'].includes(String(person.paymentStatus || '').toUpperCase())) return 'PAYMENT';
   if (attendanceNeedsReview(person, checkIndex || indexLatestChecks(workspace.checks))) return 'ATTENDANCE';
   if (person.inside !== true && person.everIn === true && workspace.allowReentry !== true) return 'REENTRY';
@@ -133,10 +136,18 @@ function arrivalPersonByTicket(workspace, token) {
   return person;
 }
 
+const namesakeKey = (person) => `${String(person.name || '').normalize('NFC').replace(/\s+/g, '')}\n${String(person.company || '').normalize('NFC').replace(/\s+/g, '')}`.toLowerCase();
+
 // What one desk screen reads every few seconds: its waiting list and the entry count.
+// `now` is the server's clock, so a laptop with a wrong clock judges waiting times correctly.
 function deskArrivalView(workspace, desk) {
   const people = new Map(list(workspace.participants).filter(Boolean).map((person) => [String(person.id), person]));
   const checkIndex = indexLatestChecks(workspace.checks);
+  // Two registrations that look identical on a tag need a second look before handing it over.
+  const namesakes = new Map();
+  for (const person of people.values()) {
+    if (!arrivalBlockedOut(person)) namesakes.set(namesakeKey(person), (namesakes.get(namesakeKey(person)) || 0) + 1);
+  }
   const arrivals = [];
   for (const arrival of list(workspace.arrivals)) {
     if (!isOpenArrival(arrival) || String(arrival.deskId) !== String(desk.id)) continue;
@@ -147,6 +158,7 @@ function deskArrivalView(workspace, desk) {
       name: String(person.name || ''), company: String(person.company || ''), group: String(person.group || ''),
       source: String(arrival.source || ''), at: String(arrival.at || ''),
       review: arrivalReview(workspace, person, checkIndex),
+      namesake: namesakes.get(namesakeKey(person)) > 1,
       printedAt: arrival.printedAt || null, printFailedAt: arrival.printFailedAt || null,
       printClaim: arrival.printClaim ? { station: arrival.printClaim.station, at: arrival.printClaim.at } : null,
     });
@@ -154,6 +166,7 @@ function deskArrivalView(workspace, desk) {
   arrivals.sort((left, right) => left.at.localeCompare(right.at));
   const approved = [...people.values()].filter((person) => !arrivalBlockedOut(person) && String(person.status || '').toUpperCase() === 'APPROVED');
   return {
+    now: new Date().toISOString(),
     desk: { id: String(desk.id), name: String(desk.name || ''), action: String(desk.action || ''), open: desk.open !== false, nametag: desk.nametag !== false },
     arrivals,
     entered: approved.filter((person) => person.inside === true).length,

@@ -76,6 +76,20 @@ npm run ops:release:check -- --attestation /private/path/acceptance.json
 
 A release record requires explicit policy review and actual operator-journey, iOS Safari/camera, Android/camera, screen-reader, printer/reader, email and message-delivery, and customer-acceptance observations. Configuration, a successful build, or synthetic audits do not satisfy those checks. Follow [provider acceptance](INTEGRATIONS.md) and [the physical-device list](../scripts/device-checklist.md).
 
+## 현장 접수 규모와 접속 주소
+
+2026-11-25 합성 측정(개발 컴퓨터의 Docker, 참가자 3,000명 행사 하나, 데스크 4대가 쉬지 않고 출력·입장 처리, 실제 와이파이·터널·휴대폰 제외):
+
+| 상황 | 결과 |
+|---|---|
+| 도착 접수 동시 600명 | 실패 없음, 0.8초 안에 모두 응답 |
+| 현장 신청 동시 150명 | 실패 없음, 95%가 9초 안, 마지막 9.6초 |
+| 현장 신청 동시 300명 | 실패 없음, 95%가 21초 안. 화면 대기 한도 12초를 넘으면 참가자에게 다시 누르라고 안내하며 같은 신청으로 확인됩니다 |
+
+행사 데이터가 한 덩어리로 저장되므로 참가자·기록이 늘면 쓰기가 느려집니다. API 프로세스는 하나를 전제합니다(대기 줄과 접수 시도 제한이 메모리에 있습니다). 계정 하나에 대형 행사가 많이 쌓이면 데스크가 다시 읽는 전체 데이터가 커져 응답이 느려지므로, 행사 전에 실제 데이터 규모로 확인하세요.
+
+접수의 틀린 입력 제한은 접속 주소별로도 셉니다. HTTPS 입구(터널·리버스 프록시) 뒤에서 `EVENTOUCH_WEB_TRUSTED_PROXIES`를 설정하지 않으면 모든 참가자가 한 주소로 보여, 한 사람의 반복 입력이 다른 사람의 이름·번호 접수를 10분간 막을 수 있습니다. 입구의 실제 주소를 확인해 그 주소만 신뢰하도록 설정하고, 서로 다른 회선 두 곳에서 구분되는지 확인하세요.
+
 ## Retention and deletion
 
 Backup expiry is decided above (14 days, newest 7 kept). Retention periods for event, account, receipt, attendee and file data, deletion authority and exceptions are not approved. Until they are, do not permanently delete events, accounts, receipts, attendee data, or file bytes. `npm run event:purge:review -- --org-id <organization-id> --event-id <event-id>` reports review information only; it does not purge data.
