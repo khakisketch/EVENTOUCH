@@ -3310,7 +3310,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   ? "새 조직에는 발송 수단이 없으므로 모의 기록만 남습니다. 실제로 전달되지 않습니다."
                   : "실제로 전달되지 않으며, 요청은 연결 필요 상태로 기록됩니다(모의 기록이 아닙니다)."}
             </p>
-            {state.integrations.connected ? null : <ProductLink className={styles.inkLink} variant="ghost" href="/help">연결 안내 보기</ProductLink>}
+            {state.integrations.connected ? null : <ProductLink className={styles.inkLink} variant="ghost" href="/help">도움말 보기</ProductLink>}
             {state.messageSchedule?.eligibleForAuto && (!state.messageSchedule.autoConfigured || !state.messageSchedule.workerStarted)
               ? <p className={styles.connectionNote}>{scheduleServerStatus(state.messageSchedule)} 예약 메시지는 직접 ‘발송 실행’을 눌러야 나갑니다.</p>
               : null}
