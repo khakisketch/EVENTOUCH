@@ -78,8 +78,10 @@ test('web-service-entry-sends-everyone-through-the-shared-login', () => {
   assert.match(home, /화면 구성 예시/);
   // Reopened 2026-11-25 (hero 가안): the hero is one still scene (live count + ticket); no tab-driven preview.
   assert.match(home, /<ProductPreview variant="live" \/>/);
-  for (const variant of ['home', 'ticket', 'staff', 'report']) {
-    assert.match(home, new RegExp(`<ProductPreview variant="${variant}"`));
+  // Reopened 2026-11-25 (직접 눌러 보는 섹션): the journey previews gave way to the hands-on check-in phones.
+  const playSource = read('app/LandingPlay.tsx');
+  for (const variant of ['ticket', 'staff']) {
+    assert.match(playSource, new RegExp(`<ProductPreview variant="${variant}"`));
   }
 
   // Auth lookup must not block public content; it has a deadline and fallback.

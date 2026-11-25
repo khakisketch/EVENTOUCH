@@ -1,0 +1,241 @@
+/* Landing hands-on section (owner choice 2026-11-25): the stage draw and the phone roulette a
+   visitor can run, then the check-in screens. The draw wears the room screen's violet and gold,
+   the wheel the attendee roulette's yellow and blue; all colours are tokens. */
+
+/* One ink band across the page, like the hero. */
+.band {
+  background: var(--ink);
+  color: var(--paper);
+  box-shadow: 0 0 0 100vmax var(--ink);
+  clip-path: inset(0 -100vmax);
+}
+
+.band h2 { color: var(--paper); }
+.band > div > p:first-child { color: var(--brand); }
+.band > div > p:last-child { color: color-mix(in srgb, var(--paper) 72%, transparent); }
+
+.play { display: grid; gap: var(--s5); margin-top: var(--s7); }
+
+.games { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: var(--s5); }
+
+.draw,
+.roulette,
+.checkin { border-radius: var(--r-stage); }
+
+.draw h3,
+.roulette h3,
+.checkin h3 { margin: 0; font-size: var(--text-xl); font-weight: var(--fw-heavy); letter-spacing: var(--ls-heading); }
+
+.lead { margin: 0; font-size: var(--small); line-height: 1.6; text-align: center; }
+
+/* ---- Stage draw ---- */
+.draw {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s4);
+  padding: var(--s6) var(--s5);
+  border: 1px solid color-mix(in srgb, var(--demo-draw-gold) 36%, transparent);
+  background: radial-gradient(420px 300px at 50% 55%, var(--demo-draw-glow), var(--demo-draw-bg) 70%), var(--demo-draw-bg);
+}
+
+.draw h3 { color: var(--demo-draw-gold-bright); }
+.draw .lead { color: var(--demo-draw-muted); }
+
+.slot {
+  display: grid;
+  width: min(100%, 600px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 6px solid var(--demo-draw-brass);
+  border-radius: var(--r-card);
+  background: var(--demo-draw-slot);
+}
+
+.slot span {
+  display: grid;
+  height: clamp(140px, 20vw, 250px);
+  place-items: center;
+  color: var(--demo-draw-gold-bright);
+  font-size: clamp(calc(var(--display-xl) * 1.3), 12vw, calc(var(--display-xl) * 2.6));
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--fw-heavy);
+  line-height: 1;
+}
+
+.slot span + span { border-left: 1px solid color-mix(in srgb, var(--demo-draw-gold) 36%, transparent); }
+
+.winner { display: grid; min-height: 84px; place-content: center; justify-items: center; gap: var(--s1); text-align: center; }
+.winner span { color: var(--demo-draw-muted); font-size: var(--small); font-weight: var(--fw-strong); }
+.winner strong { color: var(--paper); font-size: var(--h1); font-weight: var(--fw-heavy); line-height: 1.2; }
+
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.drawButton {
+  min-height: 56px;
+  padding: 0 var(--s7);
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: var(--demo-draw-gold);
+  color: var(--demo-draw-ink);
+  font: inherit;
+  font-size: var(--h3);
+  font-weight: var(--fw-heavy);
+  cursor: pointer;
+}
+
+.drawButton:hover { background: var(--demo-draw-gold-bright); }
+.drawButton:focus-visible { outline: 3px solid var(--paper); outline-offset: 3px; }
+.drawButton[aria-disabled="true"] { cursor: progress; }
+
+/* ---- Phone roulette ---- */
+.roulette {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s4);
+  padding: var(--s6) var(--s5);
+  background: var(--ref-yellow);
+  color: var(--ref-yellow-ink);
+}
+
+.roulette .lead { color: var(--ref-yellow-ink); }
+
+.wheel { position: relative; width: min(100%, 300px); aspect-ratio: 1; }
+
+.disc { width: 100%; height: 100%; overflow: hidden; }
+.rotor { width: 100%; height: 100%; transition: transform 3.6s cubic-bezier(0.15, 0.7, 0.12, 1); }
+.rotor svg { display: block; width: 100%; height: 100%; }
+.rotor path { fill: var(--ref-wheel-deep); stroke: var(--paper); stroke-width: 1.5; }
+.rotor path[data-odd="true"] { fill: var(--ref-wheel-blue); }
+.rotor text { fill: var(--paper); font-size: var(--text-md); font-weight: var(--fw-heavy); text-anchor: middle; dominant-baseline: central; }
+
+.pointer { position: absolute; top: -6px; left: 50%; width: 44px; height: 40px; transform: translateX(-50%); }
+.pointer path { fill: var(--paper); stroke: var(--ref-wheel-deep); stroke-width: 4; stroke-linejoin: round; }
+
+.hub {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 34%;
+  aspect-ratio: 1;
+  border: 6px solid var(--paper);
+  border-radius: var(--r-pill);
+  background: var(--ref-wheel-deep);
+  color: var(--paper);
+  font: inherit;
+  font-weight: var(--fw-heavy);
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+
+.hub:hover { background: var(--ref-wheel-blue); }
+.hub:focus-visible { outline: 3px solid var(--ref-yellow-ink); outline-offset: 3px; }
+.hub[aria-disabled="true"] { cursor: progress; }
+
+.prizes {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: prize;
+}
+
+.prizes li {
+  display: flex;
+  min-width: 0;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-ctl);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--small);
+  counter-increment: prize;
+}
+
+.prizes li::before { color: var(--ref-wheel-deep); content: counter(prize); font-weight: var(--fw-heavy); }
+.prizes li[data-won] { background: var(--ref-wheel-deep); color: var(--paper); font-weight: var(--fw-strong); }
+.prizes li[data-won]::before { color: var(--paper); }
+
+.prize {
+  display: grid;
+  width: 100%;
+  min-height: 84px;
+  box-sizing: border-box;
+  margin-top: auto;
+  place-content: center;
+  justify-items: center;
+  gap: var(--s1);
+  padding: var(--s3);
+  border: 2px solid var(--ref-yellow-ink);
+  border-radius: var(--r-card);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: center;
+}
+
+.prize span { color: var(--muted); font-size: var(--label); font-weight: var(--fw-strong); }
+.prize strong { font-size: var(--h2); font-weight: var(--fw-heavy); line-height: 1.25; }
+
+/* ---- Check-in ---- */
+.checkin {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s7);
+  padding: var(--s6) var(--s7) 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--paper) 16%, transparent);
+  background: radial-gradient(520px 300px at 100% 0%, color-mix(in srgb, var(--brand) 34%, transparent), transparent 70%), var(--stage);
+}
+
+.checkinCopy { display: grid; gap: var(--s3); padding-bottom: var(--s6); }
+.checkinCopy h3 { color: var(--paper); font-size: var(--h1); }
+.checkinCopy p { max-width: 46ch; margin: 0; color: color-mix(in srgb, var(--paper) 84%, transparent); line-height: 1.7; word-break: keep-all; }
+.checkinCopy small { color: color-mix(in srgb, var(--paper) 64%, transparent); font-size: var(--label); }
+
+.phones { --k: 0.74; display: flex; align-items: flex-end; gap: var(--s4); }
+
+/* A phone drawn at 295 x 560, scaled and cut off by the card's lower edge. */
+.phone {
+  width: calc(295px * var(--k));
+  height: calc(440px * var(--k));
+  box-sizing: content-box;
+  overflow: hidden;
+  border: 7px solid var(--ink);
+  border-bottom: 0;
+  border-radius: calc(var(--r-card) * 2) calc(var(--r-card) * 2) 0 0;
+  background: var(--paper);
+}
+
+.phone > [role="img"] { width: 295px; height: 560px; transform: scale(var(--k)); transform-origin: top left; pointer-events: none; }
+
+@media (max-width: 1024px) {
+  .games { grid-template-columns: minmax(0, 1fr); }
+  .checkin { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 0; }
+  .checkinCopy { justify-self: stretch; }
+}
+
+@media (max-width: 560px) {
+  .play { margin-top: var(--s5); }
+  .draw,
+  .roulette { padding: var(--s5) var(--s4); }
+  .slot span { height: 150px; font-size: calc(var(--display-xl) * 1.45); }
+  .checkin { padding: var(--s5) var(--s4) 0; }
+  /* One phone at a readable scale: the staff scan is the check-in moment (the ticket is in the hero). */
+  .phones { --k: 0.82; }
+  .phone:first-child { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotor { transition: none; }
+}
+
+@media print {
+  .band { background: transparent; color: inherit; box-shadow: none; clip-path: none; }
+  .play { display: none; }
+}

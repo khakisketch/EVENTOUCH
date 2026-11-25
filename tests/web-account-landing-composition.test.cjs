@@ -67,16 +67,20 @@ test('flows, tokens and the contact rules are unchanged', () => {
 test('the landing below the hero is interactive, honest and keeps the hero\'s ink identity', () => {
   const home = fs.readFileSync(path.join(app, 'page.tsx'), 'utf8');
   const sections = fs.readFileSync(path.join(app, 'landing-sections.module.css'), 'utf8');
-  const flow = fs.readFileSync(path.join(app, 'LandingFlow.tsx'), 'utf8');
-  // The persuasion path: one event in three moments, the attendee page you can try,
+  const playSource = fs.readFileSync(path.join(app, 'LandingPlay.tsx'), 'utf8');
+  // The persuasion path: the draw, the roulette and check-in you can try (2026-11-25), the attendee page you can try,
   // the old way against the new, who it fits, the result, the steps, the answers.
-  for (const part of ['<LandingFlow', '<LandingPageDemo', '<LandingCompare', 'id="report"', 'id="faq"', 'id="contact"']) assert.ok(home.includes(part), `${part} stays`);
+  for (const part of ['<LandingPlay', '<LandingPageDemo', '<LandingCompare', 'id="report"', 'id="faq"', 'id="contact"']) assert.ok(home.includes(part), `${part} stays`);
   // Totals nobody measured are not shown as a track record.
   assert.doesNotMatch(home, /320\+|86,000\+|누적 운영 행사/u);
   // Interactive parts are real controls with names and states, not pictures.
-  assert.match(flow, /role="tablist"[\s\S]*?role="tab"[\s\S]*?aria-selected/u);
-  assert.match(flow, /role="tabpanel"/u);
-  assert.match(flow, /prefers-reduced-motion/u, 'the flow never advances for people who asked for less motion');
+  // Reopened 2026-11-25 (owner: 직접 눌러 보는 방식): real buttons, announced results, and no motion for people who asked for less.
+  assert.match(playSource, /<button type="button" className=\{styles\.drawButton\}/u);
+  // The accessible name contains the visible "START" (WCAG 2.5.3, label in name).
+  assert.match(playSource, /<button type="button" className=\{styles\.hub\}[^>]*"START · 룰렛 돌리기"/u);
+  assert.equal((playSource.match(/role="status" aria-live="polite"/gu) || []).length, 2);
+  assert.match(playSource, /prefers-reduced-motion/u);
+  assert.doesNotMatch(playSource, /fetch\(|\/api\/|localStorage|sessionStorage/u, 'the demo stays in the browser');
   const demo = fs.readFileSync(path.join(app, 'LandingPageDemo.tsx'), 'utf8');
   assert.match(demo, /role="radiogroup"[\s\S]*?role="radio"[\s\S]*?aria-checked/u);
   // Reopened 2026-11-25 (owner): the visible "화면 구성 예시 · 합성 데이터" captions are gone from the landing; screen readers still get the
@@ -94,12 +98,14 @@ test('the landing below the hero is interactive, honest and keeps the hero\'s in
   assert.match(landing, /@media \(max-width: 768px\) \{\s*\.header \{ position: static; \}/u);
 });
 
-test('phone landing previews stay readable: tall hero stage, no clipped offset shadow, one legible phone in the flow stage', () => {
+test('phone landing previews stay readable: hero scene fits a phone, the hands-on section stacks with one legible check-in phone', () => {
   // Reopened 2026-11-25 (owner: 랜딩 가독성·모바일 제품 프리뷰). The dark hero identity is unchanged.
   const sections = fs.readFileSync(path.join(app, 'landing-sections.module.css'), 'utf8');
   // Reopened 2026-11-25 (hero 가안): on a phone the hero is title, one line and the scene; the fixed bar is the only inquiry button.
   assert.match(landing, /@media \(max-width: 768px\)[\s\S]*?\.heroActions \{ display: none; \}[\s\S]*?\.heroScene \{ --k: 0\.6; height: 540px; \}/u);
-  assert.match(sections, /@media \(max-width: 560px\) \{\s*\.flow \{ --flow-stage-h: 520px; --k-duo: 0\.82; --k-pair: 0\.82; \}/u);
-  assert.match(sections, /\.stageDuo \.window \{ display: none; \}/u);
-  assert.match(sections, /\.stagePair \.phoneCrop:last-child \{ display: none; \}/u);
+  const play = fs.readFileSync(path.join(app, 'landing-play.module.css'), 'utf8');
+  // Reopened 2026-11-25 (직접 눌러 보는 섹션): on phones one readable check-in phone, games stacked in one column.
+  assert.match(play, /@media \(max-width: 1024px\) \{\s*\.games \{ grid-template-columns: minmax\(0, 1fr\); \}/u);
+  assert.match(play, /\.phones \{ --k: 0\.82; \}\s*\.phone:first-child \{ display: none; \}/u);
+  assert.match(play, /@media \(prefers-reduced-motion: reduce\) \{\s*\.rotor \{ transition: none; \}/u);
 });

@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import styles from "./landing.module.css";
 import ProductPreview from "./ProductPreview";
 import sec from "./landing-sections.module.css";
-import LandingFlow, { type FlowScene } from "./LandingFlow";
+import LandingPlay from "./LandingPlay";
+import play from "./landing-play.module.css";
 import LandingPageDemo from "./LandingPageDemo";
 import LandingCompare from "./LandingCompare";
 import { LandingIcon } from "./LandingIcons";
@@ -22,53 +23,6 @@ const INQUIRY_BODY =
 
 const INQUIRY_HREF =
   `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(INQUIRY_SUBJECT)}&body=${encodeURIComponent(INQUIRY_BODY)}`;
-
-const FLOW_SCENES: readonly FlowScene[] = [
-  {
-    id: "before",
-    phase: "행사 전",
-    title: "모집 · 승인 · 안내",
-    body: "신청 명단과 참가 상태를 살피고, 안내할 대상을 정합니다. 참가자 페이지와 참여 이벤트도 이때 준비합니다.",
-    screens: "쓰는 화면 · 참가자 명단, 메시지, 참가자 페이지",
-    stage: (
-      <div className={sec.stageDuo}>
-        <div className={sec.window}>
-          <div className={sec.windowBar} aria-hidden="true"><i /><i /><i /><span>운영 현황</span></div>
-          <ProductPreview variant="console" />
-        </div>
-        <div className={sec.phoneCrop}><ProductPreview variant="home" /></div>
-      </div>
-    ),
-  },
-  {
-    id: "onsite",
-    phase: "행사 현장",
-    title: "체크인 · 참여",
-    body: "배정된 스태프가 QR 또는 참가자 검색으로 입장을 처리하고, 운영자는 현장 모드에서 입장 상황을 한 화면으로 봅니다.",
-    screens: "쓰는 화면 · 입장·스태프, 현장 모드",
-    stage: (
-      <div className={sec.stagePair}>
-        <div className={sec.phoneCrop}><ProductPreview variant="ticket" /></div>
-        <div className={sec.phoneCrop}><ProductPreview variant="staff" /></div>
-      </div>
-    ),
-  },
-  {
-    id: "after",
-    phase: "행사 후",
-    title: "결과 · 보고서",
-    body: "참가·입장·현장 기록을 모아 결과를 확인하고 보고서로 남깁니다.",
-    screens: "쓰는 화면 · 결과 보고서",
-    stage: (
-      <div className={sec.stageSolo}>
-        <div className={sec.window}>
-          <div className={sec.windowBar} aria-hidden="true"><i /><i /><i /><span>결과 보고서</span></div>
-          <ProductPreview variant="report" />
-        </div>
-      </div>
-    ),
-  },
-];
 
 const AUDIENCE = [
   { icon: "seminar", title: "컨퍼런스·세미나", text: "사전 등록부터 현장 입장까지 한 흐름으로 운영합니다." },
@@ -167,7 +121,7 @@ export default function Home() {
                   <path d="M4 10h11M10 4l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </a>
-              <a className={styles.secondaryAction} href="#journey">한 행사의 흐름 보기 ↓</a>
+              <a className={styles.secondaryAction} href="#journey">직접 눌러 보기 ↓</a>
             </div>
           </div>
 
@@ -196,15 +150,13 @@ export default function Home() {
           </ul>
         </section>
 
-        <section className={sec.section} id="journey" aria-labelledby="flow-title">
+        <section className={`${sec.section} ${play.band}`} id="journey" aria-labelledby="play-title">
           <Reveal className={sec.heading}>
-            <p className={sec.eyebrow}>운영 흐름</p>
-            <h2 id="flow-title">한 행사의 세 시점이 이어집니다.</h2>
-            <p>운영자는 콘솔에서, 스태프는 모바일 웹에서, 참가자는 행사 링크에서 일합니다.</p>
+            <p className={sec.eyebrow}>행사 당일</p>
+            <h2 id="play-title">직접 눌러 보세요.</h2>
+            <p>모두가 보는 무대 추첨, 각자 돌리는 룰렛, QR 한 번의 체크인.</p>
           </Reveal>
-          <Reveal delay={120}>
-            <LandingFlow scenes={FLOW_SCENES} />
-          </Reveal>
+          <LandingPlay />
         </section>
 
         <section className={`${sec.section} ${sec.bandTint}`} id="attendee-page" aria-labelledby="demo-title">

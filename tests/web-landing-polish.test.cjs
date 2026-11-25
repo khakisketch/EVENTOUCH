@@ -13,7 +13,7 @@ const path = require('node:path');
 const app = path.join(__dirname, '../apps/web/app');
 const read = (file) => fs.readFileSync(path.join(app, file), 'utf8');
 const strip = (css) => css.replace(/\/\*[\s\S]*?\*\//g, '');
-const LANDING_CSS = ['landing.module.css', 'landing-sections.module.css', 'product-preview.module.css'];
+const LANDING_CSS = ['landing.module.css', 'landing-sections.module.css', 'product-preview.module.css', 'landing-play.module.css'];
 
 test('the console preview draws the real menu and an overview built around one entry number', () => {
   const preview = read('ProductPreview.tsx');
@@ -50,16 +50,18 @@ test('the hero is one still scene: the live count with the ticket laid over it, 
 
 test('the hero strip says what to know up front, in sentences that read on their own', () => {
   const home = read('page.tsx');
-  for (const text of ['미리 알려 드립니다', '참가자 앱 설치 없이 링크로 신청·티켓', '문자·알림톡은 발송 연결 후 실제 발송', '고객사 포털은 제공하지 않음', '한 행사의 흐름 보기', 'QR 입장, 실시간 현황, 결과 보고서까지.']) assert.ok(home.includes(text), `${text} is in the hero`);
+  for (const text of ['미리 알려 드립니다', '참가자 앱 설치 없이 링크로 신청·티켓', '문자·알림톡은 발송 연결 후 실제 발송', '고객사 포털은 제공하지 않음', '직접 눌러 보기', 'QR 입장, 실시간 현황, 결과 보고서까지.']) assert.ok(home.includes(text), `${text} is in the hero`);
   assert.doesNotMatch(home, /합성 데이터|도입 전 확인|문자 발송 연결 확인|행사 종류·일정·규모를 적을 수 있게 준비합니다|화면 구성 살펴보기/u);
 });
 
-test('the journey keeps one stage height and shows the chosen moment as a caption on small screens', () => {
-  const css = strip(read('landing-sections.module.css'));
-  const flow = read('LandingFlow.tsx');
-  assert.match(css, /\.flowStage \{[^}]*\bheight:\s*var\(--flow-stage-h\)/su);
-  assert.doesNotMatch(css, /\.flowStage \{[^}]*min-height/su);
-  assert.match(flow, /styles\.flowCaption/u);
+test('the hands-on section runs the draw and the roulette in the browser and ends at check-in', () => {
+  // Reopened 2026-11-25 (owner chose the 직접 눌러 보는 방식): replaces the three-moment journey tabs.
+  const play = read('LandingPlay.tsx');
+  assert.match(play, /무대 추첨[\s\S]*휴대폰 룰렛[\s\S]*체크인/u, 'draw, roulette, check-in in that order');
+  assert.match(play, /<ProductPreview variant="ticket" \/>[\s\S]*?<ProductPreview variant="staff" \/>/u);
+  // The wheel stops with the picked prize under the pointer: six equal sectors of 60 degrees.
+  assert.match(play, /const target = 360 - \(pick \* 60 \+ 30\);/u);
+  assert.match(play, /const PRIZES = \[[^\]]*\] as const;/u);
 });
 
 test('landing styles use only the 400 / 600 / 800 weights, token radii and no hex colours', () => {
@@ -83,7 +85,8 @@ test('the landing states only numbers and features the product has', () => {
   assert.doesNotMatch(compare, /실시간/u, 'the roster refreshes on its own schedule; do not call it real time');
   // The result section names what the report screen really offers.
   assert.match(home, /PPTX/u);
-  // The journey names the screens by their current menu names.
-  for (const label of ['입장·스태프', '현장 모드', '결과 보고서']) assert.ok(home.includes(label), `${label} in the journey`);
+  // The check-in block names the screens by their current menu names.
+  for (const label of ['입장·스태프', '현장 모드']) assert.ok(read('LandingPlay.tsx').includes(label), `${label} in the check-in block`);
+  assert.ok(home.includes('결과 보고서'), 'the result section stays');
   assert.doesNotMatch(home, /스태프 체크인, 부스 인증|결과 분석, 보고서/u);
 });

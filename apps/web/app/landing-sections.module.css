@@ -60,136 +60,7 @@
 .section [data-reveal="pending"],
 .contact [data-reveal="pending"] { opacity: 0; transform: translateY(26px); }
 
-/* ---- Flow: one event in three moments. The stage has one height for every
-   moment, so choosing a tab never moves the sections below. ---- */
-.flow {
-  --flow-stage-h: 580px;
-  --flow-window-h: 410px;
-  --k-duo: 0.62;
-  --k-pair: 0.76;
-  display: grid;
-  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
-  gap: clamp(24px, 4vw, 56px);
-  margin-top: var(--s7);
-}
-.flowTabs { display: flex; flex-direction: column; gap: var(--s2); align-self: start; }
-.flowTab {
-  position: relative;
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  gap: var(--s4);
-  align-items: start;
-  padding: var(--s4) var(--s5);
-  border: 1px solid transparent;
-  border-radius: var(--r-card);
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--enter), box-shadow var(--enter), color var(--enter), border-color var(--enter);
-}
-.flowTab:hover { background: var(--surface-muted); }
-.flowTab[aria-selected="true"] {
-  padding-bottom: calc(var(--s4) + 16px);
-  border-color: var(--line);
-  background: var(--paper);
-  box-shadow: var(--shadow-raised);
-  color: var(--ink);
-}
-.flowNum {
-  display: grid;
-  width: 44px;
-  height: 44px;
-  place-items: center;
-  border-radius: var(--r-ctl);
-  background: var(--surface-muted);
-  border: 1px solid var(--line);
-  font-size: var(--small);
-  font-weight: var(--fw-heavy);
-  font-variant-numeric: tabular-nums;
-  transition: background var(--enter), color var(--enter), border-color var(--enter);
-}
-.flowTab[aria-selected="true"] .flowNum { border-color: var(--brand); background: var(--brand); color: var(--on-brand); }
-.flowText { display: block; min-width: 0; }
-.flowText em { display: block; line-height: 1.4; color: var(--brand-text); font-size: var(--label); font-style: normal; font-weight: var(--fw-strong); }
-.flowText strong { display: block; margin-top: 2px; line-height: 1.35; font-size: var(--text-xl); font-weight: var(--fw-heavy); letter-spacing: var(--ls-heading); }
-.flowMore { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 0.35s ease, opacity 0.3s ease; }
-.flowTab[aria-selected="true"] .flowMore { grid-template-rows: 1fr; opacity: 1; }
-.flowMoreInner { display: grid; gap: var(--s2); min-height: 0; overflow: hidden; font-size: var(--small); line-height: 1.65; }
-.flowMoreInner > span:first-child { margin-top: var(--s3); }
-.flowMoreInner small { color: var(--muted); font-size: var(--label); }
-.flowBar {
-  position: absolute;
-  right: var(--s5);
-  bottom: var(--s3);
-  left: var(--s5);
-  height: 3px;
-  border-radius: var(--r-pill);
-  background: var(--line);
-  opacity: 0;
-  overflow: hidden;
-}
-.flowTab[aria-selected="true"] .flowBar { opacity: 1; }
-.flowBar b { display: block; width: 100%; height: 100%; background: var(--brand); opacity: 0.4; }
-.flowBar b[data-running="true"] { opacity: 1; animation: flowFill 7s linear forwards; }
-@keyframes flowFill { from { width: 0; } to { width: 100%; } }
-
-/* The chosen moment as a caption under the stage; only on one-column layouts,
-   where the tabs shrink to a row and cannot carry the text themselves. */
-.flowCaption { display: none; }
-
-.flowStage {
-  position: relative;
-  display: grid;
-  height: var(--flow-stage-h);
-  place-items: center;
-  padding: clamp(20px, 3vw, 40px);
-  border-radius: var(--r-stage);
-  background:
-    radial-gradient(520px 320px at 85% 0%, color-mix(in srgb, var(--brand) 38%, transparent), transparent 70%),
-    radial-gradient(420px 300px at 0% 100%, color-mix(in srgb, var(--focus) 28%, transparent), transparent 70%),
-    var(--stage);
-  overflow: hidden;
-}
-.flowScene { width: 100%; animation: sceneIn 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 @keyframes sceneIn { from { opacity: 0; transform: translateY(14px) scale(0.985); } to { opacity: 1; transform: none; } }
-
-.window {
-  --pv-h: var(--flow-window-h);
-  overflow: hidden;
-  border-radius: var(--r-card);
-  background: var(--paper);
-  box-shadow: 0 24px 60px -12px color-mix(in srgb, var(--stage) 50%, transparent), 0 0 0 1px color-mix(in srgb, var(--paper) 12%, transparent);
-}
-.windowBar { display: flex; align-items: center; gap: var(--s2); height: 34px; padding-inline: var(--s3); background: var(--surface-muted); border-bottom: 1px solid var(--line); }
-.windowBar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line-strong); }
-.windowBar i:first-child { background: var(--brand); }
-.windowBar span { margin-left: var(--s2); color: var(--muted); font-size: var(--label); }
-
-/* A phone drawn at 295 x 560 and scaled; the bezel is added around it. */
-.phoneCrop {
-  --k: 0.8;
-  position: relative;
-  box-sizing: content-box;
-  width: calc(295px * var(--k));
-  height: calc(560px * var(--k));
-  flex: none;
-  overflow: hidden;
-  border: var(--bezel) solid var(--stage);
-  border-radius: calc(var(--r-card) * 2);
-  background: var(--paper);
-  box-shadow: 0 24px 60px -12px color-mix(in srgb, var(--stage) 56%, transparent), 0 0 0 1px color-mix(in srgb, var(--paper) 15%, transparent);
-}
-.phoneCrop > [role="img"] { width: 295px; height: 560px; transform: scale(var(--k)); transform-origin: top left; pointer-events: none; }
-
-.stageDuo { position: relative; display: grid; width: 100%; padding-bottom: var(--s6); }
-.stageDuo .phoneCrop { position: absolute; right: 0; bottom: 0; --k: var(--k-duo); }
-.stagePair { display: flex; justify-content: center; gap: var(--s5); --k: var(--k-pair); }
-.stagePair .phoneCrop { --k: var(--k-pair); }
-.stagePair .phoneCrop:last-child { margin-top: var(--s6); }
-.stageSolo { --solo-extra: 40px; display: grid; width: 100%; }
-.stageSolo .window { --pv-h: calc(var(--flow-window-h) + var(--solo-extra)); }
 
 /* ---- Attendee page demo (a drawn A1 / A2 phone, nothing live) ---- */
 .demo {
@@ -458,26 +329,6 @@
 .contactCopy { display: grid; gap: var(--s3); max-width: 640px; }
 
 @media (max-width: 1024px) {
-  .flow {
-    --flow-stage-h: 540px;
-    --flow-window-h: 400px;
-    --k-pair: 0.8;
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--s4);
-  }
-  /* The tabs become a row of three; the text moves to the caption below. */
-  .flowTabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2); }
-  .flowTab { grid-template-columns: minmax(0, 1fr); gap: var(--s2); padding: var(--s3) var(--s4) calc(var(--s3) + 8px); }
-  .flowTab[aria-selected="true"] { padding-bottom: calc(var(--s3) + 8px); }
-  .flowNum { width: 32px; height: 32px; }
-  .flowText strong,
-  .flowMore { display: none; }
-  .flowBar { right: var(--s4); bottom: var(--s2); left: var(--s4); }
-  .flowCaption { display: grid; gap: var(--s1); align-content: start; min-height: 9.5rem; padding: var(--s4) var(--s1) 0; }
-  .flowCaption em { color: var(--brand-text); font-size: var(--label); font-style: normal; font-weight: var(--fw-strong); }
-  .flowCaption strong { font-size: var(--text-xl); font-weight: var(--fw-heavy); letter-spacing: var(--ls-heading); line-height: 1.35; }
-  .flowCaption span { color: var(--muted); font-size: var(--small); line-height: 1.65; }
-  .flowCaption small { color: var(--muted); font-size: var(--label); }
   .demo { grid-template-columns: minmax(0, 1fr); justify-items: center; }
   /* Reopened 2026-11-25 (visual first): on one column the phone comes before its controls. */
   .demoStage { order: -1; }
@@ -489,11 +340,6 @@
 }
 
 @media (max-width: 768px) {
-  .flow { --flow-stage-h: 440px; --flow-window-h: 330px; --k-duo: 0.5; --k-pair: 0.62; }
-  .stageSolo { --solo-extra: 16px; }
-  .stagePair { gap: var(--s3); }
-  .stagePair .phoneCrop:last-child { margin-top: var(--s5); }
-  .stageDuo { padding-bottom: var(--s5); }
   .compareGrid,
   .audience { grid-template-columns: minmax(0, 1fr); }
   .compareCard { min-height: 0; }
@@ -504,29 +350,10 @@
   .reportNumbers { gap: var(--s3); }
 }
 
-@media (max-width: 480px) {
-  .flow { --flow-stage-h: 400px; --flow-window-h: 300px; --k-duo: 0.46; --k-pair: 0.48; }
-  .flowCaption { min-height: 10rem; }
-}
-
-/* Reopened 2026-11-25 (owner: 모바일에서도 제품 프리뷰가 읽히게): a phone drawn at 0.46~0.5 is
-   unreadable, so on phones the stage shows ONE phone at a readable scale. The console window
-   (already shown in the hero) and the staff phone (named in the caption) step aside. */
-@media (max-width: 560px) {
-  .flow { --flow-stage-h: 520px; --k-duo: 0.82; --k-pair: 0.82; }
-  .stageDuo { place-items: center; padding-bottom: 0; }
-  .stageDuo .window { display: none; }
-  .stageDuo .phoneCrop { position: relative; right: auto; bottom: auto; }
-  .stagePair .phoneCrop:last-child { display: none; }
-  .stagePair { gap: 0; }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .section [data-reveal],
   .contact [data-reveal] { transition: none; }
-  .flowScene,
   .demoBody { animation: none; }
-  .flowBar b[data-running="true"] { animation: none; }
   .compareOld,
   .compareNow,
   .compareCard,

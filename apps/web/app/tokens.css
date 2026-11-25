@@ -212,6 +212,17 @@
   --ref-wheel-deep: #16478F;
   --ref-wheel-blue: #1F66C1;
 
+  /* Landing hands-on draw: the same violet and gold as the room screen's draw stage
+     (screen/[slug]/draw-stage.module.css). Landing demo only. */
+  --demo-draw-bg: #14101F;
+  --demo-draw-glow: #37244A;
+  --demo-draw-slot: #17111F;
+  --demo-draw-brass: #B58B43;
+  --demo-draw-gold: #E8BD61;
+  --demo-draw-gold-bright: #FFE8A4;
+  --demo-draw-muted: #D2C7DF;
+  --demo-draw-ink: #1B1424;
+
   --web-content-max: 1200px;
   --web-reading-max: 760px;
   --web-form-max: 640px;
