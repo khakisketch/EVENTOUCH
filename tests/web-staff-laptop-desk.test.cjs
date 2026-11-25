@@ -102,5 +102,7 @@ test("the desk screen: scanner without focus, result held on wide screens, auto 
   assert.match(work, /setPrintJob\(autoPrintRef\.current && isDesk && !recordStatus && scanAction === "IN" && participantId/u, "only a fresh entry prints by itself");
   assert.match(work, /autoPrintRef\.current = autoPrint && wide;/u);
   assert.match(work, /--kiosk-printing/u, "silent printing is explained as a browser start option");
+  assert.match(work, /const deskCameraTile = wide && activeTask === "desk";/u, "on a laptop desk the camera is a quiet fallback");
+  assert.match(work, /\{!deskCameraTile && !cameraMounted && !selfBooth && !noCamera \? \(\s*<ProductButton/u);
   assert.doesNotMatch(work, /sessionStorage|localStorage/u, "the field screen keeps nothing in device storage");
 });

@@ -1806,6 +1806,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const selfBooth = activeTask === "booth" && activeScope.stampMode === "SELF";
   const cameraMounted = !selfBooth && cameraOpen && ready && !orgChanged && !scanUnknown;
   const scanSuspended = submitting || result.kind !== "idle" || writeLocked || sheet !== null || entryMode === "roster";
+  // On a laptop desk the camera is one fallback among the others, not the main action.
+  const deskCameraTile = wide && activeTask === "desk";
   // With a scanner and no camera running, the result stays until the next ticket replaces it.
   const holdForNextScan = wide && !cameraMounted;
   const printCurrent = printJob && printJob.result === result ? printJob : null;
@@ -2622,7 +2624,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       <div className={prizeStyles.fieldBar} data-mode={result.kind}>
         {result.kind === "idle" && scanInputHasWork ? (
           <>
-            {!cameraMounted && !selfBooth && !noCamera ? (
+            {!deskCameraTile && !cameraMounted && !selfBooth && !noCamera ? (
               <ProductButton
                 ref={cameraButtonRef}
                 type="button"
@@ -2640,6 +2642,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               <ProductButton type="button" variant="primary" disabled={scanControlsLocked || submitting} onClick={() => chooseEntryMode("roster")}>명단에서 찾기</ProductButton>
             ) : null}
             <div className={prizeStyles.bar3} role="group" aria-label="입력 방식">
+              {deskCameraTile && !cameraMounted && !selfBooth && !noCamera ? (
+                <button ref={cameraButtonRef} type="button" disabled={!ready || writeLocked || submitting} aria-describedby="staff-scan-hint"
+                  onClick={() => { primeScanFeedback(); setResult({ kind: "idle" }); setCameraOpen(true); }}><CameraIcon />카메라 켜기</button>
+              ) : null}
               <button type="button" disabled={writeLocked || submitting} onClick={() => setSheet("code")}><KeyIcon />코드 입력</button>
               {activeTask === "desk" ? <button type="button" aria-pressed={entryMode === "roster"} disabled={scanControlsLocked || submitting} onClick={() => chooseEntryMode("roster")}><ListIcon />명단 찾기</button> : null}
               {rewardEnabled && isExitDesk && assignment ? <button type="button" disabled={scanUnknown || receiptLock} onClick={() => setSheet("rewards")}><GiftIcon />경품 조회</button> : null}

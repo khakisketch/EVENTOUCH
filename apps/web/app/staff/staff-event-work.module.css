@@ -1360,9 +1360,7 @@
   .eventWorkPage .fieldApp[data-wide="true"] > .deskSide { grid-column: 2; grid-row: 2 / span 20; }
   .eventWorkPage .fieldApp[data-wide="true"] > .fieldStage { min-height: max(400px, calc(100svh - 270px)); border-radius: var(--r-card); }
   /* One row under the stage, so the whole desk fits a laptop screen without scrolling. */
-  .eventWorkPage .fieldApp[data-wide="true"] > .fieldBar { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); align-items: stretch; margin-top: var(--s3); padding: var(--s3); border-radius: var(--r-card); box-shadow: none; }
-  .eventWorkPage .fieldApp[data-wide="true"] > .fieldBar > :only-child { grid-column: 1 / -1; }
-  .eventWorkPage .fieldApp[data-wide="true"] .scanPrimary { height: 100%; }
+  .eventWorkPage .fieldApp[data-wide="true"] > .fieldBar { margin-top: var(--s3); padding: var(--s3); border-radius: var(--r-card); box-shadow: none; }
   .eventWorkPage .fieldApp[data-wide="true"] .fieldContext :global(.staff-direction-hint) { width: 100%; max-width: none; }
 }
 
