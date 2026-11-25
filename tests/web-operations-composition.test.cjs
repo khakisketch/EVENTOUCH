@@ -4,7 +4,7 @@
 // operations-options.html, scene A3). Reopened 2026-11-19 by the owner: rows carry
 // a kind tile and the gap list is amber. Reopened 2026-11-20 (owner approved
 // proposal C, design-review/onsite-ux-proposal.html): the screen is renamed
-// 입장·스태프 and reads as three steps (desks, staff on duty, scanning on the staff
+// 입장 관리 and reads as three steps (desks, staff on duty, scanning on the staff
 // phone) with booths optional; the 전광판 출력 block and the two-card KPI strip are
 // gone (the display moved to 현장 모드, big-number strips stay off work screens).
 // Reopened 2026-11-24 (owner: 진행 중 데스크 보드): while the event is LIVE the page opens on a
@@ -94,10 +94,11 @@ test("live stage opens on a desk board and folds the setup steps", () => {
   const parts = read("LocationParts.tsx");
   const css = read("operations.module.css");
 
-  // The board exists only while LIVE; every other stage keeps the three numbered steps unchanged.
+  // Reopened 2026-11-25 (owner: 데스크 절차 제거): the page leads with one entry panel; the
+  // board and the steps belong to the 여러 곳 setup behind one button.
   assert.match(ops, /const liveBoard = state\.kind === "ready" && state\.stage === "LIVE"/u);
-  assert.match(ops, /\{liveBoard \? \(\s*<ConsoleSection\s+headingId="ops-board"\s+title="데스크 보드"/u, "the board only renders while LIVE");
-  assert.match(ops, /<SetupFold\s+live=\{liveBoard\}/u);
+  assert.match(ops, /\{manyDesks && liveBoard \? \(\s*<ConsoleSection\s+headingId="ops-board"\s+title="데스크 보드"/u, "the board only renders while LIVE");
+  assert.match(ops, /<SetupFold\s+live=\{liveBoard && manyDesks\}/u);
   assert.match(ops, /if \(!live\) return <>\{children\}<\/>;/u, "preparing, ended and archived stages render the steps as before");
   assert.equal(ops.match(/headingId="ops-desks"/g)?.length, 1, "the three steps are rendered once, folded or not");
 

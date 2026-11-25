@@ -1406,3 +1406,11 @@
 .lineNote small { color: var(--muted); font-size: var(--text-sm); }
 .phoneLink { display: grid; justify-items: center; gap: var(--s4); text-align: center; word-break: keep-all; }
 .phoneLink p { margin: 0; }
+
+/* 입장/퇴장 (2026-11-25): one switch decides what every scan at this desk means. */
+.directionSwitch { display: grid; grid-template-columns: 1fr 1fr; gap: 0; padding: 4px; border-radius: var(--r-pill); background: var(--surface-muted); }
+.directionSwitch button { min-height: var(--control-min-size); border: 0; border-radius: var(--r-pill); background: transparent; color: var(--ink); font: inherit; font-size: var(--text-md); font-weight: var(--fw-heavy); cursor: pointer; }
+.directionSwitch button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.directionSwitch button:disabled { cursor: default; opacity: 0.6; }
+.directionSwitch button[aria-pressed="true"]:disabled { opacity: 1; }
+.directionSwitch button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }

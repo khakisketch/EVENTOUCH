@@ -41,7 +41,7 @@ const EXPECTED_TITLES = {
   participants: '참가자 명단',
   import: '명단 가져오기',
   messages: '메시지 발송',
-  operations: '입장·스태프',
+  operations: '입장 관리',
   live: '현장 모드',
   programs: '참여 이벤트',
   draws: '추첨·투표',

@@ -92,7 +92,7 @@ async function main() {
         ['messages', '/messages', '#history-heading'],
         ['theme', '/page', '#theme-save-draft'],
         ['overview-live', '', '#event-metrics-heading'],
-        ['operations', '/operations', '#ops-desks'],
+        ['operations', '/operations', '#ops-entry'],
         ['settings', '/settings', '#settings-intake'],
       ]) {
         await page.goto(base + route);
@@ -719,7 +719,7 @@ async function main() {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(base + '/operations');
     // Reopened 2026-11-24: 진행 중에는 데스크 보드가 먼저 보이고 설정 3단계도 접힌 details 하나다(프리셋 2개 + 접힌 설정 1개).
-    await page.locator('#ops-board, #ops-desks').first().waitFor();
+    await page.locator('#ops-entry').waitFor();
     check('desktop presets start folded', await page.locator('main details').evaluateAll(nodes => nodes.length >= 2 && nodes.length <= 3 && nodes.every(e => !e.open)));
     // Every permitted destination is available without opening another group.
     const hubLabels = await page.locator('.desktop-side-nav .console-nav-group > .nav-section-label').allTextContents();
@@ -728,7 +728,7 @@ async function main() {
     const eventBasePath = `/console/events/${f.eventId}`;
     const approvedDestinations = [
       {label:'운영 현황',href:eventBasePath},
-      ...[['참가자 명단','participants'],['메시지','messages'],['참가자 화면','page'] /* Reopened 2026-11-20: 참가자 페이지·공지·안내·참여 이벤트 share one 참가자 화면 rail entry */,['입장·스태프','operations'],['행사 설정','settings'],['현장 모드','live'],['결과 보고서','reports'],['경품 지급','rewards'],['현장 사진','photos']].map(([label,route])=>({label,href:`${eventBasePath}/${route}`})),
+      ...[['참가자 명단','participants'],['메시지','messages'],['참가자 화면','page'] /* Reopened 2026-11-20: 참가자 페이지·공지·안내·참여 이벤트 share one 참가자 화면 rail entry */,['입장 관리','operations'],['행사 설정','settings'],['현장 모드','live'],['결과 보고서','reports'],['경품 지급','rewards'],['현장 사진','photos']].map(([label,route])=>({label,href:`${eventBasePath}/${route}`})),
     ];
 
     check(

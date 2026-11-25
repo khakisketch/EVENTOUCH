@@ -149,8 +149,8 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
     await page.setViewportSize({ width: 1280, height: 960 });
     phase = 'operations';
     await page.goto(base + '/operations', { waitUntil: 'networkidle' });
-    // Reopened 2026-11-20: 현장 운영 is 입장·스태프; participation work moved to 현장 모드 (/live).
-    await page.getByRole('heading', { name: '입장·스태프', exact: true }).waitFor(); await capture('02-operations-1280');
+    // Reopened 2026-11-20: 현장 운영 is 입장 관리; participation work moved to 현장 모드 (/live).
+    await page.getByRole('heading', { name: '입장 관리', exact: true }).waitFor(); await capture('02-operations-1280');
     phase = 'participation collection';
     await page.goto(base + '/programs', { waitUntil: 'networkidle' });
     await page.locator('#program-search-label').waitFor({ state: 'attached' }); await capture('03-participation-1280');

@@ -476,6 +476,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const [lineBusy, setLineBusy] = useState(false);
   useEffect(() => { setLineMode(new URLSearchParams(window.location.search).get("line") === "1"); }, []);
   const [phoneLinkOpen, setPhoneLinkOpen] = useState(false);
+  // 입장/퇴장 switch (owner decision 2026-11-25): one desk, and the switch decides what every scan means.
+  const [switching, setSwitching] = useState(false);
+  const [switchError, setSwitchError] = useState("");
   const arrivalDesk = scope?.desks.find((item) => item.id === deskId);
   const arrivalAssignment = scope?.assignments.find((item) => item.targetId === deskId)?.id ?? "";
   // A desk without name tags may be a phone: someone there still has to confirm each arrival.
@@ -1137,7 +1140,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         {orgChanged ? <OrganizationContextNotice confirmLeave={confirmLeaveStaff} /> : null}
         <section className={`staff-workspace state-panel ${prizeStyles.hubState}`}>
           <span className={prizeStyles.hubTile} data-tone="danger" aria-hidden="true"><BangIcon /></span>
-          <p role="alert" className={prizeStyles.hubNote}>{loadError ?? (operatorViewer ? "이 행사에 열 수 있는 데스크가 없습니다. 입장·스태프에서 데스크를 만들거나 현장 운영 권한을 확인하세요." : "이 행사에 대한 업무 배정이 없습니다. 운영자에게 문의하세요.")}</p>
+          <p role="alert" className={prizeStyles.hubNote}>{loadError ?? (operatorViewer ? "이 행사에 열 수 있는 데스크가 없습니다. 입장 관리에서 데스크를 만들거나 현장 운영 권한을 확인하세요." : "이 행사에 대한 업무 배정이 없습니다. 운영자에게 문의하세요.")}</p>
           <div className={prizeStyles.hubActions}>
             <ProductButton type="button" className="button button-secondary" onClick={() => load()}>
               다시 불러오기
@@ -1877,6 +1880,26 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const waiting = arrivalCard.arrival;
   const lineAvailable = !wide && activeTask === "desk" && selectedDesk?.action === "IN" && selectedDesk.nametag !== false;
   const lineActive = lineAvailable && lineMode;
+  async function switchDirection(next: "IN" | "OUT") {
+    const desk = selectedDesk;
+    if (!desk || desk.action === next || switching || writeLocked) return;
+    setSwitching(true);
+    setSwitchError("");
+    const mode = desk.mode || "desk";
+    const sent = await sendDeskCommand(targetEventId, "desk.save", "", {
+      id: desk.id, name: desk.name, action: next, mode, open: true, nametag: desk.nametag !== false,
+      confirmDirectionChange: true, keepOpen: true,
+      expectedDesk: { name: desk.name, action: desk.action, mode, open: desk.open !== false },
+    });
+    if (!sent.ok) {
+      setSwitchError(sent.message);
+      setSwitching(false);
+      return;
+    }
+    // This screen chose the direction itself, so it starts confirmed in the new one.
+    rememberDeskInAddress(desk.id, next);
+    window.location.reload();
+  }
   async function runArrival(work: () => Promise<{ ok: boolean; message?: string }>) {
     if (arrivalBusy || writeLocked) return;
     setArrivalBusy(true);
@@ -2339,8 +2362,19 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       {activeTask === "desk" ? (
         <section className={prizeStyles.workSection} aria-label="처리 위치 선택">
         <div className="staff-select-field">
-          <label htmlFor="staff-desk">데스크</label>
+          {operatorViewer && selectedDesk && !directionReview ? (
+            <div className={prizeStyles.directionSwitch} role="group" aria-label="찍으면 처리할 일">
+              {(["IN", "OUT"] as const).map((value) => (
+                <button key={value} type="button" aria-pressed={selectedDesk.action === value}
+                  disabled={switching || scanControlsLocked || submitting || writeLocked}
+                  onClick={() => void switchDirection(value)}>{value === "IN" ? "입장" : "퇴장"}</button>
+              ))}
+            </div>
+          ) : null}
+          {switchError ? <p className="staff-direction-hint" role="alert">{switchError}</p> : null}
+          <label htmlFor="staff-desk" hidden={activeScope.desks.length === 1 && operatorViewer}>데스크</label>
           <select
+            hidden={activeScope.desks.length === 1 && operatorViewer}
             id="staff-desk"
             value={deskId}
             disabled={scanControlsLocked || submitting}
@@ -2397,7 +2431,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                 {refreshing ? "데스크 상태 확인 중" : "데스크 상태 다시 확인"}
               </ProductButton>
             </>
-          ) : deskId && !deskRefreshRequired && !directionReview ? (
+          ) : deskId && !deskRefreshRequired && !directionReview && !operatorViewer ? (
             <p className="staff-direction-hint" role="status">
               {selectedDesk ? `이 데스크는 ${selectedDesk.action === "OUT" ? "퇴장" : "입장"} 처리합니다.` : ""}
             </p>
@@ -2735,7 +2769,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               ))}
             </ul>
           ) : null}
-          <p className={prizeStyles.sideHint}>USB 스캐너로 티켓을 찍으면 바로 입장합니다.</p>
+          <p className={prizeStyles.sideHint}>USB 스캐너로 티켓을 찍으면 바로 {isExitDesk ? "퇴장" : "입장"}합니다.</p>
           {arrivalsOn && selectedDesk?.nametag !== false ? (
             <ProductButton type="button" variant="ghost" onClick={() => setPhoneLinkOpen(true)}>휴대폰 연결</ProductButton>
           ) : null}

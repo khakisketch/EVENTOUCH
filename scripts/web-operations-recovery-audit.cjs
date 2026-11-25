@@ -75,7 +75,7 @@ async function main() {
     if (!before && !beforeMap) {
       phase = 'operation sections and keyboard navigation';
       const sections = page.locator('[data-workspace-section^="ops-"]:visible');
-      // Reopened 2026-11-20: 입장·스태프 is three steps; booths (and their presets) appear only with the feature on.
+      // Reopened 2026-11-20: 입장 관리 is three steps; booths (and their presets) appear only with the feature on.
       const basic = ['ops-desks', 'ops-staff', 'ops-scan'];
       const boothSettings = ['ops-booths', 'ops-booth-mode', 'ops-booth-map'];
       const all = [...basic, ...boothSettings];

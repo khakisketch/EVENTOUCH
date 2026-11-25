@@ -181,7 +181,7 @@ async function settleLayout(page) {
   await page.evaluate(() => Promise.allSettled(document.getAnimations().map((animation) => animation.finished)));
 }
 
-// Reopened 2026-11-20: 입장·스태프의 데스크·부스 행은 상세 시트를 여는 버튼 하나만 가진다(행 안의 '편집' 버튼과 '부스' 탭이 사라짐).
+// Reopened 2026-11-20: 입장 관리의 데스크·부스 행은 상세 시트를 여는 버튼 하나만 가진다(행 안의 '편집' 버튼과 '부스' 탭이 사라짐).
 // 편집은 상세 시트의 '<종류> 편집'에서 연다. kind는 '데스크' 또는 '부스'.
 // Reopened 2026-11-24 (진행 중 데스크 보드): while the event is LIVE the setup steps are folded under the
 // board; open that fold first. It is a no-op in every other stage, where the steps are always open.

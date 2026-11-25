@@ -62,10 +62,10 @@ async function main() {
       while (Date.now() < end) { if (await probe()) return; await new Promise((resolve) => setTimeout(resolve, 200)); }
       assert.fail(`timed out: ${label}`);
     };
-    const typed = async (phone, person) => {
+    const typed = async (phone, person, button = '도착 접수') => {
       await phone.locator('#arrive-name').fill(person.name);
       await phone.locator('#arrive-phone').fill(person.phone);
-      await phone.getByRole('button', { name: '도착 접수' }).click();
+      await phone.getByRole('button', { name: button, exact: true }).click();
     };
 
     const laptop = await context({ who: 'manager', width: 1440, height: 900 });
@@ -183,7 +183,31 @@ async function main() {
 
     const ops = await context({ who: 'manager', width: 1440, height: 900 });
     await ops.goto(`${f.baseUrl}/console/events/${f.eventId}/operations`, { waitUntil: 'networkidle' });
-    await ops.getByRole('button', { name: /안내판 인쇄$/ }).first().click();
+    const entry = ops.getByRole('region', { name: /지금 찍으면/ });
+    await entry.getByRole('heading', { name: '지금 찍으면 입장' }).waitFor();
+    assert.equal(await entry.getByRole('link', { name: '이 노트북에서 열기' }).count(), 1);
+    assert.equal(await ops.getByRole('heading', { name: '데스크 보드' }).count(), 0, 'desk setup stays behind its button');
+    assert.equal(await ops.getByRole('button', { name: '스태프 배정' }).count(), 0);
+    await accessible(ops);
+    await ops.screenshot({ path: path.join(out, 'ops-0-entry.png') });
+    pass('the page leads with one way in and keeps desk setup out of sight');
+
+    await laptop.getByRole('group', { name: '찍으면 처리할 일' }).getByRole('button', { name: '퇴장' }).click();
+    await laptop.waitForLoadState('networkidle');
+    await laptop.getByRole('group', { name: '찍으면 처리할 일' }).getByRole('button', { name: '퇴장', pressed: true }).waitFor();
+    await phone.goto(poster, { waitUntil: 'networkidle' });
+    await phone.getByRole('heading', { name: '퇴장하실 분을 확인할게요' }).waitFor();
+    await typed(phone, people[0], '퇴장');
+    await phone.getByText('퇴장했습니다').waitFor();
+    await waitFor(async () => (await workspace()).participants.find((p) => p.id === people[0].id).inside === false, 'exit');
+    await phone.screenshot({ path: path.join(out, 'phone-6-exit.png') });
+    await laptop.screenshot({ path: path.join(out, 'laptop-3-exit-mode.png') });
+    await laptop.getByRole('group', { name: '찍으면 처리할 일' }).getByRole('button', { name: '입장' }).click();
+    await laptop.waitForLoadState('networkidle');
+    await laptop.getByRole('group', { name: '찍으면 처리할 일' }).getByRole('button', { name: '입장', pressed: true }).waitFor();
+    pass('one switch on the desk turns every scan into an exit and back');
+
+    await entry.getByRole('button', { name: '안내판 인쇄' }).click();
     await ops.getByRole('dialog').getByRole('button', { name: '인쇄하기' }).waitFor();
     await ops.screenshot({ path: path.join(out, 'ops-1-poster.png') });
     await ops.emulateMedia({ media: 'print' });

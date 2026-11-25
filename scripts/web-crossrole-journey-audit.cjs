@@ -698,7 +698,7 @@ async function main() {
     await lonePage.screenshot({ path: path.join(OUT, 'staff-hub-empty-320.png') });
     // Hub empty @320: wording keeps its source/contact/retry and wraps by
     // word (eojeol), never split mid-syllable like 문/의 or 스태/프.
-    check('hub empty names the assignment source and a contact', (await lonePage.getByText(/운영 콘솔.*입장·스태프.*스태프 배정/).count()) > 0 && (await lonePage.getByText(/초대 메일·행사 안내의 문의처/).count()) > 0);
+    check('hub empty names the assignment source and a contact', (await lonePage.getByText(/운영 콘솔.*입장 관리.*스태프 배정/).count()) > 0 && (await lonePage.getByText(/초대 메일·행사 안내의 문의처/).count()) > 0);
     check('hub empty retry stays findable', await lonePage.getByRole('button', { name: '다시 불러오기', exact: true }).isVisible());
     const hubKeepAll = await lonePage.locator('section.state-panel p').evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).wordBreak));
     check('hub empty wraps by word at 320 (keep-all)', hubKeepAll.length > 0 && hubKeepAll.every((mode) => mode === 'keep-all'));

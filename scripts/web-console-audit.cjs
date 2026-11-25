@@ -60,7 +60,7 @@ const SCREENS = [
   { key: 'participants', path: '/console/events/:id/participants', title: '참가자 명단', scope: 'event', marker: { css: 'input[placeholder*="이름·소속·연락처 검색"]' } },
   { key: 'import', path: '/console/events/:id/participants/import', title: '명단 가져오기', scope: 'event', marker: { css: '#participant-import-file-heading' } },
   { key: 'messages', path: '/console/events/:id/messages', title: '메시지 발송', scope: 'event', marker: { css: '#history-heading' } },
-  { key: 'operations', path: '/console/events/:id/operations', title: '입장·스태프', scope: 'event', marker: { css: '#ops-board, #ops-desks' } }, // 진행 중에는 데스크 보드가, 그 밖에는 1단계가 먼저 보인다
+  { key: 'operations', path: '/console/events/:id/operations', title: '입장 관리', scope: 'event', marker: { css: '#ops-board, #ops-desks' } }, // 진행 중에는 데스크 보드가, 그 밖에는 1단계가 먼저 보인다
   { key: 'live', path: '/console/events/:id/live', title: '현장 모드', scope: 'event', marker: { css: '[data-live-room]' } },
   { key: 'programs', path: '/console/events/:id/programs', title: '참여 이벤트', scope: 'event', marker: { role: 'button', name: '이벤트 만들기' } },
   { key: 'draws', path: '/console/events/:id/draws', title: '추첨·투표', scope: 'event', marker: { css: 'section[aria-label="무대"]' } },

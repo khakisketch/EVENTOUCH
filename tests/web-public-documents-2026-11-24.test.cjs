@@ -173,7 +173,7 @@ test('help covers the four stages and the four questions an operator asks first'
   for (const question of ['참가자가 티켓을 잃어버렸어요', '문자가 안 가요', '사진이 안 올라가요', '스캔이 안 돼요']) assert.match(body, new RegExp(question));
   assert.equal((pages.help.match(/<details/g) ?? []).length, 5, 'questions open in place, no script');
   // Menu names the screens really have.
-  for (const label of ['행사 설정', '참가자 명단', '명단 가져오기', '입장·스태프', '현장 모드', '결과 보고서', '경품 지급', '현장 사진', '명단에서 찾기', '티켓 재발급']) assert.match(body, new RegExp(label));
+  for (const label of ['행사 설정', '참가자 명단', '명단 가져오기', '입장 관리', '현장 모드', '결과 보고서', '경품 지급', '현장 사진', '명단에서 찾기', '티켓 재발급']) assert.match(body, new RegExp(label));
 });
 
 test('the privacy text says what the code does: roles, no auto purge, cookie lifetimes', () => {

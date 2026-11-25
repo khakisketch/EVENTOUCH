@@ -130,7 +130,7 @@ export function entryState(person: EntryPerson, context: EntryContext): EntrySta
   if (["expired", "revoked", "cancelled"].includes(person.ticketReview)) return { kind: "reason", text: "티켓 상태를 확인한 뒤 입장 처리할 수 있습니다.", deskLink: false };
   if (!["FREE", "PAID"].includes(person.paymentStatus.toUpperCase())) return { kind: "reason", text: "결제가 완료된 뒤 입장 처리할 수 있습니다.", deskLink: false };
   if (context.desks === null) return { kind: "reason", text: "입장 데스크를 확인할 수 없습니다. 목록을 새로고침한 뒤 다시 시도해 주세요.", deskLink: false };
-  if (!context.desks.length) return { kind: "reason", text: "열려 있는 입장 데스크가 없습니다 — 입장·스태프에서 데스크를 만들고 가동하세요.", deskLink: true };
+  if (!context.desks.length) return { kind: "reason", text: "입장 받을 준비가 안 됐습니다 — 입장 관리에서 ‘입장 받기 준비’를 누르세요.", deskLink: true };
   return { kind: "ready", desks: context.desks };
 }
 
@@ -149,7 +149,7 @@ export type EntryDone = { participantId: string; name: string; deskName: string 
 // The server rejects with a sentence the operator can read; add what to do next.
 const NEXT_STEP: Record<string, string> = {
   ALREADY_CHECKED_IN: "명단에서 입장 상태를 확인하세요.",
-  DESK_CLOSED: "다른 데스크를 선택하거나 입장·스태프에서 데스크를 가동하세요.",
+  DESK_CLOSED: "다른 데스크를 선택하거나 입장 관리에서 다시 받기를 누르세요.",
   DESK_ACTION_CHANGED: "데스크 목록을 새로 불러왔습니다. 입장 데스크를 다시 선택하세요.",
   CHECK_ATTENDANCE_REVIEW_REQUIRED: "참가자 상세의 출입 상태 확인에서 먼저 정리하세요.",
   CHECK_SOURCE_UNAVAILABLE: "목록을 새로고침한 뒤 다시 시도하세요. 계속되면 조직 관리자에게 문의하세요.",
@@ -344,7 +344,7 @@ export function EntrySheetBlock({ person, state, entry, eventId, locked }: {
     {done ? <p className="sr-only" role="status">{done}</p> : null}
     {state.kind === "inside" ? <p className={styles.entryDone}>{state.line}</p> : null}
     {state.kind === "reason" ? <p className={styles.entryReason}>{state.text}{state.deskLink ? <>{" "}
-      <ProductLink variant="ghost" className={styles.entryLink} href={`/console/events/${encodeURIComponent(eventId)}/operations`}>입장·스태프 열기</ProductLink></> : null}</p> : null}
+      <ProductLink variant="ghost" className={styles.entryLink} href={`/console/events/${encodeURIComponent(eventId)}/operations`}>입장 관리 열기</ProductLink></> : null}</p> : null}
     {state.kind === "ready" ? (() => {
       const desk = entry.pickDesk(state.desks);
       const otherPending = Boolean(entry.pending && entry.pending.participantId !== person.id);

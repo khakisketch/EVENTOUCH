@@ -970,7 +970,7 @@ export function confirmsOperationsCommand(command: string, payload: unknown, val
     if (input.expectedDesk !== undefined) {
       if (!expectedDesk || !(typeof expectedDesk.action === "string" || expectedDesk.action === null) || typeof expectedDesk.open !== "boolean" ||
           typeof input.action !== "string") return false;
-      const targetOpen = expectedDesk.action !== input.action.trim().toUpperCase() ? false : expectedDesk.open;
+      const targetOpen = expectedDesk.action !== input.action.trim().toUpperCase() && input.keepOpen !== true ? false : expectedDesk.open;
       if (desk.open !== targetOpen) return false;
     }
     return typeof input.name === "string" && desk.name === input.name.trim().slice(0, 60) &&

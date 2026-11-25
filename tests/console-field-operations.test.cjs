@@ -1,4 +1,4 @@
-// Reopened 2026-11-20 (입장·스태프 + 현장 모드): the screen is now the three-step
+// Reopened 2026-11-20 (입장 관리 + 현장 모드): the screen is now the three-step
 // "입장을 받을 준비" flow (desks, staff on duty, scanning on the staff phone) with
 // booths optional. The 전광판 출력 block and the 2-card KPI strip are gone; the
 // display output lives in 현장 모드 (tests/web-live-mode-composition.test.cjs).

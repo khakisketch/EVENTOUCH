@@ -63,7 +63,7 @@ test("message templates use delivery families and leave photo type to compositio
 });
 
 test("the stage-board output says when a selection is not applied yet", () => {
-  // Reopened 2026-11-20: the output picker moved from 입장·스태프 to 현장 모드.
+  // Reopened 2026-11-20: the output picker moved from 입장 관리 to 현장 모드.
   const live = read("console/events/[id]/live/LivePanes.tsx");
   assert.match(live, /선택한 출력은 아직 적용되지 않았습니다/u);
   assert.match(live, /displayChoice !== "" && displayChoice !== currentKey/u);

@@ -1776,7 +1776,7 @@ export default function ProgramsWorkspace({ eventId, afterHeader }: { eventId: s
   const reviewTotal = reviewQuestions + reviewPhotos + reviewPosts;
   const runningCount = state.modules.filter((module) => module.status === "OPEN").length;
   const returnBack = handoffReturn?.href ?? `/console/events/${encodeURIComponent(eventId)}/operations#ops-participation`;
-  const returnLabel = handoffReturn?.label ?? "입장·스태프";
+  const returnLabel = handoffReturn?.label ?? "입장 관리";
 
   return (
     <ConsolePage

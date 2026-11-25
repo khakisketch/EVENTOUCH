@@ -25,7 +25,7 @@ test('staff invite hints describe the assignment hub, not a placement', () => {
 test('empty assignment hub names its source and a contact', () => {
   const hub = read('app/staff/StaffHub.tsx');
   assert.match(hub, /배정된 업무가 없습니다\. 운영자에게 문의하세요\./u, 'existing guidance stays');
-  assert.match(hub, /운영 콘솔.*입장·스태프.*스태프 배정/u, 'assignment source is named');
+  assert.match(hub, /운영 콘솔.*입장 관리.*스태프 배정/u, 'assignment source is named');
   assert.match(hub, /초대 메일·행사 안내의 문의처/u, 'a contact path is named');
   assert.match(hub, /다시 불러오기/u, 'retry stays for a just-assigned staffer');
 });

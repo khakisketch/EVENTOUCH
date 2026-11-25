@@ -59,7 +59,7 @@ async function main() {
         ['team', '/console/team', '#team-members'],
         ['photos', `/console/events/${f.eventId}/photos`, '#evidence-photo-archive'],
         ['import', `/console/events/${f.eventId}/participants/import`, 'input[type=file]'],
-        ['operations', `/console/events/${f.eventId}/operations`, '#ops-board'], // the fixture event is live, so the desk board is the visible head (the setup steps fold since 2026-11-24)
+        ['operations', `/console/events/${f.eventId}/operations`, '#ops-entry'], // the one entry panel leads the page (2026-11-25); desks sit behind a button
         ['reports', `/console/events/${f.eventId}/reports`, '#reports-list'],
       ]) {
         await page.goto(f.baseUrl + route, { waitUntil: 'networkidle' });

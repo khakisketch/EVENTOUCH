@@ -71,7 +71,7 @@ export const CONSOLE_PAGES: Record<ConsolePageId, ConsolePageMeta> = {
   participants: { label: "참가자 명단", title: "참가자 명단", scope: "event", layout: "workspace" },
   participantImport: { label: "명단 가져오기", title: "명단 가져오기", scope: "event", layout: "workspace" },
   messages: { label: "메시지", title: "메시지 발송", scope: "event", layout: "workspace" },
-  operations: { label: "입장·스태프", title: "입장·스태프", scope: "event", layout: "workspace" },
+  operations: { label: "입장 관리", title: "입장 관리", scope: "event", layout: "workspace" },
   live: { label: "현장 모드", title: "현장 모드", scope: "event", layout: "workspace" },
   programs: { label: "참여 이벤트", title: "참여 이벤트", scope: "event", layout: "workspace" },
   draws: { label: "추첨·투표", title: "추첨·투표", scope: "event", layout: "workspace" },

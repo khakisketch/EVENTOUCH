@@ -165,13 +165,13 @@ export default function StaffHub() {
           {state.operator ? (
             <>
               <p role="status" className={workStyles.hubNote}>열 수 있는 데스크가 없습니다.</p>
-              <p className={workStyles.hubNote}>운영 콘솔 &gt; 입장·스태프에서 데스크를 만드세요. 데스크가 있는데 보이지 않으면 이 행사의 현장 운영 권한을 확인하세요.</p>
+              <p className={workStyles.hubNote}>운영 콘솔 &gt; 입장 관리에서 데스크를 만드세요. 데스크가 있는데 보이지 않으면 이 행사의 현장 운영 권한을 확인하세요.</p>
               <ProductLink className="button button-secondary" href="/console">운영 콘솔로</ProductLink>
             </>
           ) : (
             <>
               <p role="status" className={workStyles.hubNote}>배정된 업무가 없습니다. 운영자에게 문의하세요.</p>
-              <p className={workStyles.hubNote}>업무 배정은 운영 콘솔 &gt; 입장·스태프 &gt; 스태프 배정에서 지정됩니다. 아직 배정 전이라면 대기 상태이며, 배정이 올라오면 다시 불러오기 후 목록에 표시됩니다.</p>
+              <p className={workStyles.hubNote}>업무 배정은 운영 콘솔 &gt; 입장 관리 &gt; 스태프 배정에서 지정됩니다. 아직 배정 전이라면 대기 상태이며, 배정이 올라오면 다시 불러오기 후 목록에 표시됩니다.</p>
               <p className={workStyles.hubNote}>이 화면을 안내한 담당자(초대 메일·행사 안내의 문의처)에게 배정 여부를 확인해 주세요.</p>
             </>
           )}

@@ -124,9 +124,9 @@ async function main() {
         pass(`lifecycle-options-${width}`, options);
       }
       const commandsBefore = fixture.gateway.commands.length;
-      // Reopened 2026-11-20: 팀 화면의 행에는 버튼이 없고 배정 선택과 '입장·스태프 · 스태프 배정으로 이동' 링크가 구성원 드로어에 있다
+      // Reopened 2026-11-20: 팀 화면의 행에는 버튼이 없고 배정 선택과 '입장 관리 · 스태프 배정으로 이동' 링크가 구성원 드로어에 있다
       // (같은 줄 위에서 드로어를 연 채로 누른다). 행(row)에 묶이지 않고 열린 구성원 패널에서 같은 링크를 누른다.
-      await page.getByRole('link', { name: /입장·스태프 · 스태프 배정으로 이동/ }).click();
+      await page.getByRole('link', { name: /입장 관리 · 스태프 배정으로 이동/ }).click();
       if (baseline) {
         assert.equal(await page.getByRole('dialog').count(), 0);
         pass(`baseline-account-handoff-missing-${width}`, { commands: fixture.gateway.commands.length - commandsBefore });

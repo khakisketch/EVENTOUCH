@@ -296,7 +296,7 @@ test('hub-empty-and-error-wrap-by-word-and-keep-next-action-findable', () => {
   assert.match(hub, /className=\{workStyles\.hubNote\}/);
   // Existing copy stays verbatim (source of truth for invite honesty test).
   assert.match(hub, /배정된 업무가 없습니다\. 운영자에게 문의하세요\./);
-  assert.match(hub, /운영 콘솔.*입장·스태프.*스태프 배정/);
+  assert.match(hub, /운영 콘솔.*입장 관리.*스태프 배정/);
   assert.match(hub, /초대 메일·행사 안내의 문의처/);
   assert.match(hub, /다시 불러오기/);
   // No inputs are introduced; hub still holds no drafts and issues no writes.

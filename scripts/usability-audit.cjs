@@ -1658,7 +1658,7 @@ async function main() {
       const { context, page } = await newOperatorPage();
       attachErrorListeners(page, task, baseUrl);
       try {
-        // Reopened 2026-11-20: the venue-display output is set from 현장 모드, not 입장·스태프.
+        // Reopened 2026-11-20: the venue-display output is set from 현장 모드, not 입장 관리.
         await page.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/live`, { waitUntil: 'networkidle', timeout: 30000 });
         await page.locator('#live-display-pick').waitFor({ state: 'visible', timeout: 15000 });
         await verifySkipLink(page, task);

@@ -418,6 +418,9 @@ async function main() {
 
     // ---- 10. Desk created through the operations UI ----
     await login.goto(`${baseUrl}/console/events/${encodeURIComponent(eventId)}/operations`);
+    // Reopened 2026-11-25: desk setup sits behind one button; the page leads with 입장 받기 준비.
+    await login.getByRole('button', { name: '입장 받기 준비', exact: true }).waitFor({ timeout: 15000 });
+    await login.getByRole('button', { name: '여러 곳에서 따로 받거나 스태프 계정을 쓸 때' }).click();
     await login.getByRole('button', { name: '데스크 추가', exact: true }).waitFor({ timeout: 15000 });
     await login.screenshot({ path: path.join(OUT, '13-operations-1280-first.png') });
     await geometry(login, 'operations 1280', 'button:has-text("데스크 추가")');

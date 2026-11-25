@@ -1,6 +1,6 @@
 'use strict';
 
-// 현장 모드(/live)와 입장·스태프(/operations)를 실제 API·격리 DB로 검증한다.
+// 현장 모드(/live)와 입장 관리(/operations)를 실제 API·격리 DB로 검증한다.
 // 세 칸이 그려지는지, 행사장 화면 출력 변경과 이벤트 열기·마감·추첨·경품 지급이
 // 기존 명령으로 반영되는지, 읽기 전용 운영자에게 조작이 없는지, 진행 전·종료 후
 // 단계 차단, 새로고침 실패 시 이전 내용 유지, 1280/768/390 가로 넘침을 확인한다.
@@ -258,9 +258,13 @@ async function main() {
       await context.close();
     });
 
-    await step('입장·스태프: 진행 중에는 데스크 보드와 접힌 설정, 전광판 출력과 요약 카드는 이 화면에 없다', async () => {
+    await step('입장 관리: 진행 중에는 데스크 보드와 접힌 설정, 전광판 출력과 요약 카드는 이 화면에 없다', async () => {
       await page.goto(`${base}/operations`);
-      await page.getByRole('heading', { level: 1, name: '입장·스태프' }).waitFor();
+      await page.getByRole('heading', { level: 1, name: '입장 관리' }).waitFor();
+      // Reopened 2026-11-25 (owner: 데스크 절차 제거): the page leads with one entry panel; the board
+      // and the folded steps sit behind one button.
+      await page.getByRole('heading', { name: /^지금 찍으면/ }).waitFor();
+      await page.getByRole('button', { name: '여러 곳에서 따로 받거나 스태프 계정을 쓸 때' }).click();
       // Reopened 2026-11-24 (owner: 진행 중 데스크 보드): LIVE shows one card per desk and folds the three steps.
       await page.getByRole('heading', { name: '데스크 보드' }).waitFor();
       assert.ok(await page.getByRole('button', { name: /명 처리|확인 불가/ }).count(), '데스크 카드(처리 수)');

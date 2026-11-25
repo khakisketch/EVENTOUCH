@@ -7,7 +7,7 @@
 import { canWriteEvent } from "../../lib/event-capabilities";
 
 export type StaffAssignment = { id: string; type: string; targetId: string };
-export type StaffDesk = { id: string; name: string; action: string; open?: boolean; nametag?: boolean };
+export type StaffDesk = { id: string; name: string; action: string; open?: boolean; nametag?: boolean; mode?: string };
 export type StaffBooth = {
   id: string; name: string; zone: string; status: string;
   startsAt?: string | null; endsAt?: string | null; capacity?: number; used?: number;

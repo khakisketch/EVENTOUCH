@@ -13,13 +13,13 @@ function PosterSheet({ eventName, deskName, url, nametag }: { eventName: string;
   return (
     <>
       <p className={styles.desk}>{deskName}</p>
-      <h1 className={styles.title}>입장 접수<br />여기를 찍으세요</h1>
+      <h1 className={styles.title}>입장·퇴장<br />여기를 찍으세요</h1>
       <div className={styles.qr}><QRCode value={url} size={320} level="Q" bgColor="#ffffff" fgColor="#16181c" title={`${deskName} 입장 접수 QR`} /></div>
       <p className={styles.event}>{eventName}</p>
       <ol className={styles.steps}>
         <li>카메라로 찍기</li>
-        <li>도착 접수 누르기</li>
-        <li>{nametag ? "명찰 받기" : "입장 확인 받기"}</li>
+        <li>화면의 버튼 누르기</li>
+        <li>{nametag ? "입장 때 명찰 받기" : "입장 때 확인 받기"}</li>
       </ol>
       <p className={styles.fine}>휴대폰이 어려우면 데스크에서 이름을 말씀해 주세요.</p>
     </>

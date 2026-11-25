@@ -301,3 +301,28 @@ test('the desk keeps its name tag setting', async () => {
   assert.equal(kept.json.desk.nametag, false, 'an editor that does not send it keeps it');
   assert.equal((await run(event, 'desk.save', { id: event.gate, name: '정문', action: 'IN', mode: 'desk', open: true, nametag: 'yes' })).status, 400);
 });
+
+test('one switch: the same poster admits through the desk in 입장 and records the exit in 퇴장', async () => {
+  const event = await fixture({ people: (id) => [person(id, '조은솔', '01071717171'), person(id, '임다온', '01072727272')] });
+  const body = (name, phone) => ({ action: 'arrive', deskId: event.gate, commandId: command(), name, phone });
+  // 입장: the phone waits for the desk.
+  await arrive(event, body('조은솔', '01071717171'));
+  const arrivalId = (await list(event, event.gate)).json.arrivals[0].id;
+  assert.equal((await run(event, 'arrival.handover', { deskId: event.gate, arrivalId })).status, 200);
+  // The desk screen switches to 퇴장 and stays open.
+  const switched = await run(event, 'desk.save', { id: event.gate, name: '정문 데스크', action: 'OUT', mode: 'desk', open: true,
+    confirmDirectionChange: true, keepOpen: true, expectedDesk: { name: '정문 데스크', action: 'IN', mode: 'desk', open: true } });
+  assert.equal(switched.status, 200, JSON.stringify(switched.json));
+  assert.deepEqual([switched.json.desk.action, switched.json.desk.open], ['OUT', true]);
+  const view = await arrive(event, { action: 'view', deskId: event.gate });
+  assert.deepEqual([view.json.open, view.json.action], [true, 'OUT']);
+  const left = await arrive(event, body('조은솔', '01071717171'));
+  assert.equal(left.json.result, 'left');
+  const state = await workspace(event);
+  assert.equal(state.participants.find((p) => p.name === '조은솔').inside, false);
+  assert.equal(state.checks[0].action, 'OUT');
+  assert.equal((await arrive(event, body('임다온', '01072727272'))).json.result, 'notInside', 'someone never admitted cannot leave');
+  // Without the switch flag a direction change still stops the desk.
+  const plain = await run(event, 'desk.save', { id: event.gate, name: '정문 데스크', action: 'IN', mode: 'desk', open: true, confirmDirectionChange: true });
+  assert.equal(plain.json.desk.open, false);
+});

@@ -420,7 +420,9 @@ function updateDesk(workspace, input) {
     name,
     action,
     mode,
-    open: changedDirection ? false : input.open !== false,
+    // A direction change stops the desk, except the one-switch 입장/퇴장 on the desk screen:
+    // there the operator is at the desk, and every other screen still asks to confirm.
+    open: changedDirection && input.keepOpen !== true ? false : input.open !== false,
     // Absent means the desk prints a name tag (the behaviour before this setting existed).
     nametag: input.nametag === undefined ? desk.nametag !== false : input.nametag,
   });
@@ -1464,4 +1466,14 @@ function createOperationsCommands(database) {
   };
 }
 
-module.exports = { createOperationsCommands, COMMANDS };
+// A phone at the venue poster while the desk is set to exit: leaving needs nothing handed over,
+// so the phone records the exit itself, under the same scan rules.
+async function appendSelfExit(client, workspace, event, { person, desk, id, now }) {
+  const scanned = scan(workspace, event, { id: person.id }, { deskId: desk.id, participantId: person.id, expectedAction: 'OUT' }, null, { trusted: true });
+  scanned.row.id = id;
+  scanned.row.at = now;
+  workspace.checks.unshift(scanned.row);
+  await projectCheckinRecord(client, event.id, scanned.row);
+}
+
+module.exports = { createOperationsCommands, COMMANDS, appendSelfExit };

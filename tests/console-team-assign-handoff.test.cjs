@@ -182,7 +182,7 @@ test('the operations screen has no jump nav; sections keep their anchors in one 
   }
 });
 
-test('the display output moved to 현장 모드 with its copy and handlers, and left 입장·스태프', () => {
+test('the display output moved to 현장 모드 with its copy and handlers, and left 입장 관리', () => {
   const source = read(OPS);
   assert.equal(source.match(/ops-display/g)?.length ?? 0, 0, 'moved, not copied');
   const live = read('app/console/events/[id]/live/LivePanes.tsx') + read('app/console/events/[id]/live/live-schedule.ts');

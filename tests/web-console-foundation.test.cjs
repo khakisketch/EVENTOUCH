@@ -66,7 +66,7 @@ test('navigation registry covers all seventeen menu pages as metadata only', () 
   const labels = {
     events: '행사', clients: '고객사', team: '팀·권한', overview: '운영 현황',
     participants: '참가자 명단', participantImport: '명단 가져오기', messages: '메시지',
-    operations: '입장·스태프', live: '현장 모드', programs: '참여 이벤트', draws: '추첨·투표',
+    operations: '입장 관리', live: '현장 모드', programs: '참여 이벤트', draws: '추첨·투표',
     photos: '현장 사진', content: '공지·안내', attendeePage: '참가자 페이지',
     rewards: '경품 지급', settings: '행사 설정', reports: '결과 보고서', analysis: '기간 분석',
   };

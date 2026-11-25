@@ -309,6 +309,9 @@ export default function OperationsWorkspace({ eventId, publicBase = null }: { ev
   const [presetOpen, setPresetOpen] = useState({ mode: false, map: false });
   // 진행 중에는 설정 3단계가 접힌 한 줄로 내려간다. 앵커로 들어오면 펼친다.
   const [setupOpen, setSetupOpen] = useState(false);
+  // Desks, staff accounts and assignment are for running several places at once (owner
+  // decision 2026-11-25): the page leads with one entry point and keeps them behind one button.
+  const [manyDesks, setManyDesks] = useState(false);
   const liveBoard = state.kind === "ready" && state.stage === "LIVE";
   // "N분 전" 표시용 시계. 서버 시각이 아니라 화면 표시용이라 30초마다만 갱신한다.
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -633,6 +636,7 @@ export default function OperationsWorkspace({ eventId, publicBase = null }: { ev
       }
       // 진행 중 보드 아래의 접힌 설정: 설정 앵커를 가리키면 펼치고 그 자리로 스크롤한다.
       const anchor = hash.slice(1);
+      if (["ops-board", "ops-desks", "ops-staff", "ops-scan"].includes(anchor)) setManyDesks(true);
       if (liveBoard && SETUP_ANCHORS.has(anchor)) {
         setSetupOpen(true);
         window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
@@ -672,6 +676,7 @@ export default function OperationsWorkspace({ eventId, publicBase = null }: { ev
       return;
     }
     if (!requested) return;
+    setManyDesks(true);
     try {
       const url = new URL(window.location.href);
       url.searchParams.delete("assignAccount");
@@ -1353,7 +1358,7 @@ export default function OperationsWorkspace({ eventId, publicBase = null }: { ev
       eventId={eventId}
       eventName={state.eventName || undefined}
       meta={state.eventMeta}
-      headerActions={(
+      headerActions={manyDesks ? (
         <ProductButton
           id="ops-staff-assign"
           type="button"
@@ -1364,7 +1369,7 @@ export default function OperationsWorkspace({ eventId, publicBase = null }: { ev
         >
           스태프 배정
         </ProductButton>
-      )}
+      ) : undefined}
       feedback={(
         <>
           {state.stage === "ARCHIVED" ? (
@@ -1398,7 +1403,47 @@ export default function OperationsWorkspace({ eventId, publicBase = null }: { ev
       {pendingOperation && !((deskOpen && pendingOperation.command === "desk.save") || (boothOpen && pendingOperation.command === "booth.save") || (assignOpen && pendingOperation.command === "staff.assign")) ? operationRecovery() : null}
       {otherOperationReceipt ? <ConsoleFeedback kind="warning">이전 현장 운영 요청의 처리 결과를 화면 위에서 먼저 확인하세요. 서버 확인은 요청을 다시 보내지 않습니다.</ConsoleFeedback> : null}
 
-      {liveBoard ? (
+      {(() => {
+        // The one way in: the desk this event runs on (made on first use), opened on this laptop.
+        const main = desks.find((desk) => desk.open && ["IN", "OUT"].includes(desk.action || "")) ?? desks[0];
+        const live = state.stage === "LIVE";
+        const canRun = canWriteEvent(capabilities, "check.scan") && !archived;
+        const direction = main?.action === "OUT" ? "퇴장" : "입장";
+        const deskSnapshot = main ? { name: main.name, action: main.action, mode: main.mode, open: main.open } : null;
+        return (
+          <section id="ops-entry" className={styles.entryPanel} aria-labelledby="ops-entry-title">
+            <div className={styles.entryText}>
+              <h2 id="ops-entry-title" className={styles.entryTitle}>{!main ? "입장 받을 준비" : !live ? "행사를 시작하면 바로 받습니다" : `지금 찍으면 ${direction}`}</h2>
+              {main && live && !main.open ? <p className={styles.entryLead}>받기를 멈춰 두었습니다.</p> : null}
+            </div>
+            <div className={styles.entryActions}>
+              {!main ? (
+                <ProductButton type="button" variant="primary" disabled={onsiteBlocked} title={onsiteBlocked ? onsiteNoWriteReason : undefined}
+                  onClick={() => void runCommand("desk.save", { name: "입장", action: "IN", mode: "desk", open: true, nametag: true }, "입장 받을 준비를 마쳤습니다.")}>
+                  입장 받기 준비
+                </ProductButton>
+              ) : !live ? (
+                <ProductLink variant="primary" href={`/console/events/${encodeURIComponent(eventId)}`}>행사 시작하러 가기</ProductLink>
+              ) : !main.open ? (
+                <ProductButton type="button" variant="primary" disabled={onsiteBlocked} title={onsiteBlocked ? onsiteNoWriteReason : undefined}
+                  onClick={() => void runCommand("desk.set-open", { id: main.id, open: true, expectedOpen: false, expectedDesk: deskSnapshot }, "다시 받기 시작했습니다.")}>
+                  다시 받기
+                </ProductButton>
+              ) : canRun ? (
+                <ProductLink variant="primary" href={`/staff/events/${encodeURIComponent(eventId)}?desk=${encodeURIComponent(main.id)}&as=${encodeURIComponent(main.action || "IN")}`}>
+                  이 노트북에서 열기
+                </ProductLink>
+              ) : null}
+              {main ? (
+                <DeskPoster eventName={state.eventName} slug={state.eventSlug} deskId={main.id} deskName={main.name || "입장"} nametag={main.nametag !== false} publicBase={publicBase}
+                  trigger={(open) => <ProductButton type="button" variant="ghost" onClick={open}>안내판 인쇄</ProductButton>} />
+              ) : null}
+            </div>
+          </section>
+        );
+      })()}
+
+      {manyDesks && liveBoard ? (
         <ConsoleSection
           headingId="ops-board"
           title="데스크 보드"
@@ -1464,7 +1509,7 @@ export default function OperationsWorkspace({ eventId, publicBase = null }: { ev
       ) : null}
 
       <SetupFold
-        live={liveBoard}
+        live={liveBoard && manyDesks}
         open={setupOpen}
         onToggle={setSetupOpen}
         remaining={desks.some((desk) => desk.open && desk.action === "IN") ? 0 : 1}
@@ -1473,6 +1518,13 @@ export default function OperationsWorkspace({ eventId, publicBase = null }: { ev
         onCopy={() => void copyStaffLink()}
       >
       <div className={styles.steps}>
+          <p className={styles.optionalNote}>
+            <ProductButton type="button" variant="ghost" aria-expanded={manyDesks} onClick={() => setManyDesks((value) => !value)}>
+              {manyDesks ? "여러 곳 설정 닫기" : "여러 곳에서 따로 받거나 스태프 계정을 쓸 때"}
+            </ProductButton>
+          </p>
+          {manyDesks ? (
+          <>
           <ConsoleSection
             headingId="ops-desks"
             title="입장 데스크 만들기"
@@ -1619,6 +1671,9 @@ export default function OperationsWorkspace({ eventId, publicBase = null }: { ev
               </div>
             </div>
           </ConsoleSection>
+
+          </>
+          ) : null}
 
           {stampEnabled ? (
           <ConsoleSection

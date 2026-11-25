@@ -62,7 +62,7 @@ function createAttemptWindow(limit, now = () => Date.now()) {
   };
 }
 
-function createPublicArrival({ database, env = process.env }) {
+function createPublicArrival({ database, env = process.env, appendExit }) {
   const clientAddress = createClientAddressResolver(env);
   const byPair = createAttemptWindow(PAIR_LIMIT);
   const byPhone = createAttemptWindow(PHONE_LIMIT);
@@ -113,14 +113,17 @@ function createPublicArrival({ database, env = process.env }) {
     return { row, event, workspace, byId, byNumber, checkIndex: indexLatestChecks(workspace.checks) };
   }
 
+  // The poster's desk, whichever way its switch is set.
   const entryDesk = (workspace, deskId) => list(workspace.desks).find((desk) => desk && String(desk.id) === deskId &&
-    String(desk.action || '').toUpperCase() === 'IN') || null;
+    ['IN', 'OUT'].includes(String(desk.action || '').toUpperCase())) || null;
+  const exiting = (desk) => String(desk.action || '').toUpperCase() === 'OUT';
 
   function status(event, desk) {
     return {
       eventName: String(event.name || ''),
       deskName: String(desk.name || ''),
-      open: String(event.stage || '').toUpperCase() === 'LIVE' && deskTakesArrivals(desk),
+      open: String(event.stage || '').toUpperCase() === 'LIVE' && desk.open !== false,
+      action: exiting(desk) ? 'OUT' : 'IN',
       nametag: desk.nametag !== false,
     };
   }
@@ -157,7 +160,9 @@ function createPublicArrival({ database, env = process.env }) {
         if (!person) { outcomes.push({ value: { ...status(loaded.event, desk), known: null } }); continue; }
         // Already waiting at this desk (a reload, or a signup made here): show that, not the button.
         const waiting = openArrivalFor(loaded.workspace, person.id);
-        const state = person.inside === true ? 'inside'
+        // At an exit desk only someone inside has something to press.
+        const state = exiting(desk) ? (person.inside === true ? null : 'notInside')
+          : person.inside === true ? 'inside'
           : waiting && String(waiting.deskId) === String(desk.id)
             ? (arrivalReview(loaded.workspace, person, loaded.checkIndex) ? 'review' : 'waiting') : null;
         outcomes.push({ value: { ...status(loaded.event, desk), known: { ...identity(person), state } } });
@@ -204,6 +209,23 @@ function createPublicArrival({ database, env = process.env }) {
         throw failure(409, '지금은 이 데스크에서 접수를 받지 않습니다. 데스크에 말씀해 주세요.', undefined, 'DESK_CLOSED');
       }
       const answer = (result, at) => ({ result, deskName: String(at.name || ''), ...identity(person) });
+      if (exiting(desk)) {
+        // The desk is set to exit: a phone that leaves records it at once.
+        if (person.inside !== true) return answer('notInside', desk);
+        try {
+          await appendExit(client, workspace, event, { person, desk, id: request.id, now });
+        } catch (error) {
+          if (!error.status) throw error;
+          throw failure(409, '퇴장을 기록하지 못했습니다. 데스크에 말씀해 주세요.', undefined, 'ARRIVAL_EXIT_REVIEW');
+        }
+        if (!Array.isArray(workspace.audit)) workspace.audit = [];
+        workspace.audit.unshift({ id: request.id, type: 'arrival.self-exit', actor: String(person.id), at: now, detail: '', eventId: event.id });
+        changed = true;
+        const saved = { command: 'arrival.self', proof, participantId: String(person.id), response: { result: 'left', deskName: String(desk.name || '') } };
+        handled.set(request.id, saved);
+        newReceipts.push({ command_id: request.id, result: saved });
+        return answer('left', desk);
+      }
       if (person.inside === true) return answer('inside', desk);
       const review = arrivalReview(workspace, person, loaded.checkIndex);
       const waitingResult = review ? 'review' : 'waiting';

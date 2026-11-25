@@ -9,18 +9,19 @@ import { randomCommandId } from "../../../../lib/command-id";
 import { readStoredTicket } from "../../../../lib/attendee-ticket-storage";
 import styles from "./arrive.module.css";
 
-type Known = { name: string; company: string; state: "inside" | "waiting" | "review" | null };
-type Desk = { eventName: string; deskName: string; open: boolean; nametag: boolean; known: Known | null };
-type Outcome = { result: "waiting" | "review" | "inside"; name: string; company: string; deskName: string };
+type Known = { name: string; company: string; state: "inside" | "waiting" | "review" | "notInside" | null };
+type Desk = { eventName: string; deskName: string; open: boolean; action?: "IN" | "OUT"; nametag: boolean; known: Known | null };
+type Outcome = { result: "waiting" | "review" | "inside" | "left" | "notInside"; name: string; company: string; deskName: string };
 type ArrivalResponse = Partial<Desk> & Partial<Outcome> & { error?: unknown; code?: unknown; field?: unknown };
 
 const UNKNOWN = "접수 결과를 확인하지 못했습니다. 같은 버튼을 다시 눌러 주세요.";
 
 function Pass({ outcome, ticket, nametag }: { outcome: Outcome; ticket: string; nametag: boolean }) {
-  const tone = outcome.result === "waiting" ? "good" : outcome.result === "review" ? "wait" : "in";
-  const head = outcome.result === "waiting" ? "접수됐습니다" : outcome.result === "review" ? "확인이 필요합니다" : "이미 입장하셨어요";
+  const tone = outcome.result === "waiting" || outcome.result === "left" ? "good" : outcome.result === "review" || outcome.result === "notInside" ? "wait" : "in";
+  const head = { waiting: "접수됐습니다", review: "확인이 필요합니다", inside: "이미 입장하셨어요", left: "퇴장했습니다", notInside: "입장 기록이 없습니다" }[outcome.result];
   const next = outcome.result === "waiting" ? `${outcome.deskName}에서 ${nametag ? "명찰을 받으세요" : "입장 확인을 받으세요"}`
-    : outcome.result === "review" ? `${outcome.deskName}에 말씀해 주세요` : "그대로 들어가셔도 됩니다";
+    : outcome.result === "left" ? "안녕히 가세요"
+    : outcome.result === "review" || outcome.result === "notInside" ? `${outcome.deskName}에 말씀해 주세요` : "그대로 들어가셔도 됩니다";
   return (
     <section className={styles.pass} aria-live="polite">
       <div className={styles.band} data-tone={tone}>
@@ -67,7 +68,7 @@ export default function ArriveView({ slug, deskId }: { slug: string; deskId: str
       }
       setDesk(data as Desk);
       const known = (data as Desk).known;
-      if (known?.state) setOutcome({ result: known.state, name: known.name, company: known.company, deskName: data.deskName });
+      if (known?.state && known.state !== "notInside") setOutcome({ result: known.state, name: known.name, company: known.company, deskName: data.deskName });
     } catch {
       setLoadError("접수 화면을 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도하세요.");
     }
@@ -145,11 +146,13 @@ export default function ArriveView({ slug, deskId }: { slug: string; deskId: str
     return (
       <>
         <Pass outcome={outcome} ticket={typing ? "" : ticket} nametag={desk.nametag} />
-        {outcome.result !== "inside" ? <p className={styles.foot}><ProductLink variant="ghost" href={`/event/${encodeURIComponent(slug)}/home`}>참가자 홈으로</ProductLink></p> : null}
+        {outcome.result === "waiting" || outcome.result === "review" ? <p className={styles.foot}><ProductLink variant="ghost" href={`/event/${encodeURIComponent(slug)}/home`}>참가자 홈으로</ProductLink></p> : null}
       </>
     );
   }
   const form = typing || !desk.known;
+  const leaving = desk.action === "OUT";
+  const press = sending ? "처리 중" : leaving ? "퇴장" : "도착 접수";
   return (
     <section className={styles.sheet} aria-labelledby="arrive-title">
       <p className={styles.where}><strong>{desk.deskName}</strong><span>{desk.eventName}</span></p>
@@ -161,7 +164,7 @@ export default function ArriveView({ slug, deskId }: { slug: string; deskId: str
         </>
       ) : form ? (
         <form className={styles.form} onSubmit={submit} noValidate>
-          <h1 id="arrive-title" className={styles.title}>신청하신 분인지 확인할게요</h1>
+          <h1 id="arrive-title" className={styles.title}>{leaving ? "퇴장하실 분을 확인할게요" : "신청하신 분인지 확인할게요"}</h1>
           <label className={styles.field}>
             <span>이름</span>
             <input id="arrive-name" type="text" autoComplete="name" maxLength={60} value={name} onChange={(event) => setName(event.target.value)} />
@@ -171,8 +174,8 @@ export default function ArriveView({ slug, deskId }: { slug: string; deskId: str
             <input id="arrive-phone" type="tel" inputMode="tel" autoComplete="tel" maxLength={20} value={phone} onChange={(event) => setPhone(event.target.value)} />
           </label>
           {failure ? <p role="alert" className={styles.alert}>{failure}</p> : null}
-          <ProductButton type="submit" variant="primary" className={styles.cta} disabled={sending}>{sending ? "접수 중" : "도착 접수"}</ProductButton>
-          <ProductLink className={styles.quiet} href={`/event/${encodeURIComponent(slug)}/register?desk=${encodeURIComponent(deskId)}`}>신청하지 않았어요 · 현장 신청</ProductLink>
+          <ProductButton type="submit" variant="primary" className={styles.cta} disabled={sending}>{press}</ProductButton>
+          {leaving ? null : <ProductLink className={styles.quiet} href={`/event/${encodeURIComponent(slug)}/register?desk=${encodeURIComponent(deskId)}`}>신청하지 않았어요 · 현장 신청</ProductLink>}
         </form>
       ) : (
         <div className={styles.knownBlock}>
@@ -180,7 +183,7 @@ export default function ArriveView({ slug, deskId }: { slug: string; deskId: str
           <h1 id="arrive-title" className={styles.knownName}>{desk.known!.name} 님</h1>
           {desk.known!.company ? <p className={styles.knownSub}>{desk.known!.company}</p> : null}
           {failure ? <p role="alert" className={styles.alert}>{failure}</p> : null}
-          <ProductButton type="button" variant="primary" className={styles.cta} disabled={sending} onClick={() => void arrive(null)}>{sending ? "접수 중" : "도착 접수"}</ProductButton>
+          <ProductButton type="button" variant="primary" className={styles.cta} disabled={sending} onClick={() => void arrive(null)}>{press}</ProductButton>
           <button type="button" className={styles.quiet} onClick={() => { setTyping(true); setFailure(""); }}>내가 아니에요</button>
         </div>
       )}

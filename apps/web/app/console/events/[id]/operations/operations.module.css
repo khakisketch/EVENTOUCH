@@ -374,3 +374,11 @@
   .cardOpen:hover .cardMore svg { transform: none; }
   .locationOpen:hover .locationChevron { transform: none; }
 }
+
+/* 입장 관리 (owner decision 2026-11-25): one panel and one primary; desks stay behind a button. */
+.entryPanel { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s4); padding: var(--s5); border: 1px solid var(--line); border-radius: var(--r-card); background: var(--paper); }
+.entryText { display: grid; gap: var(--s1); min-width: 0; }
+.entryTitle { margin: 0; font-size: var(--h2); font-weight: var(--fw-heavy); letter-spacing: var(--ls-heading); }
+.entryLead { margin: 0; color: var(--muted); font-size: var(--text-sm); }
+.entryActions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+@media (max-width: 560px) { .entryActions, .entryActions > * { width: 100%; } .entryActions > * { justify-content: center; } }

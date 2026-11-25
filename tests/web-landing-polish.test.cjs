@@ -19,7 +19,7 @@ test('the console preview draws the real menu and an overview built around one e
   const preview = read('ProductPreview.tsx');
   const navigation = read('console/console-navigation.ts');
   const real = new Set([...navigation.matchAll(/label: "([^"]+)"/gu)].map((match) => match[1]));
-  const rail = ['운영 현황', '참가자 명단', '메시지', '참가자 페이지', '공지·안내', '참여 이벤트', '입장·스태프', '행사 설정', '현장 모드', '결과 보고서'];
+  const rail = ['운영 현황', '참가자 명단', '메시지', '참가자 페이지', '공지·안내', '참여 이벤트', '입장 관리', '행사 설정', '현장 모드', '결과 보고서'];
   for (const label of rail) {
     assert.ok(real.has(label), `${label} is a menu name of the product`);
     assert.ok(preview.includes(label), `${label} is in the drawn menu`);
@@ -90,6 +90,6 @@ test('the landing states only numbers and features the product has', () => {
   assert.doesNotMatch(home, /평균 일주일|100명 이상|열 배|\d+% 단축/u, 'no invented figures');
   assert.doesNotMatch(compare, /실시간/u, 'the roster refreshes on its own schedule; do not call it real time');
   // The check-in block names the screens by their current menu names.
-  for (const label of ['입장·스태프', '현장 모드']) assert.ok(read('LandingPlay.tsx').includes(label), `${label} in the check-in block`);
+  for (const label of ['입장 관리', '현장 모드']) assert.ok(read('LandingPlay.tsx').includes(label), `${label} in the check-in block`);
   assert.doesNotMatch(home, /스태프 체크인, 부스 인증|결과 분석, 보고서/u);
 });

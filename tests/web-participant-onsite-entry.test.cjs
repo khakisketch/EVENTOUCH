@@ -42,7 +42,7 @@ test('the entry offer needs LIVE, APPROVED, not inside, and says why otherwise',
   // Reopened 2026-11-25 (owner: 불필요한 문구 제거): outside LIVE nothing is shown.
   assert.match(fn, /!== "LIVE"\) return \{ kind: "none" \}/);
   assert.match(fn, /"승인한 뒤 입장 처리할 수 있습니다\."/);
-  assert.match(fn, /"열려 있는 입장 데스크가 없습니다 — 입장·스태프에서 데스크를 만들고 가동하세요\.", deskLink: true/);
+  assert.match(fn, /"입장 받을 준비가 안 됐습니다 — 입장 관리에서 ‘입장 받기 준비’를 누르세요\.", deskLink: true/);
   assert.match(fn, /context\.desks === null/);
   assert.match(entry, /href=\{`\/console\/events\/\$\{encodeURIComponent\(eventId\)\}\/operations`\}/);
   // The order matters: the stage and status reasons come before the desk reasons.
