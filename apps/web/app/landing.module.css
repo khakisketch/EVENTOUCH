@@ -523,11 +523,6 @@
   pointer-events: none;
 }
 
-.heroSample {
-  margin: var(--s3) 0 0;
-  font-size: var(--small);
-}
-
 .factLabel {
   display: flex;
   align-items: center;
@@ -733,7 +728,6 @@
 .hero::before { background: radial-gradient(closest-side, color-mix(in srgb, var(--brand) 30%, transparent), transparent); }
 .heroTitle { color: var(--paper); }
 .heroDescription { color: color-mix(in srgb, var(--paper) 72%, transparent); }
-.heroSample { color: color-mix(in srgb, var(--paper) 72%, transparent); }
 .secondaryAction { border-color: color-mix(in srgb, var(--paper) 28%, transparent); background: transparent; color: var(--paper); }
 .secondaryAction:hover { border-color: var(--paper); background: color-mix(in srgb, var(--paper) 12%, transparent); }
 .factStrip { border-top-color: color-mix(in srgb, var(--paper) 14%, transparent); border-bottom: 0; }

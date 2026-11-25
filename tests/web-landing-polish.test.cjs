@@ -48,10 +48,10 @@ test('the hero is one still scene: the live count with the ticket laid over it, 
   assert.match(read('product-preview.module.css'), /@container \(min-width: 480px\) \{\s*\.liveCanvas \.entry,\s*\.liveCanvas \.recent \{ max-width: 300px; \}/u);
 });
 
-test('the hero names who must check what before adopting, in sentences that read on their own', () => {
+test('the hero strip says what to know up front, in sentences that read on their own', () => {
   const home = read('page.tsx');
-  for (const text of ['도입 전 확인', '참가자 앱 설치 없이 링크로 신청·티켓', '문자·알림톡은 발송 연결 후 실제 발송', '고객사 포털은 제공하지 않음', '한 행사의 흐름 보기', 'QR 입장, 실시간 현황, 결과 보고서까지.']) assert.ok(home.includes(text), `${text} is in the hero`);
-  assert.doesNotMatch(home, /문자 발송 연결 확인|행사 종류·일정·규모를 적을 수 있게 준비합니다|화면 구성 살펴보기/u);
+  for (const text of ['미리 알려 드립니다', '참가자 앱 설치 없이 링크로 신청·티켓', '문자·알림톡은 발송 연결 후 실제 발송', '고객사 포털은 제공하지 않음', '한 행사의 흐름 보기', 'QR 입장, 실시간 현황, 결과 보고서까지.']) assert.ok(home.includes(text), `${text} is in the hero`);
+  assert.doesNotMatch(home, /합성 데이터|도입 전 확인|문자 발송 연결 확인|행사 종류·일정·규모를 적을 수 있게 준비합니다|화면 구성 살펴보기/u);
 });
 
 test('the journey keeps one stage height and shows the chosen moment as a caption on small screens', () => {

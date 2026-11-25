@@ -441,8 +441,6 @@
 .bars i:nth-child(3) { background: var(--brand); }
 .reportCard[data-reveal="pending"] .bars i { transform: scaleY(0); }
 .reportAxis { display: flex; justify-content: space-between; margin: calc(var(--s3) * -1) 0 0; color: var(--muted); font-size: var(--label); }
-.reportNote { margin: 0; color: var(--muted); font-size: var(--label); }
-
 /* ---- Steps ---- */
 .steps { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s5); margin: var(--s7) 0 0; padding: 0; list-style: none; }
 .steps::before { position: absolute; top: 28px; right: 17%; left: 17%; border-top: 2px dashed var(--line-strong); opacity: 0.45; content: ""; }

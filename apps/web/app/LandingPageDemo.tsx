@@ -168,7 +168,7 @@ export default function LandingPageDemo() {
           </div>
         </div>
         <figcaption>
-          <strong>{current.label}</strong> · 화면 구성 예시, 실제 행사 데이터가 아닙니다.
+          <strong>{current.label}</strong>
         </figcaption>
       </figure>
     </div>

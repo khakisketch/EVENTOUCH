@@ -748,14 +748,6 @@
   font-size: var(--text-xs);
 }
 
-.sample {
-  margin: 0;
-  padding-inline: var(--s4);
-  color: var(--muted);
-  font-size: var(--text-xs);
-  text-align: center;
-}
-
 .bottomBar {
   margin-top: auto;
   padding: var(--s3) var(--s4) var(--s4);

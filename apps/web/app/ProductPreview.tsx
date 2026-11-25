@@ -201,7 +201,6 @@ export default function ProductPreview({ variant }: { variant: Variant }) {
           <div className={styles.qr}><QRCode value="EVENTOUCH-DEMO-NOT-A-VALID-TICKET" size={120} /></div>
           <p className={styles.hint}>입장할 때 이 QR을 보여 주세요.</p>
         </div>
-        <p className={styles.sample}>샘플 QR · 실제 입장에 사용할 수 없습니다.</p>
         <div className={styles.bottomBar}><span className={styles.primaryWide}>참여 콘텐츠 보기</span></div>
       </div>
     );

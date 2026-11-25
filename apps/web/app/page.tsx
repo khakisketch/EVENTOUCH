@@ -186,11 +186,10 @@ export default function Home() {
               </section>
               <div className={styles.heroPhone}><ProductPreview variant="ticket" /></div>
             </div>
-            <p className={styles.heroSample}>화면 구성 예시 · 합성 데이터</p>
           </div>
 
-          <ul className={styles.factStrip} aria-label="도입 전 확인">
-            <li className={styles.factLabel}>도입 전 확인</li>
+          <ul className={styles.factStrip} aria-label="미리 알려 드립니다">
+            <li className={styles.factLabel}>미리 알려 드립니다</li>
             <li><a href="#faq-install">참가자 앱 설치 없이 링크로 신청·티켓</a></li>
             <li><a href="#faq-sms">문자·알림톡은 발송 연결 후 실제 발송</a></li>
             <li><a href="#faq-portal">고객사 포털은 제공하지 않음</a></li>
@@ -278,7 +277,6 @@ export default function Home() {
                 {ENTRY_BARS.map((height, i) => <i key={i} style={{ "--bar": `${height}%`, "--i": i } as CSSProperties} />)}
               </div>
               <p className={sec.reportAxis} aria-hidden="true"><span>09시</span><span>시간대별 입장</span><span>15시</span></p>
-              <p className={sec.reportNote}>화면 구성 예시 · 합성 데이터</p>
             </Reveal>
           </div>
         </section>

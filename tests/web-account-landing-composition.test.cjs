@@ -79,7 +79,9 @@ test('the landing below the hero is interactive, honest and keeps the hero\'s in
   assert.match(flow, /prefers-reduced-motion/u, 'the flow never advances for people who asked for less motion');
   const demo = fs.readFileSync(path.join(app, 'LandingPageDemo.tsx'), 'utf8');
   assert.match(demo, /role="radiogroup"[\s\S]*?role="radio"[\s\S]*?aria-checked/u);
-  assert.match(demo, /실제 행사 데이터가 아닙니다/u, 'the attendee page sample says it is a sample');
+  // Reopened 2026-11-25 (owner): the visible "화면 구성 예시 · 합성 데이터" captions are gone from the landing; screen readers still get the
+  // "구성 예시" in the drawings' aria-labels.
+  assert.doesNotMatch(demo, /실제 행사 데이터가 아닙니다/u);
   const compare = fs.readFileSync(path.join(app, 'LandingCompare.tsx'), 'utf8');
   assert.match(compare, /aria-pressed/u);
   // Reveal never hides content before script runs, and motion respects the preference.
