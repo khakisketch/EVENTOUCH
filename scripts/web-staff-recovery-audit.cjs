@@ -15,7 +15,9 @@ let stage = 'setup';
 
 async function confirmInitialDesk(page) {
   const panel = page.getByRole('region', { name: '데스크 업무 방향을 확인해 주세요' });
-  await panel.getByText('시작하기 전에 업무 방향을 확인해 주세요.', { exact: false }).waitFor();
+  // Reopened 2026-11-25: after a reload the tab remembers what was confirmed, so a changed
+  // direction is named as a change; a first visit still asks to confirm before starting.
+  await panel.getByText(/시작하기 전에 업무 방향을 확인해 주세요|이전에 확인한 방향은/).first().waitFor();
   const button = panel.getByRole('button', { name: /^(입장|퇴장) 업무 확인$/ });
   await button.click();
   await panel.waitFor({ state: 'hidden' });

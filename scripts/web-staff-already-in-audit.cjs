@@ -66,7 +66,7 @@ async function main() {
     await staff.getByRole('button', { name: '입장 처리', exact: true }).click();
     const refused = staff.getByRole('region', { name: '스캔 실패', exact: true });
     await refused.getByText(REFUSAL, { exact: true }).waitFor();
-    await refused.getByText(`${person.name} · ${when} 입장`, { exact: true }).waitFor();
+    /* Reopened 2026-11-25: the name stands large and the quiet line carries affiliation and time. */ await refused.getByText(person.name, { exact: true }).waitFor(); await refused.getByText(new RegExp(`${when} 입장$`, 'u')).waitFor();
     assert.equal(await staff.getByRole('region', { name: '스캔 실패와 복구', exact: true }).getAttribute('data-tone'), 'info', 'still the blue, non-error notice');
     assert.equal((await read()).checks.filter((check) => check.participantId === person.id).length, 1, 'the refused scan wrote nothing');
     for (const width of [320, 390, 1280]) {

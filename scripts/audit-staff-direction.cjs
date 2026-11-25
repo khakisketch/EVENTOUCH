@@ -13,7 +13,8 @@ async function confirmInitialStaffDesk(page, { hold = true } = {}) {
   const review = page.getByRole('region', { name: '데스크 업무 방향을 확인해 주세요' });
   let confirmed = false;
   if (await review.isVisible()) {
-    await review.getByText('시작하기 전에 업무 방향을 확인해 주세요.', { exact: false }).waitFor();
+    // After a reload the tab may remember an earlier answer, so a changed direction is named as a change.
+    await review.getByText(/시작하기 전에 업무 방향을 확인해 주세요|이전에 확인한 방향은/).first().waitFor();
     await review.getByRole('button', { name: /^(입장|퇴장) 업무 확인$/ }).click();
     await review.waitFor({ state: 'hidden' });
     confirmed = true;

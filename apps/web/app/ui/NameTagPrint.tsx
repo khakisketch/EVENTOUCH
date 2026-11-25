@@ -19,16 +19,41 @@ const PAPER = {
   label100: "라벨 100 × 70 mm",
 } as const;
 type Paper = keyof typeof PAPER;
+export type NameTagPaper = Paper;
+export const NAMETAG_PAPERS = PAPER;
+// Printer-side choices of this computer (paper size, print on entry). Nothing about a
+// person, event or organization is stored.
 const PAPER_PREFERENCE = "eventouch.nametag-paper";
+const AUTO_PREFERENCE = "eventouch.nametag-auto";
 
 function isPaper(value: string | null): value is Paper {
   return value !== null && Object.hasOwn(PAPER, value);
 }
 
-export default function NameTagPrint({ identity, onClose, resolveIdentity }: {
+export function readNameTagPreferences(): { auto: boolean; paper: Paper } {
+  try {
+    const paper = window.localStorage.getItem(PAPER_PREFERENCE);
+    return { auto: window.localStorage.getItem(AUTO_PREFERENCE) === "on", paper: isPaper(paper) ? paper : "a4" };
+  } catch {
+    return { auto: false, paper: "a4" };
+  }
+}
+
+export function saveNameTagPreference(next: { auto?: boolean; paper?: Paper }) {
+  try {
+    if (next.paper) window.localStorage.setItem(PAPER_PREFERENCE, next.paper);
+    if (next.auto !== undefined) window.localStorage.setItem(AUTO_PREFERENCE, next.auto ? "on" : "off");
+  } catch {
+    // The choice still applies until the page is closed.
+  }
+}
+
+export default function NameTagPrint({ identity, onClose, resolveIdentity, onAutoSettled }: {
   identity: NameTagIdentity;
   onClose?: () => void;
   resolveIdentity?: (signal: AbortSignal) => Promise<NameTagIdentity>;
+  // Print once, as soon as the latest identity is confirmed, and report whether it went out.
+  onAutoSettled?: (sent: boolean) => void;
 }) {
   const [paper, setPaper] = useState<Paper>("a4");
   const [fits, setFits] = useState(true);
@@ -65,14 +90,7 @@ export default function NameTagPrint({ identity, onClose, resolveIdentity }: {
     setVerified(identity);
   }, [identity.name, identity.company, identity.eventName, identity.context]);
 
-  useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem(PAPER_PREFERENCE);
-      if (isPaper(saved)) setPaper(saved);
-    } catch {
-      // The default remains usable with storage disabled.
-    }
-  }, []);
+  useEffect(() => { setPaper(readNameTagPreferences().paper); }, []);
 
   useEffect(() => {
     const artwork = artworkRef.current;
@@ -151,6 +169,30 @@ export default function NameTagPrint({ identity, onClose, resolveIdentity }: {
     else openPrint();
   }
 
+  const autoSettledRef = useRef(false);
+  useEffect(() => {
+    if (!onAutoSettled || autoSettledRef.current || checking) return;
+    if (!verified) {
+      if (error) { autoSettledRef.current = true; onAutoSettled(false); }
+      return;
+    }
+    // Two frames: the saved paper size is applied and the label is laid out before measuring.
+    let second = 0;
+    const first = window.requestAnimationFrame(() => {
+      second = window.requestAnimationFrame(() => {
+        const artwork = artworkRef.current;
+        const room = paper === "a4" || Boolean(artwork && artwork.scrollHeight <= artwork.clientHeight + 1 && artwork.scrollWidth <= artwork.clientWidth + 1);
+        if (room && !fits) return; // the fit flag is about to catch up; this effect runs again then
+        autoSettledRef.current = true;
+        if (room) openPrint();
+        onAutoSettled(room);
+      });
+    });
+    return () => { window.cancelAnimationFrame(first); window.cancelAnimationFrame(second); };
+    // openPrint and the callback are read from the render that owns these values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checking, verified, error, paper, fits]);
+
   const labelText = (
     <>
       <p className={styles.event}>{verified?.eventName}</p>
@@ -169,7 +211,7 @@ export default function NameTagPrint({ identity, onClose, resolveIdentity }: {
           const next = event.target.value;
           if (!isPaper(next)) return;
           setPaper(next);
-          try { sessionStorage.setItem(PAPER_PREFERENCE, next); } catch { /* optional preference */ }
+          saveNameTagPreference({ paper: next });
           setError("");
         }}>
           {Object.entries(PAPER).map(([value, label]) => <option key={value} value={value}>{label}</option>)}

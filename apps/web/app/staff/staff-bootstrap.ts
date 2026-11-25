@@ -13,6 +13,8 @@ export function staffReadErrorMessage(error: unknown) {
 type StaffBootstrap = {
   serverTimeMs?: unknown;
   state?: {
+    viewer?: unknown;
+    memberships?: unknown;
     events?: Array<{ id?: unknown; name?: unknown; stage?: unknown; features?: unknown }>;
     workspaces?: Record<string, {
       desks?: unknown;

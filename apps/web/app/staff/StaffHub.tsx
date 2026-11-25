@@ -24,7 +24,7 @@ import { readStaffBootstrap, staffReadErrorMessage } from "./staff-bootstrap";
 type HubState =
   | { kind: "loading" }
   | { kind: "failed"; message: string }
-  | { kind: "ready"; scopes: StaffScope[] };
+  | { kind: "ready"; scopes: StaffScope[]; operator: boolean };
 
 export default function StaffHub() {
   const router = useRouter();
@@ -82,9 +82,11 @@ export default function StaffHub() {
         }
         const scopes = buildStaffScopes(
           Array.isArray(bootstrap.events) ? bootstrap.events : [],
-          bootstrap.workspaces ?? {}
+          bootstrap.workspaces ?? {},
+          bootstrap
         );
-        setState({ kind: "ready", scopes });
+        const viewerRole = (bootstrap.viewer as { role?: unknown } | undefined)?.role;
+        setState({ kind: "ready", scopes, operator: viewerRole === "AGENCY" || viewerRole === "MANAGER" });
       } catch (error) {
         if (!cancelled) {
           setState({ kind: "failed", message: staffReadErrorMessage(error) });
@@ -160,9 +162,19 @@ export default function StaffHub() {
         {chrome}
         <section className={`staff-workspace state-panel ${workStyles.hubState}`}>
           <span className={workStyles.hubTile} data-tone="warn" aria-hidden="true"><ClockIcon /></span>
-          <p role="status" className={workStyles.hubNote}>배정된 업무가 없습니다. 운영자에게 문의하세요.</p>
-          <p className={workStyles.hubNote}>업무 배정은 운영 콘솔 &gt; 입장·스태프 &gt; 스태프 배정에서 지정됩니다. 아직 배정 전이라면 대기 상태이며, 배정이 올라오면 다시 불러오기 후 목록에 표시됩니다.</p>
-          <p className={workStyles.hubNote}>이 화면을 안내한 담당자(초대 메일·행사 안내의 문의처)에게 배정 여부를 확인해 주세요.</p>
+          {state.operator ? (
+            <>
+              <p role="status" className={workStyles.hubNote}>열 수 있는 데스크가 없습니다.</p>
+              <p className={workStyles.hubNote}>운영 콘솔 &gt; 입장·스태프에서 데스크를 만드세요. 데스크가 있는데 보이지 않으면 이 행사의 현장 운영 권한을 확인하세요.</p>
+              <ProductLink className="button button-secondary" href="/console">운영 콘솔로</ProductLink>
+            </>
+          ) : (
+            <>
+              <p role="status" className={workStyles.hubNote}>배정된 업무가 없습니다. 운영자에게 문의하세요.</p>
+              <p className={workStyles.hubNote}>업무 배정은 운영 콘솔 &gt; 입장·스태프 &gt; 스태프 배정에서 지정됩니다. 아직 배정 전이라면 대기 상태이며, 배정이 올라오면 다시 불러오기 후 목록에 표시됩니다.</p>
+              <p className={workStyles.hubNote}>이 화면을 안내한 담당자(초대 메일·행사 안내의 문의처)에게 배정 여부를 확인해 주세요.</p>
+            </>
+          )}
           <ProductButton type="button" variant="secondary" onClick={() => setReloadTick((tick) => tick + 1)}>
             다시 불러오기
           </ProductButton>
@@ -185,7 +197,7 @@ export default function StaffHub() {
   return (
     <>
       {chrome}
-      <section className="staff-workspace" aria-label="내 배정 업무">
+      <section className="staff-workspace" aria-label={state.operator ? "현장 업무 목록" : "내 배정 업무"}>
         <h2 className={workStyles.hubHeading}>
           오늘 처리할 행사 <span className={workStyles.hubCount}>{state.scopes.length}곳</span>
         </h2>
@@ -195,7 +207,7 @@ export default function StaffHub() {
             <StatusPill tone="ok" dot>지금 진행 중</StatusPill>
             <strong className={workStyles.hubLiveName}>{live.eventName}</strong>
             {live.start ? <span className={workStyles.hubLiveTime}>{live.start}{live.end ? <> <i>~</i> {live.end}</> : null}</span> : null}
-            <span className={workStyles.hubLiveMine}>내 배정 · {staffScopeLine(live)}</span>
+            <span className={workStyles.hubLiveMine}>{live.operator ? "" : "내 배정 · "}{staffScopeLine(live)}</span>
             {orgChanged ? (
               <ProductButton type="button" variant="primary" disabled title="다른 탭에서 조직이 전환됐습니다. 위 안내에서 전환을 먼저 확인하세요.">
                 업무 열기

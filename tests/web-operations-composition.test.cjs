@@ -32,7 +32,8 @@ test("approved operations design stays locked", () => {
     assert.match(ops, new RegExp(`headingId="${id}"`), `${id} keeps its anchor`);
   }
   // Reopened 2026-11-20: the three steps, each with a status pill in the description slot.
-  for (const [n, title] of [[1, "입장 데스크 만들기"], [2, "스태프 배정"], [3, "스태프 폰에서 스캔"]]) {
+  // Reopened 2026-11-25: assignment is optional, and scanning covers this device as well as staff phones.
+  for (const [n, title] of [[1, "입장 데스크 만들기"], [2, "휴대폰 스태프 \\(선택\\)"], [3, "입장 처리"]]) {
     assert.match(ops, new RegExp(`title="${title}"[\\s\\S]*?<StepPill n=\\{${n}\\}`, "u"), `step ${n} is ${title}`);
   }
   assert.match(ops, /<DeviceFrame variant="phone"/u, "step 3 previews the staff scan screen on a phone");
@@ -74,9 +75,9 @@ test("approved operations design stays locked", () => {
   assert.match(ops, /deskStopPending/u);
   assert.match(ops, /confirmLabel="가동 중지"/u);
 
-  // Assignment: one page-level entry that is primary only while a place has no one on duty.
-  assert.match(ops, /variant=\{gapTargets\.length && !archived \? "primary" : "ghost"\}/u);
-  assert.match(css, /\.gapSurface\s*\{[^}]*background:\s*var\(--warning-soft\)/su, "the gap list is amber work waiting on a person, not a card");
+  // Assignment: one quiet page-level entry (reopened 2026-11-25: assigning staff is optional).
+  assert.match(ops, /id="ops-staff-assign"\s+type="button"\s+variant="ghost"/u);
+  assert.match(css, /\.gapSurface\s*\{[^}]*background:\s*var\(--surface-muted\)/su, "the optional list is a quiet surface, not a warning");
 
   // Release lives in the detail dialog, with the same command.
   assert.match(ops, /function LocationDialog/u);
@@ -105,23 +106,24 @@ test("live stage opens on a desk board and folds the setup steps", () => {
   assert.match(ops, /<DeskCard[\s\S]*?onOpen=\{\(\) => setDetail\(\{ type: "DESK", id: desk\.id \}\)\}/u);
   assert.match(ops, /<DeskCard[\s\S]*?<RunSwitch[\s\S]*?setDeskStopPending\(desk\)/u, "the card's switch reuses the confirm-before-stop flow");
   assert.equal(ops.match(/confirmLabel="가동 중지"/g)?.length, 1, "one stop confirmation serves both lists");
-  assert.match(ops, /setAssignPreset\(\{ type: "DESK", targetId: desk\.id \}\)/u, "배정 on a card reuses the assignment dialog");
+  assert.match(ops, /enterHref=\{canWriteEvent\(capabilities, "check\.scan"\)[\s\S]*?\/staff\/events\/\$\{encodeURIComponent\(eventId\)\}\?desk=/u, "a running desk opens on this device from its card");
   assert.match(parts, /export function DeskCard/u);
   assert.match(parts, /<button type="button" className=\{styles\.cardOpen\} onClick=\{onOpen\}>/u);
   assert.match(parts, /명 처리/u);
   assert.match(parts, /마지막 처리 \$\{last\}/u);
-  assert.match(parts, /스태프가 없습니다/u);
+  assert.match(parts, /휴대폰 스태프 없음/u);
   assert.match(parts, /외 \$\{staff\.length - 1\}명/u, "several staff read as the first name plus a count");
-  assert.match(parts, /variant="secondary"[\s\S]*?className=\{styles\.cardAssign\}/u, "the card's 배정 is a white button, not a primary");
-  assert.doesNotMatch(parts.slice(parts.indexOf("export function DeskCard")), /variant="primary"/u, "a card never carries the page's primary");
-  assert.match(ops, /variant=\{gapTargets\.length && !archived \? "primary" : "ghost"\}/u, "the header 스태프 배정 stays the only primary");
+  assert.match(parts, /variant=\{enterPrimary \? "primary" : "secondary"\} className=\{styles\.cardEnterLink\}/u, "orange only when a single desk is running");
+  assert.match(ops, /enterPrimary=\{desks\.filter\(\(item\) => item\.open\)\.length === 1\}/u);
+  assert.match(parts, /이 기기에서 열기/u);
+  assert.match(ops, /id="ops-staff-assign"\s+type="button"\s+variant="ghost"/u, "assignment is optional and stays quiet");
   assert.doesNotMatch(parts, /접속 중|online/u, "no presence indicator: the server records none");
   // Buttons never nest: the switch and 배정 sit beside the opening button, not inside it.
   const cardOpen = parts.slice(parts.indexOf("<button type=\"button\" className={styles.cardOpen}"), parts.indexOf("</button>", parts.indexOf("className={styles.cardOpen}")));
   assert.doesNotMatch(cardOpen.slice(cardOpen.indexOf(">") + 1), /<ProductButton|<Switch|<RunSwitch|<button/u, "no control nests inside the opening button");
   assert.match(css, /\.deskBoard\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/su, "two columns on desktop");
   assert.match(css, /@media \(max-width: 768px\)\s*\{[^}]*\.deskBoard\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/su, "one column on phones");
-  assert.match(css, /\.deskCard\[data-gap="true"\]\s*\{[^}]*border-color:\s*var\(--warning-line\)[^}]*background:\s*var\(--warning-soft\)/su, "a desk with no one on duty is amber");
+  assert.doesNotMatch(css, /deskCard\[data-gap/u, "no one assigned is not a warning");
   assert.match(css, /\.deskCard\[data-dim="true"\] \.cardName[\s\S]*?color:\s*var\(--muted\)/u, "a stopped desk is muted text");
   assert.doesNotMatch(css, /\.(deskCard|card[A-Za-z]*)\b[^{]*\{[^}]*opacity/su, "no dimming by opacity");
   assert.match(css, /\.cardNum\s*\{[^}]*font-size:\s*var\(--text-num\)/su, "the per-desk figure uses the number token");

@@ -254,7 +254,8 @@ test('staff-org-guard-executes-at-runtime', async () => {
   // Role wording never leaks internal keys: unknown roles get Korean.
   assert.strictEqual(staffRoleLabel('STAFF'), '스태프');
   assert.strictEqual(staffRoleLabel('AGENCY'), '운영자');
-  assert.strictEqual(staffRoleLabel('MANAGER'), '역할 확인 필요');
+  // Reopened 2026-11-25: a manager opens a desk themselves, so the field screen names the role.
+  assert.strictEqual(staffRoleLabel('MANAGER'), '행사 운영자');
   assert.strictEqual(staffRoleLabel('SUPER'), '역할 확인 필요');
   assert.strictEqual(staffRoleLabel(null), '역할 확인 필요');
   assert.strictEqual(staffRoleLabel(''), '역할 확인 필요');

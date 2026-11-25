@@ -77,12 +77,13 @@ export function isSelectionRequiredError(error: string | null): boolean {
   return error === "조직을 선택하세요";
 }
 
-// Account role wording for the staff surface. Only the two roles this
-// surface operates under get short labels; anything else (including a raw
+// Account role wording for the staff surface. The roles that work here
+// (staff, and operators opening a desk themselves) get short labels; anything else (including a raw
 // server key the worker never assigned) falls back to a Korean placeholder
 // instead of leaking an internal key.
 export function staffRoleLabel(role: unknown): string {
   if (role === "STAFF") return "스태프";
   if (role === "AGENCY") return "운영자";
+  if (role === "MANAGER") return "행사 운영자";
   return "역할 확인 필요";
 }

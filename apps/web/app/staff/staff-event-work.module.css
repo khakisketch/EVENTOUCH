@@ -1316,3 +1316,80 @@
   .orgLine { margin-bottom: var(--s1); padding-block: var(--s1); }
   .workSection { padding-top: var(--s1); }
 }
+
+/* ------------------------------------------------------------------
+   Laptop desk (owner decision 2026-11-25): from 1024px the column widens
+   into the stage and a side panel (who is in, the last people, name tag
+   printing). The phone column above is unchanged.
+   ------------------------------------------------------------------ */
+.affiliation {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-lg);
+  font-weight: var(--fw-strong);
+  overflow-wrap: anywhere;
+}
+
+.quietMessage {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-md);
+  word-break: keep-all;
+}
+
+.printState { margin: 0; font-size: var(--text-sm); font-weight: var(--fw-strong); }
+.printOffstage { position: fixed; top: 0; left: -10000px; width: 360px; }
+
+@media (min-width: 1024px) {
+  .eventWorkPage .fieldApp[data-wide="true"] {
+    --fld-name: 4.5rem;
+    --fld-verdict: 2rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-auto-rows: min-content;
+    align-content: start;
+    column-gap: var(--s4);
+    max-width: 1280px;
+    padding: 0 var(--s4) var(--s4);
+  }
+  .eventWorkPage .fieldApp[data-wide="true"] > * { grid-column: 1; min-width: 0; }
+  .eventWorkPage .fieldApp[data-wide="true"] > .eventContext { grid-column: 1 / -1; }
+  .eventWorkPage .fieldApp[data-wide="true"] > .deskSide { grid-column: 2; grid-row: 2 / span 20; }
+  .eventWorkPage .fieldApp[data-wide="true"] > .fieldStage { min-height: max(400px, calc(100svh - 270px)); border-radius: var(--r-card); }
+  /* One row under the stage, so the whole desk fits a laptop screen without scrolling. */
+  .eventWorkPage .fieldApp[data-wide="true"] > .fieldBar { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); align-items: stretch; margin-top: var(--s3); padding: var(--s3); border-radius: var(--r-card); box-shadow: none; }
+  .eventWorkPage .fieldApp[data-wide="true"] > .fieldBar > :only-child { grid-column: 1 / -1; }
+  .eventWorkPage .fieldApp[data-wide="true"] .scanPrimary { height: 100%; }
+  .eventWorkPage .fieldApp[data-wide="true"] .fieldContext :global(.staff-direction-hint) { width: 100%; max-width: none; }
+}
+
+.deskSide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  align-self: start;
+  margin-top: var(--s2);
+  padding: var(--s4);
+  border-radius: var(--r-card);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.sideCount { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s2); margin: 0; }
+.sideCount strong { font-size: var(--fld-name); font-weight: var(--fw-heavy); font-variant-numeric: tabular-nums; line-height: 1; }
+.sideCount span { color: var(--muted); font-size: var(--text-md); }
+.sideHint { margin: 0; color: var(--muted); font-size: var(--text-sm); word-break: keep-all; }
+.sideRecent { display: grid; margin: 0; padding: 0; list-style: none; }
+.sideRecent li { display: flex; justify-content: space-between; gap: var(--s2); padding: var(--s2) 0; border-top: 1px solid var(--line); }
+.sideRecent span { min-width: 0; font-weight: var(--fw-strong); overflow-wrap: anywhere; }
+.sideRecent time { flex: none; color: var(--muted); font-size: var(--text-sm); }
+.sidePrint { display: grid; gap: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--line); }
+.sideToggle { display: flex; min-height: var(--control-min-size); align-items: center; gap: var(--s2); font-weight: var(--fw-heavy); cursor: pointer; }
+.sideToggle input { width: 22px; height: 22px; accent-color: var(--brand-hover); }
+.sidePaper { display: grid; gap: var(--s1); color: var(--muted); font-size: var(--text-sm); }
+.sidePaper select { width: 100%; min-height: var(--control-min-size); color: var(--ink); }
+.sideHelp summary { min-height: var(--control-min-size); align-content: center; font-size: var(--text-sm); font-weight: var(--fw-strong); cursor: pointer; }
+.sideHelp p { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--lh-body); word-break: keep-all; }

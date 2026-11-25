@@ -5,9 +5,14 @@ const fs = require('node:fs');
 const source = fs.readFileSync('apps/web/app/staff/StaffEventWork.tsx', 'utf8');
 
 test('single assigned desk is selected, zero/multiple desks still require a choice', () => {
-  const expression = source.match(/setDeskId\((next\.desks\.length === 1 \? next\.desks\[0\]\.id : "")\);/);
-  assert.ok(expression);
-  const select = new Function('next', `return ${expression[1]}`);
+  // Reopened 2026-11-25: the address may name the desk (the console's "이 기기에서 열기"); without one the rule is unchanged.
+  assert.match(source, /const start = silent \? undefined : initialDesk\(next\);\s*noteDeskDirections\(next, !silent, start\);/);
+  assert.match(source, /setDeskId\(start\?\.id \?\? ""\);/);
+  const rule = source.match(/return scope\.desks\.find\(\(desk\) => desk\.id === named\) \?\? \(scope\.desks\.length === 1 \? scope\.desks\[0\] : undefined\);/);
+  assert.ok(rule);
+  const pick = new Function('scope', 'named', rule[0]);
+  assert.equal(pick({ desks: [{ id: 'desk-one' }, { id: 'desk-two' }] }, 'desk-two').id, 'desk-two');
+  const select = (next) => pick(next, '')?.id ?? '';
   assert.equal(select({ desks: [] }), '');
   assert.equal(select({ desks: [{ id: 'desk-one' }] }), 'desk-one');
   assert.equal(select({ desks: [{ id: 'desk-one' }, { id: 'desk-two' }] }), '');

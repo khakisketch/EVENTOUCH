@@ -25,14 +25,15 @@ test("the operations screen reads as one page: no sidebar nav, one primary entry
   const source = ops();
   assert.doesNotMatch(source, /ConsoleSectionNav|sectionLayout="sidebar"|activeSection|navPinRef/u, "the sidebar nav and its scroll spy are gone");
   assert.match(source, /id="ops-staff-assign"/u, "the handoff focus target survives");
-  assert.match(source, /variant=\{gapTargets\.length && !archived \? "primary" : "ghost"\}/u, "the page owns one primary only while some place has no one on duty");
+  // Reopened 2026-11-25: assigning staff is optional, so its header entry stays quiet.
+  assert.match(source, /id="ops-staff-assign"\s+type="button"\s+variant="ghost"/u, "assignment is never the page's primary");
   assert.match(source, /window\.addEventListener\("hashchange", applyHash\)/u, "later fragments still unfold their preset");
 });
 
 test("same-day and before-the-day sections split through one summary slot", () => {
   const source = ops();
   assert.match(source, /<StepPill n=\{1\}/u, "step 1 states its status in the description slot");
-  assert.match(source, /<StepPill n=\{2\} tone=\{assignableTargets === 0 \? "wait" : gapTargets\.length \? "warn" : "ok"\}/u, "step 2 turns amber while a place has no one on duty");
+  assert.match(source, /<StepPill n=\{2\} tone=\{assignableTargets === 0 \? "wait" : assignments\.length \? "ok" : "day"\}/u, "step 2 is optional: it never turns amber");
   assert.match(source, /<StepPill n=\{3\} tone="day">/u);
   assert.doesNotMatch(source, /kpiStrip|kpiCard|현장 운영 요약/u, "no big-number strip on a work screen");
   assert.match(source, /description=\{boothSummary\}/u);
@@ -80,9 +81,9 @@ test("danger-adjacent presets keep their in-place confirm grammar and copy", () 
 
 test("staff assignment keeps its guidance and its release path", () => {
   const source = ops();
-  assert.match(source, /배정된 스태프가 없습니다\. 진행 중으로 전환하려면 입장 데스크에 스태프를 배정하세요\./u);
+  assert.match(source, /이 기기에서 직접 처리하면 배정이 없어도 됩니다\./u);
   assert.match(source, /배정하려면 먼저 데스크나 부스를 만드세요/u);
-  assert.match(source, /진행 중 전환 조건: 등록 데스크 \{desks\.length\}개 · 데스크 배정 \{deskStaffCount\}건/u);
+  assert.doesNotMatch(source, /진행 중으로 전환하려면 입장 데스크에 스태프를 배정/u, "going live no longer needs an assignment");
   assert.match(source, /staff\.assign/u);
   assert.match(source, /staff\.unassign/u);
   assert.match(source, />\s*해제\s*<\/button>/u, "the release affordance stays on the row");

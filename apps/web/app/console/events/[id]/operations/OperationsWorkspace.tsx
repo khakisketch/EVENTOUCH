@@ -228,7 +228,7 @@ function SetupFold({ live, open, onToggle, remaining, address, copied, onCopy, c
         <summary className={styles.foldSummary}>
           <span className={styles.foldText}>
             <b>설정 3단계</b>
-            <span className={styles.foldDetail}> · 데스크 만들기, 스태프 배정, 스캔 안내</span>
+            <span className={styles.foldDetail}> · 데스크 만들기, 휴대폰 스태프, 입장 처리</span>
           </span>
           <span className={styles.foldState} data-state={remaining ? "todo" : "done"}>{remaining ? `${remaining}단계 남음` : "모두 완료"}</span>
           <span className={styles.foldChevron} aria-hidden="true"><ChevronRightIcon /></span>
@@ -1179,7 +1179,6 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   const accountName = new Map(accounts.map((account) => [account.id, account.name]));
   const deskName = new Map(desks.map((desk) => [desk.id, desk.name]));
   const boothName = new Map(booths.map((booth) => [booth.id, booth.name]));
-  const deskStaffCount = assignments.filter((assignment) => assignment.type === "DESK").length;
   // Staff can be assigned to booths without any desk: the LIVE precondition
   // still needs a desk separately (see the notice below), but assignment
   // itself only needs a selectable target of either kind.
@@ -1356,7 +1355,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         <ProductButton
           id="ops-staff-assign"
           type="button"
-          variant={gapTargets.length && !archived ? "primary" : "ghost"}
+          variant="ghost"
           onClick={() => { setAssignPreset(null); setAssignOpen(true); setFailure(null); }}
           disabled={assignableTargets === 0 || onsiteBlocked}
           title={onsiteBlocked ? onsiteNoWriteReason : assignableTargets === 0 ? "데스크나 부스를 먼저 만드세요" : undefined}
@@ -1404,7 +1403,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
           description={!state.deskStats.available
             ? "출입 기록을 확인할 수 없어 처리 수를 표시하지 않습니다."
             : desks.length
-              ? `${deskOpenCount} / ${desks.length} 가동${gapTargets.some((target) => target.type === "DESK") ? ` · 담당 필요 ${gapTargets.filter((target) => target.type === "DESK").length}곳` : ""}`
+              ? `${deskOpenCount} / ${desks.length} 가동`
               : undefined}
           className={styles.anchorSection}
         >
@@ -1427,9 +1426,9 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                     last={tally ? processedAgo(tally.lastAt, nowMs) : null}
                     staff={deskStaff}
                     onOpen={() => setDetail({ type: "DESK", id: desk.id })}
-                    onAssign={() => { setAssignPreset({ type: "DESK", targetId: desk.id }); setAssignOpen(true); setFailure(null); }}
-                    assignDisabled={busy || onsiteBlocked}
-                    assignReason={onsiteBlocked ? onsiteNoWriteReason : undefined}
+                    enterHref={canWriteEvent(capabilities, "check.scan") && !archived && desk.open && !deskIncomplete
+                      ? `/staff/events/${encodeURIComponent(eventId)}?desk=${encodeURIComponent(desk.id)}&as=${encodeURIComponent(desk.action || "")}` : null}
+                    enterPrimary={desks.filter((item) => item.open).length === 1}
                     control={(
                       <RunSwitch
                         name={deskLabel}
@@ -1462,7 +1461,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
         live={liveBoard}
         open={setupOpen}
         onToggle={setSetupOpen}
-        remaining={(desks.length ? 0 : 1) + (assignableTargets > 0 && !gapTargets.length ? 0 : 1)}
+        remaining={desks.some((desk) => desk.open && desk.action === "IN") ? 0 : 1}
         address={typeof window === "undefined" ? "/staff" : `${window.location.host}/staff`}
         copied={staffLinkCopied}
         onCopy={() => void copyStaffLink()}
@@ -1537,23 +1536,23 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                 })}
               </ul>
             ) : (
-              <ConsoleEmptyState title="등록된 데스크가 없습니다" description="진행 중 전환에는 데스크와 스태프 배정이 필요합니다." />
+              <ConsoleEmptyState title="등록된 데스크가 없습니다" description="진행 중으로 바꾸려면 가동 중인 입장 데스크가 하나 필요합니다." />
             )}
             {liveBoard && deskStopOrigin === "board" ? null : deskStopConfirm}
           </ConsoleSection>
 
           <ConsoleSection
             headingId="ops-staff"
-            title="스태프 배정"
+            title="휴대폰 스태프 (선택)"
             heading="rule"
-            description={<StepPill n={2} tone={assignableTargets === 0 ? "wait" : gapTargets.length ? "warn" : "ok"}>{assignableTargets === 0 ? "1단계를 먼저" : gapTargets.length ? `${gapTargets.length}곳 담당 필요` : `완료 · 배정 ${assignments.length}건`}</StepPill>}
-            className={`${styles.anchorSection} ${styles.stepSection}${assignableTargets > 0 && gapTargets.length ? ` ${styles.stepAmber}` : ""}`}
+            description={<StepPill n={2} tone={assignableTargets === 0 ? "wait" : assignments.length ? "ok" : "day"}>{assignableTargets === 0 ? "1단계를 먼저" : assignments.length ? `배정 ${assignments.length}건` : "필요할 때만"}</StepPill>}
+            className={`${styles.anchorSection} ${styles.stepSection}`}
           >
             {assignableTargets === 0 ? (
               <ConsoleEmptyState title="배정하려면 먼저 데스크나 부스를 만드세요" />
             ) : gapTargets.length ? (
               <div className={styles.gapSurface}>
-                <p className={styles.gapHead}><span className={styles.gapMark} aria-hidden="true" />담당이 없는 곳 <b>{gapTargets.length}</b>곳</p>
+                <p className={styles.gapHead}>휴대폰으로 찍을 스태프를 따로 둘 곳만 배정하세요. 이 기기에서 직접 처리하면 배정이 없어도 됩니다.</p>
                 {gapTargets.map((target) => (
                   <div key={`${target.type}-${target.id}`} className={styles.gapRow}>
                     <span className={styles.gapName}><strong>{target.name}</strong><em>{target.type === "DESK" ? "데스크" : "부스"}</em></span>
@@ -1570,15 +1569,6 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                     </ProductButton>
                   </div>
                 ))}
-                {!assignments.length ? (
-                  <p className={styles.gapCondition} role="status">
-                    배정된 스태프가 없습니다. 진행 중으로 전환하려면 입장 데스크에 스태프를 배정하세요.
-                  </p>
-                ) : !deskStaffCount ? (
-                  <p className={styles.gapCondition} role="status">
-                    진행 중 전환 조건: 등록 데스크 {desks.length}개 · 데스크 배정 {deskStaffCount}건
-                  </p>
-                ) : null}
               </div>
             ) : (
               <div className={styles.gapSurface}>
@@ -1589,7 +1579,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
 
           <ConsoleSection
             headingId="ops-scan"
-            title="스태프 폰에서 스캔"
+            title="입장 처리"
             heading="rule"
             description={<StepPill n={3} tone="day">당일</StepPill>}
             className={`${styles.anchorSection} ${styles.stepSection}`}
@@ -1597,9 +1587,9 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             <div className={styles.scanStep}>
               <div className={styles.scanCopy}>
                 <ol className={styles.scanList}>
-                  <li>스태프가 자기 폰에서 <b>스태프 로그인</b> 주소를 엽니다.</li>
-                  <li>배정된 데스크가 바로 열립니다.</li>
-                  <li>티켓 QR을 카메라에 비추거나 번호를 입력해 입장을 처리합니다.</li>
+                  <li><b>이 기기</b>: 진행 중에 데스크 카드의 &lsquo;이 기기에서 열기&rsquo;를 누릅니다.</li>
+                  <li><b>휴대폰 스태프</b>: 배정한 스태프가 <b>스태프 로그인</b> 주소를 엽니다.</li>
+                  <li>USB 스캐너나 카메라로 티켓 QR을 찍거나, 명단에서 찾아 처리합니다.</li>
                 </ol>
                 <p className={styles.scanLink}>
                   <span>로그인 주소</span>
@@ -1607,10 +1597,9 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                 </p>
                 <div className={styles.scanActions}>
                   <ProductButton type="button" variant="ghost" icon={staffLinkCopied ? <CheckIcon /> : <CopyIcon />} onClick={() => void copyStaffLink()}>{staffLinkCopied ? "복사했습니다" : "주소 복사"}</ProductButton>
-                  <ProductLink variant="ghost" href="/staff" target="_blank" rel="noreferrer">스태프 화면 열기<span className="sr-only"> (새 탭)</span></ProductLink>
                   {staffAccounts.length === 0 ? <ProductLink variant="ghost" href="/console/team">스태프 초대하기</ProductLink> : null}
                 </div>
-                <p className={styles.hint} role="status">{staffAccounts.length ? `스태프 계정 ${staffAccounts.length}명 · 데스크에 배정된 사람만 스캔할 수 있습니다.` : "스태프 계정이 없습니다. 팀·권한에서 스태프를 초대한 뒤 데스크에 배정하세요."}</p>
+                <p className={styles.hint} role="status">{staffAccounts.length ? `스태프 계정 ${staffAccounts.length}명` : "스태프 계정은 휴대폰으로 찍을 사람을 따로 둘 때만 필요합니다."}</p>
               </div>
               <div className={styles.scanPhone} aria-hidden="true">
                 <DeviceFrame variant="phone" fixed maxDisplayWidth={196} viewportHeight={500}>

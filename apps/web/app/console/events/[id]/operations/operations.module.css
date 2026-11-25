@@ -166,7 +166,7 @@
 .locationWarn { color: var(--warning); font-size: var(--text-sm); font-weight: var(--fw-strong); }
 .locationDuty { display: inline-flex; align-items: center; gap: var(--s2); min-width: 0; }
 .dutyCaption { max-width: 9em; overflow: hidden; color: var(--ink); font-size: var(--text-sm); font-weight: var(--fw-strong); text-overflow: ellipsis; white-space: nowrap; }
-.dutyCaption[data-empty="true"] { color: var(--warning); }
+.dutyCaption[data-empty="true"] { color: var(--muted); }
 .locationChevron { display: inline-flex; color: var(--line-strong); transition: transform 0.12s, color 0.12s; }
 .locationChevron svg { width: 20px; height: 20px; }
 .locationControl { display: inline-flex; align-items: center; min-width: 44px; justify-content: flex-end; padding-right: var(--s2); }
@@ -187,16 +187,13 @@
 }
 
 /* Missing coverage is work waiting on a person: amber, with the way to fix it on each row. */
-.gapSurface { display: grid; gap: var(--s1); padding: var(--s4) var(--s5); border: 1px solid var(--warning-line); border-radius: var(--r-card); background: var(--warning-soft); }
-.gapHead { display: flex; align-items: center; gap: var(--s2); margin: 0 0 var(--s1); color: var(--warning); font-size: var(--text-sm); font-weight: var(--fw-strong); }
-.gapHead b { font-size: var(--text-lg); font-weight: var(--fw-heavy); font-variant-numeric: tabular-nums; }
-.gapMark { width: var(--s2); height: var(--s2); border-radius: 50%; background: var(--warning); }
+.gapSurface { display: grid; gap: var(--s1); padding: var(--s4) var(--s5); border: 1px solid var(--line); border-radius: var(--r-card); background: var(--surface-muted); }
+.gapHead { margin: 0 0 var(--s1); color: var(--muted); font-size: var(--text-sm); word-break: keep-all; }
 .gapRow { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); min-height: 48px; border-top: 1px solid var(--warning-line); }
 .gapName { display: inline-flex; align-items: baseline; gap: var(--s2); min-width: 0; }
 .gapName strong { font-weight: var(--fw-strong); overflow-wrap: anywhere; word-break: keep-all; }
 .gapName em { color: var(--muted); font-size: var(--text-xs); font-style: normal; font-weight: var(--fw-strong); }
 .gapRow > button, .gapRow > a { flex: none; }
-.gapCondition { margin: var(--s2) 0 0; color: var(--muted); font-size: var(--text-sm); }
 .gapOk { display: flex; align-items: center; gap: var(--s3); margin: 0; padding: var(--s3) var(--s4); border-radius: var(--r-card); background: var(--success-soft); color: var(--ink); font-weight: var(--fw-strong); }
 .gapOkMark { display: inline-grid; flex: none; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--paper); color: var(--success); }
 .gapSurface:has(.gapOk) { padding: 0; border: 0; background: transparent; }
@@ -237,8 +234,6 @@
   transition: border-color 0.12s;
 }
 .deskCard:hover { border-color: var(--line-strong); }
-.deskCard[data-gap="true"] { border-color: var(--warning-line); background: var(--warning-soft); }
-.deskCard[data-gap="true"]:hover { border-color: var(--warning); }
 .cardOpen {
   display: grid;
   gap: var(--s2);
@@ -278,11 +273,11 @@
   font-size: var(--text-sm);
   font-weight: var(--fw-strong);
 }
-.deskCard[data-gap="true"] .cardFoot { padding-right: calc(var(--s8) + var(--s5)); border-top-color: var(--warning-line); }
 .cardStaff { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cardNone { color: var(--warning); }
+.cardNone { color: var(--muted); font-weight: var(--fw-regular); }
 .cardControl { position: absolute; top: var(--s4); right: var(--s5); display: inline-flex; align-items: center; justify-content: flex-end; min-width: 44px; min-height: 44px; }
-.cardAssign { position: absolute; right: var(--s5); bottom: var(--s4); }
+.cardEnter { display: grid; padding: 0 var(--s5) var(--s4); }
+.cardEnterLink { justify-content: center; }
 /* 가동 스위치: 보이는 트랙은 40x24지만 눌리는 영역은 44px 바닥을 채운다. */
 .runSwitch { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
 .runSwitch.runSwitch :global(.astryx-switch-field) input[role="switch"] {
@@ -363,8 +358,8 @@
 @media (max-width: 768px) {
   .deskBoard { grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
   .cardOpen { padding-inline: var(--s4); }
-  .cardControl, .cardAssign { right: var(--s4); }
-  .deskCard[data-gap="true"] .cardFoot { padding-right: calc(var(--s8) + var(--s4)); }
+  .cardControl { right: var(--s4); }
+  .cardEnter { padding-inline: var(--s4); }
   .foldSummary, .addressRow { padding-left: var(--s4); }
   .foldDetail { display: none; }
 }

@@ -219,9 +219,9 @@ test('event workspaces keep factual meta and action-specific sections inside the
   const operations = read(eventPhaseTwoTargets[0]);
   // Field operations owns one page-level assignment action in the header: it is
   // the page's only primary while some place has no one on duty, a ghost after.
-  assert.match(operations, /headerActions=\{\(\s*<ProductButton\s+id="ops-staff-assign"[\s\S]*?variant=\{gapTargets\.length && !archived \? "primary" : "ghost"\}/u);
+  assert.match(operations, /headerActions=\{\(\s*<ProductButton\s+id="ops-staff-assign"[\s\S]*?variant="ghost"/u);
   // Reopened 2026-11-20: step 2 of 입장·스태프 keeps the anchor and gains a status pill.
-  assert.match(operations, /headingId="ops-staff"\s+title="스태프 배정"/u, 'the staff anchor section stays');
+  assert.match(operations, /headingId="ops-staff"\s+title="휴대폰 스태프 \(선택\)"/u, 'the staff anchor section stays');
   assert.match(operations, /className="button button-primary"[^>]*>[\s\S]*?초안 저장/u, 'map draft save remains a primary body action');
 });
 

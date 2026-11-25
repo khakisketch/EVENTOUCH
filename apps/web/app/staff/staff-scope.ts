@@ -1,7 +1,10 @@
-// Shared staff assignment projection: the hub and the event work screen read
-// the same server-owned bootstrap and keep only the current account's active
-// DESK/BOOTH assignments. Scans stay server-checked; this module never
-// decides admission.
+// Shared field-work projection: the hub and the event work screen read the same
+// server-owned bootstrap. A staff account sees its own active DESK/BOOTH
+// assignments. An operator who holds the field permission opens any desk or
+// booth of a running or upcoming event without being assigned to it (owner
+// decision 2026-11-25). Scans stay server-checked; this module never decides
+// admission.
+import { canWriteEvent } from "../../lib/event-capabilities";
 
 export type StaffAssignment = { id: string; type: string; targetId: string };
 export type StaffDesk = { id: string; name: string; action: string; open?: boolean };
@@ -36,7 +39,12 @@ export type StaffScope = {
   checksAvailable: boolean;
   participantsAvailable: boolean;
   boothVisits: StaffBoothVisit[];
+  // True when the viewer works here as an operator, not through an assignment.
+  operator: boolean;
 };
+
+// Who is looking, as the bootstrap names them.
+export type StaffAccess = { viewer?: unknown; memberships?: unknown };
 
 type BootstrapWorkspace = {
   desks?: unknown;
@@ -56,8 +64,11 @@ function text(value: unknown): string {
 
 export function buildStaffScopes(
   events: Array<{ id?: unknown; name?: unknown; stage?: unknown; features?: unknown; date?: unknown; start?: unknown; end?: unknown }>,
-  workspaces: Record<string, BootstrapWorkspace>
+  workspaces: Record<string, BootstrapWorkspace>,
+  access?: StaffAccess
 ): StaffScope[] {
+  const viewer = typeof access?.viewer === "object" && access.viewer !== null ? access.viewer as { id?: unknown; role?: unknown } : null;
+  const operator = viewer?.role === "AGENCY" || viewer?.role === "MANAGER";
   const next: StaffScope[] = [];
   for (const event of events) {
     const id = typeof event.id === "string" ? event.id : "";
@@ -66,15 +77,28 @@ export function buildStaffScopes(
     const assignments = Array.isArray(workspace.assignments)
       ? (workspace.assignments as StaffAssignment[])
       : [];
-    const deskAssignments = assignments.filter((item) => item.type === "DESK");
-    const boothAssignments = assignments.filter((item) => item.type === "BOOTH");
-    if (!deskAssignments.length && !boothAssignments.length) continue;
     const desks = Array.isArray(workspace.desks)
       ? (workspace.desks as StaffDesk[])
       : [];
     const booths = Array.isArray(workspace.booths)
       ? (workspace.booths as StaffBooth[])
       : [];
+    // The server ignores an operator's assignment id (it checks the event permission), so the
+    // screen can name each place itself and keep one code path for both kinds of account.
+    const over = event.stage === "ENDED" || event.stage === "ARCHIVED";
+    const may = (command: string) => operator && !over && canWriteEvent({
+      role: viewer?.role, userId: viewer?.id, memberships: access?.memberships, eventId: id,
+    }, command);
+    const asOperator = (type: "DESK" | "BOOTH", places: Array<{ id: string }>): StaffAssignment[] =>
+      places.map((place) => ({ id: `operator:${place.id}`, type, targetId: place.id }));
+    const stampOn = !Array.isArray(event.features) || event.features.includes("stamp");
+    const deskAssignments = operator
+      ? (may("check.scan") ? asOperator("DESK", desks) : [])
+      : assignments.filter((item) => item.type === "DESK");
+    const boothAssignments = operator
+      ? (may("booth.visit") && stampOn ? asOperator("BOOTH", booths) : [])
+      : assignments.filter((item) => item.type === "BOOTH");
+    if (!deskAssignments.length && !boothAssignments.length) continue;
     const checksAvailable = workspace.checksAvailable === true && Array.isArray(workspace.checks) &&
       workspace.checks.every((item) => typeof item === "object" && item !== null && !Array.isArray(item));
     const participantsAvailable = workspace.participantsAvailable === true && Array.isArray(workspace.participants) &&
@@ -111,6 +135,7 @@ export function buildStaffScopes(
       checksAvailable,
       participantsAvailable,
       boothVisits,
+      operator,
     });
   }
   return next;

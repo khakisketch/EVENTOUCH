@@ -2,7 +2,7 @@ import { Switch } from "@astryxdesign/core/Switch";
 import type { ReactNode } from "react";
 import ConsoleAvatar from "../../../console-ui/ConsoleAvatar";
 import { ChevronRightIcon } from "../../../console-ui/ConsoleIcons";
-import ProductButton from "../../../../ui/ProductButton";
+import ProductLink from "../../../../ui/ProductLink";
 import StatusPill from "../../../console-ui/StatusPill";
 import { BoothIcon, DeskIcon, TabletIcon } from "./OpsIcons";
 import styles from "./operations.module.css";
@@ -24,9 +24,9 @@ export function StaffFaces({ staff }: { staff: Staffer[] }) {
   );
 }
 
-/** The duty line beside the faces: the first name, or a quiet "담당 필요" for an empty place. Decorative; the row's spoken summary carries the same facts. */
+/** The duty line beside the faces: the first name, or a quiet "스태프 없음" for an empty place. Decorative; the row's spoken summary carries the same facts. */
 function DutyCaption({ staff }: { staff: Staffer[] }) {
-  if (!staff.length) return <span className={styles.dutyCaption} data-empty="true" aria-hidden="true">담당 필요</span>;
+  if (!staff.length) return <span className={styles.dutyCaption} data-empty="true" aria-hidden="true">스태프 없음</span>;
   return (
     <span className={styles.dutyCaption} aria-hidden="true">
       {staff[0].name}{staff.length > 1 ? ` 외 ${staff.length - 1}명` : ""}
@@ -125,22 +125,22 @@ type DeskCardProps = {
   last: string | null;
   staff: Staffer[];
   onOpen: () => void;
-  onAssign: () => void;
-  assignDisabled: boolean;
-  assignReason?: string;
+  /** The field screen for this desk on this device, or null when it cannot take scans. */
+  enterHref: string | null;
+  /** Orange only when there is a single running desk to open. */
+  enterPrimary: boolean;
   /** The run switch; it sits outside the opening button. */
   control: ReactNode;
 };
 
 /**
- * 진행 중 데스크 보드의 카드 하나(2026-11-24). 카드 전체가 데스크 상세를 열고, 가동 스위치와
- * (담당이 없을 때) 배정 버튼은 열기 버튼 밖에 겹쳐 놓는다. 담당이 없으면 호박색이다.
+ * 진행 중 데스크 보드의 카드 하나(2026-11-24, 다시 엶 2026-11-25). 카드 전체가 데스크 상세를 열고,
+ * 가동 스위치와 "이 기기에서 열기"는 열기 버튼 밖에 둔다. 스태프 배정은 선택이라 경고색을 쓰지 않는다.
  */
-export function DeskCard({ name, note, tone, dim, count, last, staff, onOpen, onAssign, assignDisabled, assignReason, control }: DeskCardProps) {
-  const gap = staff.length === 0;
+export function DeskCard({ name, note, tone, dim, count, last, staff, onOpen, enterHref, enterPrimary, control }: DeskCardProps) {
   const lastLine = count === null ? null : last ? `마지막 처리 ${last}` : "아직 처리 기록이 없습니다";
   return (
-    <li className={styles.deskCard} data-gap={gap ? "true" : undefined} data-dim={dim ? "true" : undefined}>
+    <li className={styles.deskCard} data-dim={dim ? "true" : undefined}>
       <button type="button" className={styles.cardOpen} onClick={onOpen}>
         <span className={styles.cardHead}>
           <span className={styles.cardDot} data-tone={tone} aria-hidden="true" />
@@ -160,30 +160,24 @@ export function DeskCard({ name, note, tone, dim, count, last, staff, onOpen, on
         </span>
         {lastLine ? <span className={styles.cardMeta}>{lastLine}</span> : null}
         <span className={styles.cardFoot}>
-          {gap ? (
-            <span className={styles.cardNone}>스태프가 없습니다</span>
-          ) : (
+          {staff.length ? (
             <>
               <ConsoleAvatar name={staff[0].name} tone="ok" size="sm" />
               <span className={styles.cardStaff}>{staff[0].name}{staff.length > 1 ? ` 외 ${staff.length - 1}명` : ""}</span>
             </>
+          ) : (
+            <span className={styles.cardNone}>휴대폰 스태프 없음</span>
           )}
         </span>
         <span className="sr-only">상세 보기</span>
       </button>
       <span className={styles.cardControl}>{control}</span>
-      {gap ? (
-        <ProductButton
-          type="button"
-          variant="secondary"
-          className={styles.cardAssign}
-          disabled={assignDisabled}
-          title={assignDisabled ? assignReason : undefined}
-          aria-label={`${name} 배정`}
-          onClick={onAssign}
-        >
-          배정
-        </ProductButton>
+      {enterHref ? (
+        <div className={styles.cardEnter}>
+          <ProductLink variant={enterPrimary ? "primary" : "secondary"} className={styles.cardEnterLink} href={enterHref} target="_blank" rel="noreferrer" aria-label={`${name} 이 기기에서 열기 (새 탭)`}>
+            이 기기에서 열기
+          </ProductLink>
+        </div>
       ) : null}
     </li>
   );

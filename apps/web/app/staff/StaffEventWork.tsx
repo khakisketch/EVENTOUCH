@@ -3,7 +3,8 @@
 import ProductButton from "../ui/ProductButton";
 
 import ValidatedForm from "../ui/ValidatedForm";
-import NameTagPrint, { type NameTagIdentity } from "../ui/NameTagPrint";
+import NameTagPrint, { NAMETAG_PAPERS, readNameTagPreferences, saveNameTagPreference, type NameTagIdentity, type NameTagPaper } from "../ui/NameTagPrint";
+import { createScanBuffer } from "./scanner-input";
 
 
 import { useEffect, useRef, useState } from "react";
@@ -253,6 +254,34 @@ function alreadyInDetails(value: unknown): { alreadyName?: string; alreadyAt?: s
   return { ...(name ? { alreadyName: name } : {}), ...(at ? { alreadyAt: at } : {}) };
 }
 
+function deskFromAddress(): { id: string; direction: DeskDirection | null } {
+  const query = new URLSearchParams(window.location.search);
+  return { id: query.get("desk") ?? "", direction: deskDirection(query.get("as") ?? "") };
+}
+
+function rememberDeskInAddress(id: string, direction: DeskDirection) {
+  const address = new URL(window.location.href);
+  address.searchParams.set("desk", id);
+  address.searchParams.set("as", direction);
+  window.history.replaceState(window.history.state, "", address);
+}
+
+// A direction change that is still waiting for an answer must be asked again after a reload.
+function forgetConfirmedDirection(id: string) {
+  const address = new URL(window.location.href);
+  if (address.searchParams.get("desk") !== id || !address.searchParams.has("as")) return;
+  address.searchParams.delete("as");
+  window.history.replaceState(window.history.state, "", address);
+}
+
+// The desk to start on: the one the address names with a confirmed direction, or the only
+// one there is. Without that, several desks stay the person's choice.
+function initialDesk(scope: StaffScope) {
+  const address = deskFromAddress();
+  const named = address.direction ? address.id : "";
+  return scope.desks.find((desk) => desk.id === named) ?? (scope.desks.length === 1 ? scope.desks[0] : undefined);
+}
+
 function identityKey(person: Pick<DeskParticipant, "name" | "company">): string {
   return `${person.name.trim().toLowerCase()}\u0000${person.company.trim().toLowerCase()}`;
 }
@@ -266,8 +295,9 @@ async function readNameTagIdentity(eventId: string, participantId: string, confi
     const event = state.events.find((item) => item?.id === eventId);
     const workspace = state.workspaces?.[eventId];
     if (!event || typeof event.name !== "string" || !workspace || workspace.participantsAvailable !== true ||
-        workspace.checksAvailable !== true || !Array.isArray(workspace.participants) ||
-        !Array.isArray(workspace.assignments) || !workspace.assignments.some((item) => item && item.type === "DESK")) {
+        workspace.checksAvailable !== true || !Array.isArray(workspace.participants) || !Array.isArray(workspace.assignments) ||
+        // Still allowed to run a desk here: a staff desk assignment, or an operator's field permission.
+        !buildStaffScopes(state.events, state.workspaces ?? {}, state).some((item) => item.eventId === eventId && item.assignments.length > 0)) {
       throw new Error(unavailable);
     }
     const matches = workspace.participants.filter((item): item is Record<string, unknown> =>
@@ -300,6 +330,30 @@ function AutoAdvance({ ms, onAdvance }: { ms: number; onAdvance: () => void }) {
     const timer = window.setTimeout(() => advance.current(), ms);
     return () => window.clearTimeout(timer);
   }, [ms]);
+  return null;
+}
+
+// A USB or Bluetooth scanner types the ticket and presses Enter. It works without any
+// field focused, so the desk never opens a drawer between two people.
+function ScannerKeys({ onScan }: { onScan: (code: string) => void }) {
+  const handler = useRef(onScan);
+  handler.current = onScan;
+  useEffect(() => {
+    const read = createScanBuffer();
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target;
+      // The code fields and a written reason keep their own typing and Enter.
+      if (target instanceof HTMLTextAreaElement ||
+          (target instanceof HTMLInputElement && (target.id === "staff-ticket" || target.id === "reward-lookup-ticket"))) return;
+      const code = read(event);
+      if (!code) return;
+      event.preventDefault();
+      event.stopPropagation();
+      handler.current(code);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
   return null;
 }
 
@@ -384,6 +438,26 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const [lastScan, setLastScan] = useState<Extract<ScanResult, { kind: "ok" }> | null>(null);
   const [soundOn, setSoundOn] = useState(true);
   const [autoNext, setAutoNext] = useState(true);
+  // Laptop desk (2026-11-25): at 1024px and up the screen adds a side panel, keeps a result
+  // until the next ticket, and can print the name tag by itself.
+  const [wide, setWide] = useState(false);
+  const [autoPrint, setAutoPrint] = useState(false);
+  const [paper, setPaper] = useState<NameTagPaper>("a4");
+  const autoPrintRef = useRef(false);
+  autoPrintRef.current = autoPrint && wide;
+  const [printJob, setPrintJob] = useState<{ result: ScanResult; status: "pending" | "sent" | "failed" } | null>(null);
+  const [scannerNotice, setScannerNotice] = useState("");
+  const [operatorViewer, setOperatorViewer] = useState(false);
+  useEffect(() => {
+    const saved = readNameTagPreferences();
+    setAutoPrint(saved.auto);
+    setPaper(saved.paper);
+    const media = window.matchMedia("(min-width: 1024px)");
+    const update = () => setWide(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   const soundOnRef = useRef(true);
   soundOnRef.current = soundOn;
   const resultSeqRef = useRef<{ last: ScanResult | null; seq: number }>({ last: null, seq: 0 });
@@ -453,19 +527,24 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   // Compare every previously selected desk with the last direction the staff
   // member chose or explicitly confirmed. A refresh may follow a successful
   // scan, so changing the selector alone must not authorize the next action.
-  function noteDeskDirections(next: StaffScope, reset: boolean) {
+  function noteDeskDirections(next: StaffScope, reset: boolean, start?: StaffScope["desks"][number]) {
     if (reset) {
       confirmedDeskDirectionsRef.current.clear();
       const initialReviews: Record<string, DeskDirectionReview> = {};
-      if (next.desks.length === 1) {
-        const desk = next.desks[0];
+      const desk = start;
+      if (desk) {
         const direction = deskDirection(desk.action);
         if (direction) {
           confirmedDeskDirectionsRef.current.set(desk.id, direction);
-          // An auto-selected desk has not been chosen or confirmed by the
-          // staff member. Require a fresh confirmation on each page entry;
-          // never persist a desk or organization context on a shared device.
-          initialReviews[desk.id] = { from: null, to: direction };
+          // An auto-selected desk has not been confirmed yet, so ask once. The answer is
+          // kept only in this tab's address (never in device storage): a reload does not
+          // ask again, and a direction that changed since then still does.
+          const confirmed = deskFromAddress();
+          const known = confirmed.id === desk.id ? confirmed.direction : null;
+          if (known !== direction) {
+            initialReviews[desk.id] = { from: known, to: direction };
+            forgetConfirmedDirection(desk.id);
+          }
         }
       }
       deskDirectionReviewsRef.current = initialReviews;
@@ -476,7 +555,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     for (const [id, from] of confirmedDeskDirectionsRef.current) {
       const desk = next.desks.find((item) => item.id === id);
       const to = deskDirection(desk?.action);
-      if (to !== from || reviews[id]) reviews[id] = { from: reviews[id] ? reviews[id].from : from, to };
+      if (to !== from || reviews[id]) {
+        reviews[id] = { from: reviews[id] ? reviews[id].from : from, to };
+        forgetConfirmedDirection(id);
+      }
     }
     deskDirectionReviewsRef.current = reviews;
     setDeskDirectionReviews(reviews);
@@ -484,10 +566,18 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   }
 
   function selectDeskDirection(id: string, next: StaffScope) {
-    if (!id || confirmedDeskDirectionsRef.current.has(id)) return;
+    if (!id) return;
+    const kept = confirmedDeskDirectionsRef.current.get(id);
+    if (kept) {
+      // Going back to a desk: the address follows the choice, and an open question stays open.
+      rememberDeskInAddress(id, kept);
+      if (deskDirectionReviewsRef.current[id]) forgetConfirmedDirection(id);
+      return;
+    }
     const direction = deskDirection(next.desks.find((desk) => desk.id === id)?.action);
     if (direction) {
       confirmedDeskDirectionsRef.current.set(id, direction);
+      rememberDeskInAddress(id, direction);
     }
   }
   // Shared operator context: the active organization, role, and whether
@@ -691,8 +781,11 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       }
       const scopes = buildStaffScopes(
         Array.isArray(state.events) ? state.events : [],
-        state.workspaces ?? {}
+        state.workspaces ?? {},
+        state
       );
+      const viewerRole = (state.viewer as { role?: unknown } | undefined)?.role;
+      setOperatorViewer(viewerRole === "AGENCY" || viewerRole === "MANAGER");
       const next = scopes.find((item) => item.eventId === targetEventId) ?? null;
       if (!next) {
         lastLoadedScopeRef.current = null;
@@ -709,7 +802,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         return false;
       }
       lastLoadedScopeRef.current = next;
-      noteDeskDirections(next, !silent);
+      // Read the address before the direction check edits it: the same desk is asked about and selected.
+      const start = silent ? undefined : initialDesk(next);
+      noteDeskDirections(next, !silent, start);
       setScope(next);
       setServerClock(clock);
       setBoothStatusStale(false);
@@ -754,7 +849,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         // A single assigned desk is not a choice. Keep its name and IN/OUT
         // explanation visible in the existing selector; never pick between
         // multiple desks or submit a scan on the staff member's behalf.
-        setDeskId(next.desks.length === 1 ? next.desks[0].id : "");
+        // The console's "이 기기에서 열기" link (and a reload of this tab) names the desk.
+        setDeskId(start?.id ?? "");
         setBoothId("");
         setTask(next.desks.length ? "desk" : "booth");
         setResult({ kind: "idle" });
@@ -1009,13 +1105,13 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         {orgChanged ? <OrganizationContextNotice confirmLeave={confirmLeaveStaff} /> : null}
         <section className={`staff-workspace state-panel ${prizeStyles.hubState}`}>
           <span className={prizeStyles.hubTile} data-tone="danger" aria-hidden="true"><BangIcon /></span>
-          <p role="alert" className={prizeStyles.hubNote}>{loadError ?? "이 행사에 대한 업무 배정이 없습니다. 운영자에게 문의하세요."}</p>
+          <p role="alert" className={prizeStyles.hubNote}>{loadError ?? (operatorViewer ? "이 행사에 열 수 있는 데스크가 없습니다. 입장·스태프에서 데스크를 만들거나 현장 운영 권한을 확인하세요." : "이 행사에 대한 업무 배정이 없습니다. 운영자에게 문의하세요.")}</p>
           <div className={prizeStyles.hubActions}>
             <ProductButton type="button" className="button button-secondary" onClick={() => load()}>
               다시 불러오기
             </ProductButton>
-            <ProductLink className="button button-secondary" href="/staff">
-              내 업무로
+            <ProductLink className="button button-secondary" href={operatorViewer ? `/console/events/${encodeURIComponent(targetEventId)}/operations` : "/staff"}>
+              {operatorViewer ? "운영 콘솔로" : "내 업무로"}
             </ProductLink>
           </div>
         </section>
@@ -1291,7 +1387,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         : undefined;
       if (isDesk) setLastScannedTicket(recordStatus ? "" : requestTicket);
       if (isDesk && !recordStatus && scanAction === "OUT" && participantId && rewardEnabled) {
-        const verificationId = data.rewardVerificationId === pending.commandId ? pending.commandId : "";
+        // An operator needs no staff proof: the server sends none and checks the event permission.
+        const operatorCheck = activeScope.operator && data.rewardVerificationId === undefined;
+        const verificationId = data.rewardVerificationId === pending.commandId || operatorCheck ? pending.commandId : "";
         setRewardTarget({ id: participantId, name: participantName, company: directory[participantId] ?? "", verificationId, ticket: requestTicket });
         const rewards = parseRewardList(data?.rewards);
         setTargetRewards(rewards ?? []);
@@ -1315,6 +1413,9 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       };
       setResult(okResult);
       setLastScan(okResult);
+      setPrintJob(autoPrintRef.current && isDesk && !recordStatus && scanAction === "IN" && participantId
+        ? { result: okResult, status: "pending" } : null);
+      setScannerNotice("");
       setTicket("");
       setManualTarget(null);
       setManualIdentityConfirmed(false);
@@ -1364,6 +1465,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       delete remaining[id];
       deskDirectionReviewsRef.current = remaining;
       setDeskDirectionReviews(remaining);
+      rememberDeskInAddress(id, current);
       window.requestAnimationFrame(() => document.getElementById("staff-desk")?.focus());
     } finally {
       directionConfirmRef.current = false;
@@ -1454,7 +1556,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       : null;
     const rewards = parseRewardList(data.rewards);
     if (!person || typeof person.id !== "string" || !person.id || typeof person.name !== "string" || !person.name || rewards === null ||
-        data.rewardRequestVersion !== 1 || data.rewardVerificationId !== commandId || ("participantId" in payload && person.id !== payload.participantId)) {
+        data.rewardRequestVersion !== 1 || !(data.rewardVerificationId === commandId || (activeScope.operator && data.rewardVerificationId === undefined)) || ("participantId" in payload && person.id !== payload.participantId)) {
       const pending = pendingRewardCommandsRef.current.get(attempt);
       if (pending) pending.uncertain = true;
       throw new Error("경품 조회 응답을 확인하지 못했습니다. 다시 조회하세요.");
@@ -1704,6 +1806,39 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const selfBooth = activeTask === "booth" && activeScope.stampMode === "SELF";
   const cameraMounted = !selfBooth && cameraOpen && ready && !orgChanged && !scanUnknown;
   const scanSuspended = submitting || result.kind !== "idle" || writeLocked || sheet !== null || entryMode === "roster";
+  // With a scanner and no camera running, the result stays until the next ticket replaces it.
+  const holdForNextScan = wide && !cameraMounted;
+  const printCurrent = printJob && printJob.result === result ? printJob : null;
+  const printPending = printCurrent?.status === "pending";
+  function onScannerCode(code: string) {
+    if (selfBooth) return;
+    const held = result.kind === "failed" && Boolean(result.uncertain || result.manualRefreshRequired || result.deskRefreshRequired || result.sourceRefreshRequired);
+    if (held || writeLocked || submitting || scanBusyRef.current || pendingScanRef.current || printPending || sheet === "correct" || sheet === "rewards" || rewardHold) {
+      setScannerNotice("방금 찍은 티켓은 처리하지 않았습니다. 화면의 안내를 먼저 끝낸 뒤 다시 찍어 주세요.");
+      return;
+    }
+    if (!ready) {
+      setScannerNotice(`방금 찍은 티켓은 처리하지 않았습니다. ${scanHint}`);
+      return;
+    }
+    setScannerNotice("");
+    setSheet(null);
+    setEntryMode("scan");
+    setManualTarget(null);
+    setManualIdentityConfirmed(false);
+    setManualQuery("");
+    primeScanFeedback();
+    setTicket(code);
+    void submitTicket(code);
+  }
+  const resultPerson = result.kind === "ok" && result.action !== "STAMP"
+    ? deskParticipants.find((person) => person.id === result.participantId) : undefined;
+  const sameName = result.kind === "failed" && result.alreadyName
+    ? deskParticipants.filter((person) => person.name.trim() === result.alreadyName) : [];
+  const alreadyPerson = sameName.length === 1 ? sameName[0] : undefined;
+  const affiliationOf = (person?: DeskParticipant) => [person?.company, person?.group].filter(Boolean).join(" · ");
+  const approved = deskParticipants.filter((person) => person.status === "APPROVED");
+  const insideCount = approved.filter((person) => person.inside === true).length;
   const placeTitle = activeTask === "desk" ? (selectedDesk?.name ?? "데스크") : (selectedBooth?.name ?? "부스");
   const failKicker = boothLimitReached ? "인증 한도 도달" : result.kind === "failed" && result.alreadyIn ? "이미 입장했습니다" : result.kind === "failed" && result.uncertain ? "처리 결과를 확인하지 못했습니다" : result.kind === "failed" && result.attendanceReviewRequired ? "출입 기록 확인이 필요합니다" : result.kind === "failed" && result.eligibilityReviewRequired ? "참가 상태 확인이 필요합니다" : "처리하지 못했습니다";
   const resultActions = result.kind === "failed" ? (
@@ -1943,13 +2078,13 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   );
 
   return (
-    <section className={`staff-workspace ${prizeStyles.fieldApp}${kiosk ? " kiosk-mode" : ""}`} aria-label={`${activeScope.eventName} 현장 업무`} data-tone={stageTone}>
+    <section className={`staff-workspace ${prizeStyles.fieldApp}${kiosk ? " kiosk-mode" : ""}`} aria-label={`${activeScope.eventName} 현장 업무`} data-tone={stageTone} data-wide={wide && activeTask === "desk" ? "true" : undefined}>
       {!connection.online ? <StaffNote id="staff-connection-offline" tone="danger" role="alert">{STAFF_OFFLINE_MESSAGE}</StaffNote>
         : connection.slow ? <StaffNote id="staff-connection-slow" tone="warn" role="status">{STAFF_SLOW_MESSAGE}</StaffNote> : null}
       <div className={`staff-event-context ${prizeStyles.eventContext}`}>
         <ProductLink
           className="staff-back-link"
-          href="/staff"
+          href={activeScope.operator ? `/console/events/${encodeURIComponent(targetEventId)}/operations` : "/staff"}
           onClick={(event) => {
             let confirmed = false;
             if (
@@ -1985,7 +2120,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           }}
         >
           <BackIcon />
-          <span className={prizeStyles.backLabel}>내 업무</span>
+          <span className={prizeStyles.backLabel}>{activeScope.operator ? "운영 콘솔" : "내 업무"}</span>
         </ProductLink>
         <span className={prizeStyles.eventWorkTitle}>{activeScope.eventName}</span>
         <details className={prizeStyles.moreMenu}>
@@ -2044,6 +2179,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           .finally(() => { if (currentEventRef.current === selectedEvent) { receiptRefreshRef.current = false; setReceiptRefreshing(false); if (refreshed) drainAppliedReceipts(); } });
       }}>업무 정보 다시 확인</ProductButton></StaffNote> : null}
       {receiptNotice ? <StaffNote tone="info" role="status">{receiptNotice}</StaffNote> : null}
+      {scannerNotice ? <StaffNote tone="warn" role="alert">{scannerNotice}</StaffNote> : null}
       {rewardCollectUncertain ? <StaffNote tone="warn" role="alert">
         <p>경품 수령 결과를 확인할 때까지 다른 현장 업무를 잠급니다. 아래에서 같은 요청을 다시 확인하세요. 서버 처리 확인만으로는 대상을 확인할 수 없습니다.</p>
         <ProductButton type="button" className="button button-secondary" disabled={rewardCollectingId !== null || receiptRefreshing} onClick={() => {
@@ -2306,7 +2442,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           <div className={prizeStyles.stageIdle}>
             <div className={prizeStyles.idleFrame} aria-hidden="true"><i /><i /><i /><i /></div>
             <p className={prizeStyles.idleText}>
-              {noCamera ? "이 기기에서는 카메라를 쓸 수 없습니다. 명단에서 찾거나 코드를 입력해 처리하세요." : ready ? "카메라가 꺼져 있습니다" : scanHint}
+              {ready && wide ? "티켓 QR을 찍어 주세요" : noCamera ? "이 기기에서는 카메라를 쓸 수 없습니다. 명단에서 찾거나 코드를 입력해 처리하세요." : ready ? "카메라가 꺼져 있습니다" : scanHint}
             </p>
           </div>
         ) : null}
@@ -2332,6 +2468,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                 {historicalScan ? "이전 출입 기록" : result.action === "STAMP" ? "스탬프 인증됨" : result.action === "IN" ? (result.reentry ? "재입장 처리됨" : "입장 처리됨") : "퇴장 처리됨"}
               </p>
               <p className={prizeStyles.bigName} aria-hidden="true">{result.name}</p>
+              {affiliationOf(resultPerson) ? <p className={prizeStyles.affiliation}>{affiliationOf(resultPerson)}</p> : null}
               <p className={prizeStyles.subLine}>
                 {result.action === "STAMP" ? (result.booth || result.place.placeName) : [result.place.placeName, result.place.actionLabel].filter(Boolean).join(" · ")}
               </p>
@@ -2340,13 +2477,16 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               ) : result.correctionChanged ? (
                 <p className={prizeStyles.reason} role="alert" ref={correctionConflictRef} tabIndex={-1}>출입 기록이 바뀌어 이 요청은 중단했습니다. 추가 정정은 현장 책임자에게 요청하세요.</p>
               ) : null}
+              {printCurrent ? (
+                <p className={prizeStyles.printState} role="status">{printCurrent.status === "pending" ? "명찰 인쇄를 준비하고 있습니다." : printCurrent.status === "sent" ? "명찰을 인쇄로 보냈습니다." : "명찰을 인쇄하지 못했습니다. 아래 ‘네임택 인쇄’에서 확인하세요."}</p>
+              ) : null}
               {!plainSuccess ? (
                 <p className={prizeStyles.reason}>{correctionLocked ? "정정 결과를 먼저 확인하세요. 위 기록은 정정 전 마지막으로 확인한 스캔입니다." : rewardCollectUncertain ? "경품 수령 결과를 확인한 뒤 다음 참가자를 처리하세요." : directionReview ? (directionChanged ? "바뀐 데스크 업무를 확인한 뒤 다음 참가자를 처리하세요." : "데스크 업무 방향을 확인한 뒤 다음 참가자를 처리하세요.") : result.recordStatus === "UNAVAILABLE" || (activeTask === "desk" && !deskSourcesAvailable) ? "현장 책임자에게 참가자와 최근 출입 기록 확인을 요청한 뒤 다음 참가자를 처리하세요." : rewardHold ? "경품을 전달한 뒤 다음 참가자를 스캔하세요." : "다음 참가자를 스캔하세요."}</p>
               ) : null}
             </div>
             <div className={prizeStyles.overlayFoot}>
-              {plainSuccess && autoMs ? <div className={prizeStyles.timer} aria-hidden="true"><i style={{ animationDuration: `${autoMs}ms` }} /></div> : null}
-              {plainSuccess ? <p className={prizeStyles.tapHint}>탭하면 바로 다음 스캔</p> : null}
+              {plainSuccess && autoMs && !holdForNextScan && !printPending ? <div className={prizeStyles.timer} aria-hidden="true"><i style={{ animationDuration: `${autoMs}ms` }} /></div> : null}
+              {plainSuccess ? <p className={prizeStyles.tapHint}>{holdForNextScan ? "다음 티켓을 찍으면 바로 바뀝니다" : "탭하면 바로 다음 스캔"}</p> : null}
               <div className={prizeStyles.linkRow}>
                 {correctableCheck || correctUnknown ? (
                   <ProductButton type="button" variant="ghost" className={prizeStyles.dangerLink} disabled={scanControlsLocked && !correctUnknown} onClick={() => setSheet("correct")}>잘못 스캔했어요</ProductButton>
@@ -2366,6 +2506,15 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
                 {rewardHold ? rewardPanel : null}
               </div>
             ) : null}
+          {printCurrent && printCurrent.status !== "failed" && walkIn && !nametagOpen ? (
+            // Laid out off screen so the label can be measured; only the print output shows it.
+            <div className={prizeStyles.printOffstage} inert>
+              <NameTagPrint identity={{ name: result.name, company: "", eventName: activeScope.eventName, context: `${result.place.placeName} · 입장` }}
+                resolveIdentity={(signal) => readNameTagIdentity(targetEventId, result.participantId, result.name,
+                  result.checkId, `${result.place.placeName} · 입장`, signal)}
+                onAutoSettled={(sent) => setPrintJob((current) => current && current.result === result ? { result, status: sent ? "sent" : "failed" } : current)} />
+            </div>
+          ) : null}
           {nametagOpen ? (
             <NameTagPrint identity={{
               name: result.name,
@@ -2392,9 +2541,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             <div className={prizeStyles.overlayBody}>
               <span className={prizeStyles.badge} data-tone={stageTone} aria-hidden="true">{stageTone === "info" ? <InfoIcon /> : stageTone === "bad" ? <XIcon /> : <BangIcon />}</span>
               <h2 className={prizeStyles.kicker}>{failKicker}</h2>
-              <p className={`${boothLimitReached || result.alreadyIn ? "scan-result notice" : "scan-result scan-failure"} ${prizeStyles.bigMessage}`} role={boothLimitReached || result.alreadyIn ? "status" : "alert"}>{result.message}</p>
+              {result.alreadyIn && result.alreadyName ? <p className={prizeStyles.bigName}>{result.alreadyName}</p> : null}
+              <p className={`${boothLimitReached || result.alreadyIn ? "scan-result notice" : "scan-result scan-failure"} ${result.alreadyIn && result.alreadyName ? prizeStyles.quietMessage : prizeStyles.bigMessage}`} role={boothLimitReached || result.alreadyIn ? "status" : "alert"}>{result.message}</p>
               {result.alreadyIn && (result.alreadyName || result.alreadyAt) ? (
-                <p className={prizeStyles.subLine}>{[result.alreadyName, result.alreadyAt ? `${formatCheckTime(result.alreadyAt)} 입장` : ""].filter(Boolean).join(" · ")}</p>
+                <p className={prizeStyles.subLine}>{[affiliationOf(alreadyPerson), result.alreadyAt ? `${formatCheckTime(result.alreadyAt)} 입장` : ""].filter(Boolean).join(" · ")}</p>
               ) : null}
               {result.place.placeName ? (
                 <p className={prizeStyles.subLine}>처리 위치: {result.place.placeName} · {result.place.actionLabel}</p>
@@ -2433,6 +2583,42 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         ) : null}
       </div>
 
+      {wide && activeTask === "desk" ? (
+        <aside className={prizeStyles.deskSide} aria-label="데스크 현황">
+          {activeScope.participantsAvailable ? (
+            <p className={prizeStyles.sideCount}><strong>{insideCount}</strong><span>/ {approved.length}명 입장 중</span></p>
+          ) : <p className={prizeStyles.sideHint}>인원을 확인할 수 없습니다.</p>}
+          <p className={prizeStyles.sideHint}>USB 스캐너로 티켓을 찍으면 바로 처리합니다.</p>
+          {activeScope.checksAvailable && taskChecks.length ? (
+            <ul className={prizeStyles.sideRecent} aria-label="방금 처리">
+              {taskChecks.slice(0, 6).map((check) => (
+                <li key={check.id}>
+                  <span>{check.name}{check.corrected ? " (정정됨)" : check.action === "OUT" ? " · 퇴장" : ""}</span>
+                  {check.at ? <time dateTime={check.at}>{formatCheckTime(check.at)}</time> : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {!isExitDesk ? (
+            <div className={prizeStyles.sidePrint}>
+              <label className={prizeStyles.sideToggle}>
+                <input type="checkbox" checked={autoPrint} onChange={(event) => { setAutoPrint(event.target.checked); saveNameTagPreference({ auto: event.target.checked }); }} />
+                <span>입장하면 명찰 자동 인쇄</span>
+              </label>
+              <label className={prizeStyles.sidePaper}>
+                <span>명찰 용지</span>
+                <select value={paper} onChange={(event) => { const next = event.target.value as NameTagPaper; setPaper(next); saveNameTagPreference({ paper: next }); }}>
+                  {Object.entries(NAMETAG_PAPERS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </label>
+              <details className={prizeStyles.sideHelp}>
+                <summary>인쇄 창 없이 바로 뽑기</summary>
+                <p>이 컴퓨터의 기본 프린터를 명찰 프린터로 정합니다. Chrome을 모두 닫은 뒤, 바로가기 실행 옵션에 <code>--kiosk-printing</code>을 붙여 다시 여세요. 행사 전에 실제 프린터로 확인하세요.</p>
+              </details>
+            </div>
+          ) : null}
+        </aside>
+      ) : null}
       <div className={prizeStyles.fieldBar} data-mode={result.kind}>
         {result.kind === "idle" && scanInputHasWork ? (
           <>
@@ -2468,7 +2654,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         ) : null}
       </div>
 
-      {autoMs ? <AutoAdvance key={`advance-${resultSeq}`} ms={autoMs} onAdvance={prepareNextParticipant} /> : null}
+      {autoMs && !holdForNextScan && !printPending ? <AutoAdvance key={`advance-${resultSeq}`} ms={autoMs} onAdvance={prepareNextParticipant} /> : null}
+      <ScannerKeys onScan={onScannerCode} />
       {result.kind !== "idle" ? <ScanFeedback key={`tone-${resultSeq}`} tone={result.kind === "ok" ? "ok" : infoFailure ? "info" : "bad"} enabled={soundOn} /> : null}
 
       {sheet === "code" ? (

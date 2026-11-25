@@ -130,6 +130,7 @@ test('lost response blocks another ticket and replays the exact frozen desk and 
       setEntryMode: () => {}, setSheet: () => {}, setLastScan: () => {},
       setTicket: () => {}, load: async () => {}, rewardEnabled: false, directory: {},
       setManualTarget: () => {}, setManualIdentityConfirmed: () => {}, setManualQuery: () => {},
+      setPrintJob: () => {}, setScannerNotice: () => {}, autoPrintRef: { current: false },
       abandonOperatorAttempt: id => abandoned.push(id), forgetOperatorReceipt: id => forgotten.push(id),
       operatorFetch: async (url, options) => {
         calls.push({ url, body: JSON.parse(options.body) });

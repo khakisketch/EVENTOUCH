@@ -191,7 +191,7 @@ test("operations: gates, commands, and touch reuse stay pinned", () => {
   assert.match(source, /runCommand\("staff\.assign"/u);
   assert.equal(source.match(/runCommand\("staff\.assign"/g)?.length ?? 0, 1, "the existing assign call stays the only one");
   assert.match(source, /staff\.unassign/u, "the release path is untouched");
-  assert.match(source, /배정된 스태프가 없습니다\. 진행 중으로 전환하려면 입장 데스크에 스태프를 배정하세요\./u);
+  assert.match(source, /이 기기에서 직접 처리하면 배정이 없어도 됩니다\./u);
   assert.match(source, /className="button button-secondary"/u, "row actions reuse the shared button sizing");
   assert.doesNotMatch(source, /useSearchParams|router\.push\([^)]*#/u, "direct operation never navigates or changes query state; existing hashes only reveal presets");
   const style = opsCss();

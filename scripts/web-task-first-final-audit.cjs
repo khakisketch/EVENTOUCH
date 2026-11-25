@@ -59,7 +59,7 @@ async function main() {
         ['team', '/console/team', '#team-members'],
         ['photos', `/console/events/${f.eventId}/photos`, '#evidence-photo-archive'],
         ['import', `/console/events/${f.eventId}/participants/import`, 'input[type=file]'],
-        ['operations', `/console/events/${f.eventId}/operations`, '#ops-desks'],
+        ['operations', `/console/events/${f.eventId}/operations`, '#ops-board'], // the fixture event is live, so the desk board is the visible head (the setup steps fold since 2026-11-24)
         ['reports', `/console/events/${f.eventId}/reports`, '#reports-list'],
       ]) {
         await page.goto(f.baseUrl + route, { waitUntil: 'networkidle' });
@@ -154,7 +154,10 @@ async function main() {
       // Multiple desks stay a real choice; nothing is auto-selected.
       const second = (await api('desk.save', { name: '두 번째 입장 데스크', action: 'IN', mode: 'desk', open: true })).desk;
       await f.helpers.insertAssignment(f.harness.database, { id: `second-${f.suffix}`, accountId: f.staff.id, eventId: f.eventId, type: 'DESK', targetId: second.id });
+      // Reopened 2026-11-25: a reload keeps the desk this tab already confirmed; a fresh visit still asks.
       await page.reload({ waitUntil: 'networkidle' });
+      assert.equal(await page.locator('#staff-desk').inputValue(), f.deskId);
+      await page.goto(f.baseUrl + `/staff/events/${f.eventId}`, { waitUntil: 'networkidle' });
       assert.equal(await page.locator('#staff-desk').inputValue(), '');
       await shot('staff-multiple-desks', 390);
 
