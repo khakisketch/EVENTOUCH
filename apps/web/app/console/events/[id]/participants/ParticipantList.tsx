@@ -2697,8 +2697,6 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
                   ) : null}
                   {canEraseParticipant && !selectedPerson.erased ? (
                     <section className={styles.eraseZone} aria-label="개인정보 삭제">
-                      <h4>개인정보 삭제</h4>
-                      <p>참가자가 삭제를 요청했을 때만 사용하세요. 이름·연락처·신청 답변이 지워지며 되돌릴 수 없습니다.</p>
                       <ProductButton type="button" variant="destructive" disabled={unresolvedRosterReceipt || receiptRefreshLock}
                         onClick={() => setEraseTarget({ id: selectedPerson.id, name: selectedPerson.name })}>개인정보 삭제…</ProductButton>
                     </section>

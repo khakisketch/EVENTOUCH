@@ -122,7 +122,8 @@ export function entryState(person: EntryPerson, context: EntryContext): EntrySta
     const found = context.records?.[person.id];
     return { kind: "inside", line: ["입장함", found ? formatEntryTime(found.at) : "", found?.deskName ?? ""].filter(Boolean).join(" · ") };
   }
-  if (context.stage.toUpperCase() !== "LIVE") return { kind: "reason", text: "행사가 진행 중일 때 입장 처리할 수 있습니다.", deskLink: false };
+  // Outside the live stage there is nothing to do here, so nothing is shown (2026-11-25).
+  if (context.stage.toUpperCase() !== "LIVE") return { kind: "none" };
   if (status === "PENDING") return { kind: "reason", text: "승인한 뒤 입장 처리할 수 있습니다.", deskLink: false };
   if (status === "WAITLIST") return { kind: "reason", text: "참가 확정한 뒤 입장 처리할 수 있습니다.", deskLink: false };
   if (person.presenceUnknown || person.attendanceReview) return { kind: "reason", text: "출입 기록을 확인한 뒤 입장 처리할 수 있습니다.", deskLink: false };

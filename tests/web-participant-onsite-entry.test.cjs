@@ -39,7 +39,8 @@ test('the entry offer needs LIVE, APPROVED, not inside, and says why otherwise',
   assert.match(fn, /"APPROVED", "PENDING", "WAITLIST"\]\.includes\(status\)\) return \{ kind: "none" \}/, 'cancelled and unknown people show nothing');
   assert.match(fn, /if \(person\.inside\)/);
   assert.match(fn, /입장함", found \? formatEntryTime\(found\.at\) : "", found\?\.deskName/);
-  assert.match(fn, /!== "LIVE"\) return \{ kind: "reason", text: "행사가 진행 중일 때 입장 처리할 수 있습니다\."/);
+  // Reopened 2026-11-25 (owner: 불필요한 문구 제거): outside LIVE nothing is shown.
+  assert.match(fn, /!== "LIVE"\) return \{ kind: "none" \}/);
   assert.match(fn, /"승인한 뒤 입장 처리할 수 있습니다\."/);
   assert.match(fn, /"열려 있는 입장 데스크가 없습니다 — 입장·스태프에서 데스크를 만들고 가동하세요\.", deskLink: true/);
   assert.match(fn, /context\.desks === null/);
