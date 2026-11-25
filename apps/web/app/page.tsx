@@ -201,7 +201,7 @@ export default function Home() {
           <Reveal className={sec.heading}>
             <p className={sec.eyebrow}>운영 흐름</p>
             <h2 id="flow-title">한 행사의 세 시점이 이어집니다.</h2>
-            <p>행사 전 준비, 현장 진행, 행사 후 정리. 필요한 화면과 역할은 달라도 업무의 맥락은 이어집니다. 운영자는 콘솔에서, 스태프는 모바일 웹 현장 화면에서, 참가자는 행사 링크에서 일합니다.</p>
+            <p>운영자는 콘솔에서, 스태프는 모바일 웹에서, 참가자는 행사 링크에서 일합니다.</p>
           </Reveal>
           <Reveal delay={120}>
             <LandingFlow scenes={FLOW_SCENES} />
@@ -212,7 +212,7 @@ export default function Home() {
           <Reveal className={sec.heading}>
             <p className={sec.eyebrow}>참가자 페이지</p>
             <h2 id="demo-title">행사마다 다른 얼굴, 링크는 하나.</h2>
-            <p>참가자는 행사 링크에서 앱 설치 없이 신청하고 티켓과 참여 화면까지 이어갑니다. 구성과 색은 관리자에서 행사마다 고릅니다. 직접 눌러 바꿔 보세요.</p>
+            <p>앱 설치 없이 행사 링크 하나로 신청·티켓·참여까지. 눌러서 바꿔 보세요.</p>
           </Reveal>
           <Reveal delay={120}>
             <LandingPageDemo />
@@ -223,7 +223,7 @@ export default function Home() {
           <Reveal className={sec.heading}>
             <p className={sec.eyebrow}>기존 방식과 비교</p>
             <h2 id="compare-title">엑셀·종이 명단과 무엇이 다른가요.</h2>
-            <p>행사 당일에 벌어지는 네 가지 일을 기준으로 비교했습니다. 위의 전환을 눌러 보세요.</p>
+            <p>행사 당일의 네 가지 일로 비교했습니다. 전환을 눌러 보세요.</p>
           </Reveal>
           <Reveal delay={120}>
             <LandingCompare />
@@ -259,11 +259,11 @@ export default function Home() {
             <Reveal className={sec.reportCopy}>
               <p className={sec.eyebrow}>결과 보고</p>
               <h2 id="report-title">행사가 끝나면, 기록을 결과로.</h2>
-              <p>등록·입장·부스·참여 기록을 한곳에서 확인하고 보고서로 남깁니다.</p>
+              <p>등록·입장·부스·참여 기록을 한곳에서 확인합니다.</p>
               <ul className={sec.checks}>
                 <li><LandingIcon name="check" size={18} />등록·입장 집계가 행사 중에도 계속 쌓입니다.</li>
                 <li><LandingIcon name="check" size={18} />보고서는 생성 시점의 기록을 고정해 보관합니다.</li>
-                <li><LandingIcon name="check" size={18} />결과 보고서에서 바로 확인하고, PPTX 파일이나 인쇄·PDF로 내보냅니다.</li>
+                <li><LandingIcon name="check" size={18} />보고서에서 바로 확인하고 PPTX·인쇄·PDF로 내보냅니다.</li>
               </ul>
             </Reveal>
             <Reveal className={sec.reportCard} delay={140}>

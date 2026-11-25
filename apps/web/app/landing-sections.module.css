@@ -481,6 +481,8 @@
   .flowCaption span { color: var(--muted); font-size: var(--small); line-height: 1.65; }
   .flowCaption small { color: var(--muted); font-size: var(--label); }
   .demo { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+  /* Reopened 2026-11-25 (visual first): on one column the phone comes before its controls. */
+  .demoStage { order: -1; }
   .demoControls { max-width: none; width: 100%; }
   .compareGrid,
   .audience { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -497,6 +499,7 @@
   .compareGrid,
   .audience { grid-template-columns: minmax(0, 1fr); }
   .compareCard { min-height: 0; }
+  .demoFacts { display: none; }
   .audienceOff h3 { padding-top: 0; }
   .steps { grid-template-columns: minmax(0, 1fr); gap: var(--s6); }
   .steps::before { display: none; }
@@ -505,7 +508,7 @@
 
 @media (max-width: 480px) {
   .flow { --flow-stage-h: 400px; --flow-window-h: 300px; --k-duo: 0.46; --k-pair: 0.48; }
-  .flowCaption { min-height: 12rem; }
+  .flowCaption { min-height: 10rem; }
 }
 
 /* Reopened 2026-11-25 (owner: 모바일에서도 제품 프리뷰가 읽히게): a phone drawn at 0.46~0.5 is

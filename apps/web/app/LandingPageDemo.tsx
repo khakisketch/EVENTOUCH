@@ -115,7 +115,6 @@ export default function LandingPageDemo() {
           </div>
         </div>
         <ul className={styles.demoFacts}>
-          <li>참가자는 링크 하나로 신청, 티켓, 참여까지 이어집니다.</li>
           <li>고른 구성은 참가자 홈과 행사 안내에 함께 적용됩니다.</li>
           <li>행사 색 위의 글자색은 읽기 쉬운 대비로 자동 조정됩니다.</li>
         </ul>
