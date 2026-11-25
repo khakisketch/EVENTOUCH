@@ -40,7 +40,7 @@ async function main() {
     const dialog = page.getByRole('dialog');
     async function openReview(title) {
       // Rows open the editor in place; 게시 검토 lives there. Leave any open editor first.
-      const crumb = page.locator('#content-panel').getByRole('button', { name: /^(공지|일정)$/ });
+      const crumb = page.locator('#content-panel').getByRole('button', { name: /^(공지|일정) 목록으로$/ });
       if (await crumb.count()) await crumb.first().click();
       await page.locator('#content-panel li').filter({ hasText: title }).last().getByRole('button').first().click();
       await page.getByRole('button', { name: '게시 검토', exact: true }).click();

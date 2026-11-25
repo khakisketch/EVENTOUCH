@@ -101,7 +101,8 @@ async function main() {
     }
     await reconfirm.click();
     stage = 'replay confirmation';
-    await page.getByRole('status').filter({ hasText: '요청 결과를 확인했습니다.' }).waitFor();
+    // A confirmed answer reads on its own card (2026-11-24), not in a page notice.
+    await poll.getByRole('status').filter({ hasText: '제출을 마쳤습니다.' }).waitFor();
     assert.equal(attempts.length, 2, 'retry sends the command again');
     assert.equal(attempts[1].commandId, attempts[0].commandId, 'explicit confirmation reuses the original receipt ID');
     assert.equal(requestContext[0].path, `/api/events/${fixture.eventId}/commands`, 'initial request targets the fixture event');
@@ -140,7 +141,7 @@ async function main() {
     await rejectedPoll.getByRole('radio', { name: /^두 번째 선택/ }).check();
     await rejectedPoll.getByRole('button', { name: '투표하기' }).click();
     stage = 'corrected submission';
-    await page.getByRole('status').filter({ hasText: '투표를 제출했습니다.' }).waitFor();
+    await rejectedPoll.getByRole('status').filter({ hasText: '제출을 마쳤습니다.' }).waitFor();
     const afterCorrection = (await database.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [fixture.eventId])).rows[0].payload;
     const correctedResponses = afterCorrection.responses.filter(response => response.moduleId === definiteFailureModuleId && response.participantId === participant.id);
     assert.equal(correctedResponses.length, 1, 'a corrected request after definitive 400 commits once');

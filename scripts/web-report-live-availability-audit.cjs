@@ -104,7 +104,8 @@ async function main() {
     const copy = afterCopy.reports.find(report => report.parentId === created.json.report.id);
     assert.deepEqual(copy.snapshot, created.json.report.snapshot, 'the existing frozen report remains reusable');
     await page.getByRole('tab', { name: /합성 공유 보고서.*초안/ }).click();
-    await page.getByRole('button', { name: '내용 편집', exact: true }).click();
+    // An empty operations summary names the same button after what is missing.
+    await page.locator('aside').getByRole('button', { name: /^(내용 편집|운영 요약 작성)$/ }).click();
     await page.locator('#report-subtitle').fill('합성 변경');
     await page.getByRole('dialog').getByRole('button', { name: '수정 저장', exact: true }).click();
     await page.getByRole('dialog').waitFor({ state: 'hidden' });

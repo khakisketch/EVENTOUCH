@@ -124,7 +124,7 @@ async function checkDisplayRecovery(page, baseUrl, slug, body, out, check) {
     } else {
       const dialog = page.getByRole('dialog');
       const rowNamed = title => page.locator('#content-panel li').filter({ hasText: title }).last();
-      const crumbBack = async () => { const crumb = page.locator('#content-panel').getByRole('button', { name: /^(공지|일정)$/ }); if (await crumb.count()) await crumb.first().click(); };
+      const crumbBack = async () => { const crumb = page.locator('#content-panel').getByRole('button', { name: /^(공지|일정) 목록으로$/ }); if (await crumb.count()) await crumb.first().click(); };
       // Open an item's editor from the list (leaving any other open editor first).
       const openItem = async (title, kind = 'notice') => {
         const field = page.locator(kind === 'notice' ? '#content-notice-title' : '#content-program-title');
@@ -151,7 +151,7 @@ async function checkDisplayRecovery(page, baseUrl, slug, body, out, check) {
       check('the selected public screen keeps its published notice during drafting', await screenPage.getByText(notice.body, { exact: true }).isVisible());
       check('saved draft survives canonical reload', (await read()).notices.find(n => n.id === notice.id).draft.title === '입장 장소 변경 안내');
       await crumbBack();
-      await rowNamed('입장 장소 변경 안내').getByText('수정본 있음', { exact: true }).waitFor();
+      await rowNamed('입장 장소 변경 안내').getByText('게시 대기', { exact: true }).waitFor();
       await openReview('입장 장소 변경 안내');
       check('review compares live and draft content together', await dialog.locator('dd').filter({ hasText: notice.body }).isVisible() && await dialog.locator('dd').filter({ hasText: '서문 데스크에서 QR 티켓을 보여 주세요.' }).isVisible());
       check('review names actual participant and screen destinations', await dialog.getByText('행사 안내 · 공지', { exact: true }).isVisible() && await dialog.getByText('참가자 홈 · 공지', { exact: true }).isVisible() && await dialog.getByText('행사장 전광판', { exact: true }).isVisible());
