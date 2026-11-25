@@ -503,6 +503,8 @@ Reopened 2026-11-20 (입장·스태프 + 현장 모드; owner approved proposal 
 
 Reopened 2026-11-25 (owner: "복잡한 과정은 벗기고 쓰기 좋은 화면"; where this differs from the text above, this wins; `tests/web-operations-composition.test.cjs` asserts it). Staff assignment is optional. Each running desk card carries "이 기기에서 열기" (orange only when a single desk is running), which opens the field screen for that desk in a new tab. The header 스태프 배정 is a ghost, a desk with no one assigned is not amber and has no card 배정 button, step 2 is "휴대폰 스태프 (선택)" on a quiet surface, and step 3 is "입장 처리" (this device or a staff phone). Going live needs one running entry desk, not an assignment.
 
+Reopened 2026-11-25 (owner: 필요한 보완 모두 진행). At a desk without name tags a phone arrival waits for the staff; the desk poster's third step and the attendee pass then say "입장 확인" instead of 명찰.
+
 Reopened 2026-11-25 (owner: 안내판과 명찰 설정). Entry desks have "안내판 인쇄" on the live card and in the desk detail: a preview and one "인쇄하기"; the paper size is the print dialog's choice and the layout scales to it. The desk editor adds 명찰 출력함/없음 for entry desks.
 
 ## 현장 모드 확정 구성
@@ -633,6 +635,8 @@ Reopened 2026-11-19 (owner: plain; `tests/web-staff-field-composition.test.cjs` 
 Reopened 2026-11-25 (owner: 노트북 데스크; `tests/web-staff-laptop-desk.test.cjs` asserts it). The phone column is unchanged except that the result names the company and group, and "이미 입장" shows the name large with the sentence quiet. An operator with the field permission opens any desk without an assignment; the back link returns to the console. A confirmed desk and direction stay in this tab's address (never device storage), so a reload does not ask again and a changed direction still does. A USB scanner works with no field focused. From 1024px the screen adds a white side panel (people inside, the last entries, "입장하면 명찰 자동 인쇄", paper size, the silent-print note), the bar becomes one row, and a result stays until the next ticket while the camera is off. On that wide desk screen "카메라 켜기" is one of the quiet tiles, not the orange primary (owner question 2026-11-25: the camera is only the fallback when there is no scanner).
 
 Reopened 2026-11-25 (owner: 참가자가 안내판 QR을 찍는 흐름, A안; `scripts/web-venue-arrival-audit.cjs`). On the wide entry desk the side panel is the waiting list ("기다리는 사람"), and while no result or camera is showing the stage is the next person large with one primary ("건넸어요 · 입장", "승인하고 입장", or "입장 처리" at a desk without name tags), quiet 다시 출력 and 취소 beneath. A handover confirms for 1.6 seconds and moves on. Review cases are amber and print nothing. Name tags print one at a time by themselves (on by default); "휴대폰 연결" shows a QR that opens this desk on a staff phone in line-scan mode, where a scan sends the person to the desk instead of admitting (also a switch in the ⋯ menu).
+
+Reopened 2026-11-25 (owner: 필요한 보완 모두 진행). Below 1024px a desk without name tags shows the same next-person card on the stage and a quiet "기다리는 사람 N명" button above the input tiles, which opens the list as a drawer. A card that changed because another device handled the person keeps its buttons off for 1.5 seconds with one line saying so; namesakes carry one warning line. `scripts/web-venue-arrival-audit.cjs`.
 
 ## Product component boundary
 

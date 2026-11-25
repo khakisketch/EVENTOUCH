@@ -11,16 +11,15 @@ import styles from "./arrive.module.css";
 
 type Known = { name: string; company: string; state: "inside" | "waiting" | "review" | null };
 type Desk = { eventName: string; deskName: string; open: boolean; nametag: boolean; known: Known | null };
-type Outcome = { result: "waiting" | "review" | "entered" | "inside"; name: string; company: string; deskName: string };
+type Outcome = { result: "waiting" | "review" | "inside"; name: string; company: string; deskName: string };
 type ArrivalResponse = Partial<Desk> & Partial<Outcome> & { error?: unknown; code?: unknown; field?: unknown };
 
 const UNKNOWN = "접수 결과를 확인하지 못했습니다. 같은 버튼을 다시 눌러 주세요.";
 
-function Pass({ outcome, ticket }: { outcome: Outcome; ticket: string }) {
+function Pass({ outcome, ticket, nametag }: { outcome: Outcome; ticket: string; nametag: boolean }) {
   const tone = outcome.result === "waiting" ? "good" : outcome.result === "review" ? "wait" : "in";
-  const head = outcome.result === "waiting" ? "접수됐습니다" : outcome.result === "review" ? "확인이 필요합니다"
-    : outcome.result === "entered" ? "입장 완료" : "이미 입장하셨어요";
-  const next = outcome.result === "waiting" ? `${outcome.deskName}에서 명찰을 받으세요`
+  const head = outcome.result === "waiting" ? "접수됐습니다" : outcome.result === "review" ? "확인이 필요합니다" : "이미 입장하셨어요";
+  const next = outcome.result === "waiting" ? `${outcome.deskName}에서 ${nametag ? "명찰을 받으세요" : "입장 확인을 받으세요"}`
     : outcome.result === "review" ? `${outcome.deskName}에 말씀해 주세요` : "그대로 들어가셔도 됩니다";
   return (
     <section className={styles.pass} aria-live="polite">
@@ -145,7 +144,7 @@ export default function ArriveView({ slug, deskId }: { slug: string; deskId: str
   if (outcome) {
     return (
       <>
-        <Pass outcome={outcome} ticket={typing ? "" : ticket} />
+        <Pass outcome={outcome} ticket={typing ? "" : ticket} nametag={desk.nametag} />
         {outcome.result !== "inside" ? <p className={styles.foot}><ProductLink variant="ghost" href={`/event/${encodeURIComponent(slug)}/home`}>참가자 홈으로</ProductLink></p> : null}
       </>
     );

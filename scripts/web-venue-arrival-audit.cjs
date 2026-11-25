@@ -2,8 +2,9 @@
 
 // Venue arrival end to end on an isolated fixture: a participant phone arrives from a desk
 // poster, the desk laptop prints and hands over, two laptops never print twice, an on-site
-// signup and a staff line scan reach the same list, review and no-name-tag desks behave, and
-// the poster prints on whatever paper is chosen. Print is intercepted: no real device is used.
+// signup and a staff line scan reach the same list, a card handled elsewhere is guarded, review
+// cases hold, a desk without name tags is confirmed on a staff phone, and the poster prints on
+// whatever paper is chosen. Print is intercepted: no real device is used.
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -154,6 +155,16 @@ async function main() {
     await waitFor(async () => (await printed(laptop)).some((tag) => tag.includes(people[2].name)), 'line scan printed at the desk');
     pass('a staff line scan prints at the desk and waits for the handover');
 
+    const card = laptop.getByRole('region', { name: '지금 처리할 참가자' });
+    await laptop.getByRole('list', { name: '도착한 참가자' }).waitFor();
+    await card.getByRole('heading', { name: people[1].name }).waitFor();
+    const waitingFirst = (await workspace()).arrivals.find((item) => item.participantId === people[1].id && !item.handedAt && !item.cancelledAt);
+    await command('arrival.handover', { deskId: f.deskId, arrivalId: waitingFirst.id });
+    await card.getByText('앞 사람은 처리되어 다음 사람으로 바뀌었습니다.').waitFor();
+    assert.equal(await card.getByRole('button', { name: '건넸어요 · 입장' }).isDisabled(), true, 'a card that changed by itself cannot be pressed at once');
+    await waitFor(async () => card.getByRole('button', { name: '건넸어요 · 입장' }).isEnabled(), 'buttons return');
+    pass('a card handled on another device changes with its buttons held back');
+
     await command('participant.status', { id: people[3].id, status: 'PENDING' });
     await phone.goto(poster, { waitUntil: 'networkidle' });
     await typed(phone, people[3]);
@@ -192,9 +203,26 @@ async function main() {
     const side = (await command('desk.save', { name: '명찰 없는 문', action: 'IN', mode: 'desk', open: true, nametag: false })).desk;
     await phone.goto(`${f.baseUrl}/event/${f.slug}/arrive?desk=${side.id}`, { waitUntil: 'networkidle' });
     await typed(phone, people[4]);
-    await phone.getByText('입장 완료').waitFor();
-    assert.equal((await workspace()).participants.find((p) => p.id === people[4].id).inside, true);
-    pass('a desk without name tags admits on arrival');
+    await phone.getByText('접수됐습니다').waitFor();
+    await phone.getByText('명찰 없는 문에서 입장 확인을 받으세요').waitFor();
+    assert.equal((await workspace()).participants.find((p) => p.id === people[4].id).inside, false, 'a phone never admits');
+    await phone.screenshot({ path: path.join(out, 'phone-5-no-nametag.png') });
+    const gatePhone = await context({ who: 'manager', width: 390, height: 844 });
+    await gatePhone.goto(`${f.baseUrl}/staff/events/${f.eventId}?desk=${side.id}&as=IN`, { waitUntil: 'networkidle' });
+    const sideCard = gatePhone.getByRole('region', { name: '지금 처리할 참가자' });
+    await sideCard.getByRole('heading', { name: people[4].name }).waitFor();
+    await noOverflow(gatePhone); await accessible(gatePhone);
+    assert.equal(await gatePhone.locator('[data-product-action][data-product-variant="primary"]:visible').count(), 1, 'one primary while a person waits');
+    await gatePhone.screenshot({ path: path.join(out, 'gate-phone-1-card.png') });
+    await gatePhone.getByRole('button', { name: '기다리는 사람 1명' }).click();
+    await gatePhone.getByRole('dialog').getByRole('button', { name: new RegExp(people[4].name) }).waitFor();
+    await gatePhone.screenshot({ path: path.join(out, 'gate-phone-2-list.png') });
+    await gatePhone.getByRole('dialog').getByRole('button', { name: new RegExp(people[4].name) }).click();
+    await sideCard.getByRole('button', { name: '입장 처리', exact: true }).click();
+    await waitFor(async () => (await workspace()).participants.find((p) => p.id === people[4].id).inside === true, 'entry from the phone');
+    await noOverflow(gatePhone);
+    assert.equal((await printed(gatePhone)).length, 0, 'a desk without name tags prints nothing');
+    pass('a desk without name tags is confirmed by staff on a phone');
 
     assert.deepEqual(errors, []);
     console.log(`Venue arrival: ${checks.length} checks passed; evidence ${out}`);

@@ -1432,7 +1432,7 @@ export default function OperationsWorkspace({ eventId, publicBase = null }: { ev
                       ? `/staff/events/${encodeURIComponent(eventId)}?desk=${encodeURIComponent(desk.id)}&as=${encodeURIComponent(desk.action || "")}` : null}
                     enterPrimary={desks.filter((item) => item.open).length === 1}
                     poster={desk.action === "IN" && !deskIncomplete ? (
-                      <DeskPoster eventName={state.eventName} slug={state.eventSlug} deskId={desk.id} deskName={desk.name || "입장 데스크"} publicBase={publicBase}
+                      <DeskPoster eventName={state.eventName} slug={state.eventSlug} deskId={desk.id} deskName={desk.name || "입장 데스크"} nametag={desk.nametag !== false} publicBase={publicBase}
                         trigger={(open) => <ProductButton type="button" variant="ghost" className={styles.posterButton} aria-label={`${deskLabel} 안내판 인쇄`} onClick={open}>안내판 인쇄</ProductButton>} />
                     ) : null}
                     control={(
@@ -1960,7 +1960,7 @@ export default function OperationsWorkspace({ eventId, publicBase = null }: { ev
             reason={blocked ? (detail.type === "DESK" ? onsiteNoWriteReason : boothNoWriteReason) : undefined}
             onClose={() => setDetail(null)}
             poster={desk && desk.action === "IN" ? (
-              <DeskPoster eventName={state.eventName} slug={state.eventSlug} deskId={desk.id} deskName={desk.name || "입장 데스크"} publicBase={publicBase}
+              <DeskPoster eventName={state.eventName} slug={state.eventSlug} deskId={desk.id} deskName={desk.name || "입장 데스크"} nametag={desk.nametag !== false} publicBase={publicBase}
                 trigger={(open) => <ProductButton type="button" variant="ghost" className={styles.posterButton} onClick={open}>안내판 인쇄</ProductButton>} />
             ) : null}
             onAdd={() => { setDetail(null); setAssignPreset({ type: detail.type, targetId: detail.id }); setAssignOpen(true); setFailure(null); }}
@@ -2170,7 +2170,7 @@ function DeskDialog({
         {action === "IN" ? (
           <div>
             <ConsoleChoiceGroup id="desk-nametag" label="명찰" value={nametag ? "PRINT" : "NONE"} onChange={(value) => setNametag(value === "PRINT")}
-              hint={nametag ? "도착하면 명찰을 출력하고, 건네면 입장입니다." : "명찰 없이 도착하거나 찍으면 바로 입장입니다."}
+              hint={nametag ? "도착하면 명찰을 출력하고, 건네면 입장입니다." : "도착한 사람은 데스크에서 눌러 입장시키고, 티켓을 찍으면 바로 입장입니다."}
               options={[{ value: "PRINT", label: "출력함" }, { value: "NONE", label: "없음" }]} />
           </div>
         ) : null}

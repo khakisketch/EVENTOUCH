@@ -18,17 +18,20 @@ const CLAIM_MS = 60_000;
 
 export type DeskArrival = {
   id: string; participantId: string; name: string; company: string; group: string; source: string; at: string;
-  review: null | "PENDING" | "WAITLIST" | "PAYMENT" | "ATTENDANCE" | "REENTRY" | "STATUS";
+  review: null | "PENDING" | "WAITLIST" | "PAYMENT" | "ATTENDANCE" | "REENTRY" | "STATUS" | "EXPIRED";
+  namesake?: boolean;
   printedAt: string | null; printFailedAt: string | null; printClaim: { station: string; at: string } | null;
 };
 export type DeskArrivalView = {
   eventName: string; stage: string; canApprove: boolean; arrivals: DeskArrival[]; entered: number; total: number;
+  // Server time when read, and how far this device's clock is from it.
+  now?: string; skew: number;
   desk: { id: string; name: string; action: string; open: boolean; nametag: boolean };
 };
 
 const REVIEW_TEXT: Record<string, string> = {
   PENDING: "승인 대기", WAITLIST: "대기 명단", PAYMENT: "결제 확인", ATTENDANCE: "출입 기록 확인",
-  REENTRY: "재입장 불가", STATUS: "참가 상태 확인",
+  REENTRY: "재입장 불가", STATUS: "참가 상태 확인", EXPIRED: "티켓 만료",
 };
 
 type CommandResult = { ok: true; data: Record<string, unknown> } | { ok: false; message: string; code: string };
@@ -74,7 +77,8 @@ export function useDeskArrivals(eventId: string, deskId: string, assignmentId: s
         setError(data?.error || "도착 목록을 불러오지 못했습니다.");
         return;
       }
-      setView(data);
+      const read = data.now ? Date.parse(data.now) : NaN;
+      setView({ ...data, skew: Number.isFinite(read) ? read - Date.now() : 0 });
       setError("");
     } catch {
       if (request.current === mine) setError("도착 목록을 불러오지 못했습니다. 연결을 확인하세요.");
@@ -107,17 +111,38 @@ function stateOf(arrival: DeskArrival, now: number, nametag: boolean): { tone: s
   return { tone: "info", label: arrival.printClaim ? "출력 중" : "출력 대기" };
 }
 
-// The person to serve next: the chosen row, else the longest waiting one that is still fresh.
-export function currentArrival(view: DeskArrivalView | null, selected: string, now: number) {
-  if (!view) return null;
-  return view.arrivals.find((item) => item.id === selected) ?? view.arrivals.find((item) => !stale(item, now)) ?? null;
+// The person to serve next: the chosen row, else the one already on screen, else the longest
+// waiting one that is still fresh. `replaced` means the card changed by itself (handled on
+// another device), so its buttons stay off for a moment.
+export function useCurrentArrival(view: DeskArrivalView | null, selected: string) {
+  const [pin, setPin] = useState({ id: "", replaced: false });
+  const now = Date.now() + (view?.skew ?? 0);
+  const chosen = view?.arrivals.find((item) => item.id === selected);
+  const arrival = chosen ?? view?.arrivals.find((item) => item.id === pin.id) ??
+    view?.arrivals.find((item) => !stale(item, now)) ?? null;
+  if (view && (arrival?.id ?? "") !== pin.id) {
+    setPin({ id: arrival?.id ?? "", replaced: Boolean(pin.id && arrival && !chosen) });
+  }
+  // Called when this screen finished with the card, so the next one is not a surprise.
+  const release = useCallback(() => setPin({ id: "", replaced: false }), []);
+  return { arrival, replaced: pin.replaced && arrival?.id === pin.id, release };
 }
 
-export function ArrivalNow({ view, arrival, busy, message, onHand, onApprove, onPrint, onCancel }: {
-  view: DeskArrivalView; arrival: DeskArrival; busy: boolean; message: string;
+const SETTLE_MS = 1500;
+
+export function ArrivalNow({ view, arrival, replaced, busy: working, message, onHand, onApprove, onPrint, onCancel }: {
+  view: DeskArrivalView; arrival: DeskArrival; replaced: boolean; busy: boolean; message: string;
   onHand: () => void; onApprove: () => void; onPrint: () => void; onCancel: () => void;
 }) {
-  const now = Date.now();
+  const [settled, setSettled] = useState("");
+  const settling = replaced && settled !== arrival.id;
+  useEffect(() => {
+    if (!replaced) return;
+    const timer = window.setTimeout(() => setSettled(arrival.id), SETTLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [arrival.id, replaced]);
+  const busy = working || settling;
+  const now = Date.now() + view.skew;
   const { nametag } = view.desk;
   const review = arrival.review;
   const approvable = (review === "PENDING" || review === "WAITLIST") && view.canApprove;
@@ -130,6 +155,8 @@ export function ArrivalNow({ view, arrival, busy, message, onHand, onApprove, on
       <p className={styles.kicker}>{kicker}</p>
       <h2 className={styles.name}>{arrival.name}</h2>
       <p className={styles.affiliation}>{affiliation(arrival) || "소속 없음"}</p>
+      {arrival.namesake ? <p className={styles.problem}>이름과 소속이 같은 사람이 있습니다. 휴대폰의 접수 화면을 확인하세요.</p> : null}
+      {replaced ? <p className={styles.changed} role="status">앞 사람은 처리되어 다음 사람으로 바뀌었습니다.</p> : null}
       {message ? <p className={styles.problem} role="alert">{message}</p> : null}
       {!review ? (
         <ProductButton type="button" variant="primary" className={styles.hand} disabled={busy} onClick={onHand}>{nametag ? "건넸어요 · 입장" : "입장 처리"}</ProductButton>
@@ -146,16 +173,16 @@ export function ArrivalNow({ view, arrival, busy, message, onHand, onApprove, on
   );
 }
 
-export function ArrivalList({ view, error, selected, onSelect }: {
-  view: DeskArrivalView | null; error: string; selected: string; onSelect: (id: string) => void;
+export function ArrivalList({ view, error, selected, titled = true, onSelect }: {
+  view: DeskArrivalView | null; error: string; selected: string; titled?: boolean; onSelect: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
-  const now = Date.now();
+  const now = Date.now() + (view?.skew ?? 0);
   const wanted = query.trim().toLocaleLowerCase();
   const rows = (view?.arrivals ?? []).filter((item) => !wanted || `${item.name} ${item.company}`.toLocaleLowerCase().includes(wanted));
   return (
     <div className={styles.listBlock}>
-      <h2 className={styles.listHead}><span>기다리는 사람</span><b>{view?.arrivals.length ?? 0}</b></h2>
+      {titled ? <h2 className={styles.listHead}><span>기다리는 사람</span><b>{view?.arrivals.length ?? 0}</b></h2> : null}
       {(view?.arrivals.length ?? 0) > 5 ? (
         <input type="search" className={styles.search} aria-label="기다리는 사람에서 찾기" placeholder="기다리는 사람에서 찾기" value={query} onChange={(event) => setQuery(event.target.value)} />
       ) : null}
@@ -187,11 +214,23 @@ export function ArrivalPrinter({ eventId, assignmentId, view, enabled, station, 
 }) {
   const [job, setJob] = useState<DeskArrival | null>(null);
   const busy = useRef(false);
+  // Tags this screen already sent to the printer, so a lost report never prints them again.
+  const printed = useRef(new Map<string, boolean>());
+  const report = useCallback((deskId: string, arrivalId: string, ok: boolean) =>
+    sendDeskCommand(eventId, "arrival.print-result", assignmentId, { deskId, arrivalId, station, ok }), [eventId, assignmentId, station]);
   useEffect(() => {
     if (!view || !view.desk.nametag || job || busy.current) return;
-    const now = Date.now();
+    const now = Date.now() + view.skew;
+    const unreported = view.arrivals.find((item) => printed.current.has(item.id) &&
+      !item.printedAt && !item.printFailedAt && item.printClaim?.station === station);
+    if (unreported && !forced) {
+      busy.current = true;
+      void report(view.desk.id, unreported.id, printed.current.get(unreported.id)!).finally(() => { busy.current = false; });
+      return;
+    }
     const wanted = forced ? view.arrivals.find((item) => item.id === forced) : enabled
       ? view.arrivals.find((item) => !item.review && !item.printedAt && !item.printFailedAt && !stale(item, now) &&
+        !printed.current.has(item.id) &&
         (!item.printClaim || item.printClaim.station === station || now - Date.parse(item.printClaim.at) > CLAIM_MS))
       : undefined;
     if (forced) onForcedHandled();
@@ -202,12 +241,13 @@ export function ArrivalPrinter({ eventId, assignmentId, view, enabled, station, 
         if (result.ok && result.data.claimed === true) setJob(wanted);
         else busy.current = false;
       });
-  }, [view, enabled, forced, job, eventId, assignmentId, station, onForcedHandled]);
+  }, [view, enabled, forced, job, eventId, assignmentId, station, onForcedHandled, report]);
 
   if (!job || !view) return null;
   const settle = (ok: boolean) => {
     onDone(job.participantId);
-    void sendDeskCommand(eventId, "arrival.print-result", assignmentId, { deskId: view.desk.id, arrivalId: job.id, station, ok })
+    printed.current.set(job.id, ok);
+    void report(view.desk.id, job.id, ok)
       // Keep the print output mounted until the report returns, then take the next person.
       .finally(() => { busy.current = false; setJob(null); });
   };

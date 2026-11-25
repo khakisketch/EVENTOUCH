@@ -5,7 +5,7 @@ import ProductButton from "../ui/ProductButton";
 import ValidatedForm from "../ui/ValidatedForm";
 import NameTagPrint, { NAMETAG_PAPERS, readNameTagPreferences, saveNameTagPreference, type NameTagIdentity, type NameTagPaper } from "../ui/NameTagPrint";
 import { createScanBuffer } from "./scanner-input";
-import { ArrivalList, ArrivalNow, ArrivalPrinter, currentArrival, sendDeskCommand, useDeskArrivals, type DeskArrival } from "./DeskArrivals";
+import { ArrivalList, ArrivalNow, ArrivalPrinter, sendDeskCommand, useCurrentArrival, useDeskArrivals, type DeskArrival } from "./DeskArrivals";
 
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -433,7 +433,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   }, []);
   // Other sheets and field preferences. Sheets open only on demand; the scan
   // screen itself carries no list or form.
-  const [sheet, setSheet] = useState<null | "code" | "recent" | "correct" | "rewards">(null);
+  const [sheet, setSheet] = useState<null | "code" | "recent" | "correct" | "rewards" | "arrivals">(null);
   // The last successful scan stays correctable after the result hands itself
   // back to the camera: the correction opens from 최근 처리.
   const [lastScan, setLastScan] = useState<Extract<ScanResult, { kind: "ok" }> | null>(null);
@@ -473,12 +473,16 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const [lineMode, setLineMode] = useState(false);
   const [lineNote, setLineNote] = useState<{ tone: "good" | "wait" | "bad"; head: string; name: string; detail: string } | null>(null);
   const lineBusyRef = useRef(false);
+  const [lineBusy, setLineBusy] = useState(false);
   useEffect(() => { setLineMode(new URLSearchParams(window.location.search).get("line") === "1"); }, []);
   const [phoneLinkOpen, setPhoneLinkOpen] = useState(false);
   const arrivalDesk = scope?.desks.find((item) => item.id === deskId);
   const arrivalAssignment = scope?.assignments.find((item) => item.targetId === deskId)?.id ?? "";
-  const arrivalsOn = wide && task === "desk" && scope?.stage === "LIVE" && arrivalDesk?.action === "IN" && arrivalDesk.open !== false;
+  // A desk without name tags may be a phone: someone there still has to confirm each arrival.
+  const arrivalsOn = (wide || arrivalDesk?.nametag === false) && task === "desk" && scope?.stage === "LIVE" &&
+    arrivalDesk?.action === "IN" && arrivalDesk.open !== false;
   const arrivals = useDeskArrivals(targetEventId, deskId, arrivalAssignment, arrivalsOn);
+  const arrivalCard = useCurrentArrival(arrivalsOn ? arrivals.view : null, selectedArrival);
   useEffect(() => { setSelectedArrival(""); setArrivalMessage(""); setHanded(""); setLineNote(null); }, [deskId]);
   useEffect(() => {
     if (!handed) return;
@@ -1836,9 +1840,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const resultSeq = resultSeqRef.current.seq;
   const selfBooth = activeTask === "booth" && activeScope.stampMode === "SELF";
   const cameraMounted = !selfBooth && cameraOpen && ready && !orgChanged && !scanUnknown;
-  const scanSuspended = submitting || result.kind !== "idle" || writeLocked || sheet !== null || entryMode === "roster";
-  // On a laptop desk the camera is one fallback among the others, not the main action.
-  const deskCameraTile = wide && activeTask === "desk";
+  const scanSuspended = submitting || result.kind !== "idle" || writeLocked || sheet !== null || entryMode === "roster" || lineBusy;
+  // On a laptop desk, or while a waiting person is on the card, the camera is one fallback among
+  // the others, not the main action.
+  const deskCameraTile = (wide && activeTask === "desk") || Boolean(arrivalCard.arrival);
   // With a scanner and no camera running, the result stays until the next ticket replaces it.
   const holdForNextScan = wide && !cameraMounted;
   const printCurrent = printJob && printJob.result === result ? printJob : null;
@@ -1855,7 +1860,11 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       return;
     }
     setScannerNotice("");
-    if (lineActive) { void lineScan(code); return; }
+    if (lineActive) {
+      if (lineBusyRef.current) setScannerNotice("방금 찍은 티켓은 보내지 않았습니다. 앞 티켓을 보낸 뒤 다시 찍어 주세요.");
+      else void lineScan(code);
+      return;
+    }
     setSheet(null);
     setEntryMode("scan");
     setManualTarget(null);
@@ -1865,7 +1874,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     setTicket(code);
     void submitTicket(code);
   }
-  const waiting = arrivals.view && arrivalsOn ? currentArrival(arrivals.view, selectedArrival, Date.now()) : null;
+  const waiting = arrivalCard.arrival;
   const lineAvailable = !wide && activeTask === "desk" && selectedDesk?.action === "IN" && selectedDesk.nametag !== false;
   const lineActive = lineAvailable && lineMode;
   async function runArrival(work: () => Promise<{ ok: boolean; message?: string }>) {
@@ -1875,6 +1884,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     const outcome = await work();
     if (!outcome.ok) setArrivalMessage(outcome.message ?? "처리하지 못했습니다.");
     await arrivals.refresh();
+    if (outcome.ok) arrivalCard.release();
     setArrivalBusy(false);
   }
   async function handOver(arrival: DeskArrival) {
@@ -1892,15 +1902,19 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     return sent;
   }
   async function approveAndHandOver(arrival: DeskArrival) {
-    const approved = await sendDeskCommand(targetEventId, "participant.status", arrivalAssignment, { id: arrival.participantId, status: "APPROVED" });
+    // Only the status shown on the card is approved: a cancellation made meanwhile stays cancelled.
+    const approved = await sendDeskCommand(targetEventId, "participant.status", arrivalAssignment,
+      { id: arrival.participantId, status: "APPROVED", expectedStatus: arrival.review });
     return approved.ok ? handOver(arrival) : approved;
   }
   // A staff phone in line mode sends the ticket to its desk instead of admitting there and then.
   async function lineScan(code: string) {
     if (lineBusyRef.current || writeLocked || !ready || !assignment) return;
     lineBusyRef.current = true;
+    setLineBusy(true);
     const sent = await sendDeskCommand(targetEventId, "arrival.record", assignment.id, { deskId, ticket: code });
     lineBusyRef.current = false;
+    setLineBusy(false);
     setTicket("");
     setSheet(null);
     if (!sent.ok) {
@@ -2541,7 +2555,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         {result.kind === "idle" && arrivalsOn && arrivals.view && handed ? (
           <div className={prizeStyles.handed} role="status"><span>입장 완료</span><strong>{handed}</strong></div>
         ) : result.kind === "idle" && arrivals.view && waiting && (selectedArrival || !cameraMounted) ? (
-          <ArrivalNow view={arrivals.view} arrival={waiting} busy={arrivalBusy || writeLocked} message={arrivalMessage}
+          <ArrivalNow view={arrivals.view} arrival={waiting} replaced={arrivalCard.replaced} busy={arrivalBusy || writeLocked} message={arrivalMessage}
             onHand={() => void runArrival(() => handOver(waiting))}
             onApprove={() => void runArrival(() => approveAndHandOver(waiting))}
             onPrint={() => setForcedPrint(waiting.id)}
@@ -2765,6 +2779,11 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             {!selfBooth && noCamera && activeTask === "desk" ? (
               <ProductButton type="button" variant="primary" disabled={scanControlsLocked || submitting} onClick={() => chooseEntryMode("roster")}>명단에서 찾기</ProductButton>
             ) : null}
+            {arrivalsOn && !wide ? (
+              <ProductButton type="button" variant="ghost" disabled={writeLocked} onClick={() => setSheet("arrivals")}>
+                기다리는 사람 {arrivals.view?.arrivals.length ?? 0}명
+              </ProductButton>
+            ) : null}
             <div className={prizeStyles.bar3} role="group" aria-label="입력 방식">
               {deskCameraTile && !cameraMounted && !selfBooth && !noCamera ? (
                 <button ref={cameraButtonRef} type="button" disabled={!ready || writeLocked || submitting} aria-describedby="staff-scan-hint"
@@ -2893,6 +2912,12 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             ) : null}
           </div>
         </section>
+        </ConsoleDialog>
+      ) : null}
+      {sheet === "arrivals" && arrivalsOn ? (
+        <ConsoleDialog title="기다리는 사람" presentation="drawer" stickyChrome onClose={() => setSheet(null)}>
+          <ArrivalList view={arrivals.view} error={arrivals.error} selected={waiting?.id ?? ""} titled={false}
+            onSelect={(id) => { setSelectedArrival(id); setArrivalMessage(""); setHanded(""); setSheet(null); if (result.kind !== "idle") prepareNextParticipant(); }} />
         </ConsoleDialog>
       ) : null}
       {sheet === "recent" ? (
