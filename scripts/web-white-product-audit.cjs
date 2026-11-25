@@ -41,7 +41,7 @@ const CONSOLE = [
   ['participants', '/console/events/:id/participants', '#roster-search'],
   ['import', '/console/events/:id/participants/import', '#participant-import-file-heading'],
   ['messages', '/console/events/:id/messages', '#history-heading'],
-  ['operations', '/console/events/:id/operations', '#ops-entry'],
+  ['operations', '/console/events/:id/operations?setup=1', '#ops-board, #ops-desks'],
   ['live', '/console/events/:id/live', '[data-console-page="live"]'],
   ['programs', '/console/events/:id/programs', 'button:has-text("이벤트 만들기")'],
   ['draws', '/console/events/:id/draws', 'section[aria-label="무대"]'],

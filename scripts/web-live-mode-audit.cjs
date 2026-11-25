@@ -259,12 +259,9 @@ async function main() {
     });
 
     await step('입장 관리: 진행 중에는 데스크 보드와 접힌 설정, 전광판 출력과 요약 카드는 이 화면에 없다', async () => {
-      await page.goto(`${base}/operations`);
+      // Reopened 2026-11-25: desk and booth setup is the `?setup=1` view; the menu itself opens the receiving screen.
+      await page.goto(`${base}/operations?setup=1`);
       await page.getByRole('heading', { level: 1, name: '입장 관리' }).waitFor();
-      // Reopened 2026-11-25 (owner: 데스크 절차 제거): the page leads with one entry panel; the board
-      // and the folded steps sit behind one button.
-      await page.getByRole('heading', { name: /^지금 찍으면/ }).waitFor();
-      await page.getByRole('button', { name: '여러 곳에서 따로 받거나 스태프 계정을 쓸 때' }).click();
       // Reopened 2026-11-24 (owner: 진행 중 데스크 보드): LIVE shows one card per desk and folds the three steps.
       await page.getByRole('heading', { name: '데스크 보드' }).waitFor();
       assert.ok(await page.getByRole('button', { name: /명 처리|확인 불가/ }).count(), '데스크 카드(처리 수)');

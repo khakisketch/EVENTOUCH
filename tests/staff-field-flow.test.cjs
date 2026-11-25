@@ -265,7 +265,9 @@ test('scan-result-binds-request-location-not-current-selection', () => {
 test('scan-result-clears-when-context-changes-so-stale-place-never-sticks', () => {
   // 미확인 뒤 다른 데스크/티켓을 고르면 결과가 바뀌며 제거된다.
   // 늦은 응답이 와도 이전 결과에 잘못 붙지 않는다.
-  const deskChange = work.slice(work.indexOf("id=\"staff-desk\""), work.indexOf("id=\"staff-desk\"") + 1200);
+  // Reopened 2026-11-25: the desk select and the console's 받는 곳 share one change handler.
+  assert.match(work.slice(work.indexOf("id=\"staff-desk\""), work.indexOf("id=\"staff-desk\"") + 400), /onChange=\{\(event\) => changeDesk\(event\.target\.value\)\}/);
+  const deskChange = work.slice(work.indexOf("function changeDesk"), work.indexOf("function changeDesk") + 600);
   assert.match(deskChange, /setResult\(\{ kind: "idle" \}\)/);
   const boothChange = work.slice(work.indexOf("id=\"staff-booth\""), work.indexOf("id=\"staff-booth\"") + 1200);
   assert.match(boothChange, /setResult\(\{ kind: "idle" \}\)/);

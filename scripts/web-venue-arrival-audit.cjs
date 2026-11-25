@@ -181,16 +181,67 @@ async function main() {
     assert.equal((await printed(laptop)).length, printsBefore, 'nothing printed for a person under review');
     pass('a pending person waits for approval, then approval and entry are one button');
 
+    // The console menu opens straight onto the receiving screen (owner decision 2026-11-25).
     const ops = await context({ who: 'manager', width: 1440, height: 900 });
     await ops.goto(`${f.baseUrl}/console/events/${f.eventId}/operations`, { waitUntil: 'networkidle' });
-    const entry = ops.getByRole('region', { name: /지금 찍으면/ });
-    await entry.getByRole('heading', { name: '지금 찍으면 입장' }).waitFor();
-    assert.equal(await entry.getByRole('link', { name: '이 노트북에서 열기' }).count(), 1);
-    assert.equal(await ops.getByRole('heading', { name: '데스크 보드' }).count(), 0, 'desk setup stays behind its button');
-    assert.equal(await ops.getByRole('button', { name: '스태프 배정' }).count(), 0);
+    const modes = ops.getByRole('group', { name: '찍으면 처리할 일' });
+    await modes.getByRole('button', { name: '입장', pressed: true }).waitFor();
+    for (const name of ['이름으로 찾기', '안내판 인쇄', '휴대폰 연결', '더 보기']) await ops.getByRole('button', { name, exact: true }).waitFor();
+    assert.equal(await ops.getByRole('button', { name: '카메라 켜기' }).count(), 0, 'a laptop offers no camera');
+    assert.equal(await ops.getByRole('heading', { name: '데스크 보드' }).count(), 0, 'desk setup is a separate view');
+    await noOverflow(ops); await accessible(ops);
+    await ops.screenshot({ path: path.join(out, 'console-1-waiting.png') });
+    await phone.goto(poster, { waitUntil: 'networkidle' });
+    await typed(phone, people[5]);
+    await phone.getByText('접수됐습니다').waitFor();
+    const consoleCard = ops.getByRole('region', { name: '지금 처리할 참가자' });
+    await ops.getByRole('list', { name: '도착한 참가자' }).getByRole('button', { name: new RegExp(people[5].name) }).click();
+    await consoleCard.getByRole('heading', { name: people[5].name }).waitFor();
+    await ops.screenshot({ path: path.join(out, 'console-2-arrival.png') });
     await accessible(ops);
-    await ops.screenshot({ path: path.join(out, 'ops-0-entry.png') });
-    pass('the page leads with one way in and keeps desk setup out of sight');
+    await consoleCard.getByRole('button', { name: '건넸어요 · 입장' }).click();
+    await waitFor(async () => (await workspace()).participants.find((p) => p.id === people[5].id).inside === true, 'console entry');
+    pass('the menu opens the receiving screen, without a camera, and a handover there is the entry');
+
+    await modes.getByRole('button', { name: '퇴장' }).click();
+    await ops.waitForLoadState('networkidle');
+    await modes.getByRole('button', { name: '퇴장', pressed: true }).waitFor();
+    await ops.getByText('퇴장 받는 중').waitFor();
+    await phone.goto(poster, { waitUntil: 'networkidle' });
+    await typed(phone, people[5], '퇴장');
+    await phone.getByText('퇴장했습니다').waitFor();
+    await ops.getByRole('list', { name: '방금 나간 사람' }).getByText(people[5].name).waitFor();
+    await ops.screenshot({ path: path.join(out, 'console-3-exit.png') });
+    await accessible(ops);
+    await modes.getByRole('button', { name: '입장' }).click();
+    await ops.waitForLoadState('networkidle');
+    await modes.getByRole('button', { name: '입장', pressed: true }).waitFor();
+    pass('the console screen turns to exit and sees a phone leaving');
+
+    await ops.getByRole('button', { name: '이름으로 찾기' }).click();
+    await ops.getByRole('dialog', { name: '명단에서 찾기' }).waitFor();
+    await ops.keyboard.press('Escape');
+    await ops.getByRole('button', { name: '휴대폰 연결' }).click();
+    await ops.getByRole('dialog', { name: '휴대폰 연결' }).waitFor();
+    await ops.keyboard.press('Escape');
+    await ops.getByRole('button', { name: '더 보기' }).click();
+    const more = ops.getByRole('dialog', { name: '더 보기' });
+    await more.getByRole('button', { name: '코드 직접 입력' }).waitFor();
+    await ops.screenshot({ path: path.join(out, 'console-4-more.png') });
+    await accessible(ops);
+    await more.getByRole('link', { name: '여러 곳 · 부스 · 스태프 설정' }).click();
+    await ops.getByRole('heading', { name: '데스크 보드' }).waitFor();
+    await ops.getByRole('link', { name: '← 접수 화면으로' }).click();
+    await modes.waitFor();
+    pass('name search, phone link, the more drawer and the setup view are one step away');
+
+    const consolePhone = await context({ who: 'manager', width: 390, height: 844 });
+    await consolePhone.goto(`${f.baseUrl}/console/events/${f.eventId}/operations`, { waitUntil: 'networkidle' });
+    await consolePhone.getByRole('button', { name: '카메라 켜기' }).waitFor();
+    await noOverflow(consolePhone); await accessible(consolePhone);
+    await consolePhone.screenshot({ path: path.join(out, 'console-5-phone.png') });
+    await consolePhone.context().close();
+    pass('on a phone the same screen keeps the camera');
 
     await laptop.getByRole('group', { name: '찍으면 처리할 일' }).getByRole('button', { name: '퇴장' }).click();
     await laptop.waitForLoadState('networkidle');
@@ -207,7 +258,7 @@ async function main() {
     await laptop.getByRole('group', { name: '찍으면 처리할 일' }).getByRole('button', { name: '입장', pressed: true }).waitFor();
     pass('one switch on the desk turns every scan into an exit and back');
 
-    await entry.getByRole('button', { name: '안내판 인쇄' }).click();
+    await ops.getByRole('button', { name: '안내판 인쇄', exact: true }).click();
     await ops.getByRole('dialog').getByRole('button', { name: '인쇄하기' }).waitFor();
     await ops.screenshot({ path: path.join(out, 'ops-1-poster.png') });
     await ops.emulateMedia({ media: 'print' });
@@ -247,6 +298,20 @@ async function main() {
     await noOverflow(gatePhone);
     assert.equal((await printed(gatePhone)).length, 0, 'a desk without name tags prints nothing');
     pass('a desk without name tags is confirmed by staff on a phone');
+
+    // Before the event: one next step. (The fixture row is moved back directly; the product never does.)
+    await f.harness.database.query(`UPDATE events SET payload = jsonb_set(payload, '{stage}', '"READY"') WHERE id = $1`, [f.eventId]);
+    const before_ = await context({ who: 'manager', width: 1440, height: 900 });
+    await before_.goto(`${f.baseUrl}/console/events/${f.eventId}/operations`, { waitUntil: 'networkidle' });
+    await before_.getByRole('heading', { name: '아직 행사 시작 전입니다' }).waitFor();
+    await noOverflow(before_); await accessible(before_);
+    await before_.screenshot({ path: path.join(out, 'console-6-before.png') });
+    await before_.getByRole('button', { name: '행사 시작', exact: true }).click();
+    await before_.getByText('시작하면 준비 단계로 되돌릴 수 없습니다.', { exact: false }).waitFor();
+    await before_.getByRole('button', { name: '행사 시작', exact: true }).click();
+    await before_.getByRole('group', { name: '찍으면 처리할 일' }).waitFor();
+    assert.equal((await f.harness.database.query('SELECT payload FROM events WHERE id=$1', [f.eventId])).rows[0].payload.stage, 'LIVE');
+    pass('before the event the screen starts it after one confirmation');
 
     assert.deepEqual(errors, []);
     console.log(`Venue arrival: ${checks.length} checks passed; evidence ${out}`);

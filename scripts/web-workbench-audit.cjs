@@ -92,7 +92,7 @@ async function main() {
         ['messages', '/messages', '#history-heading'],
         ['theme', '/page', '#theme-save-draft'],
         ['overview-live', '', '#event-metrics-heading'],
-        ['operations', '/operations', '#ops-entry'],
+        ['operations', '/operations?setup=1', '#ops-desks'],
         ['settings', '/settings', '#settings-intake'],
       ]) {
         await page.goto(base + route);
@@ -717,9 +717,9 @@ async function main() {
     await page.waitForFunction(() => document.querySelector(':is(section,[role=region])[aria-labelledby="ops-booth-mode"] details')?.open === true);
     check('preset anchor opens its controls', await page.locator(':is(section,[role=region])[aria-labelledby="ops-booth-mode"] details').evaluate(e => e.open));
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto(base + '/operations');
+    await page.goto(base + '/operations?setup=1');
     // Reopened 2026-11-24: 진행 중에는 데스크 보드가 먼저 보이고 설정 3단계도 접힌 details 하나다(프리셋 2개 + 접힌 설정 1개).
-    await page.locator('#ops-entry').waitFor();
+    await page.locator('#ops-board, #ops-desks').first().waitFor();
     check('desktop presets start folded', await page.locator('main details').evaluateAll(nodes => nodes.length >= 2 && nodes.length <= 3 && nodes.every(e => !e.open)));
     // Every permitted destination is available without opening another group.
     const hubLabels = await page.locator('.desktop-side-nav .console-nav-group > .nav-section-label').allTextContents();

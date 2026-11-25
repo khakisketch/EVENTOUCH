@@ -94,11 +94,10 @@ test("live stage opens on a desk board and folds the setup steps", () => {
   const parts = read("LocationParts.tsx");
   const css = read("operations.module.css");
 
-  // Reopened 2026-11-25 (owner: 데스크 절차 제거): the page leads with one entry panel; the
-  // board and the steps belong to the 여러 곳 setup behind one button.
+  // The board exists only while LIVE; every other stage keeps the three numbered steps unchanged.
   assert.match(ops, /const liveBoard = state\.kind === "ready" && state\.stage === "LIVE"/u);
-  assert.match(ops, /\{manyDesks && liveBoard \? \(\s*<ConsoleSection\s+headingId="ops-board"\s+title="데스크 보드"/u, "the board only renders while LIVE");
-  assert.match(ops, /<SetupFold\s+live=\{liveBoard && manyDesks\}/u);
+  assert.match(ops, /\{liveBoard \? \(\s*<ConsoleSection\s+headingId="ops-board"\s+title="데스크 보드"/u, "the board only renders while LIVE");
+  assert.match(ops, /<SetupFold\s+live=\{liveBoard\}/u);
   assert.match(ops, /if \(!live\) return <>\{children\}<\/>;/u, "preparing, ended and archived stages render the steps as before");
   assert.equal(ops.match(/headingId="ops-desks"/g)?.length, 1, "the three steps are rendered once, folded or not");
 

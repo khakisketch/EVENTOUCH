@@ -51,7 +51,7 @@ async function main() {
     const b = await contextB.newPage();
     for (const page of [a, b]) {
       page.setDefaultTimeout(12000);
-      await page.goto(`${f.baseUrl}/console/events/${f.eventId}/operations`, { waitUntil: 'networkidle' });
+      await page.goto(`${f.baseUrl}/console/events/${f.eventId}/operations?setup=1`, { waitUntil: 'networkidle' });
       // Reopened 2026-11-20: 부스 탭과 행의 '편집' 버튼이 사라지고 행 → 상세 시트 → '부스 편집'으로 열린다.
       await openLocationEditor(page, '부스', '합성 공동 부스');
       await page.getByRole('dialog', { name: '부스 편집' }).waitFor();

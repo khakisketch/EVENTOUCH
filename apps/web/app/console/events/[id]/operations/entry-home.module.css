@@ -1,0 +1,10 @@
+/* 입장 관리 before and around the live screen (owner decision 2026-11-25): one panel in the
+   place of the receiving stage, one primary, setup as a quiet link. */
+.panel { display: flex; min-height: max(420px, calc(100svh - 160px)); flex-direction: column; align-items: center; justify-content: center; gap: var(--s3); padding: var(--s6) var(--s4); border: 2px solid var(--line); border-radius: var(--r-card); background: var(--surface-muted); text-align: center; word-break: keep-all; }
+.title { margin: 0; font-size: var(--h1); font-weight: var(--fw-heavy); letter-spacing: var(--ls-heading); }
+.lead { margin: 0; color: var(--muted); font-size: var(--text-md); }
+.error { margin: 0; color: var(--danger); font-weight: var(--fw-strong); }
+.panel .cta { min-width: min(360px, 100%); min-height: 64px; justify-content: center; margin-top: var(--s3); font-size: var(--text-xl); }
+.quiet { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s2); margin-top: var(--s5); }
+.loading { padding: var(--s6) var(--s4); color: var(--muted); text-align: center; }
+.back { margin: 0 0 var(--s2); }

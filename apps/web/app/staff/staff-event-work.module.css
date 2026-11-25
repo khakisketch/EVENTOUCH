@@ -1414,3 +1414,88 @@
 .directionSwitch button:disabled { cursor: default; opacity: 0.6; }
 .directionSwitch button[aria-pressed="true"]:disabled { opacity: 1; }
 .directionSwitch button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* ------------------------------------------------------------------
+   Inside the console (입장 관리, owner decision 2026-11-25): the same screen on paper. The
+   whole stage takes the mode's colour (입장 green, 퇴장 blue), one thing is large, and the
+   rarely used tools sit behind 더 보기. These rules come last so they win over the dark column.
+   ------------------------------------------------------------------ */
+.consoleState { display: grid; justify-items: center; gap: var(--s3); padding: var(--s6) var(--s4); color: var(--ink); text-align: center; }
+
+.fieldApp.consoleDesk {
+  --fld-fg: var(--ink);
+  --fld-soft: var(--muted);
+  --fld-strong: var(--ink);
+  --fld-edge: var(--line);
+  --fld-hair: var(--line);
+  --fld-wash: var(--surface-muted);
+  --fld-lift: var(--paper);
+  --fld-sheet-r: var(--r-card);
+  --fld-corner: var(--r-card);
+  --fld-name: 2.5rem;
+  --fld-verdict: 1.5rem;
+  --fld-sheet-shadow: none;
+  --mode: var(--success);
+  --mode-soft: var(--success-soft);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: min-content;
+  align-content: start;
+  gap: var(--s3) var(--s4);
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.fieldApp.consoleDesk[data-direction="OUT"] { --mode: var(--info); --mode-soft: var(--info-soft); }
+.consoleDesk > * { grid-column: 1 / -1; min-width: 0; }
+.consoleDesk > :global([data-staff-note]) { margin: 0; }
+.consoleDesk .fieldContext:not(:has(:global(.staff-select-field) > :not([hidden]))) { display: none; }
+.consoleDesk .fieldContext label { position: static; width: auto; height: auto; margin: 0; clip: auto; }
+
+.consoleTop { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s3); }
+.modeSwitch { display: grid; flex: 1 1 280px; max-width: 520px; grid-template-columns: 1fr 1fr; gap: 6px; padding: 6px; border-radius: var(--r-card); background: var(--surface-muted); }
+.modeSwitch button { min-height: 56px; border: 0; border-radius: var(--r-ctl); background: transparent; color: var(--muted); font: inherit; font-size: var(--text-xl); font-weight: var(--fw-heavy); cursor: pointer; }
+.modeSwitch button[data-value="IN"][aria-pressed="true"] { background: var(--success); color: var(--paper); }
+.modeSwitch button[data-value="OUT"][aria-pressed="true"] { background: var(--info); color: var(--paper); }
+.modeSwitch button:disabled:not([aria-pressed="true"]) { cursor: default; opacity: 0.5; }
+.modeSwitch button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.consoleCount { display: grid; justify-items: end; margin: 0 0 0 auto; }
+.consoleCount strong { font-size: var(--display-xl); font-weight: var(--fw-heavy); font-variant-numeric: tabular-nums; line-height: 1; }
+.consoleCount span { color: var(--muted); font-size: var(--text-sm); }
+.consolePlace { flex-basis: 100%; margin: 0; color: var(--muted); font-size: var(--text-sm); font-weight: var(--fw-strong); }
+
+.consoleDesk .fieldStage { min-height: 420px; border: 3px solid var(--mode); border-radius: var(--r-card); background: var(--mode-soft); color: var(--ink); }
+.consoleDesk .handed { background: var(--mode-soft); }
+.consoleDesk .handed span { color: var(--mode); }
+
+.modeIdle { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: var(--s3); padding: var(--s4); text-align: center; word-break: keep-all; }
+.modeTitle { margin: 0; font-size: var(--display-xl); font-weight: var(--fw-heavy); letter-spacing: var(--ls-heading); line-height: 1.15; }
+.modeHint { margin: 0; font-size: var(--text-md); font-weight: var(--fw-strong); line-height: var(--lh-body); opacity: 0.78; }
+
+.consoleSide { display: flex; flex-direction: column; gap: var(--s2); align-self: start; }
+.sideHead { margin: 0; font-size: var(--text-lg); font-weight: var(--fw-heavy); }
+
+.consoleBar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding-top: var(--s3); border-top: 1px solid var(--line); }
+.consoleBar .barButton { justify-content: center; border: 1px solid var(--line); }
+.barToggle { display: flex; min-height: var(--control-min-size); align-items: center; gap: var(--s2); margin-left: auto; font-size: var(--text-sm); font-weight: var(--fw-heavy); cursor: pointer; }
+.barToggle input { width: 20px; height: 20px; accent-color: var(--brand-hover); }
+
+.moreList { display: grid; gap: var(--s2); }
+.moreList > * { justify-content: flex-start; }
+
+@media (min-width: 1024px) {
+  .fieldApp.consoleDesk[data-wide="true"] { --fld-name: 4.5rem; --fld-verdict: 2rem; grid-template-columns: minmax(0, 1fr) 280px; }
+  .consoleDesk[data-wide="true"] > .fieldStage { grid-column: 1; min-height: max(420px, calc(100svh - 260px)); }
+  .consoleDesk[data-wide="true"] > .consoleSide { grid-column: 2; }
+}
+
+/* A laptop on the staff screen shows the same words on the dark stage. */
+.eventWorkPage .modeIdle { color: var(--fld-fg); }
+
+@media (max-width: 560px) {
+  .consoleCount { display: flex; align-items: baseline; gap: var(--s2); }
+  .consoleCount strong { font-size: var(--h2); }
+}

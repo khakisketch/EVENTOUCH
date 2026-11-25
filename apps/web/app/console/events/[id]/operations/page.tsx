@@ -1,9 +1,8 @@
-import OperationsWorkspace from "./OperationsWorkspace";
+import { Suspense } from "react";
+import EntryHome from "./EntryHome";
 import { configuredPublicBase } from "../../../../../lib/public-origin";
 
-// Slice 6d: on-site preparation — desks, booths and staff assignments.
-// The LIVE transition requires one running entry desk, so this screen is where an
-// operator makes that true.
+// 입장 관리: the receiving screen itself, with desk, booth and staff setup behind it.
 export default async function ConsoleOperationsPage({
   params,
 }: {
@@ -12,7 +11,9 @@ export default async function ConsoleOperationsPage({
   const { id } = await params;
   return (
     <section className="console-page operations-page">
-      <OperationsWorkspace eventId={id} publicBase={configuredPublicBase()} />
+      <Suspense fallback={null}>
+        <EntryHome eventId={id} publicBase={configuredPublicBase()} />
+      </Suspense>
     </section>
   );
 }

@@ -26,6 +26,8 @@ export type DeskArrivalView = {
   eventName: string; stage: string; canApprove: boolean; arrivals: DeskArrival[]; entered: number; total: number;
   // Server time when read, and how far this device's clock is from it.
   now?: string; skew: number;
+  // Who just left through an exit desk, newest first.
+  left?: Array<{ id: string; name: string; company: string; at: string }>;
   desk: { id: string; name: string; action: string; open: boolean; nametag: boolean };
 };
 

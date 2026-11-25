@@ -130,7 +130,7 @@ export function entryState(person: EntryPerson, context: EntryContext): EntrySta
   if (["expired", "revoked", "cancelled"].includes(person.ticketReview)) return { kind: "reason", text: "티켓 상태를 확인한 뒤 입장 처리할 수 있습니다.", deskLink: false };
   if (!["FREE", "PAID"].includes(person.paymentStatus.toUpperCase())) return { kind: "reason", text: "결제가 완료된 뒤 입장 처리할 수 있습니다.", deskLink: false };
   if (context.desks === null) return { kind: "reason", text: "입장 데스크를 확인할 수 없습니다. 목록을 새로고침한 뒤 다시 시도해 주세요.", deskLink: false };
-  if (!context.desks.length) return { kind: "reason", text: "입장 받을 준비가 안 됐습니다 — 입장 관리에서 ‘입장 받기 준비’를 누르세요.", deskLink: true };
+  if (!context.desks.length) return { kind: "reason", text: "입장 받을 준비가 안 됐습니다 — 입장 관리에서 다시 받기를 누르세요.", deskLink: true };
   return { kind: "ready", desks: context.desks };
 }
 

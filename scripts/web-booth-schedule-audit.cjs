@@ -42,7 +42,7 @@ async function main() {
     page.setDefaultTimeout(15000);
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
-    await page.goto(`${f.baseUrl}/console/events/${f.eventId}/operations`, { waitUntil: 'networkidle' });
+    await page.goto(`${f.baseUrl}/console/events/${f.eventId}/operations?setup=1`, { waitUntil: 'networkidle' });
     // Reopened 2026-11-20: 부스는 더 이상 탭이 아니라 같은 화면의 구역이고, 행의 '편집' 버튼은 상세 시트의 '부스 편집'으로 옮겨졌다.
     const dialog = page.getByRole('dialog', { name: '부스 편집' });
     const open = async () => { await openLocationEditor(page, '부스', /시간 검증 부스/); await dialog.waitFor(); };

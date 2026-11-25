@@ -322,6 +322,9 @@ test('one switch: the same poster admits through the desk in 입장 and records 
   assert.equal(state.participants.find((p) => p.name === '조은솔').inside, false);
   assert.equal(state.checks[0].action, 'OUT');
   assert.equal((await arrive(event, body('임다온', '01072727272'))).json.result, 'notInside', 'someone never admitted cannot leave');
+  const exits = (await list(event, event.gate)).json;
+  assert.deepEqual(exits.left.map((person) => person.name), ['조은솔'], 'the exit desk shows who just left');
+  assert.equal(JSON.stringify(exits.left).includes('0107'), false);
   // Without the switch flag a direction change still stops the desk.
   const plain = await run(event, 'desk.save', { id: event.gate, name: '정문 데스크', action: 'IN', mode: 'desk', open: true, confirmDirectionChange: true });
   assert.equal(plain.json.desk.open, false);

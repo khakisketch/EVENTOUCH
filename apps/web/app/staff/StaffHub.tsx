@@ -171,7 +171,7 @@ export default function StaffHub() {
           ) : (
             <>
               <p role="status" className={workStyles.hubNote}>배정된 업무가 없습니다. 운영자에게 문의하세요.</p>
-              <p className={workStyles.hubNote}>업무 배정은 운영 콘솔 &gt; 입장 관리 &gt; 스태프 배정에서 지정됩니다. 아직 배정 전이라면 대기 상태이며, 배정이 올라오면 다시 불러오기 후 목록에 표시됩니다.</p>
+              <p className={workStyles.hubNote}>업무 배정은 운영 콘솔 운영 콘솔 &gt; 입장 관리의 여러 곳 · 부스 · 스태프 설정에서 지정됩니다.gt; 입장 관리의 여러 곳 · 부스 · 스태프 설정에서 하는 스태프 배정으로 지정됩니다. 아직 배정 전이라면 대기 상태이며, 배정이 올라오면 다시 불러오기 후 목록에 표시됩니다.</p>
               <p className={workStyles.hubNote}>이 화면을 안내한 담당자(초대 메일·행사 안내의 문의처)에게 배정 여부를 확인해 주세요.</p>
             </>
           )}

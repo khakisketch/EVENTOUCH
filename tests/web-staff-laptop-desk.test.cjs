@@ -97,12 +97,15 @@ test("the desk screen: scanner without focus, result held on wide screens, auto 
   // A held result (unconfirmed, locked or needing a decision) refuses the next scan.
   const handler = work.slice(work.indexOf("function onScannerCode"), work.indexOf("const resultPerson"));
   for (const hold of ["result.uncertain", "writeLocked", "pendingScanRef.current", "printPending", "rewardHold", "!ready"]) assert.ok(handler.includes(hold), `scanner waits on ${hold}`);
-  assert.match(work, /const holdForNextScan = wide && !cameraMounted;/u);
+  // Reopened 2026-11-25: the console screen returns to waiting by itself; a laptop offers no camera.
+  assert.match(work, /const holdForNextScan = wide && !cameraMounted && !embedded;/u);
+  assert.match(work, /const laptop = wide && finePointer;/u);
+  assert.match(work, /const cameraOffered = !laptop && !selfBooth && !noCamera;/u);
   assert.match(work, /\{autoMs && !holdForNextScan && !printPending \? <AutoAdvance/u);
   assert.match(work, /setPrintJob\(autoPrintRef\.current && isDesk && !recordStatus && scanAction === "IN" && participantId/u, "only a fresh entry prints by itself");
   assert.match(work, /autoPrintRef\.current = autoPrint && wide;/u);
   assert.match(work, /--kiosk-printing/u, "silent printing is explained as a browser start option");
   assert.match(work, /const deskCameraTile = \(wide && activeTask === "desk"\) \|\| Boolean\(arrivalCard\.arrival\);/u, "on a laptop desk, or with a person on the card, the camera is a quiet fallback");
-  assert.match(work, /\{!deskCameraTile && !cameraMounted && !selfBooth && !noCamera \? \(\s*<ProductButton/u);
+  assert.match(work, /\{!deskCameraTile && !cameraMounted && cameraOffered \? \(\s*<ProductButton/u);
   assert.doesNotMatch(work, /sessionStorage|localStorage/u, "the field screen keeps nothing in device storage");
 });

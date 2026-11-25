@@ -165,8 +165,20 @@ function deskArrivalView(workspace, desk) {
   }
   arrivals.sort((left, right) => left.at.localeCompare(right.at));
   const approved = [...people.values()].filter((person) => !arrivalBlockedOut(person) && String(person.status || '').toUpperCase() === 'APPROVED');
+  // An exit desk shows who just left, including exits recorded by the person's own phone.
+  const left = [];
+  if (String(desk.action || '').toUpperCase() === 'OUT') {
+    for (const check of list(workspace.checks)) {
+      if (left.length >= 8) break;
+      if (!check || check.corrected || check.action !== 'OUT' || String(check.deskId) !== String(desk.id)) continue;
+      const person = people.get(String(check.participantId));
+      if (!person || arrivalBlockedOut(person)) continue;
+      left.push({ id: String(check.id), name: String(person.name || ''), company: String(person.company || ''), at: String(check.at || '') });
+    }
+  }
   return {
     now: new Date().toISOString(),
+    left,
     desk: { id: String(desk.id), name: String(desk.name || ''), action: String(desk.action || ''), open: desk.open !== false, nametag: desk.nametag !== false },
     arrivals,
     entered: approved.filter((person) => person.inside === true).length,

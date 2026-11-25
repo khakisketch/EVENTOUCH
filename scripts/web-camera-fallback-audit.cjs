@@ -55,7 +55,9 @@ async function main() {
     await open.click();
     await page.waitForFunction(() => window.__cameraCalls === 1);
     await camera.getByRole('status').filter({ hasText: '권한 요청' }).waitFor();
-    for (const [width, height] of [[390, 844], [320, 568], [1280, 844]]) {
+    // Reopened 2026-11-25: a laptop (1024px up with a mouse) offers no camera, so the widest
+    // camera size here is just under it.
+    for (const [width, height] of [[390, 844], [320, 568], [1000, 844]]) {
       await page.setViewportSize({ width, height });
       const box = await camera.locator('video').boundingBox();
       assert.ok(box && box.y >= 0 && box.y + box.height <= height + 1, `camera preview visible at ${width}x${height}`);
@@ -64,7 +66,7 @@ async function main() {
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
       await page.evaluate(axe);
       assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious', 'critical'].includes(v.impact)).map(v => v.id)), []);
-      if (width !== 1280) await page.screenshot({ path: path.join(out, `pending-${width}.png`) });
+      if (width !== 1000) await page.screenshot({ path: path.join(out, `pending-${width}.png`) });
     }
     await page.setViewportSize({ width: 390, height: 844 });
     await camera.getByRole('status').filter({ hasText: '카메라 시작이 늦어지고 있습니다' }).waitFor();
@@ -100,6 +102,10 @@ async function main() {
     await page.screenshot({ path: path.join(out, 'denied-390.png') });
     await camera.getByRole('button', { name: '명단에서 참가자 찾기' }).click();
     await page.waitForFunction(() => document.activeElement?.id === 'staff-manual-search');
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.setViewportSize({ width: 1280, height: 844 });
+    await page.getByRole('button', { name: '명단 찾기', exact: true }).waitFor();
+    assert.equal(await open.count(), 0, 'a laptop offers no camera');
     assert.deepEqual(errors, []);
     fs.writeFileSync(path.join(out, 'verification.json'), JSON.stringify({ pendingAndSlow: true, nameSearchWhilePending: true, permissionDeniedFallback: true, manualCheckin: true, checkRecords: 1, cameraStaysOpen: true, syntheticMedia: true, physicalCamera: false }, null, 2), { mode: 0o600 });
     console.log('Camera fallback: pending, delayed permission, name search, manual check-in, denied access and the open camera passed');

@@ -6,6 +6,8 @@ import ValidatedForm from "../ui/ValidatedForm";
 import NameTagPrint, { NAMETAG_PAPERS, readNameTagPreferences, saveNameTagPreference, type NameTagIdentity, type NameTagPaper } from "../ui/NameTagPrint";
 import { createScanBuffer } from "./scanner-input";
 import { ArrivalList, ArrivalNow, ArrivalPrinter, sendDeskCommand, useCurrentArrival, useDeskArrivals, type DeskArrival } from "./DeskArrivals";
+import DeskPoster from "../console/events/[id]/operations/DeskPoster";
+import { useConsoleDraftGuard } from "../console/console-draft-guard";
 
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -275,6 +277,13 @@ function forgetConfirmedDirection(id: string) {
   window.history.replaceState(window.history.state, "", address);
 }
 
+// The console's 입장 관리 opens straight onto one desk: the first running entry desk, else the
+// first running one. Nothing is kept on the device; the address carries the choice on reload.
+function mainDesk(scope: StaffScope) {
+  const running = scope.desks.filter((desk) => desk.open !== false);
+  return running.find((desk) => desk.action === "IN") ?? running[0] ?? scope.desks[0];
+}
+
 // The desk to start on: the one the address names with a confirmed direction, or the only
 // one there is. Without that, several desks stay the person's choice.
 function initialDesk(scope: StaffScope) {
@@ -363,7 +372,10 @@ function ScanFeedback({ tone, enabled }: { tone: ScanTone; enabled: boolean }) {
   return null;
 }
 
-export default function StaffEventWork({ eventId }: { eventId: string }) {
+// `embedded` is the console's 입장 관리 screen: same work, light face, no staff header.
+export type EmbeddedDesk = { slug: string; publicBase: string | null; setupHref: string };
+
+export default function StaffEventWork({ eventId, embedded }: { eventId: string; embedded?: EmbeddedDesk }) {
   const router = useRouter();
   const targetEventId = resolveStaffScopeId(eventId);
   const pendingScanIdRef = useRef(new Map<string, string>());
@@ -414,6 +426,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const [ticketCopyNotice, setTicketCopyNotice] = useState<string | null>(null);
   const [correcting, setCorrecting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  useConsoleDraftGuard(Boolean(embedded) && ((result.kind === "failed" && Boolean(result.uncertain)) || correctUnknown),
+    "처리 결과를 확인하지 못한 요청이 있습니다. 이 화면을 떠나면 같은 요청으로 다시 확인할 수 없습니다.");
   const [directory, setDirectory] = useState<Record<string, string>>({});
   const [deskParticipants, setDeskParticipants] = useState<DeskParticipant[]>([]);
   const [manualQuery, setManualQuery] = useState("");
@@ -433,7 +447,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   }, []);
   // Other sheets and field preferences. Sheets open only on demand; the scan
   // screen itself carries no list or form.
-  const [sheet, setSheet] = useState<null | "code" | "recent" | "correct" | "rewards" | "arrivals">(null);
+  const [sheet, setSheet] = useState<null | "code" | "recent" | "correct" | "rewards" | "arrivals" | "more">(null);
   // The last successful scan stays correctable after the result hands itself
   // back to the camera: the correction opens from 최근 처리.
   const [lastScan, setLastScan] = useState<Extract<ScanResult, { kind: "ok" }> | null>(null);
@@ -442,6 +456,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   // Laptop desk (2026-11-25): at 1024px and up the screen adds a side panel, keeps a result
   // until the next ticket, and can print the name tag by itself.
   const [wide, setWide] = useState(false);
+  // A laptop (wide, mouse or trackpad) works with a scanner, the poster and name search; its
+  // camera points at the operator, so it is not offered there (owner decision 2026-11-25).
+  const [finePointer, setFinePointer] = useState(false);
+  const laptop = wide && finePointer;
   const [autoPrint, setAutoPrint] = useState(false);
   const [paper, setPaper] = useState<NameTagPaper>("a4");
   const autoPrintRef = useRef(false);
@@ -454,10 +472,12 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     setAutoPrint(saved.auto);
     setPaper(saved.paper);
     const media = window.matchMedia("(min-width: 1024px)");
-    const update = () => setWide(media.matches);
+    const pointer = window.matchMedia("(pointer: fine)");
+    const update = () => { setWide(media.matches); setFinePointer(pointer.matches); };
     update();
     media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
+    pointer.addEventListener("change", update);
+    return () => { media.removeEventListener("change", update); pointer.removeEventListener("change", update); };
   }, []);
   // The desk's waiting list (laptop) and the staff line scan (phone, opened from the desk's QR).
   const [selectedArrival, setSelectedArrival] = useState("");
@@ -484,8 +504,27 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   // A desk without name tags may be a phone: someone there still has to confirm each arrival.
   const arrivalsOn = (wide || arrivalDesk?.nametag === false) && task === "desk" && scope?.stage === "LIVE" &&
     arrivalDesk?.action === "IN" && arrivalDesk.open !== false;
-  const arrivals = useDeskArrivals(targetEventId, deskId, arrivalAssignment, arrivalsOn);
+  // The console screen also watches an exit desk: phones record exits there without this laptop.
+  const exitsOn = Boolean(embedded) && task === "desk" && scope?.stage === "LIVE" &&
+    arrivalDesk?.action === "OUT" && arrivalDesk.open !== false;
+  const arrivals = useDeskArrivals(targetEventId, deskId, arrivalAssignment, arrivalsOn || exitsOn);
   const arrivalCard = useCurrentArrival(arrivalsOn ? arrivals.view : null, selectedArrival);
+  const [leftNow, setLeftNow] = useState("");
+  const seenLeftRef = useRef<string | null>(null);
+  const latestLeft = exitsOn ? arrivals.view?.left?.[0] : undefined;
+  const exitsRead = exitsOn && Boolean(arrivals.view);
+  useEffect(() => {
+    if (!exitsRead) { seenLeftRef.current = null; setLeftNow(""); return; }
+    const id = latestLeft?.id ?? "";
+    // The first read is history, not something that just happened.
+    if (seenLeftRef.current !== null && id && id !== seenLeftRef.current) setLeftNow(latestLeft?.name ?? "");
+    seenLeftRef.current = id;
+  }, [exitsRead, latestLeft?.id, latestLeft?.name]);
+  useEffect(() => {
+    if (!leftNow) return;
+    const timer = window.setTimeout(() => setLeftNow(""), 1600);
+    return () => window.clearTimeout(timer);
+  }, [leftNow]);
   useEffect(() => { setSelectedArrival(""); setArrivalMessage(""); setHanded(""); setLineNote(null); }, [deskId]);
   useEffect(() => {
     if (!handed) return;
@@ -838,6 +877,12 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       }
       lastLoadedScopeRef.current = next;
       // Read the address before the direction check edits it: the same desk is asked about and selected.
+      // An address that already names a desk (a reload, a question still open) is left alone.
+      if (embedded && !silent && !deskFromAddress().id) {
+        const main = mainDesk(next);
+        const direction = deskDirection(main?.action);
+        if (main && direction) rememberDeskInAddress(main.id, direction);
+      }
       const start = silent ? undefined : initialDesk(next);
       noteDeskDirections(next, !silent, start);
       setScope(next);
@@ -1124,6 +1169,18 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     retryFailedRef.current?.focus({ preventScroll: true });
   }, [result]);
 
+  if (embedded && (loading || (scope && scope.eventId !== targetEventId))) {
+    return <p className={`loading-state ${prizeStyles.consoleState}`} role="status">접수 화면을 불러오고 있습니다.</p>;
+  }
+  if (embedded && (!scope || missingAssignment)) {
+    return (
+      <section className={prizeStyles.consoleState}>
+        <p role="alert">{loadError ?? "이 행사의 접수 화면을 열 수 없습니다. 현장 운영 권한을 확인하세요."}</p>
+        <ProductButton type="button" variant="primary" onClick={() => load()}>다시 불러오기</ProductButton>
+        <ProductLink variant="ghost" href={embedded.setupHref}>여러 곳 · 부스 · 스태프 설정</ProductLink>
+      </section>
+    );
+  }
   if (loading || (scope && scope.eventId !== targetEventId)) {
     return (
       <>
@@ -1179,7 +1236,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   const activeScope: StaffScope = scope;
   const hasDeskWork = activeScope.desks.length > 0;
   const hasBoothWork = activeScope.booths.length > 0;
-  const activeTask: "desk" | "booth" =
+  // The console's 입장 관리 is the entry screen only; booths are run from the staff screen.
+  const activeTask: "desk" | "booth" = embedded && hasDeskWork ? "desk" :
     task === "booth" && hasBoothWork ? "booth" : hasDeskWork ? "desk" : "booth";
   const assignment = activeTask === "desk"
     ? activeScope.assignments.find((item) => item.targetId === deskId) ?? null
@@ -1842,13 +1900,28 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   if (resultSeqRef.current.last !== result) resultSeqRef.current = { last: result, seq: resultSeqRef.current.seq + 1 };
   const resultSeq = resultSeqRef.current.seq;
   const selfBooth = activeTask === "booth" && activeScope.stampMode === "SELF";
-  const cameraMounted = !selfBooth && cameraOpen && ready && !orgChanged && !scanUnknown;
+  const cameraMounted = !selfBooth && cameraOpen && ready && !orgChanged && !scanUnknown && !laptop;
+  const cameraOffered = !laptop && !selfBooth && !noCamera;
+  // Two or more running entry desks: the console screen says which one this device receives.
+  const multiPlace = activeScope.desks.filter((desk) => desk.open !== false && desk.action === "IN").length >= 2;
+  const insideNow = arrivals.view ? arrivals.view.entered : activeScope.participantsAvailable
+    ? deskParticipants.filter((person) => person.status === "APPROVED" && person.inside === true).length : null;
+  function changeDesk(id: string) {
+    if (!allowContextChange()) return;
+    selectedDeskIdRef.current = id;
+    selectDeskDirection(id, activeScope);
+    setDeskId(id);
+    setCameraOpen(false);
+    setResult({ kind: "idle" });
+    clearRewardPanel();
+  }
   const scanSuspended = submitting || result.kind !== "idle" || writeLocked || sheet !== null || entryMode === "roster" || lineBusy;
   // On a laptop desk, or while a waiting person is on the card, the camera is one fallback among
   // the others, not the main action.
   const deskCameraTile = (wide && activeTask === "desk") || Boolean(arrivalCard.arrival);
   // With a scanner and no camera running, the result stays until the next ticket replaces it.
-  const holdForNextScan = wide && !cameraMounted;
+  // The console screen goes back to waiting by itself, so the next arrival can take the stage.
+  const holdForNextScan = wide && !cameraMounted && !embedded;
   const printCurrent = printJob && printJob.result === result ? printJob : null;
   const printPending = printCurrent?.status === "pending";
   function onScannerCode(code: string) {
@@ -2197,9 +2270,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
   );
 
   return (
-    <section className={`staff-workspace ${prizeStyles.fieldApp}${kiosk ? " kiosk-mode" : ""}`} aria-label={`${activeScope.eventName} 현장 업무`} data-tone={stageTone} data-wide={wide && activeTask === "desk" ? "true" : undefined}>
+    <section className={`staff-workspace ${prizeStyles.fieldApp}${kiosk ? " kiosk-mode" : ""}${embedded ? ` ${prizeStyles.consoleDesk}` : ""}`} aria-label={`${activeScope.eventName} 현장 업무`} data-tone={stageTone} data-wide={wide && activeTask === "desk" ? "true" : undefined} data-direction={embedded ? (isExitDesk ? "OUT" : "IN") : undefined}>
       {!connection.online ? <StaffNote id="staff-connection-offline" tone="danger" role="alert">{STAFF_OFFLINE_MESSAGE}</StaffNote>
         : connection.slow ? <StaffNote id="staff-connection-slow" tone="warn" role="status">{STAFF_SLOW_MESSAGE}</StaffNote> : null}
+      {embedded ? null : (
       <div className={`staff-event-context ${prizeStyles.eventContext}`}>
         <ProductLink
           className="staff-back-link"
@@ -2294,8 +2368,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           </div>
         </details>
       </div>
+      )}
       {/* The shared 처리 결과 확인 panel stays in the page flow: the notices say "위의 처리 결과 확인". */}
-      <div className={prizeStyles.fieldReceipts}><OperatorReceiptRecovery excludeCommandId={inlineScanReceiptId} /></div>
+      {/* The console shell already shows this panel above its pages. */}
+      {embedded ? null : <div className={prizeStyles.fieldReceipts}><OperatorReceiptRecovery excludeCommandId={inlineScanReceiptId} /></div>}
       {orgChanged ? <OrganizationContextNotice confirmLeave={confirmLeaveStaff} /> : null}
       {otherReceipt ? <StaffNote tone="warn" role="alert">이전 현장 처리의 결과를 위의 처리 결과 확인에서 확인한 뒤 새 업무를 진행하세요.</StaffNote> : null}
       {receiptRefreshNeeded ? <StaffNote tone="warn" role="alert">최신 업무 정보를 불러온 뒤 다시 진행할 수 있습니다. <ProductButton type="button" className="button button-secondary" disabled={receiptRefreshing} onClick={() => {
@@ -2326,8 +2402,23 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           공용 태블릿용 큰 화면입니다. 무인 셀프 체크인은 지원하지 않습니다.
         </StaffNote>
       ) : null}
+      {embedded ? (
+        <div className={prizeStyles.consoleTop}>
+          {selectedDesk && !directionReview ? (
+            <div className={prizeStyles.modeSwitch} role="group" aria-label="찍으면 처리할 일">
+              {(["IN", "OUT"] as const).map((value) => (
+                <button key={value} type="button" data-value={value} aria-pressed={selectedDesk.action === value}
+                  disabled={switching || scanControlsLocked || submitting || writeLocked}
+                  onClick={() => void switchDirection(value)}>{value === "IN" ? "입장" : "퇴장"}</button>
+              ))}
+            </div>
+          ) : <span />}
+          <p className={prizeStyles.consoleCount}><strong>{insideNow ?? "–"}</strong><span>명이 지금 행사장 안에</span></p>
+          {multiPlace && selectedDesk ? <p className={prizeStyles.consolePlace}>받는 곳 · {selectedDesk.name}</p> : null}
+        </div>
+      ) : null}
       <div className={prizeStyles.fieldContext}>
-      {hasDeskWork && hasBoothWork ? (
+      {hasDeskWork && hasBoothWork && !embedded ? (
         <div className={`staff-task-switch ${prizeStyles.taskSwitch}`} role="group" aria-label="업무 종류">
           <ProductButton
             type="button"
@@ -2362,7 +2453,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       {activeTask === "desk" ? (
         <section className={prizeStyles.workSection} aria-label="처리 위치 선택">
         <div className="staff-select-field">
-          {operatorViewer && selectedDesk && !directionReview ? (
+          {!embedded && operatorViewer && selectedDesk && !directionReview ? (
             <div className={prizeStyles.directionSwitch} role="group" aria-label="찍으면 처리할 일">
               {(["IN", "OUT"] as const).map((value) => (
                 <button key={value} type="button" aria-pressed={selectedDesk.action === value}
@@ -2372,21 +2463,13 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             </div>
           ) : null}
           {switchError ? <p className="staff-direction-hint" role="alert">{switchError}</p> : null}
-          <label htmlFor="staff-desk" hidden={activeScope.desks.length === 1 && operatorViewer}>데스크</label>
+          <label htmlFor="staff-desk" hidden={embedded ? Boolean(selectedDesk) : activeScope.desks.length === 1 && operatorViewer}>데스크</label>
           <select
-            hidden={activeScope.desks.length === 1 && operatorViewer}
+            hidden={embedded ? Boolean(selectedDesk) : activeScope.desks.length === 1 && operatorViewer}
             id="staff-desk"
             value={deskId}
             disabled={scanControlsLocked || submitting}
-            onChange={(event) => {
-              if (!allowContextChange()) return;
-              selectedDeskIdRef.current = event.target.value;
-              selectDeskDirection(event.target.value, activeScope);
-              setDeskId(event.target.value);
-              setCameraOpen(false);
-              setResult({ kind: "idle" });
-              clearRewardPanel();
-            }}
+            onChange={(event) => changeDesk(event.target.value)}
           >
             <option value="">선택하세요</option>
             {activeScope.desks.map((desk) => (
@@ -2577,6 +2660,15 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               </button>
             }
           />
+        ) : !selfBooth && (embedded || laptop) && activeTask === "desk" ? (
+          <div className={prizeStyles.modeIdle}>
+            <p className={prizeStyles.modeTitle}>{ready ? `${isExitDesk ? "퇴장" : "입장"} 받는 중` : "잠시 멈췄습니다"}</p>
+            <p className={prizeStyles.modeHint}>
+              {ready ? (
+                <>{cameraOffered ? "카메라를 켜거나 스캐너로 티켓 QR을 찍거나" : "티켓 QR을 스캐너로 찍거나"}<br />{isExitDesk ? "참가자가 안내판 QR에서 퇴장을 누르면 바로 기록됩니다" : "참가자가 안내판 QR을 찍으면 여기에 나타납니다"}</>
+              ) : scanHint}
+            </p>
+          </div>
         ) : !selfBooth ? (
           <div className={prizeStyles.stageIdle}>
             <div className={prizeStyles.idleFrame} aria-hidden="true"><i /><i /><i /><i /></div>
@@ -2584,6 +2676,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               {ready && wide ? "티켓 QR을 찍어 주세요" : noCamera ? "이 기기에서는 카메라를 쓸 수 없습니다. 명단에서 찾거나 코드를 입력해 처리하세요." : ready ? "카메라가 꺼져 있습니다" : scanHint}
             </p>
           </div>
+        ) : null}
+
+        {result.kind === "idle" && leftNow ? (
+          <div className={prizeStyles.handed} role="status"><span>퇴장 완료</span><strong>{leftNow}</strong></div>
         ) : null}
 
         {result.kind === "idle" && arrivalsOn && arrivals.view && handed ? (
@@ -2749,7 +2845,27 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         ) : null}
       </div>
 
-      {wide && activeTask === "desk" ? (
+      {wide && activeTask === "desk" && embedded ? (
+        <aside className={prizeStyles.consoleSide} aria-label="데스크 현황">
+          {arrivalsOn ? (
+            <ArrivalList view={arrivals.view} error={arrivals.error} selected={waiting?.id ?? ""}
+              onSelect={(id) => { setSelectedArrival(id); setArrivalMessage(""); setHanded(""); if (result.kind !== "idle") prepareNextParticipant(); }} />
+          ) : isExitDesk ? (
+            <>
+              <h2 className={prizeStyles.sideHead}><span>방금 나간 사람</span></h2>
+              {arrivals.error ? <p className={prizeStyles.sideHint} role="status">{arrivals.error}</p> : null}
+              {arrivals.view?.left?.length ? (
+                <ul className={prizeStyles.sideRecent} aria-label="방금 나간 사람">
+                  {arrivals.view.left.map((person) => (
+                    <li key={person.id}><span>{person.name}</span>{person.at ? <time dateTime={person.at}>{formatCheckTime(person.at)}</time> : null}</li>
+                  ))}
+                </ul>
+              ) : <p className={prizeStyles.sideHint}>아직 나간 사람이 없습니다.</p>}
+            </>
+          ) : <p className={prizeStyles.sideHint}>데스크 상태를 확인하면 기다리는 사람이 보입니다.</p>}
+        </aside>
+      ) : null}
+      {wide && activeTask === "desk" && !embedded ? (
         <aside className={prizeStyles.deskSide} aria-label="데스크 현황">
           {arrivalsOn && arrivals.view ? (
             <p className={prizeStyles.sideCount}><strong>{arrivals.view.entered}</strong><span>/ {arrivals.view.total}명 입장 중</span></p>
@@ -2793,10 +2909,11 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           ) : null}
         </aside>
       ) : null}
+      {embedded ? null : (
       <div className={prizeStyles.fieldBar} data-mode={result.kind}>
         {result.kind === "idle" && scanInputHasWork ? (
           <>
-            {!deskCameraTile && !cameraMounted && !selfBooth && !noCamera ? (
+            {!deskCameraTile && !cameraMounted && cameraOffered ? (
               <ProductButton
                 ref={cameraButtonRef}
                 type="button"
@@ -2819,7 +2936,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               </ProductButton>
             ) : null}
             <div className={prizeStyles.bar3} role="group" aria-label="입력 방식">
-              {deskCameraTile && !cameraMounted && !selfBooth && !noCamera ? (
+              {deskCameraTile && !cameraMounted && cameraOffered ? (
                 <button ref={cameraButtonRef} type="button" disabled={!ready || writeLocked || submitting} aria-describedby="staff-scan-hint"
                   onClick={() => { primeScanFeedback(); setResult({ kind: "idle" }); setCameraOpen(true); }}><CameraIcon />카메라 켜기</button>
               ) : null}
@@ -2836,7 +2953,35 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
           </div>
         ) : null}
       </div>
-
+      )}
+      {embedded ? (
+        <div className={prizeStyles.consoleBar}>
+          {cameraOffered && !cameraMounted ? (
+            <ProductButton ref={cameraButtonRef} type="button" variant={arrivalCard.arrival ? "ghost" : "primary"} icon={<CameraIcon />}
+              disabled={!ready || writeLocked || submitting} aria-describedby="staff-scan-hint"
+              onClick={() => { primeScanFeedback(); setResult({ kind: "idle" }); setCameraOpen(true); }}>카메라 켜기</ProductButton>
+          ) : null}
+          {arrivalsOn && !wide ? (
+            <ProductButton type="button" variant="ghost" className={prizeStyles.barButton} disabled={writeLocked} onClick={() => setSheet("arrivals")}>
+              기다리는 사람 {arrivals.view?.arrivals.length ?? 0}명
+            </ProductButton>
+          ) : null}
+          <ProductButton type="button" variant="ghost" className={prizeStyles.barButton} disabled={scanControlsLocked || submitting || !selectedDesk} onClick={() => chooseEntryMode("roster")}>이름으로 찾기</ProductButton>
+          {selectedDesk ? (
+            <DeskPoster eventName={activeScope.eventName} slug={embedded.slug} deskId={selectedDesk.id} deskName={selectedDesk.name || "입장"}
+              nametag={selectedDesk.nametag !== false} publicBase={embedded.publicBase}
+              trigger={(open) => <ProductButton type="button" variant="ghost" className={prizeStyles.barButton} onClick={open}>안내판 인쇄</ProductButton>} />
+          ) : null}
+          <ProductButton type="button" variant="ghost" className={prizeStyles.barButton} disabled={!selectedDesk} onClick={() => setPhoneLinkOpen(true)}>휴대폰 연결</ProductButton>
+          <ProductButton type="button" variant="ghost" className={prizeStyles.barButton} onClick={() => setSheet("more")}>더 보기</ProductButton>
+          {!isExitDesk && selectedDesk && selectedDesk.nametag !== false ? (
+            <label className={prizeStyles.barToggle}>
+              <input type="checkbox" checked={autoPrint} onChange={(event) => { setAutoPrint(event.target.checked); saveNameTagPreference({ auto: event.target.checked }); }} />
+              <span>명찰 자동 인쇄</span>
+            </label>
+          ) : null}
+        </div>
+      ) : null}
       {arrivalsOn ? (
         <ArrivalPrinter eventId={targetEventId} assignmentId={arrivalAssignment} view={arrivals.view} station={stationRef.current}
           enabled={autoPrint && !printPending && !nametagOpen} forced={forcedPrint} onForcedHandled={clearForcedPrint}
@@ -2845,8 +2990,8 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       {phoneLinkOpen && selectedDesk ? (
         <ConsoleDialog title="휴대폰 연결" onClose={() => setPhoneLinkOpen(false)}>
           <div className={prizeStyles.phoneLink}>
-            <QRCode value={`${window.location.origin}/staff/events/${encodeURIComponent(targetEventId)}?desk=${encodeURIComponent(selectedDesk.id)}&as=IN&line=1`} size={220} title="휴대폰 연결 QR" />
-            <p>스태프 휴대폰 카메라로 찍고 로그인하면 {selectedDesk.name}에 연결됩니다. 휴대폰으로 찍은 티켓의 명찰은 이 노트북에서 출력합니다.</p>
+            <QRCode value={`${window.location.origin}/staff/events/${encodeURIComponent(targetEventId)}?desk=${encodeURIComponent(selectedDesk.id)}&as=${selectedDesk.action === "OUT" ? "OUT" : "IN"}${selectedDesk.action === "IN" && selectedDesk.nametag !== false ? "&line=1" : ""}`} size={220} title="휴대폰 연결 QR" />
+            <p>직원 휴대폰 카메라로 찍고 로그인하면 {selectedDesk.name}에 연결됩니다. {selectedDesk.action === "IN" && selectedDesk.nametag !== false ? "휴대폰으로 찍은 티켓의 명찰은 이 노트북에서 출력합니다." : `휴대폰으로 찍으면 바로 ${selectedDesk.action === "OUT" ? "퇴장" : "입장"}합니다.`}</p>
           </div>
         </ConsoleDialog>
       ) : null}
@@ -2946,6 +3091,59 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             ) : null}
           </div>
         </section>
+        </ConsoleDialog>
+      ) : null}
+      {sheet === "more" && embedded ? (
+        <ConsoleDialog title="더 보기" presentation="drawer" stickyChrome onClose={() => setSheet(null)}>
+          <div className={prizeStyles.moreList}>
+            <ProductButton type="button" variant="ghost" disabled={writeLocked || submitting} onClick={() => setSheet("code")}>코드 직접 입력</ProductButton>
+            <ProductButton type="button" variant="ghost" onClick={() => setSheet("recent")}>최근 처리 · 정정</ProductButton>
+            {rewardEnabled && isExitDesk && assignment ? (
+              <ProductButton type="button" variant="ghost" disabled={scanUnknown || receiptLock} onClick={() => setSheet("rewards")}>경품 조회</ProductButton>
+            ) : null}
+            {cameraMounted ? (
+              <ProductButton type="button" variant="ghost" disabled={submitting || scanControlsLocked} onClick={() => { setCameraOpen(false); setSheet(null); }}>카메라 끄기</ProductButton>
+            ) : null}
+            {activeScope.desks.length > 1 ? (
+              <label className={prizeStyles.sidePaper}>
+                <span>받는 곳</span>
+                <select value={deskId} disabled={scanControlsLocked || submitting} onChange={(event) => { changeDesk(event.target.value); setSheet(null); }}>
+                  {activeScope.desks.map((desk) => (
+                    <option key={desk.id} value={desk.id}>{desk.name} · {desk.action === "OUT" ? "퇴장" : "입장"}{desk.open === false ? " · 가동 중지" : ""}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {!isExitDesk && selectedDesk && selectedDesk.nametag !== false ? (
+              <div className={prizeStyles.sidePrint}>
+                <label className={prizeStyles.sidePaper}>
+                  <span>명찰 용지</span>
+                  <select value={paper} onChange={(event) => { const next = event.target.value as NameTagPaper; setPaper(next); saveNameTagPreference({ paper: next }); }}>
+                    {Object.entries(NAMETAG_PAPERS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                </label>
+                <details className={prizeStyles.sideHelp}>
+                  <summary>인쇄 창 없이 바로 뽑기</summary>
+                  <p>이 컴퓨터의 기본 프린터를 명찰 프린터로 정합니다. Chrome을 모두 닫은 뒤, 바로가기 실행 옵션에 <code>--kiosk-printing</code>을 붙여 다시 여세요. 행사 전에 실제 프린터로 확인하세요.</p>
+                </details>
+              </div>
+            ) : null}
+            <label className={prizeStyles.sideToggle}>
+              <input type="checkbox" checked={soundOn} onChange={(event) => setSoundOn(event.target.checked)} />
+              <span>소리</span>
+            </label>
+            <label className={prizeStyles.sideToggle}>
+              <input type="checkbox" checked={autoNext} onChange={(event) => setAutoNext(event.target.checked)} />
+              <span>결과 자동 넘김</span>
+            </label>
+            {lineAvailable ? (
+              <label className={prizeStyles.sideToggle}>
+                <input type="checkbox" checked={lineMode} onChange={(event) => { setLineMode(event.target.checked); setLineNote(null); }} />
+                <span>줄 스캔 (명찰은 데스크)</span>
+              </label>
+            ) : null}
+            <ProductLink variant="ghost" href={embedded.setupHref}>여러 곳 · 부스 · 스태프 설정</ProductLink>
+          </div>
         </ConsoleDialog>
       ) : null}
       {sheet === "arrivals" && arrivalsOn ? (

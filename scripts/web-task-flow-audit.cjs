@@ -93,7 +93,7 @@ async function main() {
     // Fresh before/after full renders at both required widths, before writes.
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
-      for (const [suffix, marker, name] of [['/content', '#content-panel', 'content'], ['/operations', '#ops-entry', 'operations'], ['/messages', '#history-heading', 'messages']]) {
+      for (const [suffix, marker, name] of [['/content', '#content-panel', 'content'], ['/operations?setup=1', '#ops-board, #ops-desks', 'operations'], ['/messages', '#history-heading', 'messages']]) {
         await go(suffix, marker);
         await shot(`${name}-${width}`, true);
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${name} overflow`);
