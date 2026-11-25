@@ -179,7 +179,7 @@ async function commands(deps: CommandPathDeps, parts: string[], request: Fastify
 
   if (deps.operationsCommands && deps.operationsCommands.supports(command)) {
     const account = await currentAccount(deps, request);
-    const targetId = command === "check.scan"
+    const targetId = command === "check.scan" || String(command).startsWith("arrival.")
       ? payload.deskId || payload.targetId
       : command === "booth.visit"
         ? payload.boothId || payload.targetId

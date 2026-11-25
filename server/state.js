@@ -23,7 +23,7 @@ const ORG_PERMISSIONS = new Set(['events.all', 'events.view', 'events.create', '
 const { EVENT_PERMISSIONS } = require('./event-permissions');
 const ARRAY_FIELDS = [
   'participants', 'fields', 'publishedFields', 'notices', 'program', 'groups', 'desks', 'booths',
-  'assignments', 'checks', 'visits', 'modules', 'responses', 'questions', 'photos', 'posts',
+  'assignments', 'checks', 'arrivals', 'visits', 'modules', 'responses', 'questions', 'photos', 'posts',
   'messages', 'reports', 'payments', 'rewards', 'audit', 'evidencePhotos',
   'luckyNumbers', 'rouletteResults', 'teams', 'votes', 'drawPrograms',
 ];
@@ -79,6 +79,7 @@ function emptyWorkspace() {
     boothMap: { draft: null, published: null },
     assignments: [],
     checks: [],
+    arrivals: [],
     visits: [],
     modules: [],
     responses: [],
@@ -234,6 +235,7 @@ function operatorDeskProjection(desk) {
     action: typeof desk.action === 'string' ? desk.action : null,
     mode: typeof desk.mode === 'string' && desk.mode ? desk.mode : 'desk',
     open: desk.open !== false,
+    nametag: desk.nametag !== false,
   };
 }
 
@@ -1157,7 +1159,7 @@ function createState(database, { env = process.env } = {}) {
             paymentStatus: String(person.paymentStatus || ''),
           })) : [];
           projected.desks = array(workspace.desks).filter((desk) => deskIds.has(String(desk.id))).map((desk) => ({
-            id: String(desk.id), name: String(desk.name || ''), action: String(desk.action || ''), open: desk.open !== false,
+            id: String(desk.id), name: String(desk.name || ''), action: String(desk.action || ''), open: desk.open !== false, nametag: desk.nametag !== false,
           }));
           projected.booths = projected.booths.filter((booth) => boothIds.has(String(booth.id))).map((booth) => ({
             ...booth,
@@ -1672,7 +1674,7 @@ function createState(database, { env = process.env } = {}) {
           paymentStatus: String(person.paymentStatus || ''),
         })) : [];
         projected.desks = array(workspace.desks).filter((desk) => deskIds.has(String(desk.id))).map((desk) => ({
-          id: String(desk.id), name: String(desk.name || ''), action: String(desk.action || ''), open: desk.open !== false,
+          id: String(desk.id), name: String(desk.name || ''), action: String(desk.action || ''), open: desk.open !== false, nametag: desk.nametag !== false,
         }));
         projected.booths = projected.booths.filter((booth) => boothIds.has(String(booth.id))).map((booth) => ({
           ...booth,

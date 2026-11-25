@@ -14,7 +14,8 @@ const { createAccess } = require('./access');
 const { createState } = require('./state');
 const { createPublicEvents } = require('./public-events');
 const { createParticipantCommands } = require('./commands/participants');
-const { createOperationsCommands } = require('./commands/operations');
+const { createOperationsCommands, appendSelfCheck } = require('./commands/operations');
+const { createPublicArrival } = require('./public-arrival');
 const { createDomainCommands } = require('./commands/domain');
 const { createFileService } = require('./files');
 const { createFileStorage } = require('./file-storage');
@@ -125,6 +126,7 @@ function createHttpServer(store, auth, access, database, { storageDir, fileStora
   // otherwise. Verification codes are never returned to HTTP clients.
   const verificationTransport = createVerificationTransport({ env });
   const attendeeAccess = database ? createAttendeeAccess(database, { transport: verificationTransport }) : null;
+  const publicArrival = database ? createPublicArrival({ database, env, appendCheck: appendSelfCheck }) : null;
   // First Fastify increment: /api/health is served through the route
   // boundary (server/fastify/health.ts). Same shape, same headers — the
   // security wrapper above already ran, Fastify only fills the body.
@@ -422,6 +424,7 @@ function createHttpServer(store, auth, access, database, { storageDir, fileStora
         domainCommands,
         files,
         attendeeAccess,
+        publicArrival,
         database,
       }).catch(() => {
         sendJson(res, 500, { error: '요청을 처리하지 못했습니다' });

@@ -137,6 +137,12 @@ const COMMAND_WRITE_SCOPE = {
   'check.reconcile': 'onsite',
   'reward.lookup': 'onsite',
   'reward.collect': 'onsite',
+  'arrival.read': 'onsite',
+  'arrival.record': 'onsite',
+  'arrival.handover': 'onsite',
+  'arrival.cancel': 'onsite',
+  'arrival.claim-print': 'onsite',
+  'arrival.print-result': 'onsite',
   // booth: booths + stamp map
   'booth.save': 'booth',
   'booth.mode': 'booth',

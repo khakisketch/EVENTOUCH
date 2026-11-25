@@ -16,6 +16,10 @@ const {
   findTicket,
   ticketCode,
 } = require('./shared.ts');
+const {
+  arrivalPersonByTicket, arrivalReview, claimPrint, closeArrivals, deskArrivalView, recordArrival,
+  reportPrint, requireEntryDesk, requireOpenArrival,
+} = require('../arrivals');
 
 const COMMANDS = new Set([
   'desk.save',
@@ -32,8 +36,20 @@ const COMMANDS = new Set([
   'booth.visit',
   'reward.lookup',
   'reward.collect',
+  'arrival.record',
+  'arrival.handover',
+  'arrival.cancel',
+  'arrival.claim-print',
+  'arrival.print-result',
 ]);
+const ARRIVAL_COMMANDS = new Set(['arrival.record', 'arrival.handover', 'arrival.cancel', 'arrival.claim-print', 'arrival.print-result']);
 const STAFF_ASSIGNMENTS = new Map([
+  ['arrival.read', 'DESK'],
+  ['arrival.record', 'DESK'],
+  ['arrival.handover', 'DESK'],
+  ['arrival.cancel', 'DESK'],
+  ['arrival.claim-print', 'DESK'],
+  ['arrival.print-result', 'DESK'],
   ['check.scan', 'DESK'],
   ['check.correct', 'DESK'],
   ['booth.visit', 'BOOTH'],
@@ -395,6 +411,9 @@ function updateDesk(workspace, input) {
     throw failure(400, '입장·퇴장 방향 변경을 확인한 뒤 저장하세요.');
   }
 
+  if (input.nametag !== undefined && typeof input.nametag !== 'boolean') {
+    throw failure(400, '명찰 출력 여부를 선택하세요.', 'nametag');
+  }
   const desk = old || { id: nextId('desk') };
   Object.assign(desk, {
     id: String(desk.id),
@@ -402,6 +421,8 @@ function updateDesk(workspace, input) {
     action,
     mode,
     open: changedDirection ? false : input.open !== false,
+    // Absent means the desk prints a name tag (the behaviour before this setting existed).
+    nametag: input.nametag === undefined ? desk.nametag !== false : input.nametag,
   });
   if (!old) workspace.desks.push(desk);
   return { status: old ? 200 : 201, body: { desk: structuredClone(desk) } };
@@ -535,7 +556,9 @@ function alreadyCheckedInDetails(workspace, person) {
   return { name: String(person.name || ''), firstCheckedInAt: first };
 }
 
-function scan(workspace, event, actor, input, assignment) {
+// `trusted`: the person comes from this desk's arrival record, not from a staff selection,
+// so there is no name-and-company confirmation to compare.
+function scan(workspace, event, actor, input, assignment, { trusted = false } = {}) {
   requireLive(event, '행사 진행 중에 입퇴장을 처리할 수 있습니다. 매니저에게 진행 단계 확인을 요청하세요.');
   const deskId = clean(input.deskId || input.targetId, 120);
   const desk = list(workspace.desks).find((item) => item && String(item.id) === deskId);
@@ -569,7 +592,7 @@ function scan(workspace, event, actor, input, assignment) {
     if (!person) throw failure(404, '이 행사에서 참가자를 찾을 수 없습니다. 이름으로 다시 검색하세요.');
     idPath = true;
   }
-  if (idPath && (assignment || Object.hasOwn(input, 'expectedIdentity'))) {
+  if (idPath && !trusted && (assignment || Object.hasOwn(input, 'expectedIdentity'))) {
     const expected = Object.hasOwn(input, 'expectedIdentity') ? manualIdentityHash(input.expectedIdentity) : null;
     if (Object.hasOwn(input, 'expectedIdentity') && !expected) {
       throw failure(400, '확인한 참가자 이름과 소속을 다시 확인하세요.', 'expectedIdentity');
@@ -638,6 +661,51 @@ function scan(workspace, event, actor, input, assignment) {
       rewards: rewardsFor(workspace, String(person.id)),
     },
   };
+}
+
+// The arrival commands share the desk rules: a running event, a running entry desk, and for a
+// staff account only its assigned desk.
+function arrivalCommand(workspace, event, actor, command, input, assignment, now, commandId) {
+  requireLive(event, '행사 진행 중에 도착과 입장을 처리할 수 있습니다.');
+  const desk = requireEntryDesk(workspace, input.deskId);
+  if (assignment && (assignment.type !== 'DESK' || assignment.targetId !== String(desk.id))) {
+    throw failure(403, '배정된 데스크에서만 처리할 수 있습니다.');
+  }
+  if (command === 'arrival.record') {
+    const person = arrivalPersonByTicket(workspace, ticketCode(input.ticket));
+    if (person.inside === true) {
+      throw failure(409, '이미 입장한 참가자입니다. 중복 처리하지 않았습니다.', undefined, 'ALREADY_CHECKED_IN', alreadyCheckedInDetails(workspace, person));
+    }
+    const arrival = recordArrival(workspace, { participantId: person.id, deskId: desk.id, source: 'STAFF', now });
+    return { body: { arrivalId: arrival.id, participantId: String(person.id), name: String(person.name || ''),
+      company: String(person.company || ''), review: arrivalReview(workspace, person) } };
+  }
+  if (command === 'arrival.claim-print') {
+    const { arrival, claimed } = claimPrint(workspace, desk, input, now);
+    return { body: { arrivalId: arrival.id, claimed } };
+  }
+  if (command === 'arrival.print-result') {
+    const arrival = reportPrint(workspace, desk, input, now);
+    return { body: { arrivalId: arrival.id, printedAt: arrival.printedAt, printFailedAt: arrival.printFailedAt } };
+  }
+  const arrival = requireOpenArrival(workspace, desk, input.arrivalId);
+  if (command === 'arrival.cancel') {
+    Object.assign(arrival, { cancelledAt: now, printClaim: null });
+    return { body: { arrivalId: arrival.id, cancelled: true } };
+  }
+  // Handover: the person is at the desk, so this is the entry, with every desk scan rule.
+  const scanned = scan(workspace, event, actor, { deskId: desk.id, participantId: arrival.participantId, expectedAction: 'IN' }, assignment, { trusted: true });
+  scanned.row.id = commandId;
+  scanned.row.at = now;
+  workspace.checks.unshift(scanned.row);
+  closeArrivals(workspace, arrival.participantId, { checkId: commandId, now });
+  return { row: scanned.row, body: { arrivalId: arrival.id, checkId: commandId, id: scanned.body.id, name: scanned.body.name, action: 'IN' } };
+}
+
+// A replayed arrival request must name the same desk, arrival, ticket and outcome.
+function arrivalProof(command, input) {
+  return ticketHash(JSON.stringify([command, clean(input.deskId, 120), clean(input.arrivalId, 120),
+    ticketCode(input.ticket), clean(input.station, 64), input.ok === true, input.force === true]));
 }
 
 function rewardsFor(workspace, participantId) {
@@ -1141,6 +1209,9 @@ function createOperationsCommands(database) {
           throw failure(409, '같은 작업이 이미 다른 내용으로 처리되었습니다. 화면을 새로 고쳐 결과를 확인하세요.');
         }
         const stored = object(receipt.result);
+        if (ARRIVAL_COMMANDS.has(command) && stored.arrivalProof !== arrivalProof(command, pendingInput)) {
+          throw failure(409, '이전 도착 요청의 대상이나 내용이 다릅니다. 목록을 다시 확인하세요.', undefined, 'ARRIVAL_RECEIPT_MISMATCH');
+        }
         if (command === 'check.reviewed-exit' && stored.exitRequestProof !== reviewedExitRequest(pendingInput).proof) {
           throw failure(409, '이전 퇴장 확인 요청의 대상이나 내용이 다릅니다. 현장 기록을 확인하세요.', undefined, 'REVIEWED_EXIT_RECEIPT_MISMATCH');
         }
@@ -1194,7 +1265,7 @@ function createOperationsCommands(database) {
       const now = new Date().toISOString();
       const workspaceBefore = structuredClone(workspace);
       ensureNotArchived(event);
-      if (['check.scan', 'check.correct', 'check.reviewed-exit', 'check.reconcile'].includes(command)) {
+      if (['check.scan', 'check.correct', 'check.reviewed-exit', 'check.reconcile', 'arrival.record', 'arrival.handover'].includes(command)) {
         const sources = attendanceSourceAvailability(row.workspace_payload);
         if (!sources.participants || !sources.checks) {
           throw failure(409, '참가자 명단 또는 출입 기록을 확인할 수 없어 처리하지 않았습니다. 현장 책임자에게 문의하세요.', undefined, 'CHECK_SOURCE_UNAVAILABLE');
@@ -1225,6 +1296,7 @@ function createOperationsCommands(database) {
           scanResult.row.at = now;
           workspace.checks.unshift(scanResult.row);
           await projectCheckinRecord(client, event.id, scanResult.row);
+          if (scanResult.row.action === 'IN') closeArrivals(workspace, scanResult.row.participantId, { checkId: id, now });
           result = { body: { ...scanResult.body, checkId: id } };
           scanRequest = { deskId: scanResult.row.deskId, assignmentId: scanAssignmentId, ticketHash: ticketHash(pendingTicket) };
           if (pendingParticipantId && Object.hasOwn(input, 'expectedIdentity')) {
@@ -1290,6 +1362,14 @@ function createOperationsCommands(database) {
         case 'reward.collect':
           result = await collectReward(client, workspace, event, operationActor, authorized.assignment, input);
           break;
+        case 'arrival.record':
+        case 'arrival.handover':
+        case 'arrival.cancel':
+        case 'arrival.claim-print':
+        case 'arrival.print-result':
+          result = arrivalCommand(workspace, event, account, command, input, authorized.assignment, now, id);
+          if (result.row) await projectCheckinRecord(client, event.id, result.row);
+          break;
         default:
           throw failure(400, '지원하지 않는 현장 운영 작업입니다.', 'command');
       }
@@ -1319,6 +1399,7 @@ function createOperationsCommands(database) {
           ticketHash: ticketHash(guest ? ticketToken : null),
           participantId: pendingParticipantId,
           ...(scanRequest ? { scanRequest } : {}),
+          ...(ARRIVAL_COMMANDS.has(command) ? { arrivalProof: arrivalProof(command, input) } : {}),
           ...(exitRequestProof ? { exitRequestProof } : {}),
           ...(reconciliationProof ? { reconciliationProof } : {}),
           ...(boothModeProof ? { boothModeProof } : {}),
@@ -1331,12 +1412,66 @@ function createOperationsCommands(database) {
     });
   }
 
+  // The waiting list of one desk, read every few seconds by the desk screen. Same authority as
+  // the desk commands; nothing is written and nothing beyond this desk is returned.
+  async function readArrivals({ eventId, deskId, account, assignmentId }) {
+    if (!account || !account.id) throw failure(401, '로그인이 필요합니다');
+    return database.transaction(async (client) => {
+      const found = await client.query(
+        `SELECT e.id, e.slug, e.client_id, e.org_id, e.payload, e.revision,
+                w.payload AS workspace_payload, w.revision AS workspace_revision
+         FROM events e JOIN event_workspaces w ON w.event_id = e.id WHERE e.id = $1`,
+        [String(eventId)]
+      );
+      const row = found.rows[0];
+      if (!row) throw failure(404, '요청한 행사를 찾을 수 없습니다.');
+      const event = normalizeEvent(row);
+      const workspace = normalizeWorkspace(row.workspace_payload);
+      const { resolveEventAuthority } = require('../tenancy');
+      let scope;
+      try {
+        scope = await resolveEventAuthority(client, account, event.id, { requireHeaders: false });
+      } catch (error) {
+        throw failure(error.status || 403, error.message || '권한을 확인하세요', undefined, error.code);
+      }
+      const granted = await authorizeGrants(client, event, workspace, account, 'arrival.read', assignmentId, scope);
+      const desk = list(workspace.desks).find((item) => item && String(item.id) === clean(deskId, 120));
+      if (!desk || (granted.assignment && granted.assignment.targetId !== String(desk.id))) {
+        throw failure(404, '데스크를 찾을 수 없습니다.');
+      }
+      const sources = attendanceSourceAvailability(row.workspace_payload);
+      if (!sources.participants || !sources.checks) {
+        throw failure(409, '참가자 명단 또는 출입 기록을 확인할 수 없습니다.', undefined, 'CHECK_SOURCE_UNAVAILABLE');
+      }
+      let canApprove = scope.role === 'AGENCY';
+      if (scope.role === 'MANAGER') {
+        const membership = await client.query(
+          'SELECT write_permissions FROM memberships WHERE account_id = $1 AND event_id = $2 LIMIT 1',
+          [String(account.id), event.id]
+        );
+        canApprove = Boolean(membership.rowCount) && managerWriteAllowed(membership.rows[0].write_permissions, 'participant.status');
+      }
+      return { eventName: String(event.name || ''), stage: String(event.stage || '').toUpperCase(), canApprove, ...deskArrivalView(workspace, desk) };
+    });
+  }
+
   return {
     execute,
+    readArrivals,
     supports(command) {
       return COMMANDS.has(command);
     },
   };
 }
 
-module.exports = { createOperationsCommands, COMMANDS };
+// A poster arrival at a desk that hands nothing over: the participant's own arrival is the
+// entry, with the same scan rules, recorded under the participant.
+async function appendSelfCheck(client, workspace, event, { person, desk, id, now }) {
+  const scanned = scan(workspace, event, { id: person.id }, { deskId: desk.id, participantId: person.id, expectedAction: 'IN' }, null, { trusted: true });
+  scanned.row.id = id;
+  scanned.row.at = now;
+  workspace.checks.unshift(scanned.row);
+  await projectCheckinRecord(client, event.id, scanned.row);
+}
+
+module.exports = { createOperationsCommands, COMMANDS, appendSelfCheck };

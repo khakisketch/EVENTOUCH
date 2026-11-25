@@ -14,8 +14,15 @@ const STAFF_COMMANDS = new Map([
   ['booth.visit', 'BOOTH'],
   ['reward.lookup', 'DESK'],
   ['reward.collect', 'DESK'],
+  ['arrival.read', 'DESK'],
+  ['arrival.record', 'DESK'],
+  ['arrival.handover', 'DESK'],
+  ['arrival.cancel', 'DESK'],
+  ['arrival.claim-print', 'DESK'],
+  ['arrival.print-result', 'DESK'],
 ]);
-const STAFF_TARGET_REQUIRED = new Set(['check.scan', 'checkin.scan', 'booth.visit']);
+const STAFF_TARGET_REQUIRED = new Set(['check.scan', 'checkin.scan', 'booth.visit', 'arrival.read', 'arrival.record',
+  'arrival.handover', 'arrival.cancel', 'arrival.claim-print', 'arrival.print-result']);
 
 function denied(status = 403) {
   return Object.assign(new Error(status === 401 ? '로그인이 필요합니다' : '권한을 확인하세요'), { status });

@@ -195,9 +195,41 @@ async function streamPhotoArchive(req, res, security, { account, eventId, refs, 
 }
 
 async function handleApi(req, res, store, urlPath, security = {}) {
-  const { auth, access, state, publicEvents, participantCommands, operationsCommands, domainCommands, files, attendeeAccess, database } = security;
+  const { auth, access, state, publicEvents, participantCommands, operationsCommands, domainCommands, files, attendeeAccess, publicArrival, database } = security;
   const parts = urlPath.split('/').filter(Boolean);
   if (parts[0] !== 'api') return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
+
+  // Venue arrival from a desk poster (server/public-arrival.js).
+  if (parts[1] === 'public' && parts[2] === 'events' && parts[4] === 'arrival' && parts.length === 5 &&
+      req.method === 'POST' && publicArrival) {
+    res.setHeader('cache-control', 'no-store');
+    const slug = decodedSegment(parts[3]);
+    if (!slug) return err(res, 404, '요청한 행사를 찾을 수 없습니다');
+    try {
+      const body = await readJsonBody(req);
+      return sendJson(res, 200, await publicArrival.handle({ slug, body, req }));
+    } catch (error) {
+      return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), error.field, error.code);
+    }
+  }
+
+  // One desk's waiting list (server/commands/operations.js readArrivals).
+  if (parts[1] === 'events' && parts[3] === 'desks' && parts[5] === 'arrivals' && parts.length === 6 &&
+      req.method === 'GET' && operationsCommands) {
+    res.setHeader('cache-control', 'no-store');
+    try {
+      const account = await requireUser(auth, req);
+      const eventId = decodedSegment(parts[2]);
+      const deskId = decodedSegment(parts[4]);
+      const assignmentId = new URL(req.url, 'http://localhost').searchParams.get('assignmentId') || undefined;
+      await access.authorize({ account, eventId, command: 'arrival.read', assignmentId, targetId: deskId, forWrite: false, deferWriteGrant: true });
+      const view = await operationsCommands.readArrivals({ eventId, deskId, account, assignmentId });
+      stampOrg(res, account);
+      return sendJson(res, 200, view);
+    } catch (error) {
+      return err(res, error.status || 500, failureMessage(error, '도착 목록을 불러오지 못했습니다'), error.field, error.code);
+    }
+  }
 
   // Attendee phone verification (slice 7a). Same-origin public endpoints;
   // the session cookie set here authorizes reads only, and codes never
@@ -598,7 +630,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
 
       if (operationsCommands && operationsCommands.supports(command)) {
         const account = await requireUser(auth, req);
-        const targetId = command === 'check.scan'
+        const targetId = command === 'check.scan' || command.startsWith('arrival.')
           ? payload.deskId || payload.targetId
           : command === 'booth.visit'
             ? payload.boothId || payload.targetId

@@ -8,6 +8,7 @@ const { ensureConsentNotice } = require('../consent-notices');
 const { publicOrigin } = require('../public-origin');
 const { managerWriteAllowed } = require('../event-permissions');
 const { createAttendeeAccess, normalizePhone: attendeePhone } = require('../attendees');
+const { arrivalReview, deskTakesArrivals, recordArrival } = require('../arrivals');
 const { ERASED_NAME, anonymizeParticipant, eraseWorkspaceCopies, redactReceiptResult } = require('../participant-erasure');
 const { ticketExpiry, TICKET_TOKEN } = require('../ticket-lifetime');
 const { cancellationConflictFingerprint, cancellationConflictIdentity } = require('../cancellation-conflict-review');
@@ -784,9 +785,18 @@ function createParticipantCommands(database) {
           publicSignup: true,
           now,
         });
+        // Signing up at a desk poster is also arriving at that desk. A desk that is not taking
+        // arrivals any more leaves the signup as an ordinary one.
+        const posterDesk = String(event.stage || '').toUpperCase() === 'LIVE'
+          ? list(workspace.desks).find((desk) => desk && String(desk.id) === clean(formInput.deskId, 120)) : null;
+        const arrived = deskTakesArrivals(posterDesk)
+          ? recordArrival(workspace, { participantId: participant.id, deskId: posterDesk.id, source: 'SIGNUP', now }) : null;
         return {
           status: 201,
-          body: { participant: projectParticipant(workspace, event, participant) },
+          body: {
+            participant: projectParticipant(workspace, event, participant),
+            ...(arrived ? { arrival: { deskName: String(posterDesk.name || ''), review: arrivalReview(workspace, participant) } } : {}),
+          },
         };
       },
     });
