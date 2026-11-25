@@ -13,20 +13,17 @@
   word-break: keep-all;
 }
 
-.bandTint,
-.bandMuted {
+.bandTint {
   box-shadow: 0 0 0 100vmax var(--band);
   clip-path: inset(0 -100vmax);
   background: var(--band);
 }
 .bandTint { --band: var(--brand-tint); }
-.bandMuted { --band: color-mix(in srgb, var(--ink) 4%, var(--paper)); }
 
 .heading,
 .faqIntro { display: grid; gap: var(--s3); max-width: 720px; }
 .heading h2,
-.faqIntro h2,
-.reportCopy h2 {
+.faqIntro h2 {
   margin: 0;
   font-size: clamp(var(--h1), 3.2vw, var(--display));
   font-weight: var(--fw-heavy);
@@ -35,8 +32,7 @@
   text-wrap: balance;
 }
 .heading p,
-.faqIntro p,
-.reportCopy > p {
+.faqIntro p {
   margin: 0;
   max-width: 62ch;
   color: var(--muted);
@@ -293,25 +289,7 @@
 .audienceOff { border-style: dashed; background: transparent; }
 .audienceOff h3 { margin-top: 0; padding-top: 60px; color: var(--muted); }
 
-/* ---- Report ---- */
-.report { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: clamp(32px, 6vw, 80px); align-items: center; }
-.reportCopy { display: grid; gap: var(--s3); }
-.checks { display: grid; gap: var(--s3); margin: var(--s3) 0 0; padding: 0; list-style: none; }
-.checks li { display: flex; gap: var(--s3); align-items: flex-start; font-size: var(--body); line-height: 1.6; }
-.checks svg { flex: none; margin-top: 3px; padding: 3px; border-radius: 50%; background: var(--success-soft); color: var(--success); box-sizing: content-box; width: 16px; height: 16px; }
-.reportCard { display: grid; gap: var(--s5); padding: clamp(24px, 3vw, 40px); border: 1px solid var(--line); border-radius: var(--r-stage); background: var(--paper); box-shadow: var(--shadow-raised); }
-.reportKicker { margin: 0; color: var(--muted); font-size: var(--small); font-weight: var(--fw-strong); }
-.reportNumbers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s4); }
-.reportNumbers div > span { display: block; color: var(--muted); font-size: var(--small); }
-.reportNumbers strong { display: block; margin-top: 2px; font-size: clamp(var(--h1), 4vw, var(--display)); font-weight: var(--fw-heavy); letter-spacing: var(--ls-num); font-variant-numeric: tabular-nums; }
-.reportRate { height: 10px; border-radius: var(--r-pill); background: var(--chart-track); overflow: hidden; }
-.reportRate i { display: block; width: 82%; height: 100%; border-radius: var(--r-pill); background: var(--brand); transform-origin: left; transition: transform 1.1s cubic-bezier(0.2, 0.7, 0.2, 1) 0.25s; }
-.reportCard[data-reveal="pending"] .reportRate i { transform: scaleX(0); }
-.bars { display: flex; height: 132px; align-items: flex-end; gap: var(--s2); padding-top: var(--s3); border-top: 1px solid var(--line); }
-.bars i { flex: 1; height: var(--bar); border-radius: var(--r-ctl) var(--r-ctl) 0 0; background: color-mix(in srgb, var(--brand) 35%, var(--paper)); transform-origin: bottom; transition: transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) calc(0.3s + var(--i) * 70ms); }
-.bars i:nth-child(3) { background: var(--brand); }
-.reportCard[data-reveal="pending"] .bars i { transform: scaleY(0); }
-.reportAxis { display: flex; justify-content: space-between; margin: calc(var(--s3) * -1) 0 0; color: var(--muted); font-size: var(--label); }
+
 /* ---- Steps ---- */
 .steps { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s5); margin: var(--s7) 0 0; padding: 0; list-style: none; }
 .steps::before { position: absolute; top: 28px; right: 17%; left: 17%; border-top: 2px dashed var(--line-strong); opacity: 0.45; content: ""; }
@@ -335,7 +313,6 @@
   .demoControls { max-width: none; width: 100%; }
   .compareGrid,
   .audience { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .report,
   .faq { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -347,7 +324,6 @@
   .audienceOff h3 { padding-top: 0; }
   .steps { grid-template-columns: minmax(0, 1fr); gap: var(--s6); }
   .steps::before { display: none; }
-  .reportNumbers { gap: var(--s3); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -357,9 +333,7 @@
   .compareOld,
   .compareNow,
   .compareCard,
-  .compareSwitch i,
-  .reportRate i,
-  .bars i { transition: none; }
+  .compareSwitch i { transition: none; }
 }
 
 @media print {

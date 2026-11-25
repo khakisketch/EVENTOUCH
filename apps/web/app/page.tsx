@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import styles from "./landing.module.css";
@@ -11,7 +11,7 @@ import play from "./landing-play.module.css";
 import LandingPageDemo from "./LandingPageDemo";
 import LandingCompare from "./LandingCompare";
 import { LandingIcon } from "./LandingIcons";
-import { CountUp, Reveal } from "./LandingMotion";
+import { Reveal } from "./LandingMotion";
 import { SUPPORT_EMAIL as CONTACT_EMAIL } from "../lib/support-contact";
 
 // Service entry: signed-in operators return to their work surface, everyone
@@ -35,8 +35,6 @@ const STEPS = [
   { icon: "setup", title: "행사 세팅", text: "행사 생성·신청 항목·명단 준비를 함께 구성합니다." },
   { icon: "chart", title: "운영·정리", text: "현장 체크인부터 결과 보고서까지 한곳에서 운영합니다." },
 ] as const;
-
-const ENTRY_BARS = [18, 46, 82, 64, 38, 52, 30] as const;
 
 export default function Home() {
   const router = useRouter();
@@ -203,34 +201,6 @@ export default function Home() {
               </Reveal>
             </li>
           </ul>
-        </section>
-
-        <section className={`${sec.section} ${sec.bandMuted}`} id="report" aria-labelledby="report-title">
-          <div className={sec.report}>
-            <Reveal className={sec.reportCopy}>
-              <p className={sec.eyebrow}>결과 보고</p>
-              <h2 id="report-title">행사가 끝나면, 기록을 결과로.</h2>
-              <p>등록·입장·부스·참여 기록을 한곳에서 확인합니다.</p>
-              <ul className={sec.checks}>
-                <li><LandingIcon name="check" size={18} />등록·입장 집계가 행사 중에도 계속 쌓입니다.</li>
-                <li><LandingIcon name="check" size={18} />보고서는 생성 시점의 기록을 고정해 보관합니다.</li>
-                <li><LandingIcon name="check" size={18} />보고서에서 바로 확인하고 PPTX·인쇄·PDF로 내보냅니다.</li>
-              </ul>
-            </Reveal>
-            <Reveal className={sec.reportCard} delay={140}>
-              <p className={sec.reportKicker}>결과 분석 · 입장 집계</p>
-              <div className={sec.reportNumbers}>
-                <div><span>등록</span><strong><CountUp to={269} suffix="명" /></strong></div>
-                <div><span>누적 입장</span><strong><CountUp to={221} suffix="명" /></strong></div>
-                <div><span>입장률</span><strong><CountUp to={82} suffix="%" /></strong></div>
-              </div>
-              <div className={sec.reportRate} aria-hidden="true"><i /></div>
-              <div className={sec.bars} aria-hidden="true">
-                {ENTRY_BARS.map((height, i) => <i key={i} style={{ "--bar": `${height}%`, "--i": i } as CSSProperties} />)}
-              </div>
-              <p className={sec.reportAxis} aria-hidden="true"><span>09시</span><span>시간대별 입장</span><span>15시</span></p>
-            </Reveal>
-          </div>
         </section>
 
         <section className={sec.section} aria-labelledby="steps-title">

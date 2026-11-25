@@ -70,7 +70,9 @@ test('the landing below the hero is interactive, honest and keeps the hero\'s in
   const playSource = fs.readFileSync(path.join(app, 'LandingPlay.tsx'), 'utf8');
   // The persuasion path: the draw, the roulette and check-in you can try (2026-11-25), the attendee page you can try,
   // the old way against the new, who it fits, the result, the steps, the answers.
-  for (const part of ['<LandingPlay', '<LandingPageDemo', '<LandingCompare', 'id="report"', 'id="faq"', 'id="contact"']) assert.ok(home.includes(part), `${part} stays`);
+  for (const part of ['<LandingPlay', '<LandingPageDemo', '<LandingCompare', 'id="faq"', 'id="contact"']) assert.ok(home.includes(part), `${part} stays`);
+  // Reopened 2026-11-25 (owner): the result report is not a differentiator, so its landing section is gone.
+  assert.doesNotMatch(home, /id="report"|report-title|CountUp/u);
   // Totals nobody measured are not shown as a track record.
   assert.doesNotMatch(home, /320\+|86,000\+|누적 운영 행사/u);
   // Interactive parts are real controls with names and states, not pictures.

@@ -83,10 +83,7 @@ test('the landing states only numbers and features the product has', () => {
   const compare = read('LandingCompare.tsx');
   assert.doesNotMatch(home, /평균 일주일|100명 이상|열 배|\d+% 단축/u, 'no invented figures');
   assert.doesNotMatch(compare, /실시간/u, 'the roster refreshes on its own schedule; do not call it real time');
-  // The result section names what the report screen really offers.
-  assert.match(home, /PPTX/u);
   // The check-in block names the screens by their current menu names.
   for (const label of ['입장·스태프', '현장 모드']) assert.ok(read('LandingPlay.tsx').includes(label), `${label} in the check-in block`);
-  assert.ok(home.includes('결과 보고서'), 'the result section stays');
   assert.doesNotMatch(home, /스태프 체크인, 부스 인증|결과 분석, 보고서/u);
 });
