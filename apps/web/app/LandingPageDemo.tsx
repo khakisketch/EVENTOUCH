@@ -74,8 +74,13 @@ export default function LandingPageDemo() {
                 className={styles.demoLayout}
                 onClick={() => setLayout(item.id)}
               >
-                <strong>{item.label}</strong>
-                <span>{item.hint}</span>
+                <span className={styles.demoThumb} data-layout={item.id} aria-hidden="true">
+                  {item.id === "instagram" ? Array.from({ length: 9 }, (_, i) => <i key={i} />) : null}
+                </span>
+                <span className={styles.demoLayoutText}>
+                  <strong>{item.label}</strong>
+                  <span>{item.hint}</span>
+                </span>
               </button>
             ))}
           </div>
@@ -121,54 +126,58 @@ export default function LandingPageDemo() {
       </div>
 
       <figure className={styles.demoStage}>
-        <div className={styles.demoPhone} data-ground={ground} style={{ "--demo": color.value, "--demo-on": ink, "--demo-shade": ink === SAMPLE_INK ? "var(--paper)" : "var(--stage)" } as CSSProperties} aria-label={`${current.label} 참가자 화면 구성 예시`} role="img">
-          <div className={styles.demoBanner}>
-            <span>12월 12일 · 코엑스</span>
-            <strong>파트너<br />컨퍼런스</strong>
-          </div>
-          <div className={styles.demoTicket}>
-            <span><LandingIcon name="qr" size={18} /></span>
-            <b>모바일 티켓</b>
-            <i>열기</i>
-          </div>
-          <div key={layout} className={styles.demoBody} data-layout={layout}>
-            {layout === "tile" ? (
-              <>
-                <div className={styles.demoTiles}>
-                  {SHORTCUTS.slice(0, 4).map((item) => (
-                    <span key={item.label}><i><LandingIcon name={item.icon} size={18} /></i>{item.label}</span>
-                  ))}
-                </div>
-                <div className={styles.demoNotice}><b>입장 전 QR을 준비해 주세요</b><span>신청 후 받은 티켓 QR을 화면에 띄워 주세요.</span></div>
-              </>
-            ) : layout === "poster" ? (
-              <>
-                <p>행사 안내</p>
-                <div className={styles.demoCircles}>
-                  {SHORTCUTS.slice(0, 3).map((item) => (
-                    <span key={item.label}><i><LandingIcon name={item.icon} size={20} /></i>{item.label}</span>
-                  ))}
-                </div>
-                <p>행사 참여</p>
-                <div className={styles.demoCircles}>
-                  {SHORTCUTS.slice(3).map((item) => (
-                    <span key={item.label}><i><LandingIcon name={item.icon} size={20} /></i>{item.label}</span>
-                  ))}
-                </div>
-                <div className={styles.demoNotice}><b>입장 전 QR을 준비해 주세요</b><span>신청 후 받은 티켓 QR을 화면에 띄워 주세요.</span></div>
-              </>
-            ) : (
-              <>
-                <p>승인된 현장 사진</p>
-                <div className={styles.demoFeed}>
-                  {Array.from({ length: 9 }, (_, i) => <span key={i} data-n={i} />)}
-                </div>
-              </>
-            )}
+        <div className={styles.demoArt} style={{ "--demo": color.value, "--demo-on": ink } as CSSProperties}>
+          <i className={styles.demoRing} aria-hidden="true" />
+          <i className={styles.demoDot} aria-hidden="true" />
+          <div className={styles.demoPhone} data-ground={ground} style={{ "--demo": color.value, "--demo-on": ink, "--demo-shade": ink === SAMPLE_INK ? "var(--paper)" : "var(--stage)" } as CSSProperties} aria-label={`${current.label} 참가자 화면 구성 예시`} role="img">
+            <div className={styles.demoBanner}>
+              <span>12월 12일 · 코엑스</span>
+              <strong>파트너<br />컨퍼런스</strong>
+            </div>
+            <div className={styles.demoTicket}>
+              <span><LandingIcon name="qr" size={18} /></span>
+              <b>모바일 티켓</b>
+              <i>열기</i>
+            </div>
+            <div key={layout} className={styles.demoBody} data-layout={layout}>
+              {layout === "tile" ? (
+                <>
+                  <div className={styles.demoTiles}>
+                    {SHORTCUTS.slice(0, 4).map((item) => (
+                      <span key={item.label}><i><LandingIcon name={item.icon} size={18} /></i>{item.label}</span>
+                    ))}
+                  </div>
+                  <div className={styles.demoNotice}><b>입장 전 QR을 준비해 주세요</b><span>신청 후 받은 티켓 QR을 화면에 띄워 주세요.</span></div>
+                </>
+              ) : layout === "poster" ? (
+                <>
+                  <p className={styles.demoKicker}>행사 안내</p>
+                  <div className={styles.demoCircles}>
+                    {SHORTCUTS.slice(0, 3).map((item) => (
+                      <span key={item.label}><i><LandingIcon name={item.icon} size={20} /></i>{item.label}</span>
+                    ))}
+                  </div>
+                  <p className={styles.demoKicker}>행사 참여</p>
+                  <div className={styles.demoCircles}>
+                    {SHORTCUTS.slice(3).map((item) => (
+                      <span key={item.label}><i><LandingIcon name={item.icon} size={20} /></i>{item.label}</span>
+                    ))}
+                  </div>
+                  <div className={styles.demoNotice}><b>입장 전 QR을 준비해 주세요</b><span>신청 후 받은 티켓 QR을 화면에 띄워 주세요.</span></div>
+                </>
+              ) : (
+                <>
+                  <p>승인된 현장 사진</p>
+                  <div className={styles.demoFeed}>
+                    {Array.from({ length: 9 }, (_, i) => <span key={i} data-n={i} />)}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
         <figcaption>
-          <strong>{current.label}</strong>
+          <strong>{current.label}</strong> · {current.hint}
         </figcaption>
       </figure>
     </div>
