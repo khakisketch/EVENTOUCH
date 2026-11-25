@@ -84,24 +84,12 @@ function options(value) {
   return rows.map((item) => String(item || '').trim()).filter(Boolean);
 }
 
-async function activeDeskAssignment(client, eventId, orgId) {
-  // Authority is the org membership, never the global accounts.role: a
-  // shared account that is AGENCY in one org and STAFF here staffs this
-  // org's desks like anyone else. Global active still applies to everyone.
-  const result = await client.query(
-    `SELECT 1
-     FROM staff_assignments sa
-     JOIN accounts a ON a.id = sa.account_id
-     JOIN organization_memberships m
-       ON m.account_id = sa.account_id AND m.active = true AND m.role = 'STAFF'
-     JOIN events e ON e.id = sa.event_id
-     WHERE sa.event_id = $1 AND sa.type = 'DESK' AND sa.active = true
-       AND a.active = true AND m.org_id = e.org_id
-       AND ($2::text IS NULL OR e.org_id = $2)
-     LIMIT 1`,
-    [eventId, orgId || null]
-  );
-  return result.rowCount > 0;
+// Owner decision 2026-11-25: going live needs somewhere to check people in, not a staff
+// account assigned to it. An operator may run the desk from their own laptop; assignment is
+// only how a separate staff account gets access (server/commands/operations.js still checks it).
+function hasOpenEntryDesk(workspace) {
+  return (Array.isArray(workspace.desks) ? workspace.desks : []).some((desk) => desk
+    && desk.open !== false && String(desk.action || '').toUpperCase() === 'IN');
 }
 
 async function transitionStage(ctx, nextStage) {
@@ -112,8 +100,8 @@ async function transitionStage(ctx, nextStage) {
   if (nextIndex < 0) throw ctx.fail(400, '진행 단계를 확인하세요', 'stage');
   if (nextIndex < currentIndex) throw ctx.fail(409, '행사 진행 단계는 이전 상태로 되돌릴 수 없습니다');
   if (stage === 'LIVE' && current !== 'LIVE') {
-    if (!ctx.workspace.desks.length || !(await activeDeskAssignment(ctx.client, ctx.event.id, ctx.event.orgId || null))) {
-      throw ctx.fail(409, '등록 데스크와 활성 스태프를 먼저 배정하세요');
+    if (!hasOpenEntryDesk(ctx.workspace)) {
+      throw ctx.fail(409, '입장 데스크를 하나 이상 가동하세요');
     }
   }
   if (stage === 'ARCHIVED') {

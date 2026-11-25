@@ -86,8 +86,7 @@ type Overview = {
   // range UI buckets them locally without refetching.
   recent: CheckRow[];
   registrationOpen: boolean;
-  deskCount: number;
-  deskAssignmentCount: number;
+  openEntryDeskCount: number;
   formVersion: number;
   pagePublished: boolean;
   pageDraftDiffers: boolean;
@@ -532,9 +531,9 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         records(workspace.desks).forEach((desk) => {
           if (typeof desk.id === "string") deskMap.set(desk.id, text(desk.name));
         });
-        const deskCount = records(workspace.desks).length;
-        const deskAssignmentCount = records(workspace.assignments).filter(
-          (assignment) => text(assignment.type) === "DESK"
+        // Same condition as the server's 진행 중 전환: one running entry desk (assignment is optional).
+        const openEntryDeskCount = records(workspace.desks).filter(
+          (desk) => desk.open !== false && text(desk.action).toUpperCase() === "IN"
         ).length;
         const programRows: ScheduledProgram[] = records(workspace.program).flatMap((program, index) => {
           const title = text(program.title);
@@ -655,8 +654,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
             periods,
             recent: checks,
             registrationOpen: workspace.registrationOpen === true,
-            deskCount,
-            deskAssignmentCount,
+            openEntryDeskCount,
             formVersion: number(workspace.publishedVersion),
             pagePublished: Boolean(text(pageExperience?.publishedAt)),
             pageDraftDiffers: number(pageExperience?.draftVersion) !== number(pageExperience?.publishedVersion),
@@ -829,7 +827,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
     ? STAGE_ORDER[stageIndex + 1]
     : null;
   const nextStageText = nextStage ? eventStageLabel(nextStage) : "없음";
-  const liveBlocked = overview.deskCount === 0 || overview.deskAssignmentCount === 0;
+  const liveBlocked = overview.openEntryDeskCount === 0;
   // A published form alone cannot receive applications while the event is
   // still private, and an ended event cannot receive them either. Distinguish
   // the saved intake setting from what an attendee can actually do.
@@ -937,7 +935,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         key: "golive",
         title: "진행 중 전환",
         count: null,
-        hint: `등록 데스크 ${overview.deskCount}개 · 데스크 배정 ${overview.deskAssignmentCount}건 — 조건 충족.`,
+        hint: `가동 중인 입장 데스크 ${overview.openEntryDeskCount}개 — 조건 충족.`,
         action: "진행 단계 설정",
         href: `${base}/settings#settings-stage`,
       });
@@ -1017,7 +1015,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
       key: "desk",
       label: "현장 준비",
       state: !liveBlocked ? "done" : currentStage === "READY" ? "todo" : "optional",
-      text: `등록 데스크 ${overview.deskCount}개 · 배정 ${overview.deskAssignmentCount}건${liveBlocked ? " — 부족합니다" : ""}`,
+      text: liveBlocked ? "가동 중인 입장 데스크가 없습니다" : `입장 데스크 ${overview.openEntryDeskCount}개 가동`,
       action: "입장·스태프 확인",
       href: `${base}/operations`,
     },

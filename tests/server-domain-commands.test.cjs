@@ -294,11 +294,17 @@ test('event-preparation-enforces-forward-stage-transitions-and-live/archive-gate
   const missingDesk = await operator(event, 'event.stage', { stage: 'LIVE' });
   assert.equal(missingDesk.status, 409);
 
+  // Owner decision 2026-11-25: a running entry desk is enough; no staff account has to be assigned.
+  const exitOnly = await operator(event, 'desk.save', { name: '퇴장 데스크', action: 'OUT', mode: 'desk', open: true });
+  assert.equal(exitOnly.status, 201, JSON.stringify(exitOnly.json));
+  assert.equal((await operator(event, 'event.stage', { stage: 'LIVE' })).status, 409, 'an exit desk cannot admit anyone');
+  const closed = await operator(event, 'desk.save', { name: '닫힌 데스크', action: 'IN', mode: 'desk', open: false });
+  assert.equal(closed.status, 201, JSON.stringify(closed.json));
+  assert.equal((await operator(event, 'event.stage', { stage: 'LIVE' })).status, 409, 'a closed entry desk does not count');
   const desk = await operator(event, 'desk.save', {
     name: '입장 데스크', action: 'IN', mode: 'desk', open: true,
   });
   assert.equal(desk.status, 201, JSON.stringify(desk.json));
-  await seedAssignment(event, desk.json.desk.id);
   const live = await operator(event, 'event.stage', { stage: 'LIVE' });
   assert.equal(live.status, 200, JSON.stringify(live.json));
   assert.equal((await readEvent(event.id)).payload.stage, 'LIVE');

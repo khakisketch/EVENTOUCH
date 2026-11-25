@@ -96,8 +96,7 @@ type Ready = {
   role: string;
   userId: string;
   memberships: Array<{ accountId: string; eventId: string; write?: unknown }>;
-  deskCount: number;
-  deskAssignmentCount: number;
+  openEntryDeskCount: number;
   openModules: number;
   basics: Basics;
   features: string[];
@@ -614,7 +613,6 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               publishedFields?: unknown;
               pageExperience?: unknown;
               desks?: unknown;
-              assignments?: unknown;
               modules?: unknown;
             }>;
           } | null;
@@ -673,9 +671,8 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         // 단계는 settings (event.*), 접수 게시·마감은 participants (form.*).
         // The server still authorizes every settings command.
         const desks = Array.isArray(workspace.desks) ? workspace.desks : [];
-        const assignments = Array.isArray(workspace.assignments) ? workspace.assignments : [];
         const modules = Array.isArray(workspace.modules) ? workspace.modules : [];
-        const deskAssignmentCount = assignments.filter((item) => record(item)?.type === "DESK").length;
+        const openEntryDeskCount = desks.filter((item) => record(item)?.open !== false && text(record(item)?.action).toUpperCase() === "IN").length;
         const openModules = modules.filter((item) => text(record(item)?.status).toUpperCase() === "OPEN").length;
         const pageExperience = typeof workspace.pageExperience === "object" && workspace.pageExperience !== null
           ? (workspace.pageExperience as Record<string, unknown>)
@@ -739,8 +736,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           role,
           userId: myId,
           memberships,
-          deskCount: desks.length,
-          deskAssignmentCount,
+          openEntryDeskCount,
           openModules,
           // A dirty editor and its concurrency baseline are inseparable. A
           // refresh caused by another section must not make stale edits look
@@ -1393,8 +1389,8 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
         : "단계 정보가 확인되지 않아 전환할 수 없습니다.";
   const archiveDataUnavailable = nextStage === "ARCHIVED" && (!state.closeSnapshot.archiveAvailable || archiveRecheckRequired);
   const archiveUnavailableNames = [!state.closeSnapshot.participantsAvailable ? "참가자" : "", !state.closeSnapshot.registrationAvailable ? "접수" : "", !state.closeSnapshot.modulesAvailable ? "참여 콘텐츠" : ""].filter(Boolean).join(" · ") || "보관 전제";
-  const stagePrecondition = nextStage === "LIVE" && (state.deskCount === 0 || state.deskAssignmentCount === 0)
-    ? "진행 중 전환에는 등록 데스크와 데스크 배정이 필요합니다. 배정은 출근 확인이 아닙니다."
+  const stagePrecondition = nextStage === "LIVE" && state.openEntryDeskCount === 0
+    ? "진행 중으로 바꾸려면 입장 데스크를 하나 이상 가동하세요."
     : archiveDataUnavailable
       ? `${archiveUnavailableNames} 상태를 확인할 수 없어 보관할 수 없습니다. 다시 확인해도 계속되면 조직 관리자에게 문의하세요.`
     : nextStage === "ARCHIVED" && (state.registrationOpen || state.openModules > 0)
@@ -1716,7 +1712,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               {archiveDataUnavailable ? (
                 <ProductButton type="button" className="button button-secondary" disabled={refreshingAfterWrite} onClick={() => { setStageError(null); setRefreshingAfterWrite(true); setReloadTick((tick) => tick + 1); }}>{refreshingAfterWrite ? "상태 확인 중" : "상태 다시 확인"}</ProductButton>
               ) : nextStage === "LIVE" ? (
-                <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/operations`}>운영에서 데스크 배정하기</ProductLink>
+                <ProductLink className="button button-secondary" href={`/console/events/${encodeURIComponent(eventId)}/operations`}>입장 데스크 열러 가기</ProductLink>
               ) : (
                 <>
                   <a className="button button-secondary" href="#settings-intake">접수 닫기</a>

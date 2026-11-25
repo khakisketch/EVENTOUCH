@@ -98,7 +98,7 @@ test('settings owns forward-only stage confirmation and reuses the command id af
   assert.match(settings, /command: "event\.stage"/);
   assert.match(settings, /pendingSettingsRef\.current = attempt/);
   assert.match(settings, /executeSettingsAttempt\(attempt, true\)/);
-  assert.match(settings, /진행 중 전환에는 등록 데스크와 데스크 배정이 필요/);
+  assert.match(settings, /진행 중으로 바꾸려면 입장 데스크를 하나 이상 가동하세요/);
   assert.match(settings, /보관하려면 접수를 닫고 진행 중인 참여 콘텐츠를 모두 닫아야/);
   assert.match(settings, /currentStage === "ARCHIVED"\s*\?\s*"보관된 행사는 읽기 전용입니다\."/);
   assert.match(settings, /"단계 정보가 확인되지 않아 전환할 수 없습니다\."/);
