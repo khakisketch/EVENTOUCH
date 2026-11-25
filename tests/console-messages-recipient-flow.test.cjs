@@ -32,7 +32,7 @@ test('recipient state heads the compose form as the sentence\'s first pill with 
   // The sentence precedes the long form: title, body, and the folded picker's list.
   const head = SOURCE.indexOf('id="campaign-sentence"');
   assert.ok(head !== -1, 'expected the sentence');
-  assert.ok(head < SOURCE.indexOf('id="campaign-title"'), 'sentence must precede the title field');
+  assert.ok(head < SOURCE.indexOf('id="campaign-body"'), 'sentence must precede the message body');
   assert.ok(head < SOURCE.indexOf('id="campaign-body"'), 'sentence must precede the body field');
   assert.ok(SOURCE.indexOf('id="campaign-who-pill"') > head && SOURCE.indexOf('id="campaign-who-pill"') < SOURCE.indexOf('id="campaign-recipients"'), 'the pill leads the panel it opens');
   assert.ok(SOURCE.indexOf('id="campaign-recipients"') < SOURCE.indexOf('id="recipient-list-summary"'), 'the long list lives inside the picker panel');

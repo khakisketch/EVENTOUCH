@@ -80,9 +80,10 @@ async function closeMessagePanel(page, which) {
   await page.locator(panel).waitFor({ state: 'hidden' });
 }
 // 더 보기 (저장한 템플릿 · 사진 · 기록 제목): idempotent open.
+// Reopened 2026-11-25: there is no 더 보기 fold any more; this opens the record-name field ("바꾸기").
 async function openMessageMore(page) {
-  const more = page.locator('details:has(> summary[data-disclosure-indicator]):has(#campaign-title)');
-  if (!(await more.evaluate(element => element.open))) await more.locator(':scope > summary').click();
+  const toggle = page.locator('#campaign-title-edit');
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
   await page.locator('#campaign-title').waitFor({ state: 'visible' });
 }
 // The phone preview sits beside the writing on desktop; at <=1024px it is a bottom sheet opened by
@@ -96,13 +97,12 @@ async function openMessagePreview(page) {
 async function closeMessagePreview(page) {
   if ((await page.locator('#message-preview-open').getAttribute('aria-expanded')) === 'true') await page.locator('#message-preview-close').click();
 }
-// The saved-template picker lives under 더 보기 for 문자 and inside the 보내는 방법 panel for 알림톡;
-// open whichever one holds it right now and return its locator.
+// The saved-template picker is in the template starters for 문자 (always visible) and inside the
+// 보내는 방법 panel for 알림톡; open the panel when needed and return its locator.
 async function openTemplatePicker(page) {
   const select = page.locator('#campaign-template');
   if (await select.isVisible()) return select;
   if (await select.evaluate(element => Boolean(element.closest('#campaign-how-panel')))) await openMessagePanel(page, 'how');
-  else await openMessageMore(page);
   await select.waitFor({ state: 'visible' });
   return select;
 }

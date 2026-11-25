@@ -39,7 +39,7 @@ test('M1: MMS photo upload shrinks to JPEG 200,000 bytes before upload and uses 
   assert.match(WORKSPACE, /fitImage\(file, MMS_IMAGE_MAX_BYTES, \{ requireJpeg: true \}\)/u);
   assert.match(WORKSPACE, /내 파일 \$\{formatImageBytes\(file\.size\)\} · \$\{formatImageBytes\(MMS_IMAGE_MAX_BYTES\)\} 이하로 줄이지 못했습니다\. 더 작은 사진을 선택해 주세요\./u);
   assert.match(WORKSPACE, /file: target, commandId: commandId\(\), uncertain: false/u, 'the upload attempt carries the fitted file so a retry reuses it');
-  assert.match(WORKSPACE, /사진은 자동으로 줄여서 첨부합니다/u);
+  assert.match(WORKSPACE, /큰 사진은 자동으로 줄입니다/u);
   assert.match(WORKSPACE, /accept="image\/jpeg,image\/png,image\/webp"/u);
   assert.doesNotMatch(WORKSPACE, /JPG 200KB 이하/u);
 });
@@ -90,8 +90,10 @@ test('M6: the two reminder paths warn about each other', () => {
   assert.match(WORKSPACE, /scheduledReminders=\{scheduledManualReminders\}/u);
 });
 
-test('M7/M8: banner summary with 자세히, tab change clears the notice, plain confirm labels', () => {
-  assert.match(WORKSPACE, /<summary data-disclosure-indicator="">자세히<\/summary>/u);
+test('M7/M8: one visible connection row, tab change clears the notice, plain confirm labels', () => {
+  // Reopened 2026-11-25 (owner: 접고 펴기 불편): the connection state is one visible row, no disclosure.
+  assert.match(WORKSPACE, /className=\{`\$\{styles\.connectionBar\}/u);
+  assert.doesNotMatch(WORKSPACE, /<summary data-disclosure-indicator="">자세히<\/summary>/u);
   assert.match(WORKSPACE, /onNavigate=\{onTabChange\}/u);
   assert.match(WORKSPACE, /onTabChange=\{\(\) => setCampaignFeedback\(null\)\}/u);
   for (const label of ['예약 등록한다', '예약을 취소한다', '실행한다', '재시도한다', '발송 요청한다', '모의 발송을 기록한다']) {
@@ -103,7 +105,8 @@ test('M7/M8: banner summary with 자세히, tab change clears the notice, plain 
 });
 
 test('M9/M10/M11/M12: wording, template dirty check, variable chips, calmer history, one date style', () => {
-  assert.match(WORKSPACE, /작성 중인 내용은 그대로 남아 있습니다/u);
+  // Reopened 2026-11-25 (owner: 늘 떠 있는 안내 제거).
+  assert.doesNotMatch(WORKSPACE, /작성 중인 내용은 그대로 남아 있습니다/u);
   assert.doesNotMatch(WORKSPACE, /원문 \$\{bodyMeasure\.bytes/u);
   assert.match(WORKSPACE, /id="campaign-submit-reason"/u);
   assert.match(WORKSPACE, /templateDraft\.name !== EMPTY_TEMPLATE\.name \|\| templateDraft\.body !== EMPTY_TEMPLATE\.body/u);

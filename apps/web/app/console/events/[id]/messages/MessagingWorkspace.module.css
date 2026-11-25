@@ -800,12 +800,25 @@
 /* The strip tells the connection truth before the sentence does: unconnected
    is a warning, new-org simulation-only is information, a live connection is
    a success. Approved soft/line/ink feedback pairs only, no new colors. */
+.connectionBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  margin-bottom: var(--s4);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-medium);
+  background: var(--paper);
+  font-size: var(--text-sm);
+}
+.connectionBar > p { min-width: 0; margin: 0; flex: 1 1 260px; color: var(--ink); }
+.connectionBar > .connectionNote { flex: 1 1 100%; margin: 0; color: var(--muted); font-size: var(--text-xs); }
+/* The strip tells the connection truth before the sentence does: unconnected is a warning,
+   new-org simulation-only is information, a live connection is success. */
 .connectionOff { border-color: var(--warning-line); background: var(--warning-soft); }
-.connectionOff > summary { color: var(--warning); }
 .connectionSim { border-color: var(--info-line); background: var(--info-soft); }
-.connectionSim > summary { color: var(--info); }
 .connectionOk { border-color: var(--success-line); background: var(--success-soft); }
-.connectionOk > summary { color: var(--success); }
 .composeReturn { display: grid; justify-items: end; gap: 0; }
 .composeReturn small { color: var(--muted); font-size: var(--label); }
 .historyFootnote { padding-top: var(--s2); font-size: var(--label); }
@@ -1212,6 +1225,9 @@
 }
 .templatePickerLabel { margin-block: -10px; }
 .templatePickerLabel label { margin: 0; }
+.templatePicker { display: grid; gap: var(--s2); margin-top: var(--s3); }
+.templatePicker .templatePickerLabel { margin-block: 0; }
+.modalConfirm [role="group"] { padding: 0; border: 0; background: transparent; }
 .templatePickerLabel .textButton { min-height: 44px; }
 .templateManager {
   display: grid;
@@ -1357,6 +1373,18 @@
 .fieldLabel { display: block; margin: 0; font-size: var(--text-sm); font-weight: var(--fw-strong); color: var(--muted); }
 .fieldLabel:focus { outline: none; }
 .purposeLoader { display: grid; gap: var(--s2); }
+.editHistory { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
+.editHistory > small { margin-left: auto; color: var(--muted); font-size: var(--text-xs); }
+/* The thumbnail of the photo that will go out with the message. */
+.attachPreview { display: block; width: 96px; height: 96px; margin-top: var(--s2); object-fit: cover; border: 1px solid var(--line); border-radius: var(--radius-medium); }
+/* The desktop phone preview already shows the photo; the thumbnail is for the folded preview on narrower screens. */
+@media (min-width: 1025px) { .attachPreview { display: none; } }
+.recordName { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); padding-top: var(--s3); border-top: 1px solid var(--line); }
+.recordName > p { flex: 0 1 auto; min-width: 0; margin: 0; color: var(--muted); font-size: var(--text-sm); }
+.recordName > p strong { margin-left: var(--s2); color: var(--ink); font-weight: var(--fw-strong); overflow-wrap: anywhere; }
+.recordName > div { flex: 1 1 100%; min-width: 0; }
+.recordName > div[hidden] { display: none; }
+.recordName input { width: 100%; }
 .purposeLabel { margin: 0; font-size: var(--text-xs); color: var(--muted); }
 .purposeChips { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .purposeChip { display: inline-flex; align-items: center; min-height: var(--control-min-size); padding: 0 var(--s4); border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--paper); color: var(--ink); font: inherit; font-size: var(--text-sm); font-weight: var(--fw-strong); cursor: pointer; }

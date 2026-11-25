@@ -33,9 +33,9 @@ test('no step jump remains: panels are folded and the submit is reachable withou
   assert.match(CSS, /\.panel\[hidden\] \{ display: none; \}/u, 'a hidden panel is never drawn or tabbed');
   // The recipient list is closed by default; it opens from 직접 고르기 or a flow that needs review.
   assert.match(SOURCE, /const \[recipientListOpen, setRecipientListOpen\] = useState\(false\)/u, 'the long list starts folded');
-  // The submit follows every panel, the body and the 더 보기 block in DOM order.
+  // The submit follows every panel, the body and the photo field in DOM order.
   const submitAt = SOURCE.indexOf('id="campaign-submit"');
-  for (const id of ['id="campaign-recipients"', 'id="campaign-schedule"', 'id="campaign-body"', 'id="campaign-title"']) {
+  for (const id of ['id="campaign-recipients"', 'id="campaign-schedule"', 'id="campaign-body"', 'id="campaign-image"', 'id="campaign-title"']) {
     assert.ok(SOURCE.indexOf(id) < submitAt, `${id} precedes the submit`);
   }
   assert.equal((SOURCE.match(/id="campaign-submit"/gu) ?? []).length, 1, 'one submit remains');
@@ -54,7 +54,8 @@ test('the dock lands on the review summary or the submit without sending', () =>
   const reveal = SOURCE.slice(SOURCE.indexOf('The field lives in a folded panel'), SOURCE.indexOf('if (recipientReviewRequired) return;'));
   assert.match(reveal, /field === "ids"\) setOpenPanel\("who"\)/u);
   assert.match(reveal, /field === "scheduled"\) setOpenPanel\("when"\)/u);
-  assert.match(reveal, /setMoreOpen\(true\)/u);
+  // Reopened 2026-11-25 (owner): the folded 더 보기 block is gone, so only the 알림톡 template needs a panel opened.
+  assert.match(reveal, /field === "templateId" && campaignDraft\.channel === "ALIMTALK"\) setOpenPanel\("how"\)/u);
   assert.doesNotMatch(reveal, /postCommand|executeCampaignCreate|requestSubmit|\.click\(/u);
 });
 

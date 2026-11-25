@@ -215,10 +215,10 @@ test('reloaded-source summary renders as info above the sentence panels, never a
   assert.match(SOURCE, /const \[reloadSummary, setReloadSummary\]/u);
   // In-form placement directly under the sentence, ahead of every panel and field.
   const summaryRender = SOURCE.indexOf('id="campaign-reload-summary"');
-  const titleField = SOURCE.indexOf('id="campaign-title"');
+  const titleField = SOURCE.indexOf('id="campaign-body"'); // the first field below the sentence panels
   assert.ok(summaryRender !== -1, 'expected the reload summary element');
-  assert.ok(titleField !== -1, 'expected the campaign title field');
-  assert.ok(summaryRender < titleField, 'summary must precede the title field');
+  assert.ok(titleField !== -1, 'expected the message body');
+  assert.ok(summaryRender < titleField, 'summary must precede the message body');
   assert.ok(summaryRender > SOURCE.indexOf('id="campaign-sentence"'), 'summary sits under the sentence');
   assert.ok(summaryRender < SOURCE.indexOf('id="campaign-recipients"'), 'summary precedes the folded panels');
   assert.match(SOURCE, /<ConsoleFeedback kind="info" id="campaign-reload-summary">\{reloadSummary\}<\/ConsoleFeedback>/u);

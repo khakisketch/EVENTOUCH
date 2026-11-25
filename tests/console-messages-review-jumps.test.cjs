@@ -38,8 +38,9 @@ test('review navigation shows the relevant input panel when prerequisites are mi
   assert.match(SOURCE, /campaignFieldError\.field === "ids"\) setOpenPanel\("who"\)/u);
   assert.match(SOURCE, /field === "channel" \|\| campaignFieldError\.field === "smsFallback"\) setOpenPanel\("how"\)/u);
   assert.match(SOURCE, /campaignFieldError\.field === "scheduled"\) setOpenPanel\("when"\)/u);
-  assert.match(SOURCE, /field === "templateId"\) \{ if \(campaignDraft\.channel === "ALIMTALK"\) setOpenPanel\("how"\); else setMoreOpen\(true\); \}/u);
-  assert.match(SOURCE, /field === "imageFileId" \|\| campaignFieldError\.field === "title"\) setMoreOpen\(true\)/u);
+  // Reopened 2026-11-25 (owner): no folded 더 보기 block and no title field; photo and saved template are always visible.
+  assert.match(SOURCE, /field === "templateId" && campaignDraft\.channel === "ALIMTALK"\) setOpenPanel\("how"\)/u);
+  assert.match(SOURCE, /campaignFieldError\.field === "title"\) setTitleOpen\(true\)/u);
   assert.match(SOURCE, /ids: "recipient-status-filter", title: "campaign-title", body: "campaign-body", smsFallback: "campaign-sms-fallback", templateId: "campaign-template", imageFileId: "campaign-image", scheduled: "campaign-scheduled"/u);
   assert.match(SOURCE, /document\.getElementById\(ids\[campaignFieldError\.field\]/u);
 });

@@ -174,18 +174,11 @@ test('settings gates on the signed-in actor, not the account directory', () => {
 });
 
 test('render corrections: warning spacing and truthful draft guard', () => {
-  assert.match(
-    PAGES.messages,
-    /발송 상태는 공급사 응답을 기준으로 표시합니다\.\{" "\}/u,
-    'provider warning keeps a real space between lead and body'
-  );
-  assert.match(
-    PAGES.messages,
-    // Presentation change: retain the provider state and require the actual
-    // delivery limit in the always-visible summary, not only inside details.
-    /<summary data-disclosure-indicator="">발송 연결 · \{state\.integrations\.connected \? "연결됨" : "미연동 · 실제 전달 안 됨"\}<\/summary>/u,
-    'provider state AND the non-delivery limit stay visible before sending'
-  );
+  // Reopened 2026-11-25 (owner: 접고 펴기 불편): one visible connection row; the non-delivery limit
+  // stays visible before sending without opening anything.
+  assert.match(PAGES.messages, /현재 조직 발송 연결:\{" "\}/u, 'the connection line names the organization scope');
+  assert.match(PAGES.messages, /요청은 연결 필요 상태로 기록됩니다\(모의 기록이 아닙니다\)/u, 'the non-delivery limit stays visible');
+  assert.match(PAGES.messages, /className=\{`\$\{styles\.connectionBar\}/u, 'provider state is a visible row, not a disclosure');
   assert.match(
     PAGES.operations,
     /commandBusyRef\.current \|\|/u,
