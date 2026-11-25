@@ -1,18 +1,7 @@
 /* Landing hands-on section (owner choice 2026-11-25): the stage draw and the phone roulette a
-   visitor can run, then the check-in screens. The draw wears the room screen's violet and gold,
+   visitor can run, then the check-in screens, on the white page so they stand apart from the dark
+   hero above. The draw wears the room screen's violet and gold,
    the wheel the attendee roulette's yellow and blue; all colours are tokens. */
-
-/* One ink band across the page, like the hero. */
-.band {
-  background: var(--ink);
-  color: var(--paper);
-  box-shadow: 0 0 0 100vmax var(--ink);
-  clip-path: inset(0 -100vmax);
-}
-
-.band h2 { color: var(--paper); }
-.band > div > p:first-child { color: var(--brand); }
-.band > div > p:last-child { color: color-mix(in srgb, var(--paper) 72%, transparent); }
 
 .play { display: grid; gap: var(--s5); margin-top: var(--s7); }
 
@@ -183,6 +172,7 @@
 
 /* ---- Check-in ---- */
 .checkin {
+  scroll-margin-top: calc(var(--s8) + var(--s5));
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -236,6 +226,5 @@
 }
 
 @media print {
-  .band { background: transparent; color: inherit; box-shadow: none; clip-path: none; }
   .play { display: none; }
 }

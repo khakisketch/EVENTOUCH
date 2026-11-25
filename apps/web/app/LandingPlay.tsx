@@ -149,7 +149,7 @@ export default function LandingPlay() {
         <DrawDemo />
         <RouletteDemo />
       </div>
-      <article className={styles.checkin} aria-labelledby="play-checkin-title">
+      <article className={styles.checkin} id="play-checkin" aria-labelledby="play-checkin-title">
         <div className={styles.checkinCopy}>
           <h3 id="play-checkin-title">체크인</h3>
           <p>참가자는 티켓 QR을 보여 주고, 배정된 스태프는 휴대폰 웹에서 스캔하거나 명단에서 찾습니다. 운영자는 입장 상황을 현장 모드에서 봅니다.</p>

@@ -110,9 +110,10 @@ test('the support address lives in one place and the landing reads it', () => {
   assert.equal(SUPPORT_EMAIL, 'contact@eventouch.co.kr');
   assert.equal(supportMailto(), 'mailto:contact@eventouch.co.kr');
   assert.equal(supportMailto('도입 문의'), `mailto:contact@eventouch.co.kr?subject=${encodeURIComponent('도입 문의')}`);
-  const landing = read('app/page.tsx');
-  assert.match(landing, /import \{ SUPPORT_EMAIL as CONTACT_EMAIL \} from "\.\.\/lib\/support-contact";/);
-  assert.doesNotMatch(landing, /"contact@eventouch\.co\.kr"/);
+  // Reopened 2026-11-25: the landing inquiry lives in its dialog component.
+  const inquiry = read('app/LandingInquiry.tsx');
+  assert.match(inquiry, /import \{ SUPPORT_EMAIL, supportMailto \} from "\.\.\/lib\/support-contact";/);
+  for (const rel of ['app/page.tsx', 'app/LandingInquiry.tsx']) assert.doesNotMatch(read(rel), /contact@eventouch\.co\.kr/, `${rel} reads the shared constant`);
   for (const rel of ['app/help/page.tsx', 'app/terms/page.tsx', 'app/privacy/page.tsx']) {
     assert.doesNotMatch(read(rel), /contact@eventouch\.co\.kr/, `${rel} reads the shared constant`);
   }

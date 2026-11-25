@@ -13,7 +13,7 @@ const path = require('node:path');
 const app = path.join(__dirname, '../apps/web/app');
 const read = (file) => fs.readFileSync(path.join(app, file), 'utf8');
 const strip = (css) => css.replace(/\/\*[\s\S]*?\*\//g, '');
-const LANDING_CSS = ['landing.module.css', 'landing-sections.module.css', 'product-preview.module.css', 'landing-play.module.css'];
+const LANDING_CSS = ['landing.module.css', 'landing-sections.module.css', 'product-preview.module.css', 'landing-play.module.css', 'landing-inquiry.module.css', 'landing-contact.module.css'];
 
 test('the console preview draws the real menu and an overview built around one entry number', () => {
   const preview = read('ProductPreview.tsx');
@@ -48,10 +48,16 @@ test('the hero is one still scene: the live count with the ticket laid over it, 
   assert.match(read('product-preview.module.css'), /@container \(min-width: 480px\) \{\s*\.liveCanvas \.entry,\s*\.liveCanvas \.recent \{ max-width: 300px; \}/u);
 });
 
-test('the hero strip says what to know up front, in sentences that read on their own', () => {
+test('the hero closes on three reasons that read on their own, with the limits answered in the FAQ', () => {
+  // Reopened 2026-11-25 (owner: 더 매력적인 어필): replaces the "미리 알려 드립니다" strip.
   const home = read('page.tsx');
-  for (const text of ['미리 알려 드립니다', '참가자 앱 설치 없이 링크로 신청·티켓', '문자·알림톡은 발송 연결 후 실제 발송', '고객사 포털은 제공하지 않음', '직접 눌러 보기', 'QR 입장, 실시간 현황, 결과 보고서까지.']) assert.ok(home.includes(text), `${text} is in the hero`);
-  assert.doesNotMatch(home, /합성 데이터|도입 전 확인|문자 발송 연결 확인|행사 종류·일정·규모를 적을 수 있게 준비합니다|화면 구성 살펴보기/u);
+  for (const text of ['앱 설치 없이', '링크 하나로 신청부터 티켓까지', 'QR 한 번에', '입장 확인과 기록이 끝납니다', '추첨까지 한곳에', '직접 눌러 보기', 'QR 입장, 실시간 현황, 추첨과 룰렛까지.']) assert.ok(home.includes(text), `${text} is in the hero`);
+  // The limits did not disappear: the FAQ answers messaging setup and the missing customer portal.
+  assert.match(home, /실제 발송은 발송 연결과 발신번호가 준비된 경우에만 시도/u);
+  assert.match(home, /고객사 포털은 제공하지 않습니다/u);
+  assert.doesNotMatch(home, /미리 알려 드립니다|합성 데이터|도입 전 확인|문자 발송 연결 확인|행사 종류·일정·규모를 적을 수 있게 준비합니다|화면 구성 살펴보기/u);
+  // The result report is not sold as a differentiator anywhere on the landing (2026-11-25).
+  for (const file of ['page.tsx', 'LandingCompare.tsx', 'LandingPlay.tsx', 'LandingPageDemo.tsx']) assert.doesNotMatch(read(file), /보고서/u, file);
 });
 
 test('the hands-on section runs the draw and the roulette in the browser and ends at check-in', () => {

@@ -52,6 +52,13 @@
   letter-spacing: 0.04em;
 }
 
+.headerCta,
+.primaryAction,
+.mobileCta button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
 .loginLink {
   display: inline-flex;
   min-height: 44px;
@@ -225,15 +232,15 @@
   white-space: nowrap;
 }
 
-/* Honesty strip: the three facts that decide fit, before the fold of detail. */
+/* Reason strip (2026-11-25): three reasons to keep reading, a large keyword over one line,
+   closing the first screen. */
 .factStrip {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   margin: var(--s6) 0 0;
   padding: 0;
   border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
   list-style: none;
 }
 
@@ -247,41 +254,31 @@
 }
 
 .factStrip a {
-  display: inline-flex;
+  display: grid;
+  width: 100%;
   min-height: 44px;
-  align-items: center;
-  gap: var(--s2);
-  padding: var(--s2) var(--s5);
+  align-content: center;
+  gap: var(--s1);
+  padding: var(--s5) var(--s5) var(--s4);
   color: var(--ink);
-  font-size: var(--small);
-  font-weight: var(--fw-strong);
   text-decoration: none;
-  text-underline-offset: 4px;
-}
-
-.factStrip a::before {
-  width: 8px;
-  height: 8px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--brand);
-  content: "";
-}
-
-.factStrip a:hover {
-  color: var(--brand-text);
-  text-decoration: underline;
-  text-decoration-color: var(--line-strong);
-}
-
-.contactSection h2 {
-  margin: 0;
-  font-family: var(--display-font);
-  font-size: clamp(var(--h2), 3vw, var(--display));
-  font-weight: var(--fw-heavy);
-  line-height: 1.25;
-  letter-spacing: -0.035em;
   word-break: keep-all;
+}
+
+.factStrip li:first-child a {
+  padding-left: 0;
+}
+
+.factStrip strong {
+  font-size: clamp(var(--h2), 2.2vw, var(--h1));
+  font-weight: var(--fw-heavy);
+  letter-spacing: var(--ls-heading);
+  line-height: 1.25;
+}
+
+.factStrip span {
+  font-size: var(--small);
+  line-height: 1.5;
 }
 
 .faqItem {
@@ -336,88 +333,6 @@
   padding: 0 0 var(--s4);
   color: var(--muted);
   word-break: keep-all;
-}
-
-/* Closing call to action: the ink band of the hero, reversed to end the page. */
-.contactSection {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--s4) var(--s6);
-  padding-block: clamp(56px, 8vw, 96px);
-  border: 0;
-  background: var(--ink);
-  box-shadow: 0 0 0 100vmax var(--ink);
-  clip-path: inset(0 -100vmax);
-  color: var(--paper);
-  scroll-margin-top: var(--s5);
-}
-
-.contactSection a:focus-visible,
-.contactSection button:focus-visible { outline-color: var(--paper); }
-
-.contactSection h2 {
-  margin-bottom: var(--s2);
-  color: var(--paper);
-  font-size: clamp(var(--h2), 2.6vw, var(--display));
-}
-
-.contactSection > div:first-child p {
-  margin: 0;
-  color: color-mix(in srgb, var(--paper) 72%, transparent);
-}
-
-.contactDetails {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s2) var(--s3);
-  margin-top: var(--s4);
-}
-
-.contactDetails > span {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  padding: var(--s2) var(--s3);
-  border: 1px solid color-mix(in srgb, var(--paper) 28%, transparent);
-  border-radius: var(--r-ctl);
-  background: transparent;
-  color: var(--paper);
-  font-weight: var(--fw-strong);
-}
-
-.contactDetails button {
-  min-height: 44px;
-  padding: var(--s2) var(--s3);
-  border: 1px solid color-mix(in srgb, var(--paper) 28%, transparent);
-  border-radius: var(--r-ctl);
-  background: transparent;
-  color: var(--paper);
-  font-size: var(--small);
-  font-weight: var(--fw-strong);
-  cursor: pointer;
-}
-
-.contactDetails button:hover {
-  border-color: var(--paper);
-  background: color-mix(in srgb, var(--paper) 12%, transparent);
-}
-
-.copyStatus {
-  flex-basis: 100%;
-  min-height: 1.5em;
-  margin: 0;
-  color: color-mix(in srgb, var(--paper) 72%, transparent);
-  font-size: var(--small);
-}
-
-.copyStatus[data-tone="success"] {
-  color: var(--success-line);
-}
-
-.copyStatus[data-tone="error"] {
-  color: var(--danger-line);
 }
 
 .footer {
@@ -523,17 +438,6 @@
   pointer-events: none;
 }
 
-.factLabel {
-  display: flex;
-  align-items: center;
-  padding-right: var(--s5);
-  color: var(--brand);
-  font-size: var(--label);
-  font-weight: var(--fw-heavy);
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-}
-
 .mobileCta {
   display: none;
 }
@@ -593,7 +497,7 @@
   .heroPhone { height: calc(440px * var(--k)); }
 
   .factStrip {
-    flex-direction: column;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .factStrip li + li {
@@ -602,8 +506,7 @@
   }
 
   .factStrip a {
-    width: 100%;
-    padding-inline: 0;
+    padding: var(--s4) 0;
   }
 
   .page {
@@ -619,7 +522,9 @@
     display: block;
   }
 
-  .mobileCta a {
+  .mobileCta button {
+    width: 100%;
+    font-size: var(--body);
     display: flex;
     min-height: 52px;
     align-items: center;
@@ -631,20 +536,6 @@
     font-weight: var(--fw-heavy);
     text-decoration: none;
     box-shadow: 0 12px 26px color-mix(in srgb, var(--brand) 34%, transparent);
-  }
-
-  .contactSection {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--s4);
-    padding-block: var(--s7);
-  }
-
-  .contactSection h2 {
-    font-size: var(--h1);
-  }
-
-  .contactSection .primaryAction {
-    width: 100%;
   }
 
   .footer {
@@ -694,9 +585,7 @@
   }
 
   .heroActions,
-  .contactDetails button,
-  .mobileCta,
-  .contactSection .primaryAction {
+  .mobileCta {
     display: none;
   }
 }
@@ -705,7 +594,7 @@
    share one ink band, full width, like the login and the staff screens. The
    product window stays white so it reads best against it; every section
    below is unchanged. ---- */
-.page { padding-top: 0; }
+.page { --landing-header: 70px; padding-top: 0; }
 .header,
 .hero {
   background: var(--ink);
@@ -724,21 +613,37 @@
 .header button:focus-visible,
 .hero a:focus-visible,
 .hero button:focus-visible { outline-color: var(--paper); }
-@media (min-width: 1025px) { .hero { overflow: visible; } }
+/* Reopened 2026-11-25 (owner: 히어로가 첫 화면을 다 차지하게): on wide screens the ink band fills the
+   whole first screen, the scene centred and the reason strip along its bottom. */
+@media (min-width: 1025px) {
+  .hero { overflow: visible; min-height: calc(100svh - var(--landing-header)); box-sizing: border-box; grid-template-rows: 1fr auto; }
+}
+@media (min-width: 1280px) and (min-height: 960px) {
+  .heroScene { --k: 0.9; height: 620px; }
+}
+/* Short laptop screens: a smaller scene and tighter spacing so the first screen still holds all of it. */
+@media (min-width: 1025px) and (max-height: 860px) {
+  .hero { gap: var(--s4) var(--s6); padding-block: var(--s5) 0; }
+  .heroScene { --k: 0.64; height: 460px; }
+  .factStrip { margin-top: var(--s3); }
+  .factStrip a { padding-block: var(--s3); }
+}
 .hero::before { background: radial-gradient(closest-side, color-mix(in srgb, var(--brand) 30%, transparent), transparent); }
 .heroTitle { color: var(--paper); }
 .heroDescription { color: color-mix(in srgb, var(--paper) 72%, transparent); }
 .secondaryAction { border-color: color-mix(in srgb, var(--paper) 28%, transparent); background: transparent; color: var(--paper); }
 .secondaryAction:hover { border-color: var(--paper); background: color-mix(in srgb, var(--paper) 12%, transparent); }
-.factStrip { border-top-color: color-mix(in srgb, var(--paper) 14%, transparent); border-bottom: 0; }
-.factStrip li + li { border-left-color: color-mix(in srgb, var(--paper) 14%, transparent); }
-.factStrip a { color: color-mix(in srgb, var(--paper) 88%, transparent); }
-.factStrip a:hover { color: var(--paper); text-decoration-color: color-mix(in srgb, var(--paper) 40%, transparent); }
+.factStrip { border-top-color: color-mix(in srgb, var(--paper) 14%, transparent); }
+.factStrip li + li { border-color: color-mix(in srgb, var(--paper) 14%, transparent); }
+.factStrip a { color: var(--paper); }
+.factStrip span { color: color-mix(in srgb, var(--paper) 72%, transparent); }
+.factStrip a:hover { background: color-mix(in srgb, var(--paper) 8%, transparent); }
+.factStrip a:hover strong { color: var(--brand); }
 /* On a phone the header scrolls away (a fixed inquiry button already stays at
    the bottom), so it does not cover a fifth of every screen. */
 @media (max-width: 768px) {
   .header { position: static; }
   .headerCta { display: none; }
 }
-@media print { .header, .hero { background: transparent; color: inherit; box-shadow: none; clip-path: none; } .contactSection { background: transparent; color: inherit; box-shadow: none; clip-path: none; } }
+@media print { .header, .hero { background: transparent; color: inherit; box-shadow: none; clip-path: none; min-height: 0; } }
 

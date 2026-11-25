@@ -1,0 +1,103 @@
+/* Closing call to action (owner 2026-11-25): a full-width orange band. The visitor picks the kind
+   of event and the inquiry dialog opens with it chosen. */
+.contact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(32px, 6vw, 80px);
+  padding-block: clamp(64px, 9vw, 120px);
+  background: var(--brand);
+  color: var(--ink);
+  box-shadow: 0 0 0 100vmax var(--brand);
+  clip-path: inset(0 -100vmax);
+  word-break: keep-all;
+}
+
+.copy { display: grid; justify-items: start; gap: var(--s4); }
+.copy h2 {
+  margin: 0;
+  font-family: var(--display-font);
+  font-size: clamp(var(--h1), 4.4vw, var(--display-xl));
+  font-weight: var(--fw-heavy);
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.copy p { max-width: 40ch; margin: 0; color: var(--ink); font-size: var(--h3); line-height: 1.6; }
+
+.primary {
+  display: inline-flex;
+  min-height: 60px;
+  align-items: center;
+  gap: var(--s3);
+  margin-top: var(--s3);
+  padding: 0 var(--s6);
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: var(--ink);
+  color: var(--paper);
+  font: inherit;
+  font-size: var(--h3);
+  font-weight: var(--fw-heavy);
+  box-shadow: 0 18px 36px color-mix(in srgb, var(--ink) 30%, transparent);
+  cursor: pointer;
+  transition: transform var(--enter) ease-out;
+}
+
+.primary:hover { transform: translateY(-2px); }
+.primary svg,
+.kinds svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+.kinds { display: grid; gap: var(--s3); margin: 0; padding: 0; list-style: none; }
+.kinds p { margin: 0; font-size: var(--small); font-weight: var(--fw-heavy); }
+.kinds ul { display: grid; gap: var(--s3); margin: 0; padding: 0; list-style: none; }
+
+.kinds button {
+  display: flex;
+  width: 100%;
+  min-height: 68px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: 0 var(--s5);
+  border: 0;
+  border-radius: var(--r-card);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--h3);
+  font-weight: var(--fw-heavy);
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--enter) ease-out, background var(--enter) ease-out;
+}
+
+.kinds button:hover { background: var(--brand-tint); transform: translateX(4px); }
+.primary:focus-visible,
+.kinds button:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+
+@media (max-width: 1024px) {
+  .contact { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Phones carry the fixed 도입 문의하기 bar, so the band shows only the kind buttons. */
+@media (max-width: 768px) {
+  .primary { display: none; }
+}
+
+@media (max-width: 560px) {
+  .kinds button { min-height: 60px; padding: 0 var(--s4); font-size: var(--body); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .primary,
+  .kinds button { transition: none; }
+  .primary:hover,
+  .kinds button:hover { transform: none; }
+}
+
+@media print {
+  .contact { background: transparent; box-shadow: none; clip-path: none; }
+  .primary,
+  .kinds { display: none; }
+}

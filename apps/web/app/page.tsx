@@ -7,23 +7,17 @@ import styles from "./landing.module.css";
 import ProductPreview from "./ProductPreview";
 import sec from "./landing-sections.module.css";
 import LandingPlay from "./LandingPlay";
-import play from "./landing-play.module.css";
+import LandingInquiry, { EVENT_KINDS, type EventKind } from "./LandingInquiry";
+import cta from "./landing-contact.module.css";
 import LandingPageDemo from "./LandingPageDemo";
 import LandingCompare from "./LandingCompare";
 import { LandingIcon } from "./LandingIcons";
 import { Reveal } from "./LandingMotion";
-import { SUPPORT_EMAIL as CONTACT_EMAIL } from "../lib/support-contact";
 
 // Service entry: signed-in operators return to their work surface, everyone
 // else sees the public landing. Attendees enter through their event link.
-// Inquiries stay email-only; there is no server-backed proposal form.
-const INQUIRY_SUBJECT = "EVENTOUCH 도입 문의";
-const INQUIRY_BODY =
-  "행사 종류:\n일정:\n예상 규모(인원):\n연락처(성함/전화):\n궁금한 점:\n";
-
-const INQUIRY_HREF =
-  `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(INQUIRY_SUBJECT)}&body=${encodeURIComponent(INQUIRY_BODY)}`;
-
+// Inquiries leave through the visitor's own mail app (LandingInquiry); this site
+// has no inquiry server and stores nothing.
 const AUDIENCE = [
   { icon: "seminar", title: "컨퍼런스·세미나", text: "사전 등록부터 현장 입장까지 한 흐름으로 운영합니다." },
   { icon: "door", title: "입장 통제·사전 승인 행사", text: "QR·명단 검색으로 입장을 기록하고, 이미 입장한 티켓은 현장에서 바로 알려 줍니다." },
@@ -33,17 +27,13 @@ const AUDIENCE = [
 const STEPS = [
   { icon: "mail", title: "도입 문의", text: "종류·일정·규모를 적어 보내면 맞는 운영 방식을 제안합니다." },
   { icon: "setup", title: "행사 세팅", text: "행사 생성·신청 항목·명단 준비를 함께 구성합니다." },
-  { icon: "chart", title: "운영·정리", text: "현장 체크인부터 결과 보고서까지 한곳에서 운영합니다." },
+  { icon: "door", title: "현장 운영", text: "현장 체크인부터 추첨까지 한곳에서 운영합니다." },
 ] as const;
 
 export default function Home() {
   const router = useRouter();
-  const [copyStatus, setCopyStatus] = useState<{ message: string; tone: "success" | "error" } | null>(null);
-  // The address is filled in after mount so the edge email filter never sees
-  // a bare address in server HTML (it rewrites visible addresses and breaks
-  // hydration). Copying uses the same constant from JS, which it ignores.
-  const [emailShown, setEmailShown] = useState(false);
-  useEffect(() => { setEmailShown(true); }, []);
+  const [inquiry, setInquiry] = useState<{ open: boolean; kind: EventKind | null }>({ open: false, kind: null });
+  const openInquiry = (kind: EventKind | null = null) => setInquiry({ open: true, kind });
 
   useEffect(() => {
     let cancelled = false;
@@ -81,15 +71,6 @@ export default function Home() {
     };
   }, [router]);
 
-  async function copyContactEmail() {
-    try {
-      await navigator.clipboard.writeText(CONTACT_EMAIL);
-      setCopyStatus({ message: "이메일 주소를 복사했습니다.", tone: "success" });
-    } catch {
-      setCopyStatus({ message: "복사할 수 없습니다. 이메일 주소를 직접 선택해 복사해 주세요.", tone: "error" });
-    }
-  }
-
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -98,7 +79,7 @@ export default function Home() {
           <span className={styles.brandDescription}>행사 운영 워크스페이스</span>
         </Link>
         <Link className={styles.loginLink} href="/login">로그인</Link>
-        <a className={styles.headerCta} href={INQUIRY_HREF}>도입 문의</a>
+        <button type="button" className={styles.headerCta} aria-haspopup="dialog" onClick={() => openInquiry()}>도입 문의</button>
       </header>
 
       <main id="main-content" tabIndex={-1}>
@@ -110,15 +91,15 @@ export default function Home() {
               <span>한 흐름으로.</span>
             </h1>
             <p className={styles.heroDescription}>
-              QR 입장, 실시간 현황, 결과 보고서까지.
+              QR 입장, 실시간 현황, 추첨과 룰렛까지.
             </p>
             <div className={styles.heroActions}>
-              <a className={styles.primaryAction} href={INQUIRY_HREF}>
-                이메일로 도입 문의
+              <button type="button" className={styles.primaryAction} aria-haspopup="dialog" onClick={() => openInquiry()}>
+                도입 문의하기
                 <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
                   <path d="M4 10h11M10 4l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-              </a>
+              </button>
               <a className={styles.secondaryAction} href="#journey">직접 눌러 보기 ↓</a>
             </div>
           </div>
@@ -140,15 +121,15 @@ export default function Home() {
             </div>
           </div>
 
-          <ul className={styles.factStrip} aria-label="미리 알려 드립니다">
-            <li className={styles.factLabel}>미리 알려 드립니다</li>
-            <li><a href="#faq-install">참가자 앱 설치 없이 링크로 신청·티켓</a></li>
-            <li><a href="#faq-sms">문자·알림톡은 발송 연결 후 실제 발송</a></li>
-            <li><a href="#faq-portal">고객사 포털은 제공하지 않음</a></li>
+          {/* Three reasons to keep reading; the limits (messaging setup, no customer portal) are answered in the FAQ below. */}
+          <ul className={styles.factStrip} aria-label="핵심 강점">
+            <li><a href="#faq-install"><strong>앱 설치 없이</strong><span>링크 하나로 신청부터 티켓까지</span></a></li>
+            <li><a href="#play-checkin"><strong>QR 한 번에</strong><span>입장 확인과 기록이 끝납니다</span></a></li>
+            <li><a href="#journey"><strong>추첨까지 한곳에</strong><span>무대 추첨과 룰렛으로 객석이 반응합니다</span></a></li>
           </ul>
         </section>
 
-        <section className={`${sec.section} ${play.band}`} id="journey" aria-labelledby="play-title">
+        <section className={sec.section} id="journey" aria-labelledby="play-title">
           <Reveal className={sec.heading}>
             <p className={sec.eyebrow}>행사 당일</p>
             <h2 id="play-title">직접 눌러 보세요.</h2>
@@ -244,26 +225,28 @@ export default function Home() {
           </Reveal>
         </section>
 
-        <section className={`${styles.contactSection} ${sec.contact}`} id="contact" aria-labelledby="contact-title">
-          <Reveal className={sec.contactCopy}>
-            <h2 id="contact-title">다음 행사의 운영 흐름을 함께 살펴보세요.</h2>
-            <p>행사 종류와 일정, 예상 규모를 알려주시면 도입 상담으로 이어집니다.</p>
-            <div className={styles.contactDetails}>
-              <span>{emailShown ? CONTACT_EMAIL : ""}</span>
-              <button type="button" onClick={() => void copyContactEmail()}>
-                이메일 주소 복사
-              </button>
-              <p className={styles.copyStatus} data-tone={copyStatus?.tone} role="status" aria-live="polite">
-                {copyStatus?.message}
-              </p>
-            </div>
+        <section className={`${cta.contact} ${sec.contact}`} id="contact" aria-labelledby="contact-title">
+          <Reveal className={cta.copy}>
+            <h2 id="contact-title">다음 행사,<br />같이 준비해 볼까요?</h2>
+            <p>행사 종류만 골라 주세요. 맞는 운영 방식을 제안합니다.</p>
+            <button type="button" className={cta.primary} aria-haspopup="dialog" onClick={() => openInquiry()}>
+              도입 문의하기
+              <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M4 10h11M10 4l6 6-6 6" /></svg>
+            </button>
           </Reveal>
-          <a className={styles.primaryAction} href={INQUIRY_HREF}>
-            이메일로 도입 문의
-            <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
-              <path d="M4 10h11M10 4l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </a>
+          <Reveal className={cta.kinds} delay={120}>
+            <p id="contact-kinds">어떤 행사를 준비하세요?</p>
+            <ul aria-labelledby="contact-kinds">
+              {EVENT_KINDS.map((kind) => (
+                <li key={kind}>
+                  <button type="button" aria-haspopup="dialog" onClick={() => openInquiry(kind)}>
+                    {kind}
+                    <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M4 10h11M10 4l6 6-6 6" /></svg>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </Reveal>
         </section>
       </main>
 
@@ -278,8 +261,10 @@ export default function Home() {
       </footer>
 
       <nav className={styles.mobileCta} aria-label="모바일 도입 문의">
-        <a href={INQUIRY_HREF}>이메일로 도입 문의</a>
+        <button type="button" aria-haspopup="dialog" onClick={() => openInquiry()}>도입 문의하기</button>
       </nav>
+
+      <LandingInquiry open={inquiry.open} kind={inquiry.kind} onClose={() => setInquiry({ open: false, kind: null })} />
     </div>
   );
 }

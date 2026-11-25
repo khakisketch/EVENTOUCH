@@ -303,8 +303,7 @@
 /* ---- FAQ + contact ---- */
 .faq { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: clamp(32px, 6vw, 80px); align-items: start; }
 .faqList { display: grid; gap: var(--s3); }
-.contact { position: relative; word-break: keep-all; }
-.contactCopy { display: grid; gap: var(--s3); max-width: 640px; }
+.contact { position: relative; }
 
 @media (max-width: 1024px) {
   .demo { grid-template-columns: minmax(0, 1fr); justify-items: center; }

@@ -62,15 +62,17 @@ test('web-service-entry-sends-everyone-through-the-shared-login', () => {
   assert.doesNotMatch(home, /\/commands/);
   assert.doesNotMatch(home, /localStorage/);
   assert.doesNotMatch(home, /sessionStorage/);
-  // SaaS landing (B): email-only inquiry, no form storage, policy notice.
-  assert.match(home, /mailto:/);
-  assert.match(home, /도입 문의/);
-  assert.doesNotMatch(home, /<form/);
+  // SaaS landing (B): email-only inquiry, no form storage, policy notice. Reopened 2026-11-25
+  // (owner): the inquiry is a dialog form that hands its answers to the visitor's mail app;
+  // the site itself still stores and posts nothing.
+  const inquiry = read('app/LandingInquiry.tsx');
+  assert.match(inquiry, /supportMailto\(SUBJECT\)/);
+  assert.doesNotMatch(inquiry, /fetch\(|\/commands|\/api\/|localStorage|sessionStorage/);
+  assert.match(inquiry, /입력한 내용은 이 사이트에 저장되지 않습니다/);
+  assert.match(home, /<LandingInquiry /);
   // Persuade hierarchy: the hero asks for inquiry, login stays a utility.
-  assert.match(home, /이메일로 도입 문의/);
+  assert.match(home, /도입 문의하기/);
   assert.match(home, /styles\.loginLink/);
-  assert.match(home, /INQUIRY_BODY/);
-  assert.match(home, /이메일 주소 복사/);
   // Honest messaging claim plus real product evidence, not mockups. The
   // evidence set carries the operating flow: console, attendee, staff, report.
   assert.match(home, /실제 발송은 발송 연결과 발신번호가 준비된 경우에만 시도/);

@@ -50,7 +50,8 @@ test('the landing header and hero are one full-width ink band', () => {
   assert.match(landing, /\.loginLink \{ border: 0; background: transparent; color: var\(--paper\); text-decoration: underline;/u);
   assert.match(landing, /\.heroScene \{[^}]*position: relative;/su);
   assert.doesNotMatch(landing, /heroTabs/u);
-  assert.match(landing, /@media \(min-width: 1025px\) \{ \.hero \{ overflow: visible; \} \}/u, 'the glow bleeds only where it cannot cause a sideways scroll');
+  assert.match(landing, /@media \(min-width: 1025px\) \{\s*\.hero \{ overflow: visible; min-height: calc\(100svh - var\(--landing-header\)\);/u, 'the glow bleeds only where it cannot cause a sideways scroll, and the hero fills the first screen');
+  assert.match(landing, /@media \(min-width: 1025px\) and \(max-height: 860px\)[\s\S]*?\.heroScene \{ --k: 0\.64; height: 460px; \}/u, 'short laptop screens still hold the whole first screen');
   assert.match(landing, /@media print \{ \.header, \.hero \{ background: transparent/u, 'print keeps its plain frame');
 });
 
@@ -58,7 +59,7 @@ test('flows, tokens and the contact rules are unchanged', () => {
   const home = fs.readFileSync(path.join(app, 'page.tsx'), 'utf8');
   // Refreshed 2026-11-24: the header link is plain "로그인" (one shared /login), and the
   // contact address lives in lib/support-contact.ts (shown only after mount, see fce5422).
-  for (const text of ['이메일로 도입 문의', '>로그인</Link>', 'href="/login"', '참가자 앱 설치 없이 링크로 신청·티켓', '문자·알림톡은 발송 연결 후 실제 발송', '고객사 포털은 제공하지 않음']) assert.ok(home.includes(text), `${text} stays`);
+  for (const text of ['도입 문의하기', '>로그인</Link>', 'href="/login"', '앱 설치 없이', '문자·알림톡을 실제로 발송할 수 있나요?', '고객사 포털은 제공하지 않습니다']) assert.ok(home.includes(text), `${text} stays`);
   assert.match(fs.readFileSync(path.join(app, '..', 'lib', 'support-contact.ts'), 'utf8'), /contact@eventouch\.co\.kr/u, 'the default contact address stays');
   assert.match(pages.invite, /팀 초대 수락/u);
   assert.match(pages.recover, /비밀번호 재설정/u);
@@ -94,8 +95,17 @@ test('the landing below the hero is interactive, honest and keeps the hero\'s in
   assert.match(sections, /\[data-reveal="pending"\]/u);
   assert.match(sections, /@media \(prefers-reduced-motion: reduce\)/u);
   assert.match(sections, /@media print[\s\S]*?\[data-reveal\][\s\S]*?opacity: 1 !important/u);
-  // The closing band is the hero's ink reversed, so the page starts and ends dark.
-  assert.match(landing, /\.contactSection \{[^}]*background:\s*var\(--ink\)/su);
+  // Reopened 2026-11-25 (owner: 매력적인 CTA): the page closes on a full-width orange band that opens the inquiry dialog.
+  const contact = fs.readFileSync(path.join(app, 'landing-contact.module.css'), 'utf8');
+  assert.match(contact, /\.contact \{[^}]*background:\s*var\(--brand\)[^}]*box-shadow:\s*0 0 0 100vmax var\(--brand\)/su);
+  assert.doesNotMatch(home, /이메일 주소 복사|contactDetails/u);
+  const inquiry = fs.readFileSync(path.join(app, 'LandingInquiry.tsx'), 'utf8');
+  assert.match(inquiry, /<dialog ref=\{dialog\}[^>]*aria-labelledby="inquiry-title"/u);
+  assert.match(inquiry, /el\.showModal\(\)/u, 'a real modal: focus stays inside and Esc closes');
+  // No inquiry server yet: nothing is stored or posted, and nothing claims to have been received.
+  assert.doesNotMatch(inquiry, /fetch\(|\/api\/|localStorage|sessionStorage|접수되었습니다|전송되었습니다/u);
+  assert.match(inquiry, /window\.location\.href = mailHref\(composed\)/u);
+  assert.match(inquiry, /보내기를 눌러야 전달됩니다/u);
   // A phone does not keep a 160px sticky header over every screen.
   assert.match(landing, /@media \(max-width: 768px\) \{\s*\.header \{ position: static; \}/u);
 });
