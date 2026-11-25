@@ -46,6 +46,8 @@ export type LiveModel = {
   /** Participants not cancelled; null when the roster could not be read. */
   registered: number | null;
   everIn: number | null;
+  // Arrived at a desk and not yet handed a name tag.
+  waiting: number;
   programs: LiveProgram[];
   modules: LiveModule[];
   /** Responses (or questions, photos, posts) received per participation event. */
@@ -203,6 +205,10 @@ export function parseLiveModel(
     capacity,
     registered: rosterReadable ? people.length : null,
     everIn: rosterReadable ? people.filter((person) => person.everIn === true).length : null,
+    waiting: rosterReadable ? new Set(records(workspace.arrivals)
+      .filter((arrival) => !arrival.handedAt && !arrival.cancelledAt)
+      .map((arrival) => String(arrival.participantId))
+      .filter((id) => people.some((person) => String(person.id) === id && person.inside !== true && text(person.status).toUpperCase() === "APPROVED"))).size : 0,
     programs: records(workspace.program).flatMap((program, index) => {
       const title = text(program.title);
       if (!title) return [];

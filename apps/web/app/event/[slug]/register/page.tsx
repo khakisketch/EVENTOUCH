@@ -68,10 +68,15 @@ function Shell({
 
 export default async function RegisterPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ desk?: string | string[] }>;
 }) {
   const { slug } = await params;
+  // "?desk=" comes from a desk poster: the signup then arrives at that desk.
+  const desk = (await searchParams)?.desk;
+  const deskId = typeof desk === "string" && /^[A-Za-z0-9_-]{1,120}$/.test(desk) ? desk : undefined;
   let data: RegisterData | null = null;
   let verificationMode: VerificationMode = "unknown";
   try {
@@ -172,6 +177,7 @@ export default async function RegisterPage({
       />
       <RegisterForm
         slug={slug}
+        deskId={deskId}
         fields={data.fields}
         consentText={data.consentText}
         consentVersion={data.consentVersion}

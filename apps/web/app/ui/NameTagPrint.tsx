@@ -33,7 +33,8 @@ function isPaper(value: string | null): value is Paper {
 export function readNameTagPreferences(): { auto: boolean; paper: Paper } {
   try {
     const paper = window.localStorage.getItem(PAPER_PREFERENCE);
-    return { auto: window.localStorage.getItem(AUTO_PREFERENCE) === "on", paper: isPaper(paper) ? paper : "a4" };
+    // Printing by itself is the default at a desk (owner decision 2026-11-25); turning it off is remembered.
+    return { auto: window.localStorage.getItem(AUTO_PREFERENCE) !== "off", paper: isPaper(paper) ? paper : "a4" };
   } catch {
     return { auto: false, paper: "a4" };
   }

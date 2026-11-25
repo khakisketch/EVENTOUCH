@@ -27,6 +27,7 @@ import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
 import uiStyles from "../../../console-ui/console-ui.module.css";
 import styles from "./operations.module.css";
 import { DeskCard, LocationRow, RunSwitch, StaffFaces, StatusDot, type Staffer } from "./LocationParts";
+import DeskPoster from "./DeskPoster";
 import { CheckIcon, ChevronRightIcon, CopyIcon, PlusIcon } from "../../../console-ui/ConsoleIcons";
 import { CrewIcon } from "./OpsIcons";
 import { consoleFetch } from "../../../../../lib/console-api";
@@ -38,7 +39,7 @@ import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 import { boothScheduleTime } from "../../../../../lib/booth-availability";
 import { cancelledParticipantIds, deskBoardStats, processedAgo, type DeskBoardStats } from "../../../../../lib/desk-board";
 
-type Desk = { id: string; name: string | null; action: string | null; mode: string; open: boolean };
+type Desk = { id: string; name: string | null; action: string | null; mode: string; open: boolean; nametag?: boolean };
 type DeskConflict = { kind: "edit" | "toggle"; id: string; latest: Desk | null; loading: boolean; error: string | null; incomplete?: boolean };
 type Booth = {
   id: string;
@@ -246,7 +247,7 @@ function SetupFold({ live, open, onToggle, remaining, address, copied, onCopy, c
   );
 }
 
-export default function OperationsWorkspace({ eventId }: { eventId: string }) {
+export default function OperationsWorkspace({ eventId, publicBase = null }: { eventId: string; publicBase?: string | null }) {
   const router = useRouter();
   const [state, setState] = useState<State>({ kind: "loading" });
   const [reloadTick, setReloadTick] = useState(0);
@@ -455,6 +456,7 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                 action: typeof desk.action === "string" ? desk.action : null,
                 mode: text(desk.mode) || "desk",
                 open: desk.open !== false,
+                nametag: desk.nametag !== false,
               }];
             })
           : [];
@@ -1429,6 +1431,10 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
                     enterHref={canWriteEvent(capabilities, "check.scan") && !archived && desk.open && !deskIncomplete
                       ? `/staff/events/${encodeURIComponent(eventId)}?desk=${encodeURIComponent(desk.id)}&as=${encodeURIComponent(desk.action || "")}` : null}
                     enterPrimary={desks.filter((item) => item.open).length === 1}
+                    poster={desk.action === "IN" && !deskIncomplete ? (
+                      <DeskPoster eventName={state.eventName} slug={state.eventSlug} deskId={desk.id} deskName={desk.name || "입장 데스크"} publicBase={publicBase}
+                        trigger={(open) => <ProductButton type="button" variant="ghost" className={styles.posterButton} aria-label={`${deskLabel} 안내판 인쇄`} onClick={open}>안내판 인쇄</ProductButton>} />
+                    ) : null}
                     control={(
                       <RunSwitch
                         name={deskLabel}
@@ -1953,6 +1959,10 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
             blocked={blocked}
             reason={blocked ? (detail.type === "DESK" ? onsiteNoWriteReason : boothNoWriteReason) : undefined}
             onClose={() => setDetail(null)}
+            poster={desk && desk.action === "IN" ? (
+              <DeskPoster eventName={state.eventName} slug={state.eventSlug} deskId={desk.id} deskName={desk.name || "입장 데스크"} publicBase={publicBase}
+                trigger={(open) => <ProductButton type="button" variant="ghost" className={styles.posterButton} onClick={open}>안내판 인쇄</ProductButton>} />
+            ) : null}
             onAdd={() => { setDetail(null); setAssignPreset({ type: detail.type, targetId: detail.id }); setAssignOpen(true); setFailure(null); }}
             onEdit={() => {
               setDetail(null);
@@ -1987,7 +1997,8 @@ export default function OperationsWorkspace({ eventId }: { eventId: string }) {
   );
 }
 
-function LocationDialog({ title, sub, kind, staff, busy, blocked, reason, onClose, onAdd, onEdit, onRelease }: {
+function LocationDialog({ title, sub, kind, staff, busy, blocked, reason, poster, onClose, onAdd, onEdit, onRelease }: {
+  poster?: ReactNode;
   title: string;
   sub: string;
   kind: "데스크" | "부스";
@@ -2002,6 +2013,7 @@ function LocationDialog({ title, sub, kind, staff, busy, blocked, reason, onClos
 }) {
   return (
     <ConsoleDialog title={title} description={sub} onClose={onClose} busy={busy}>
+      {poster}
       <section aria-label={`${kind} 담당 스태프`}>
         {staff.length ? (
           <ul className={styles.dutyList}>
@@ -2069,11 +2081,14 @@ function DeskDialog({
   const [action, setAction] = useState(initial ? initial.action || "" : "IN");
   const [mode, setMode] = useState(initial ? initial.mode : "desk");
   const [confirmDirection, setConfirmDirection] = useState(false);
+  // Whether this entry desk prints a name tag; without one, arriving or scanning is the entry.
+  const [nametag, setNametag] = useState(initial?.nametag !== false);
   const directionChanged = Boolean(initial) && ["IN", "OUT"].includes(action) && initial?.action !== action;
   const dirty =
     name !== (initial?.name ?? "") ||
     action !== (initial ? initial.action ?? "" : "IN") ||
     mode !== (initial?.mode ?? "desk") ||
+    nametag !== (initial?.nametag !== false) ||
     confirmDirection;
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -2099,6 +2114,7 @@ function DeskDialog({
                 expectedDesk: { name: initial.name, action: initial.action, mode: initial.mode, open: initial.open } }
             : { name, action, mode, open: true };
           if (directionChanged && confirmDirection) payload.confirmDirectionChange = true;
+          payload.nametag = nametag;
           onSubmit(payload);
         }}
       >
@@ -2151,6 +2167,13 @@ function DeskDialog({
             hint={!['desk', 'tablet'].includes(mode) ? "사용할 화면 방식을 직접 선택해 주세요." : undefined}
             options={[{ value: "desk", label: "데스크" }, { value: "tablet", label: "태블릿" }]} />
         </div>
+        {action === "IN" ? (
+          <div>
+            <ConsoleChoiceGroup id="desk-nametag" label="명찰" value={nametag ? "PRINT" : "NONE"} onChange={(value) => setNametag(value === "PRINT")}
+              hint={nametag ? "도착하면 명찰을 출력하고, 건네면 입장입니다." : "명찰 없이 도착하거나 찍으면 바로 입장입니다."}
+              options={[{ value: "PRINT", label: "출력함" }, { value: "NONE", label: "없음" }]} />
+          </div>
+        ) : null}
         {directionChanged ? (
           <div className={uiStyles.checkRow}>
             <input

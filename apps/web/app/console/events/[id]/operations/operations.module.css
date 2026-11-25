@@ -276,7 +276,8 @@
 .cardStaff { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cardNone { color: var(--muted); font-weight: var(--fw-regular); }
 .cardControl { position: absolute; top: var(--s4); right: var(--s5); display: inline-flex; align-items: center; justify-content: flex-end; min-width: 44px; min-height: 44px; }
-.cardEnter { display: grid; padding: 0 var(--s5) var(--s4); }
+.cardEnter { display: grid; gap: var(--s2); padding: 0 var(--s5) var(--s4); }
+.posterButton { justify-content: center; }
 .cardEnterLink { justify-content: center; }
 /* 가동 스위치: 보이는 트랙은 40x24지만 눌리는 영역은 44px 바닥을 채운다. */
 .runSwitch { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }

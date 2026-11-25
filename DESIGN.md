@@ -503,6 +503,8 @@ Reopened 2026-11-20 (입장·스태프 + 현장 모드; owner approved proposal 
 
 Reopened 2026-11-25 (owner: "복잡한 과정은 벗기고 쓰기 좋은 화면"; where this differs from the text above, this wins; `tests/web-operations-composition.test.cjs` asserts it). Staff assignment is optional. Each running desk card carries "이 기기에서 열기" (orange only when a single desk is running), which opens the field screen for that desk in a new tab. The header 스태프 배정 is a ghost, a desk with no one assigned is not amber and has no card 배정 button, step 2 is "휴대폰 스태프 (선택)" on a quiet surface, and step 3 is "입장 처리" (this device or a staff phone). Going live needs one running entry desk, not an assignment.
 
+Reopened 2026-11-25 (owner: 안내판과 명찰 설정). Entry desks have "안내판 인쇄" on the live card and in the desk detail: a preview and one "인쇄하기"; the paper size is the print dialog's choice and the layout scales to it. The desk editor adds 명찰 출력함/없음 for entry desks.
+
 ## 현장 모드 확정 구성
 
 The owner approved this composition on 2026-11-20 (proposal C, `design-review/onsite-ux-proposal.html`; `apps/web/app/console/events/[id]/live/`, route `/live`, rail group 당일). Change it only on a new owner decision. `tests/web-live-mode-composition.test.cjs` and `scripts/web-live-mode-audit.cjs` guard it.
@@ -515,6 +517,8 @@ The owner approved this composition on 2026-11-20 (proposal C, `design-review/on
 
 Reopened 2026-11-20 (디자인 시스템 적용, C1): the dark stage and three-pane layout stay. The middle pane now leads with 무대 이벤트 and the selected event's control panel, where the one primary (열기 or 마감) is the biggest control (88px, 800 weight), and the venue-screen preview, output picker and 추첨 프로그램 follow. The right pane starts with 다음에 할 일 and is sticky on wide rooms. Event status is `LivePill` (a local dark-stage `StatusPill`: same shape and type tokens, stage line colours; OPEN green, DRAFT amber, CLOSED quiet). Weights are 400/600/800, sizes `--text-*`, radii `--r-*`. Needed in the shared kit: a `StatusPill` tone for dark surfaces.
 - Reopened 2026-11-20 (공용 부품 보강): 상태 알약은 지역 `LivePill`이 아니라 공용 `StatusPill`의 어두운 면 톤(`on-dark-ok`·`on-dark-wait`·`on-dark`)이다. 고른 칩(밝은 바탕) 위에서만 알약이 방 바탕색 위로 올라가는 규칙은 `live.module.css`에 남아 있다. `.room`의 여백 초기화는 명시도 0(`:where`)이라 `!important` 세 곳이 없어졌고, 48px 대상은 `[data-action-variant]`로 고른다.
+
+Reopened 2026-11-25: the entry line adds "도착 대기 N" while people are waiting for a name tag.
 
 ## 행사 목록 확정 구성
 
@@ -628,6 +632,8 @@ Reopened 2026-11-19 (owner: plain; `tests/web-staff-field-composition.test.cjs` 
 
 Reopened 2026-11-25 (owner: 노트북 데스크; `tests/web-staff-laptop-desk.test.cjs` asserts it). The phone column is unchanged except that the result names the company and group, and "이미 입장" shows the name large with the sentence quiet. An operator with the field permission opens any desk without an assignment; the back link returns to the console. A confirmed desk and direction stay in this tab's address (never device storage), so a reload does not ask again and a changed direction still does. A USB scanner works with no field focused. From 1024px the screen adds a white side panel (people inside, the last entries, "입장하면 명찰 자동 인쇄", paper size, the silent-print note), the bar becomes one row, and a result stays until the next ticket while the camera is off. On that wide desk screen "카메라 켜기" is one of the quiet tiles, not the orange primary (owner question 2026-11-25: the camera is only the fallback when there is no scanner).
 
+Reopened 2026-11-25 (owner: 참가자가 안내판 QR을 찍는 흐름, A안; `scripts/web-venue-arrival-audit.cjs`). On the wide entry desk the side panel is the waiting list ("기다리는 사람"), and while no result or camera is showing the stage is the next person large with one primary ("건넸어요 · 입장", "승인하고 입장", or "입장 처리" at a desk without name tags), quiet 다시 출력 and 취소 beneath. A handover confirms for 1.6 seconds and moves on. Review cases are amber and print nothing. Name tags print one at a time by themselves (on by default); "휴대폰 연결" shows a QR that opens this desk on a staff phone in line-scan mode, where a scan sends the person to the desk instead of admitting (also a switch in the ⋯ menu).
+
 ## Product component boundary
 
 Astryx supplies the production theme, actions, icon actions, links, labeled text fields, headings, sections and feedback. `app/ui/ProductButton`, `ProductLink`, `ProductInput` and `ProductNotice` keep the product-facing contract small. The production theme in `apps/web/src/themes/eventouch/` aliases `tokens.css`; generated theme files are rebuilt, not edited. The product explicitly uses light mode and Pretendard. The isolated design-review pilot is not a runtime dependency.
@@ -664,6 +670,8 @@ Reopened 2026-11-19 (owner: the real service screens look plain; `tests/web-atte
 - The registration form shows `AttendeeStep` (1/2 or 1/3: 참가자 정보, 연락처 인증 when required, 정보 수집 동의) that follows what is still open; every section and field stays on one page, because splitting them would hide required fields from native validation and the focus-to-field recovery, and the phone verification flow is unchanged. Fields are 56px soft inputs with a visible border.
 
 - Reopened 2026-11-20 (디자인 시스템 적용; `tests/web-home-layouts.test.cjs`): the three compositions, the banner kinds (`HomeHero`) and the home color settings are unchanged. The landing and the event guide are `AttendeeSurface` pages (a1 white, a2 the chosen ground): the ticket card carries a ticket tile, an entry line ("QR로 바로 입장") and the event-color "열기" pill; menu tiles and rows are quiet soft cards with accent icon tiles (white cards on an a2 ground); group and section titles are `AttendeeSectionHeader`; empty, error, need-ticket and "not offered" states are `AttendeeStateMessage`. The console's guide preview (`ContentPhonePreview`) renders the guide pieces without a surface and keeps the earlier white-card look until it wraps them in `AttendeeSurface`.
+
+Reopened 2026-11-25 (owner: 현장 도착 접수). `/event/[slug]/arrive?desk=` is the page a desk poster opens: the event ground, one white sheet and one orange button. A browser that signed up sees its name and "도착 접수"; another phone enters name and phone number, with "현장 신청" beneath. The result is a pass (green waiting, amber review, blue entered) with the name large; only the browser holding the ticket shows its QR for the desk scanner. An on-site signup from the poster lands on that pass.
 
 ## 신청 항목 편집 확정 구성
 

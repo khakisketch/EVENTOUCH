@@ -5,9 +5,10 @@ import ProductButton from "../ui/ProductButton";
 import ValidatedForm from "../ui/ValidatedForm";
 import NameTagPrint, { NAMETAG_PAPERS, readNameTagPreferences, saveNameTagPreference, type NameTagIdentity, type NameTagPaper } from "../ui/NameTagPrint";
 import { createScanBuffer } from "./scanner-input";
+import { ArrivalList, ArrivalNow, ArrivalPrinter, currentArrival, sendDeskCommand, useDeskArrivals, type DeskArrival } from "./DeskArrivals";
 
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ProductLink from "../ui/ProductLink";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -458,6 +459,33 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
+  // The desk's waiting list (laptop) and the staff line scan (phone, opened from the desk's QR).
+  const [selectedArrival, setSelectedArrival] = useState("");
+  const [arrivalBusy, setArrivalBusy] = useState(false);
+  const [arrivalMessage, setArrivalMessage] = useState("");
+  const [handed, setHanded] = useState("");
+  const [forcedPrint, setForcedPrint] = useState("");
+  const clearForcedPrint = useCallback(() => setForcedPrint(""), []);
+  const stationRef = useRef("");
+  if (!stationRef.current) stationRef.current = randomCommandId().replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+  // Tags this tab already printed from the list: scanning that person's pass must not print again.
+  const printedParticipantsRef = useRef(new Set<string>());
+  const [lineMode, setLineMode] = useState(false);
+  const [lineNote, setLineNote] = useState<{ tone: "good" | "wait" | "bad"; head: string; name: string; detail: string } | null>(null);
+  const lineBusyRef = useRef(false);
+  useEffect(() => { setLineMode(new URLSearchParams(window.location.search).get("line") === "1"); }, []);
+  const [phoneLinkOpen, setPhoneLinkOpen] = useState(false);
+  const arrivalDesk = scope?.desks.find((item) => item.id === deskId);
+  const arrivalAssignment = scope?.assignments.find((item) => item.targetId === deskId)?.id ?? "";
+  const arrivalsOn = wide && task === "desk" && scope?.stage === "LIVE" && arrivalDesk?.action === "IN" && arrivalDesk.open !== false;
+  const arrivals = useDeskArrivals(targetEventId, deskId, arrivalAssignment, arrivalsOn);
+  useEffect(() => { setSelectedArrival(""); setArrivalMessage(""); setHanded(""); setLineNote(null); }, [deskId]);
+  useEffect(() => {
+    if (!handed) return;
+    const timer = window.setTimeout(() => setHanded(""), 1600);
+    return () => window.clearTimeout(timer);
+  }, [handed]);
+  for (const item of arrivals.view?.arrivals ?? []) if (item.printedAt) printedParticipantsRef.current.add(item.participantId);
   const soundOnRef = useRef(true);
   soundOnRef.current = soundOn;
   const resultSeqRef = useRef<{ last: ScanResult | null; seq: number }>({ last: null, seq: 0 });
@@ -1413,8 +1441,10 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       };
       setResult(okResult);
       setLastScan(okResult);
-      setPrintJob(autoPrintRef.current && isDesk && !recordStatus && scanAction === "IN" && participantId
+      setPrintJob(autoPrintRef.current && isDesk && !recordStatus && scanAction === "IN" && participantId &&
+          selectedDesk?.nametag !== false && !printedParticipantsRef.current.has(participantId)
         ? { result: okResult, status: "pending" } : null);
+      setHanded("");
       setScannerNotice("");
       setTicket("");
       setManualTarget(null);
@@ -1432,6 +1462,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
 
   async function onScan(event: React.FormEvent) {
     event.preventDefault();
+    if (lineActive && ticket.trim()) { await lineScan(ticket.trim()); return; }
     await submitTicket(ticket);
   }
 
@@ -1824,6 +1855,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
       return;
     }
     setScannerNotice("");
+    if (lineActive) { void lineScan(code); return; }
     setSheet(null);
     setEntryMode("scan");
     setManualTarget(null);
@@ -1832,6 +1864,54 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
     primeScanFeedback();
     setTicket(code);
     void submitTicket(code);
+  }
+  const waiting = arrivals.view && arrivalsOn ? currentArrival(arrivals.view, selectedArrival, Date.now()) : null;
+  const lineAvailable = !wide && activeTask === "desk" && selectedDesk?.action === "IN" && selectedDesk.nametag !== false;
+  const lineActive = lineAvailable && lineMode;
+  async function runArrival(work: () => Promise<{ ok: boolean; message?: string }>) {
+    if (arrivalBusy || writeLocked) return;
+    setArrivalBusy(true);
+    setArrivalMessage("");
+    const outcome = await work();
+    if (!outcome.ok) setArrivalMessage(outcome.message ?? "처리하지 못했습니다.");
+    await arrivals.refresh();
+    setArrivalBusy(false);
+  }
+  async function handOver(arrival: DeskArrival) {
+    const sent = await sendDeskCommand(targetEventId, "arrival.handover", arrivalAssignment, { deskId, arrivalId: arrival.id });
+    if (!sent.ok) return sent;
+    setSelectedArrival("");
+    setHanded(arrival.name);
+    primeScanFeedback();
+    playScanFeedback("ok", soundOnRef.current);
+    // The entry can be corrected from 최근 처리 like any scan.
+    setLastScan({ kind: "ok", participantId: arrival.participantId, name: arrival.name, action: "IN", reentry: false,
+      checkId: typeof sent.data.checkId === "string" ? sent.data.checkId : undefined,
+      place: { task: "desk", placeName: selectedDesk?.name ?? "", actionLabel: "입장" } });
+    void load(true);
+    return sent;
+  }
+  async function approveAndHandOver(arrival: DeskArrival) {
+    const approved = await sendDeskCommand(targetEventId, "participant.status", arrivalAssignment, { id: arrival.participantId, status: "APPROVED" });
+    return approved.ok ? handOver(arrival) : approved;
+  }
+  // A staff phone in line mode sends the ticket to its desk instead of admitting there and then.
+  async function lineScan(code: string) {
+    if (lineBusyRef.current || writeLocked || !ready || !assignment) return;
+    lineBusyRef.current = true;
+    const sent = await sendDeskCommand(targetEventId, "arrival.record", assignment.id, { deskId, ticket: code });
+    lineBusyRef.current = false;
+    setTicket("");
+    setSheet(null);
+    if (!sent.ok) {
+      setLineNote({ tone: "bad", head: "보내지 못했습니다", name: "", detail: sent.message });
+      playScanFeedback("bad", soundOnRef.current);
+      return;
+    }
+    const review = Boolean(sent.data.review);
+    setLineNote({ tone: review ? "wait" : "good", head: review ? "데스크 확인 필요" : "데스크로 보냄",
+      name: String(sent.data.name ?? ""), detail: String(sent.data.company ?? "") });
+    playScanFeedback(review ? "info" : "ok", soundOnRef.current);
   }
   const resultPerson = result.kind === "ok" && result.action !== "STAMP"
     ? deskParticipants.find((person) => person.id === result.participantId) : undefined;
@@ -2162,6 +2242,14 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               </span>
               <span>결과 자동 넘김</span>
             </ProductButton>
+            {lineAvailable ? (
+              <ProductButton type="button" variant="ghost" role="switch" aria-checked={lineMode}
+                className={`${prizeStyles.kioskSwitch} ${lineMode ? prizeStyles.kioskSwitchOn : ""}`}
+                onClick={() => { setLineMode((current) => !current); setLineNote(null); }}>
+                <span className={prizeStyles.kioskSwitchTrack} aria-hidden="true"><span className={prizeStyles.kioskSwitchThumb} /></span>
+                <span>줄 스캔 (명찰은 데스크)</span>
+              </ProductButton>
+            ) : null}
             {cameraOpen ? (
               <ProductButton type="button" variant="ghost" disabled={submitting || scanControlsLocked} onClick={() => setCameraOpen(false)}>카메라 끄기</ProductButton>
             ) : null}
@@ -2430,6 +2518,7 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
             onUseManual={activeTask === "desk" ? () => chooseEntryMode("roster") : undefined}
             onDetected={(code) => {
               if (scanBusyRef.current || submitting || writeLocked) return;
+              if (lineActive) { void lineScan(code); return; }
               setTicket(code);
               submitTicket(code);
             }}
@@ -2447,6 +2536,33 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               {ready && wide ? "티켓 QR을 찍어 주세요" : noCamera ? "이 기기에서는 카메라를 쓸 수 없습니다. 명단에서 찾거나 코드를 입력해 처리하세요." : ready ? "카메라가 꺼져 있습니다" : scanHint}
             </p>
           </div>
+        ) : null}
+
+        {result.kind === "idle" && arrivalsOn && arrivals.view && handed ? (
+          <div className={prizeStyles.handed} role="status"><span>입장 완료</span><strong>{handed}</strong></div>
+        ) : result.kind === "idle" && arrivals.view && waiting && (selectedArrival || !cameraMounted) ? (
+          <ArrivalNow view={arrivals.view} arrival={waiting} busy={arrivalBusy || writeLocked} message={arrivalMessage}
+            onHand={() => void runArrival(() => handOver(waiting))}
+            onApprove={() => void runArrival(() => approveAndHandOver(waiting))}
+            onPrint={() => setForcedPrint(waiting.id)}
+            onCancel={() => void runArrival(async () => {
+              const sent = await sendDeskCommand(targetEventId, "arrival.cancel", arrivalAssignment, { deskId, arrivalId: waiting.id });
+              if (sent.ok) setSelectedArrival("");
+              return sent;
+            })} />
+        ) : null}
+
+        {lineActive && result.kind === "idle" ? (
+          <>
+            <p className={prizeStyles.lineBadge} role="status">줄 스캔 · {selectedDesk?.name ?? "데스크"}로 보냅니다</p>
+            {lineNote ? (
+              <div className={prizeStyles.lineNote} data-tone={lineNote.tone} role="status">
+                <span>{lineNote.head}</span>
+                {lineNote.name ? <strong>{lineNote.name}</strong> : null}
+                {lineNote.detail ? <small>{lineNote.detail}</small> : null}
+              </div>
+            ) : null}
+          </>
         ) : null}
 
         {result.kind === "ok" ? (
@@ -2587,11 +2703,15 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
 
       {wide && activeTask === "desk" ? (
         <aside className={prizeStyles.deskSide} aria-label="데스크 현황">
-          {activeScope.participantsAvailable ? (
+          {arrivalsOn && arrivals.view ? (
+            <p className={prizeStyles.sideCount}><strong>{arrivals.view.entered}</strong><span>/ {arrivals.view.total}명 입장 중</span></p>
+          ) : activeScope.participantsAvailable ? (
             <p className={prizeStyles.sideCount}><strong>{insideCount}</strong><span>/ {approved.length}명 입장 중</span></p>
           ) : <p className={prizeStyles.sideHint}>인원을 확인할 수 없습니다.</p>}
-          <p className={prizeStyles.sideHint}>USB 스캐너로 티켓을 찍으면 바로 처리합니다.</p>
-          {activeScope.checksAvailable && taskChecks.length ? (
+          {arrivalsOn ? (
+            <ArrivalList view={arrivals.view} error={arrivals.error} selected={waiting?.id ?? ""}
+              onSelect={(id) => { setSelectedArrival(id); setArrivalMessage(""); setHanded(""); if (result.kind !== "idle") prepareNextParticipant(); }} />
+          ) : activeScope.checksAvailable && taskChecks.length ? (
             <ul className={prizeStyles.sideRecent} aria-label="방금 처리">
               {taskChecks.slice(0, 6).map((check) => (
                 <li key={check.id}>
@@ -2601,11 +2721,15 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
               ))}
             </ul>
           ) : null}
-          {!isExitDesk ? (
+          <p className={prizeStyles.sideHint}>USB 스캐너로 티켓을 찍으면 바로 입장합니다.</p>
+          {arrivalsOn && selectedDesk?.nametag !== false ? (
+            <ProductButton type="button" variant="ghost" onClick={() => setPhoneLinkOpen(true)}>휴대폰 연결</ProductButton>
+          ) : null}
+          {!isExitDesk && selectedDesk?.nametag !== false ? (
             <div className={prizeStyles.sidePrint}>
               <label className={prizeStyles.sideToggle}>
                 <input type="checkbox" checked={autoPrint} onChange={(event) => { setAutoPrint(event.target.checked); saveNameTagPreference({ auto: event.target.checked }); }} />
-                <span>입장하면 명찰 자동 인쇄</span>
+                <span>명찰 자동 인쇄</span>
               </label>
               <label className={prizeStyles.sidePaper}>
                 <span>명찰 용지</span>
@@ -2660,6 +2784,19 @@ export default function StaffEventWork({ eventId }: { eventId: string }) {
         ) : null}
       </div>
 
+      {arrivalsOn ? (
+        <ArrivalPrinter eventId={targetEventId} assignmentId={arrivalAssignment} view={arrivals.view} station={stationRef.current}
+          enabled={autoPrint && !printPending && !nametagOpen} forced={forcedPrint} onForcedHandled={clearForcedPrint}
+          onDone={(participantId) => { printedParticipantsRef.current.add(participantId); }} />
+      ) : null}
+      {phoneLinkOpen && selectedDesk ? (
+        <ConsoleDialog title="휴대폰 연결" onClose={() => setPhoneLinkOpen(false)}>
+          <div className={prizeStyles.phoneLink}>
+            <QRCode value={`${window.location.origin}/staff/events/${encodeURIComponent(targetEventId)}?desk=${encodeURIComponent(selectedDesk.id)}&as=IN&line=1`} size={220} title="휴대폰 연결 QR" />
+            <p>스태프 휴대폰 카메라로 찍고 로그인하면 {selectedDesk.name}에 연결됩니다. 휴대폰으로 찍은 티켓의 명찰은 이 노트북에서 출력합니다.</p>
+          </div>
+        </ConsoleDialog>
+      ) : null}
       {autoMs && !holdForNextScan && !printPending ? <AutoAdvance key={`advance-${resultSeq}`} ms={autoMs} onAdvance={prepareNextParticipant} /> : null}
       <ScannerKeys onScan={onScannerCode} />
       {result.kind !== "idle" ? <ScanFeedback key={`tone-${resultSeq}`} tone={result.kind === "ok" ? "ok" : infoFailure ? "info" : "bad"} enabled={soundOn} /> : null}

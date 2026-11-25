@@ -37,7 +37,8 @@ import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 
 type ReportSnapshot = {
   event?: { name?: unknown; date?: unknown; start?: unknown; end?: unknown; venue?: unknown; client?: unknown };
-  metrics?: { total?: unknown; pending?: unknown; approved?: unknown; checked?: unknown; inside?: unknown; rate?: unknown; attendanceReview?: unknown; attendanceReviewVersion?: unknown; cancellationReview?: unknown };
+  metrics?: { total?: unknown; pending?: unknown; approved?: unknown; checked?: unknown; inside?: unknown; rate?: unknown; attendanceReview?: unknown;
+    arrivedNotEntered?: unknown; attendanceReviewVersion?: unknown; cancellationReview?: unknown };
   groups?: Array<{ name?: unknown; count?: unknown }>;
   booths?: Array<{ name?: unknown; used?: unknown; capacity?: unknown }>;
   programs?: Array<{ name?: unknown; type?: unknown; responses?: unknown }>;
@@ -1469,6 +1470,9 @@ export default function ReportsWorkspace({ eventId }: { eventId: string }) {
                           </>
                         ) : null}
                         <p className={savedKpi ? "sr-only" : undefined}>등록 {snapshotValue(detail.snapshot.metrics.total, "명")} · 누적 입장 {snapshotValue(detail.snapshot.metrics.checked, "명")} · 현재 입장 {snapshotValue(detail.snapshot.metrics.inside, "명")} · 입장률 {snapshotValue(detail.snapshot.metrics.rate, "%", 100)}</p>
+                        {Number(detail.snapshot.metrics.arrivedNotEntered) > 0 ? (
+                          <p>도착 접수만 하고 입장하지 않은 사람 {Number(detail.snapshot.metrics.arrivedNotEntered)}명</p>
+                        ) : null}
                         {typeof detail.snapshot.metrics.attendanceReview !== "number" || !Number.isSafeInteger(detail.snapshot.metrics.attendanceReview) || detail.snapshot.metrics.attendanceReview < 0 ? (
                           <p>저장 당시 출입 기록의 확인 필요 여부는 이 보고서에서 확인할 수 없습니다.</p>
                         ) : detail.snapshot.metrics.attendanceReview > 0 ? (

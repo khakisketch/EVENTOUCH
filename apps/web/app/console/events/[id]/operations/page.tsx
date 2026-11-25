@@ -1,8 +1,9 @@
 import OperationsWorkspace from "./OperationsWorkspace";
+import { configuredPublicBase } from "../../../../../lib/public-origin";
 
 // Slice 6d: on-site preparation — desks, booths and staff assignments.
-// The LIVE transition requires at least one desk and one active desk
-// assignment, so this screen is where an operator makes that true.
+// The LIVE transition requires one running entry desk, so this screen is where an
+// operator makes that true.
 export default async function ConsoleOperationsPage({
   params,
 }: {
@@ -11,7 +12,7 @@ export default async function ConsoleOperationsPage({
   const { id } = await params;
   return (
     <section className="console-page operations-page">
-      <OperationsWorkspace eventId={id} />
+      <OperationsWorkspace eventId={id} publicBase={configuredPublicBase()} />
     </section>
   );
 }

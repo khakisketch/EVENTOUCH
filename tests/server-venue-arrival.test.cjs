@@ -135,7 +135,7 @@ test('a signup at the poster arrives, and that browser is recognised afterwards'
   assert.equal(view.json.arrivals[0].source, 'SIGNUP');
   const cookie = String(signup.headers.get('set-cookie')).split(';')[0];
   const known = await arrive(event, { action: 'view', deskId: event.gate }, cookie);
-  assert.equal(known.json.known.name, '오민석');
+  assert.deepEqual(known.json.known, { name: '오민석', company: '', state: 'waiting' }, 'a signup here is already waiting here');
   const byCookie = await arrive(event, { action: 'arrive', deskId: event.side, commandId: command() }, cookie);
   assert.equal(byCookie.json.result, 'entered', 'a desk without name tags admits on arrival');
   assert.equal((await list(event, event.gate)).json.arrivals.length, 0, 'entering anywhere ends the wait');

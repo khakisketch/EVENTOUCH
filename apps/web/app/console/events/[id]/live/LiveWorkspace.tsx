@@ -290,8 +290,8 @@ export default function LiveWorkspace({ eventId }: { eventId: string }) {
             <strong className={styles.eventName}>{model.eventName || "이름 없는 행사"}</strong>
             <span className={styles.clock}><time dateTime={now.toISOString()}>{TIME.format(now)}</time></span>
             {model.registered !== null ? (
-              <span className={styles.entry} role="img" aria-label={`입장 ${model.everIn ?? 0}명, 등록 ${model.registered}명${model.capacity ? `, 정원 ${model.capacity}명` : ""}, 등록 대비 ${entryPct}%`}>
-                <span aria-hidden="true">입장 <b>{model.everIn ?? 0}</b> / 등록 {model.registered} ({entryPct}%)<em>{model.capacity ? ` · 정원 ${model.capacity}` : ""}</em></span>
+              <span className={styles.entry} role="img" aria-label={`입장 ${model.everIn ?? 0}명, 등록 ${model.registered}명${model.capacity ? `, 정원 ${model.capacity}명` : ""}, 등록 대비 ${entryPct}%${model.waiting ? `, 도착 대기 ${model.waiting}명` : ""}`}>
+                <span aria-hidden="true">입장 <b>{model.everIn ?? 0}</b> / 등록 {model.registered} ({entryPct}%)<em>{model.capacity ? ` · 정원 ${model.capacity}` : ""}</em>{model.waiting ? <em> · 도착 대기 {model.waiting}</em> : null}</span>
                 <i className={styles.entryBar} aria-hidden="true"><i style={{ width: `${Math.min(100, entryPct)}%` }} /></i>
               </span>
             ) : <span className={styles.entry}>입장 현황을 읽을 수 없습니다</span>}

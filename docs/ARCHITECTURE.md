@@ -21,6 +21,7 @@ Source code and tests define implementation behavior. This document owns cross-c
 
 - Passwords and session, recovery, invitation, and attendee proof tokens are secrets. Store only protected representations where applicable; never place raw values in logs, public projections, or persistent browser storage.
 - Ticket QR codes are bearer credentials. Each check-in is decided by the server against current event, ticket, and attendee state. The browser cannot assert a successful check-in while the server result is unknown.
+- Venue arrival (owner decision 2026-11-25) is not entry. A desk poster, a staff line scan or an on-site signup records ids and a time on one desk's waiting list; entry happens at the desk (handover or ticket scan) under the scan rules. The public arrival request identifies a person by this browser's attendee session, or else by name and phone together; the latter never returns a ticket, refusals are indistinguishable, misses are rate limited, and requests are replayable. A desk set to hand out no name tag admits on arrival.
 - Public and staff views receive only the data needed for their role. In particular, draft content, private evidence files, cross-agency activity, and unrelated rewards are not public bootstrap data.
 
 ## Persistence and retention

@@ -1,0 +1,64 @@
+/* One desk's arrival sign. On screen it is a paper preview; in print every size follows the
+   page the operator picked, so no paper size is declared here. */
+.preview {
+  display: flex;
+  aspect-ratio: 210 / 297;
+  width: min(100%, 360px);
+  margin: 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: center;
+  word-break: keep-all;
+}
+
+.desk { margin: 0; padding: var(--s1) var(--s4); border-radius: var(--r-pill); background: var(--ink); color: var(--paper); font-size: var(--text-md); font-weight: var(--fw-heavy); }
+.title { margin: 0; font-size: var(--h2); font-weight: var(--fw-heavy); letter-spacing: var(--ls-heading); line-height: 1.2; }
+.qr { width: 62%; }
+.qr svg { display: block; width: 100%; height: auto; }
+.event { margin: 0; font-size: var(--text-md); font-weight: var(--fw-strong); overflow-wrap: anywhere; }
+.steps { display: grid; width: 100%; grid-template-columns: repeat(3, 1fr); gap: var(--s2); margin: 0; padding: 0; list-style: none; counter-reset: step; }
+.steps li { padding-top: var(--s1); border-top: 2px solid var(--ink); font-size: var(--text-xs); font-weight: var(--fw-strong); counter-increment: step; }
+.steps li::before { content: counter(step) ". "; }
+.fine { margin: 0; color: var(--muted); font-size: var(--text-xs); }
+.openLink { display: inline-flex; min-height: var(--control-min-size); align-items: center; justify-content: center; margin-top: var(--s2); color: var(--brand-text); font-weight: var(--fw-strong); text-decoration: underline; }
+
+.printSheet { display: none; }
+
+@page deskPoster { margin: 0; }
+
+@media print {
+  :global(body):has(> .printSheet) { display: block; overflow: visible !important; margin: 0; page: deskPoster; }
+  :global(body):has(> .printSheet) > :not(.printSheet) { display: none !important; }
+
+  /* vmin and vh are the printed page here, so A5 through A3 keep the same proportions. */
+  .printSheet {
+    display: flex;
+    box-sizing: border-box;
+    width: 100vw;
+    height: 99vh;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6vmin;
+    background: var(--paper) !important;
+    color: var(--ink) !important;
+    font-family: sans-serif;
+    text-align: center;
+    word-break: keep-all;
+    break-inside: avoid;
+    page: deskPoster;
+  }
+  .printSheet .desk { padding: 1.4vmin 6vmin; font-size: 4.6vmin; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .printSheet .title { font-size: 10vmin; }
+  .printSheet .qr { width: min(66vw, 46vh); }
+  .printSheet .event { font-size: 4.4vmin; }
+  .printSheet .steps { gap: 2vmin; }
+  .printSheet .steps li { padding-top: 1.4vmin; border-top-width: 0.6vmin; font-size: 3.2vmin; }
+  .printSheet .fine { font-size: 2.6vmin; }
+}

@@ -18,9 +18,12 @@ import AttendeeStateMessage from "../ui/AttendeeStateMessage";
 import BottomAction from "../ui/BottomAction";
 import { organizerContactLine } from "../attendee-guidance";
 import { signupAvailability } from "../signup-availability";
+import { storeTicket } from "../../../../lib/attendee-ticket-storage";
 
 type Props = {
   slug: string;
+  // The desk whose poster led here (on-site signup).
+  deskId?: string;
   fields: PublishedField[];
   // Without SMS, the original browser tab may be the only way back.
   recoveryBlocked?: boolean;
@@ -43,7 +46,7 @@ type Props = {
 type Failure = { message: string; field?: string };
 
 export default function RegisterForm(initial: Props) {
-  const { slug, recoveryBlocked } = initial;
+  const { slug, recoveryBlocked, deskId } = initial;
   const [form, setForm] = useState(() => ({ fields: initial.fields, consentText: initial.consentText,
     consentVersion: initial.consentVersion, formVersion: initial.formVersion,
     verificationRequired: initial.verificationRequired, recoveryContact: initial.recoveryContact,
@@ -324,6 +327,7 @@ export default function RegisterForm(initial: Props) {
           consent: consentText ? consent : undefined,
         };
         if (verificationRequired) body.verificationGrant = grant;
+        if (deskId) body.deskId = deskId;
         for (const field of fields) {
           const value = values[field.id];
           if (field.type === "checkbox") {
@@ -340,6 +344,7 @@ export default function RegisterForm(initial: Props) {
         field?: unknown;
         code?: unknown;
         participant?: { ticket?: unknown } | null;
+        arrival?: unknown;
       }>(`/api/events/${encodeURIComponent(slug)}/signup`, attemptRef.current.body);
       if (!res.ok) {
         if (data?.code === "SIGNUP_RESULT_SUPERSEDED") {
@@ -422,6 +427,13 @@ export default function RegisterForm(initial: Props) {
       // read this arrival as a fresh completion receipt; it is cleaned
       // together with the bearer and never persists.
       protectAttemptRef.current = false;
+      // Signed up at a desk poster: the signup was also the arrival, so show the desk pass.
+      if (deskId && data?.arrival) {
+        storeTicket(slug, ticket);
+        router.push(`/event/${encodeURIComponent(slug)}/arrive?desk=${encodeURIComponent(deskId)}`);
+        navigating = true;
+        return;
+      }
       router.push(`/event/${encodeURIComponent(slug)}/ticket?ticket=${encodeURIComponent(ticket)}&registered=1`);
       navigating = true;
     } catch {

@@ -1391,3 +1391,18 @@
 .sidePaper select { width: 100%; min-height: var(--control-min-size); color: var(--ink); }
 .sideHelp summary { min-height: var(--control-min-size); align-content: center; font-size: var(--text-sm); font-weight: var(--fw-strong); cursor: pointer; }
 .sideHelp p { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: var(--lh-body); word-break: keep-all; }
+
+/* Arrivals (2026-11-25): the brief confirmation after a handover, the line-scan badge and
+   result on a staff phone, and the connect-a-phone dialog. */
+.handed { position: absolute; inset: 0; z-index: 3; display: grid; place-content: center; justify-items: center; gap: var(--s2); background: var(--info-soft); color: var(--ink); text-align: center; }
+.handed span { color: var(--info); font-size: var(--text-lg); font-weight: var(--fw-heavy); }
+.handed strong { font-size: var(--display-xl); font-weight: var(--fw-heavy); letter-spacing: var(--ls-heading); overflow-wrap: anywhere; }
+.lineBadge { position: absolute; z-index: 2; top: var(--s3); left: 50%; margin: 0; padding: var(--s1) var(--s3); border-radius: var(--r-pill); background: var(--success); color: var(--paper); font-size: var(--text-sm); font-weight: var(--fw-heavy); white-space: nowrap; transform: translateX(-50%); }
+.lineNote { position: absolute; z-index: 2; right: var(--s3); bottom: calc(var(--fld-sheet-r) + var(--s3)); left: var(--s3); display: grid; gap: var(--s1); padding: var(--s3) var(--s4); border-radius: var(--r-card); background: var(--success-soft); color: var(--ink); }
+.lineNote[data-tone="wait"] { background: var(--warning-soft); }
+.lineNote[data-tone="bad"] { background: var(--danger-soft); }
+.lineNote span { font-size: var(--text-sm); font-weight: var(--fw-heavy); }
+.lineNote strong { font-size: var(--text-xl); font-weight: var(--fw-heavy); }
+.lineNote small { color: var(--muted); font-size: var(--text-sm); }
+.phoneLink { display: grid; justify-items: center; gap: var(--s4); text-align: center; word-break: keep-all; }
+.phoneLink p { margin: 0; }

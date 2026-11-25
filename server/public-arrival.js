@@ -12,7 +12,7 @@ const { normalizeEvent, normalizeWorkspace, workspaceChangesForSave } = require(
 const { createClientAddressResolver } = require('./runtime-security.ts');
 const { cookieToken } = require('./attendees');
 const {
-  arrivalBlockedOut, arrivalReview, closeArrivals, deskTakesArrivals, recordArrival,
+  arrivalBlockedOut, arrivalReview, closeArrivals, deskTakesArrivals, openArrivalFor, recordArrival,
 } = require('./arrivals');
 
 const NOT_FOUND = '접수할 수 없습니다. 데스크에 말씀해 주세요.';
@@ -102,7 +102,13 @@ function createPublicArrival({ database, env = process.env, appendCheck }) {
       const desk = loaded && entryDesk(loaded.workspace, deskId);
       if (!desk) throw failure(404, '안내판의 QR을 다시 확인해 주세요.', undefined, 'ARRIVAL_DESK_NOT_FOUND');
       const person = granted(loaded.workspace, await sessionGrant(client, loaded.event.id, cookieHeader));
-      return { ...status(loaded.event, desk), known: person ? { ...identity(person), inside: person.inside === true } : null };
+      if (!person) return { ...status(loaded.event, desk), known: null };
+      // Already waiting at this desk (a reload, or a signup made here): show that, not the button.
+      const waiting = openArrivalFor(loaded.workspace, person.id);
+      const state = person.inside === true ? 'inside'
+        : waiting && String(waiting.deskId) === String(desk.id)
+          ? (arrivalReview(loaded.workspace, person) ? 'review' : 'waiting') : null;
+      return { ...status(loaded.event, desk), known: { ...identity(person), state } };
     });
   }
 

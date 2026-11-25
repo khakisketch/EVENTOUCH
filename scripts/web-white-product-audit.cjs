@@ -116,6 +116,7 @@ async function main() {
       ['event', `/event/${f.slug}`, 'main h1'], ['attendee', `/event/${f.slug}/home`, 'nav[aria-label="참가 메뉴"]'],
       ['register', `/event/${f.slug}/register`, '#field-name'],
       ['recover-unavailable', `/event/${f.slug}/ticket/recover`, '.verification-unavailable'],
+      ['arrive', `/event/${f.slug}/arrive?desk=${f.deskId}`, '#arrive-title'],
       ['ticket', `/event/${f.slug}/ticket?ticket=${encodeURIComponent(ticket)}`, '[class*="ticketQr"] svg'],
       ['engage', `/event/${f.slug}/engage?ticket=${encodeURIComponent(ticket)}`, 'main h1'],
       ['screen', `/screen/${f.slug}`, '.display-board'],

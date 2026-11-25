@@ -947,6 +947,11 @@ async function reportSnapshot(ctx) {
       inside: participants.filter((person) => person.inside === true).length,
       attendanceReview: participants.filter((person) => attendanceNeedsReview(person, attendanceChecks)).length,
       attendanceReviewVersion: 2,
+      // Checked in at a desk poster or line scan but never admitted (no name tag handed over).
+      arrivedNotEntered: new Set(list(ctx.workspace.arrivals)
+        .filter((arrival) => arrival && !arrival.handedAt && !arrival.cancelledAt)
+        .map((arrival) => String(arrival.participantId))
+        .filter((id) => participants.some((person) => String(person.id) === id && person.everIn !== true))).size,
       cancellationReview: participants.filter(cancellationNeedsReview).length,
       responses: responses.length,
       rate: participants.length

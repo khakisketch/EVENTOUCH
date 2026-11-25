@@ -129,6 +129,8 @@ type DeskCardProps = {
   enterHref: string | null;
   /** Orange only when there is a single running desk to open. */
   enterPrimary: boolean;
+  /** The desk's arrival sign, for entry desks. */
+  poster?: ReactNode;
   /** The run switch; it sits outside the opening button. */
   control: ReactNode;
 };
@@ -137,7 +139,7 @@ type DeskCardProps = {
  * 진행 중 데스크 보드의 카드 하나(2026-11-24, 다시 엶 2026-11-25). 카드 전체가 데스크 상세를 열고,
  * 가동 스위치와 "이 기기에서 열기"는 열기 버튼 밖에 둔다. 스태프 배정은 선택이라 경고색을 쓰지 않는다.
  */
-export function DeskCard({ name, note, tone, dim, count, last, staff, onOpen, enterHref, enterPrimary, control }: DeskCardProps) {
+export function DeskCard({ name, note, tone, dim, count, last, staff, onOpen, enterHref, enterPrimary, poster, control }: DeskCardProps) {
   const lastLine = count === null ? null : last ? `마지막 처리 ${last}` : "아직 처리 기록이 없습니다";
   return (
     <li className={styles.deskCard} data-dim={dim ? "true" : undefined}>
@@ -172,11 +174,14 @@ export function DeskCard({ name, note, tone, dim, count, last, staff, onOpen, en
         <span className="sr-only">상세 보기</span>
       </button>
       <span className={styles.cardControl}>{control}</span>
-      {enterHref ? (
+      {enterHref || poster ? (
         <div className={styles.cardEnter}>
-          <ProductLink variant={enterPrimary ? "primary" : "secondary"} className={styles.cardEnterLink} href={enterHref} target="_blank" rel="noreferrer" aria-label={`${name} 이 기기에서 열기 (새 탭)`}>
-            이 기기에서 열기
-          </ProductLink>
+          {enterHref ? (
+            <ProductLink variant={enterPrimary ? "primary" : "secondary"} className={styles.cardEnterLink} href={enterHref} target="_blank" rel="noreferrer" aria-label={`${name} 이 기기에서 열기 (새 탭)`}>
+              이 기기에서 열기
+            </ProductLink>
+          ) : null}
+          {poster}
         </div>
       ) : null}
     </li>
