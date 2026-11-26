@@ -1,7 +1,7 @@
 'use strict';
 const { messageStep, openRecipientList, openMessagePanel, openMessageMore } = require('./ui-journey-helpers.cjs');
 
-const { chooseRadio } = require('./ui-journey-helpers.cjs');
+const { chooseRadio, settleLayout } = require('./ui-journey-helpers.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
@@ -25,6 +25,8 @@ const check = (name, condition) => { assert.ok(condition, name); checks.push(nam
     page.on('pageerror', error => errors.push(error.message));
     const base = `${f.baseUrl}/console/events/${f.eventId}`;
     const a11y = async (p, name) => {
+      // Colour contrast is sampled mid-transition (saved toasts, dialogs) unless the page has settled first.
+      await settleLayout(p);
       await p.evaluate(axeSource);
       const findings = await p.evaluate(async () => (await axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a','wcag2aa','wcag21a','wcag21aa'] } })).violations.filter(v => ['serious','critical'].includes(v.impact)).map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).join(' | ')}`));
       check(`${name}: no blocking accessibility findings ${JSON.stringify(findings)}`, findings.length === 0);
@@ -197,17 +199,18 @@ const check = (name, condition) => { assert.ok(condition, name); checks.push(nam
     await choices.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check();
     await openMessagePanel(choices, 'how');
     const channels = choices.locator('#campaign-channel');
-    check('two delivery families are visible single choices', await channels.getByRole('radio').count()===2 && await channels.locator('input:checked').count()===1);
+    check('three delivery choices (문자·사진 문자·알림톡) are visible single choices', await channels.getByRole('radio').count()===3 && await channels.locator('input:checked').count()===1);
     await choices.locator('#campaign-body').fill('채널을 바꿔도 보존할 문구');
-    await channels.getByRole('radio',{name:'문자',exact:true}).focus(); await choices.keyboard.press('ArrowRight');
-    await choices.waitForFunction(()=>document.querySelector('#campaign-channel input[value="ALIMTALK"]')?.checked);
+    await channels.locator('input[value="SMS"]').focus(); await choices.keyboard.press('ArrowRight');
+    // Card order is 문자 → 사진 문자 → 알림톡, so one ArrowRight from 문자 lands on 사진 문자.
+    await choices.waitForFunction(()=>document.querySelector('#campaign-channel input[value="MMS"]')?.checked);
     check('radio arrow chooses one message channel', await channels.locator('input:checked').count()===1);
     await channels.focus();
     check('field error focus reaches the checked native radio', await channels.locator('input:checked').evaluate(el=>el===document.activeElement));
     await chooseRadio(choices,'campaign-channel','ALIMTALK');
     check('channel changes preserve message text', await choices.locator('#campaign-body').inputValue()==='채널을 바꿔도 보존할 문구');
     await chooseRadio(choices,'campaign-channel','SMS');
-    check('SMS discloses existing content-dependent LMS conversion', await choices.locator('#campaign-channel-hint').innerText().then(t=>t.includes('LMS')));
+    check('SMS card discloses the long-message switch', await channels.innerText().then(t=>t.includes('장문')));
     await a11y(choices,'message channel choices');
     await choices.screenshot({path:path.join(out,'channel-choices-desktop.png'),fullPage:true});
     await choices.setViewportSize({width:390,height:844});
@@ -218,6 +221,8 @@ const check = (name, condition) => { assert.ok(condition, name); checks.push(nam
     await choices.screenshot({path:path.join(out,'channel-choices-phone.png'),fullPage:true});
     await openMessageMore(choices); // the saved-template picker and its 템플릿 관리 link sit under 더 보기 for 문자
     await choices.getByRole('button',{name:'템플릿 관리',exact:true}).click();
+    // Reopened 2026-11-26: 템플릿 관리 switches the workbench to its 템플릿 관리 tab (the composer closes); wait for that tab's panel.
+    await choices.locator('#templates-heading-panel').waitFor({ state: 'visible' });
     await chooseRadio(choices,'template-channel','ALIMTALK');
     check('template channel reveals required approved template ID', await choices.locator('#template-solapi-id').isVisible() && await choices.locator('#template-solapi-id').getAttribute('required')!==null);
     check('template and campaign selections remain independent', await channels.locator('input:checked').inputValue()==='SMS');

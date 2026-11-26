@@ -459,20 +459,15 @@ async function main() {
       await page.waitForFunction(() => document.activeElement?.id === 'campaign-body');
       check(`empty review stays blocked with a visible reason at ${width}`, await page.locator('#campaign-submit').isDisabled() && (await page.locator('#campaign-submit-warning').textContent()).includes('수신자를 먼저 고르세요') && f.gateway.commands.length === commandsBeforeContinue);
       await page.locator('#campaign-who-pill').focus();
-      if (!(await page.locator('#campaign-recipients').isVisible())) await page.keyboard.press('Enter');
-      await page.locator('#campaign-recipients').waitFor({ state: 'visible' });
-      check(`the first pill returns to the recipient panel by keyboard at ${width}`, (await page.locator('#campaign-who-pill').getAttribute('aria-expanded')) === 'true' && f.gateway.commands.length === commandsBeforeContinue);
-      if (!(await page.locator('#campaign-recipients details').evaluate(e => e.open))) await page.locator('#recipient-list-summary').click();
-      await page.locator('#recipient-status-filter').waitFor({ state: 'visible' });
+      // Reopened 2026-11-26: the first pill opens the 받는 사람 panel; the list itself is a dialog opened from its card.
+      if (!(await page.locator('#recipient-direct-open').isVisible())) await page.keyboard.press('Enter');
+      await page.locator('#recipient-direct-open').waitFor({ state: 'visible' });
+      check(`the first pill returns to the recipient panel by keyboard at ${width}`, await page.locator('#recipient-direct-open').isVisible() && f.gateway.commands.length === commandsBeforeContinue);
+      await openRecipientList(page);
       await page.screenshot({ path: `${OUT}/state-message-empty-review-${width}.png` });
       await page.locator('#recipient-status-filter').selectOption('ALL');
-      const picker = page.locator('#campaign-recipients details');
-      const summary = picker.locator('summary');
-      if (!(await picker.evaluate(e => e.open))) await summary.click();
-      // The browser opens native <details> immediately; its asynchronous
-      // toggle event subsequently synchronizes the React description.
-      await page.waitForFunction(() => document.querySelector('#recipient-list-summary')?.getAttribute('aria-describedby') === 'recipient-list-keyboard-help');
-      check(`recipient shortcut is explained at ${width}`, await page.locator('#recipient-list-keyboard-help').isVisible() && (await summary.getAttribute('aria-describedby')) === 'recipient-list-keyboard-help');
+      const picker = page.getByRole('dialog');
+      const summary = page.locator('#recipient-direct-open');
       const boxes = picker.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]');
       const count = await boxes.count();
       check(`long recipient list is present at ${width}`, count >= 50, count);
@@ -483,7 +478,7 @@ async function main() {
       await page.keyboard.press('Space');
       check(`keyboard selection is retained at ${width}`, await chosen.isChecked() && (await page.locator('#recipient-summary').innerText()).includes('선택 1명'));
       await page.keyboard.press('Escape');
-      check(`Escape closes the list and focuses its summary at ${width}`, !(await picker.evaluate(e => e.open)) && await summary.evaluate(e => e === document.activeElement));
+      check(`Escape closes the list and focuses its card at ${width}`, await picker.isHidden() && await summary.evaluate(e => e === document.activeElement));
       // The application aligns focus on the next frame, after closing the
       // long list has changed the page height and browser scroll position.
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -494,20 +489,19 @@ async function main() {
       });
       check(`focused recipient summary is in the viewport at ${width}`, focusPosition.top >= focusPosition.minimum && focusPosition.bottom <= focusPosition.viewport, focusPosition);
       await page.screenshot({ path: `${OUT}/state-message-keyboard-${width}.png` });
-      await page.keyboard.press('Tab');
-      // Reopened 2026-11-24 (시안 A): after the closed list the next stop is the panel's own 완료 button (the way out of the panel).
-      check(`next Tab reaches the panel's 완료 at ${width}`, await page.evaluate(() => Boolean(document.activeElement?.closest('#campaign-recipients')) && document.activeElement?.textContent?.trim() === '완료'));
-      await page.keyboard.press('Shift+Tab');
+      // Reopened 2026-11-26: the list is a dialog that closes with 완료 or Escape; there is no folded panel to Tab out of.
+      await summary.focus();
       await page.keyboard.press('Enter');
-      check(`reopening keeps the exact selection at ${width}`, await picker.evaluate(e => e.open) && await chosen.isChecked());
+      await picker.waitFor({ state: 'visible' });
+      check(`reopening keeps the exact selection at ${width}`, await chosen.isChecked());
       await page.locator('#recipient-clear-all').click();
-      await summary.click();
+      await page.locator('#recipient-list-close').click();
     }
     // The compact visible-set control replaces separate add/remove buttons.
     // Exercise its tri-state semantics against a real 100-person workspace:
     // a filtered deselection must never clear the selected person outside it.
-    const bulkPicker = page.locator('#campaign-recipients details');
-    if (!(await bulkPicker.evaluate(e => e.open))) await bulkPicker.locator('summary').click();
+    await openRecipientList(page);
+    const bulkPicker = page.getByRole('dialog');
     const bulk = page.getByRole('checkbox', { name: /표시 \d+명 모두 선택/ });
     const peopleBoxes = bulkPicker.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]');
     const firstBulkName = await peopleBoxes.nth(0).evaluate(e => e.closest('label')?.querySelector('span')?.textContent?.trim());
@@ -517,12 +511,12 @@ async function main() {
     await peopleBoxes.nth(1).check();
     check('partial visible selection is indeterminate', await bulk.evaluate(e => e.indeterminate && !e.checked));
     await page.locator('#recipient-search').fill(firstBulkName);
-    check('filtered bulk checkbox represents just the visible selection', await peopleBoxes.count() === 1 && await bulk.isChecked() && (await page.locator('#recipient-summary').innerText()).includes('화면 밖 선택 1명'));
+    check('filtered bulk checkbox represents just the visible selection', await peopleBoxes.count() === 1 && await bulk.isChecked() && (await page.getByRole('dialog').innerText()).includes('화면 밖 선택 1명'));
     await bulk.focus();
     await page.keyboard.press('Space');
-    check('keyboard bulk deselection preserves hidden selection', !(await bulk.isChecked()) && (await page.locator('#recipient-summary').innerText()).includes('선택 1명') && (await page.locator('#recipient-summary').innerText()).includes('화면 밖 선택 1명'));
+    check('keyboard bulk deselection preserves hidden selection', !(await bulk.isChecked()) && (await page.locator('#recipient-summary').innerText()).includes('선택 1명') && (await page.getByRole('dialog').innerText()).includes('화면 밖 선택 1명'));
     await page.keyboard.press('Space');
-    check('keyboard bulk selection unions visible and hidden recipients', await bulk.isChecked() && (await page.locator('#recipient-summary').innerText()).includes('선택 2명') && (await page.locator('#recipient-summary').innerText()).includes('화면 밖 선택 1명'));
+    check('keyboard bulk selection unions visible and hidden recipients', await bulk.isChecked() && (await page.locator('#recipient-summary').innerText()).includes('선택 2명') && (await page.getByRole('dialog').innerText()).includes('화면 밖 선택 1명'));
     await page.locator('#recipient-search').clear();
     check('both exact recipients remain selected after clearing the filter', await bulk.evaluate(e => e.indeterminate) && await peopleBoxes.nth(0).isChecked() && await peopleBoxes.nth(1).isChecked());
     const visibleCount = await peopleBoxes.count();
@@ -542,8 +536,8 @@ async function main() {
     // A confirmation is a snapshot, not authority to send after the visible
     // selection or draft changes. Keep the count at one while changing who
     // is selected, then also check edits and a return to the old text.
-    const safetyPicker = page.locator('#campaign-recipients details');
-    if (!(await safetyPicker.evaluate(e => e.open))) await safetyPicker.locator('summary').click();
+    await openRecipientList(page);
+    const safetyPicker = page.getByRole('dialog');
     const safetyBoxes = safetyPicker.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]');
     const changedRecipientName = await safetyBoxes.nth(1).evaluate(e => e.closest('label')?.querySelector('span')?.textContent?.trim());
     const changedRecipient = people.find(person => person.name === changedRecipientName);
@@ -567,8 +561,11 @@ async function main() {
     await page.locator('#campaign-submit').click();
     check('review is offered for an unchanged draft', await sendConfirmation.isVisible());
     await messageStep(page, 1);
+    // Reopened 2026-11-26: the list is a dialog, so reopen it for the changed recipient and close it again afterwards.
+    await openRecipientList(page);
     await safetyBoxes.nth(0).uncheck();
     await safetyBoxes.nth(1).check();
+    await page.locator('#recipient-list-close').click();
     check('changing the recipient invalidates the old confirmation even when the count is unchanged', !await sendConfirmation.isVisible() && (await page.locator('#campaign-review-status').textContent()).includes('발송 검토를 다시 눌러 주세요'));
     await messageStep(page, 3);
     await page.locator('#campaign-review-status').scrollIntoViewIfNeeded();
@@ -602,8 +599,8 @@ async function main() {
       && (await page.locator('#campaign-submit-warning').innerText()).includes('수동 실행'));
     await page.getByLabel('모의 발송으로 기록', { exact: false }).uncheck();
     check('real scheduled draft defaults to manual execution',
-      await page.getByRole('radio', { name: '수동 실행', exact: true }).isChecked()
-      && (await page.locator('#campaign-schedule').innerText()).includes('이 예약은 자동 발송되지 않습니다'));
+      (await page.locator('#campaign-schedule-mode').getAttribute('data-mode')) === 'MANUAL'
+      && (await page.locator('#campaign-schedule').innerText()).includes('발송 기록에서 ‘발송 실행’을 눌러야 나갑니다'));  // Reopened 2026-11-26: wording of the manual note
     await page.locator('#campaign-submit').click();
     check('manual reservation confirmation names the mode and action',
       (await sendConfirmation.innerText()).includes('수동 실행')
@@ -612,7 +609,7 @@ async function main() {
       && (await sendConfirmation.innerText()).includes('2028'));
     await sendConfirmation.getByRole('button', { name: '취소', exact: true }).click();
     await openMessagePanel(page, 'when');
-    await chooseRadio(page, 'campaign-schedule-mode', 'AUTO');
+    await page.locator('#campaign-schedule-mode').getByRole('button', { name: '자동 발송으로 바꾸기' }).click();
     await page.locator('#campaign-submit').click();
     check('explicit auto reservation confirmation names the mode and future activation',
       (await sendConfirmation.innerText()).includes('자동 실행')
@@ -634,7 +631,7 @@ async function main() {
     await messageStep(page, 2);
     await openMessagePanel(page, 'how');
     await chooseRadio(page, 'campaign-channel', 'MMS'); // Reopened 2026-11-26: 사진 문자 is chosen first; the photo then rides the MMS request.
-    await openMessageMore(page); // the photo attachment sits under 더 보기
+    // Reopened 2026-11-26: the photo row sits in the 어떻게 보낼까요 panel (no 더 보기), beside the 보내는 방법 cards.
     const jpeg = Buffer.alloc(1024);
     Buffer.from('ffd8ffc0000b080001000a01011100ffd9', 'hex').copy(jpeg);
     await page.locator('#campaign-image').setInputFiles({ name: 'review-test.jpg', mimeType: 'image/jpeg', buffer: jpeg });
@@ -646,7 +643,18 @@ async function main() {
     check('even a rejected attachment selection invalidates the older review', !await sendConfirmation.isVisible() && (await page.locator('#campaign-review-status').textContent()).includes('발송 검토를 다시 눌러 주세요'));
     check('rejected attachment does not transmit a message', f.gateway.commands.filter(command => ['message.create', 'message.create-reviewed'].includes(command.command)).length === f.gateway.commands.slice(0, commandsBeforeJumps).filter(command => ['message.create', 'message.create-reviewed'].includes(command.command)).length);
     await messageStep(page, 2);
-    await page.getByRole('button', { name: '사진 첨부 해제', exact: true }).click();
+    // Reopened 2026-11-26: 삭제 removes the photo and returns the drop zone; 사진 문자 stays chosen.
+    const photoRow = page.locator('[data-message-attachment]');
+    await photoRow.getByRole('button', { name: '삭제', exact: true }).click();
+    check('removing the photo keeps 사진 문자 and returns the drop zone', await page.locator('#campaign-channel input[value="MMS"]').isChecked() && await photoRow.getByText('사진을 끌어다 놓거나 눌러서 선택').isVisible());
+    // A 사진 문자 without its photo is refused before any review; then the photo is attached again for the rest of the flow.
+    await messageStep(page, 3);
+    await page.locator('#campaign-submit').click();
+    await page.locator('#campaign-image-error').waitFor({ state: 'visible' });
+    check('a 사진 문자 without its photo is refused before review', (await page.locator('#campaign-image-error').innerText()).includes('사진을 첨부해야') && !(await sendConfirmation.isVisible()));
+    await messageStep(page, 2);
+    await page.locator('#campaign-image').setInputFiles({ name: 'review-test.jpg', mimeType: 'image/jpeg', buffer: jpeg });
+    await page.waitForFunction(() => document.querySelector('#campaign-image-help')?.textContent?.includes('첨부됨:'));
     // A real validation response must reopen a closed schedule and return
     // focus to the field without creating a message or losing its value.
     await messageStep(page, 3);
@@ -679,7 +687,7 @@ async function main() {
     await page.locator('#message-compose-open').click();
     await page.locator('#campaign-who-pill').waitFor({ state: 'visible' });
     await page.waitForFunction(() => document.activeElement?.id === 'campaign-who-pill');
-    check('a fresh draft starts by choosing recipients', (await page.locator('#recipient-summary').innerText()).includes('선택 0명') && (await page.locator('#campaign-who-pill').innerText()).includes('받는 사람 고르기'));
+    check('a fresh draft starts by choosing recipients', (await page.locator('#recipient-summary').innerText()).includes('선택 0명') && (await page.locator('#campaign-who-pill').innerText()).includes('받는 사람 선택'));
     await openRecipientList(page);
     await safetyPicker.locator('ul input[type="checkbox"]').first().check();
     await messageStep(page, 2);

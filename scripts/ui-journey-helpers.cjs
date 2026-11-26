@@ -52,7 +52,12 @@ async function closeSettingsBasics(page, timeout = 15000) {
 async function chooseRadio(root, id, value) {
   const choices = await root.locator(`#${id} input[type="radio"]`).all();
   for (const choice of choices) {
-    if (await choice.getAttribute('value') === value) { await choice.check({ force: true }); return; }
+    if (await choice.getAttribute('value') === value) {
+      // Some option cards hide the native radio visually (sr-only); pick it through its label then.
+      if (await choice.isVisible()) await choice.check({ force: true });
+      else await choice.evaluate(el => (el.labels?.[0] ?? el).click());
+      return;
+    }
   }
   throw new Error(`Unavailable single choice: ${id}/${value}`);
 }
