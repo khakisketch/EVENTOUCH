@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep, openSettingsBasics, settleLayout, openRecipientList, openMessagePanel, openMessageMore } = require('./ui-journey-helpers.cjs');
+const { messageStep, openSettingsBasics, settleLayout, openRecipientList, closeRecipientList, openMessagePanel, openMessageMore } = require('./ui-journey-helpers.cjs');
 
 
 // Event-close paired journey: one operator closes out a LIVE event end to
@@ -891,6 +891,8 @@ async function main() {
       await messageStep(page, 1);
       await openRecipientList(page);
       await page.locator('#recipient-clear-all').click();
+      // Reopened 2026-11-26: the list is a dialog now; leaving it open covers the archive confirmation below.
+      await closeRecipientList(page);
       const archiveAttempts = [];
       let loseArchiveReply = true;
       const archiveRoute = async route => {
