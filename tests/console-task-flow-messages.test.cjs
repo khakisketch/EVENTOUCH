@@ -165,8 +165,8 @@ test('reload preloads content, reveals any retained selection, and focuses the r
   // Context lands on the in-form summary, then focuses the title without
   // moving the viewport again (title focus contract preserved).
   assert.match(SOURCE, /getElementById\("campaign-reload-summary"\)\?\.scrollIntoView/u);
-  assert.match(SOURCE, /const nextStep = eligible\.length && !excluded && !source\.recipientChangeCount \? 2 : 1;\s*if \(nextStep === 1\) setOpenPanel\("who"\);/u, 'a set needing review opens the who panel');
-  assert.match(SOURCE, /setRecipientListOpen\(true\);\s*setSendPending\(null\)/u, 'the reloaded set is revealed in the picker list');
+  assert.match(SOURCE, /const nextStep = eligible\.length && !excluded && !source\.recipientChangeCount \? 2 : 1;\s*setComposerOpen\(true\)/u);
+  assert.match(SOURCE, /setRecipientListOpen\(nextStep === 1\);\s*setSendPending\(null\)/u, 'a set that needs a decision opens the picker dialog; a clean one does not');
   assert.match(SOURCE, /getElementById\(nextStep === 1 \? "recipient-search" : "campaign-body"\)\?\.focus/u);
   assert.doesNotMatch(SOURCE, /getElementById\("campaign-(?:title|body)"\)\?\.scrollIntoView/u);
   // Image references survive only for MMS; other channels drop them.
@@ -220,7 +220,7 @@ test('reloaded-source summary renders as info above the sentence panels, never a
   assert.ok(titleField !== -1, 'expected the message body');
   assert.ok(summaryRender < titleField, 'summary must precede the message body');
   assert.ok(summaryRender > SOURCE.indexOf('id="campaign-sentence"'), 'summary sits under the sentence');
-  assert.ok(summaryRender < SOURCE.indexOf('id="campaign-recipients"'), 'summary precedes the folded panels');
+  assert.ok(summaryRender < SOURCE.indexOf('id="campaign-recipients"'), 'summary precedes the zones');
   assert.match(SOURCE, /<ConsoleFeedback kind="info" id="campaign-reload-summary">\{reloadSummary\}<\/ConsoleFeedback>/u);
   // Reopened 2026-11-24 (시안 A): the summary renders once directly under the sentence
   // (no per-step copy, never inside a foldable panel) and is read before every field.

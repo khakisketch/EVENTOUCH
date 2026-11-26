@@ -25,14 +25,15 @@ test('message workbench leads with comparable history and mounts the draft witho
 });
 
 // Reopened 2026-11-24 (owner: 시안 A): there is no composeStep; each entry path reveals the mounted
-// composer and opens the who panel only when the retained selection still needs a look.
+// composer. Reopened 2026-11-26: the zones are always visible, so no path opens a panel; the list dialog opens only
+// when a reloaded set needs a decision.
 test('handoff, template use and failed-reload recovery reveal the mounted composer', () => {
   assert.doesNotMatch(source, /setComposeStep|composeStep/u, 'no step state remains');
-  assert.match(source, /setSelectedIds\(valid\);\s*if \(!\(valid\.length > 0 && excluded === 0\)\) setOpenPanel\("who"\);\s*setComposerOpen\(true\)/u);
+  assert.match(source, /setSelectedIds\(valid\);\s*setComposerOpen\(true\)/u);
   const apply = source.slice(source.indexOf('function applyTemplate('), source.indexOf('function useTemplate('));
   assert.match(apply, /if \(template\.archived\)/u);
-  assert.match(apply, /focusComposerOnOpenRef\.current = true;\s*revealComposer\(\)/u);
-  assert.match(source, /setSelectedIds\(eligible\);\s*const nextStep = eligible\.length && !excluded && !source\.recipientChangeCount \? 2 : 1;\s*if \(nextStep === 1\) setOpenPanel\("who"\);\s*setComposerOpen\(true\)/u);
+  assert.match(apply, /if \(!composerOpen\) \{ focusComposerOnOpenRef\.current = true; revealComposer\(\); \}/u, 'an inline pick never jumps the page');
+  assert.match(source, /setSelectedIds\(eligible\);\s*const nextStep = eligible\.length && !excluded && !source\.recipientChangeCount \? 2 : 1;\s*setComposerOpen\(true\)/u);
   assert.match(source, /function reportBlockedReload\(\) \{\s*setComposerOpen\(true\)/u);
   // The opened composer lands on the first pill of the sentence.
   assert.match(source, /document\.getElementById\("campaign-who-pill"\)\?\.focus\(\{ preventScroll: true \}\)/u);

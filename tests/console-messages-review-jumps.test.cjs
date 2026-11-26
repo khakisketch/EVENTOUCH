@@ -34,14 +34,11 @@ test('review navigation shows the relevant input panel when prerequisites are mi
   assert.match(fn, /field: campaignDraft\.channel === "ALIMTALK" \? "templateId" : "body"/u);
   assert.match(fn, /messageContentIssue\(campaignDraft, boundTemplate\)/u);
   assert.doesNotMatch(fn, /postCommand|executeCampaignCreate|requestSubmit|\.submit\(/u);
-  // Each field error opens its folded panel first, then focuses the field.
-  assert.match(SOURCE, /campaignFieldError\.field === "ids"\) setOpenPanel\("who"\)/u);
-  assert.match(SOURCE, /field === "channel" \|\| campaignFieldError\.field === "smsFallback"\) setOpenPanel\("how"\)/u);
-  assert.match(SOURCE, /campaignFieldError\.field === "scheduled"\) setOpenPanel\("when"\)/u);
-  // Reopened 2026-11-25 (owner): no folded 더 보기 block and no title field; photo and saved template are always visible.
-  assert.match(SOURCE, /field === "templateId" && campaignDraft\.channel === "ALIMTALK"\) setOpenPanel\("how"\)/u);
+  // Reopened 2026-11-26: every zone is always visible, so a field error only focuses its field (nothing to unfold).
+  assert.doesNotMatch(SOURCE, /setOpenPanel/u);
   assert.match(SOURCE, /campaignFieldError\.field === "title"\) setTitleOpen\(true\)/u);
-  assert.match(SOURCE, /ids: "recipient-status-filter", title: "campaign-title", body: "campaign-body", smsFallback: "campaign-sms-fallback", templateId: "campaign-template", imageFileId: "campaign-image", scheduled: "campaign-scheduled"/u);
+  assert.match(SOURCE, /ids: "recipient-status-filter", title: "campaign-title", body: "campaign-body", channel: "campaign-channel", smsFallback: "campaign-sms-fallback", templateId: campaignDraft\.channel === "ALIMTALK" \? "campaign-template-cards" : "campaign-template", imageFileId: "campaign-image", scheduled: "campaign-scheduled"/u);
+  assert.match(SOURCE, /#campaign-recipients button:not\(:disabled\)/u, 'no list open: land on the first audience card');
   assert.match(SOURCE, /document\.getElementById\(ids\[campaignFieldError\.field\]/u);
 });
 
@@ -65,21 +62,19 @@ test('review summary is a focusable reason surface, never a tab stop', () => {
 });
 
 test('the who pill and the 이름 확인 link reach the picker, never send', () => {
-  // Replaces the forward/back jump brackets: the pill toggles the panel; the name-review link
-  // opens the panel and list, then focuses the status filter.
-  assert.match(SOURCE, /function togglePanel\(panel: "who" \| "how" \| "when"\) \{ setOpenPanel\(current => current === panel \? null : panel\); \}/u);
+  // Replaces the forward/back jump brackets: the pill scrolls to its zone; the name-review link
+  // opens the list dialog, then focuses the status filter.
+  assert.match(SOURCE, /function jumpToSection\(sectionId: string\) \{/u);
   const fnAt = SOURCE.indexOf('function jumpToRecipientFilter()');
   assert.ok(fnAt !== -1, 'expected the picker jump handler');
   const fnWindow = SOURCE.slice(fnAt, fnAt + 600);
-  assert.match(fnWindow, /setOpenPanel\("who"\)/u, 'the jump opens the folded panel before focusing');
   assert.match(fnWindow, /setRecipientListOpen\(true\)/u, 'the jump opens the list');
   assert.match(fnWindow, /getElementById\("recipient-status-filter"\)/u, 'landing returns to the picker');
   assert.match(fnWindow, /\.focus\(/u, 'the jump moves focus');
   assert.match(fnWindow, /scrollIntoView/u, 'sighted operators follow the return');
   assert.doesNotMatch(fnWindow, /postCommand|executeCampaignCreate|requestSubmit|\.submit\(|message\.create/u, 'the return never sends');
-  // 완료 closes a panel and returns focus to its pill; no panel button submits.
-  assert.match(SOURCE, /function closePanel\(returnFocusId: string\) \{\s*setOpenPanel\(null\);/u);
-  for (const pill of ['campaign-who-pill', 'campaign-how-pill', 'campaign-when-pill']) assert.match(SOURCE, new RegExp(`closePanel\\("${pill}"\\)`, 'u'));
+  // 완료 closes the list dialog; nothing in it submits.
+  assert.match(SOURCE, /onClick=\{\(\) => setRecipientListOpen\(false\)\}>\{selectedCount > 0 \? `선택 \$\{selectedCount\}명 완료` : "완료"\}/u);
   assert.match(SOURCE, /id="campaign-who-pill" className=\{styles\.pill\}/u);
   assert.equal((SOURCE.match(/<button type="button" id="campaign-(?:who|how|when)-pill"/gu) ?? []).length, 3, 'pills are plain buttons');
 });
@@ -90,16 +85,16 @@ test('new jump controls keep native semantics and the 44px floor', () => {
   assert.doesNotMatch(CSS, /#[0-9a-fA-F]{3,8}\b/u, 'tokens only, no hex colors');
 });
 
-test('the open recipient list explains and supports keyboard escape without changing selection', () => {
-  const detailsAt = SOURCE.indexOf('className={styles.recipientDetails}');
-  const details = SOURCE.slice(detailsAt, detailsAt + 2000);
-  assert.match(details, /onKeyDown=/u, 'the open native disclosure handles Escape');
-  assert.match(details, /event\.key === "Escape"/u);
-  assert.match(details, /setRecipientListOpen\(false\)/u);
-  assert.match(details, /querySelector<HTML.*Element>\("summary"\)[\s\S]*?summary\?\.focus\(\)/u, 'focus returns to the disclosure summary');
-  assert.match(details, /requestAnimationFrame[\s\S]*?document\.activeElement === summary[\s\S]*?summary\.scrollIntoView/u, 'after closing, the focused summary remains visible without stealing moved focus');
-  assert.match(details, /Esc.*선택.*유지/u, 'the shortcut and preservation are explained where they are used');
-  assert.doesNotMatch(details.slice(0, details.indexOf('<summary')), /setSelectedIds|clearAllRecipients/u, 'closing the list cannot alter recipients');
+// Reopened 2026-11-26: the list is the shared dialog, so Escape, the scrim, focus return and the trap are its job.
+test('the open recipient list is a dialog that closes without changing the selection', () => {
+  const dialogAt = SOURCE.indexOf('title="직접 고르기"');
+  assert.ok(dialogAt !== -1, 'expected the direct-pick dialog');
+  const dialog = SOURCE.slice(dialogAt - 80, dialogAt + 1200);
+  assert.match(dialog, /<ConsoleDialog\s+title="직접 고르기"\s+presentation="drawer"\s+onClose=\{\(\) => setRecipientListOpen\(false\)\}/u, 'the shared dialog closes the list');
+  assert.doesNotMatch(dialog.slice(0, dialog.indexOf('footer=')), /setSelectedIds|clearAllRecipients/u, 'closing the list cannot alter recipients');
+  assert.match(SOURCE, /recipientListOpen \? \(\s*<ConsoleDialog/u, 'the dialog is mounted only while open');
+  assert.match(SOURCE, /if \(event\.key === "Enter"\) event\.preventDefault\(\)/u, 'Enter in the search never submits the send review');
+  assert.doesNotMatch(SOURCE, /recipient-list-summary|className=\{styles\.recipientDetails\}/u, 'the folded disclosure is gone');
 });
 
 test('a staged message cannot be confirmed after its recipients or draft change', () => {

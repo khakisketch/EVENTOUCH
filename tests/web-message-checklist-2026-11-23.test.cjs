@@ -81,37 +81,46 @@ test('보낼 때 sends the event-relative rule and states that it follows later 
   assert.match(SOURCE, /행사 날짜가 바뀌면 이 예약도 같은 기준으로 함께 옮겨집니다\. 옮긴 시각이 이미 지났다면 발송하지 않고 예약을 취소합니다\./u);
   assert.match(SOURCE, /effectiveScheduleChoice === "EVENT"\) payload\.scheduleAnchor = \{ kind: "EVENT_DATE", days: eventOffset\.days, time: eventOffset\.time \}/u);
   const choose = SOURCE.slice(SOURCE.indexOf('function chooseSchedule('), SOURCE.indexOf('function changeEventOffset('));
-  assert.match(choose, /choice === "NOW"\) setCampaignDraft\(current => \(\{ \.\.\.current, scheduled: "", scheduleMode: "MANUAL" \}\)\)/u);
+  assert.match(choose, /choice === "NOW"\) \{ scheduleModeTouchedRef\.current = false; setCampaignDraft\(current => \(\{ \.\.\.current, scheduled: "", scheduleMode: "MANUAL" \}\)\); \}/u);
   assert.match(SOURCE, /id="campaign-scheduled"/u, 'the exact date input and its validation stay');
   assert.match(SOURCE, /예약 시각은 현재 이후로 설정하세요\./u);
 });
 
-// Reopened 2026-11-24 (owner: 시안 A): the four-zone checklist became one sentence with three pill
-// buttons, each opening one inline panel; the old "every zone is mounted" test is replaced by the
-// sentence / panels / preview contract below. Folded panels stay mounted and use `hidden`.
-test('one sentence: three pills open three mounted panels, one at a time', () => {
+// Reopened 2026-11-26 (owner: 한 화면 네 구역): the three pills no longer open folded panels. 누구에게 · 어떻게 ·
+// 언제 · 무엇을 are four always-mounted zones; the pills scroll to the first three, the sentence stays in view on
+// wide screens, 직접 고르기 is a dialog, and the send dock sits under the preview.
+test('one sentence: three pills scroll to four always-mounted zones', () => {
   assert.doesNotMatch(SOURCE, /hidden=\{composeStep !== 3\}|composeStep|goComposeStep|composeChecklist|data-layout="checklist"|data-step=/u, 'no step state or checklist remains');
   assert.doesNotMatch(SOURCE, /aria-label="메시지 작성 항목"|aria-label="메시지 작성 단계"/u);
-  assert.match(SOURCE, /const \[openPanel, setOpenPanel\] = useState<"who" \| "how" \| "when" \| null>\(null\)/u, 'at most one panel is open');
-  assert.match(SOURCE, /function togglePanel\(panel: "who" \| "how" \| "when"\) \{ setOpenPanel\(current => current === panel \? null : panel\); \}/u);
-  for (const [pill, panel, key] of [['campaign-who-pill', 'campaign-recipients', 'who'], ['campaign-how-pill', 'campaign-how-panel', 'how'], ['campaign-when-pill', 'campaign-schedule', 'when']]) {
-    assert.match(SOURCE, new RegExp(`<button type="button" id="${pill}"[^>]*aria-expanded=\\{openPanel === "${key}"\\}[^>]*aria-controls="${panel}"[^>]*onClick=\\{\\(\\) => togglePanel\\("${key}"\\)\\}`, 'u'), `${pill} toggles ${panel}`);
-    assert.match(SOURCE, new RegExp(`id="${panel}"[^>]*hidden=\\{openPanel !== "${key}"\\}`, 'u'), `${panel} is mounted and folded with hidden`);
+  assert.doesNotMatch(SOURCE, /openPanel|setOpenPanel|togglePanel|closePanel/u, 'no folded panels remain');
+  assert.match(SOURCE, /function jumpToSection\(sectionId: string\)/u);
+  for (const [pill, zone] of [['campaign-who-pill', 'campaign-recipients'], ['campaign-how-pill', 'campaign-how-panel'], ['campaign-when-pill', 'campaign-schedule']]) {
+    assert.match(SOURCE, new RegExp(`<button type="button" id="${pill}"[^>]*aria-controls="${zone}"[^>]*onClick=\\{\\(\\) => jumpToSection\\("${zone}"\\)\\}`, 'u'), `${pill} scrolls to ${zone}`);
+    assert.doesNotMatch(SOURCE, new RegExp(`id="${zone}"[^>]*hidden=`, 'u'), `${zone} is always visible`);
   }
-  // The panels hold their fields: who → presets, summary and the (closed) list; how → channel,
-  // fallback and the 알림톡 template picker; when → the choice, offsets and the exact date.
+  // The zones hold their fields: who → audience cards and summary (the 직접 고르기 list is a dialog after the
+  // composer's fieldset, so a locked composer can still be read); how → channel cards, fallback and the photo drop
+  // zone; when → the choice cards, offsets, the exact date and the execution line; what → the purpose chips or the
+  // approved alimtalk template cards.
   const who = SOURCE.slice(SOURCE.indexOf('id="campaign-recipients"'), SOURCE.indexOf('id="campaign-how-panel"'));
-  for (const id of ['recipient-preset-', 'recipient-summary', 'recipient-list-summary', 'recipient-status-filter']) assert.ok(who.includes(id), `who panel holds ${id}`);
+  for (const id of ['recipient-preset-', 'recipient-direct-open', 'recipient-summary']) assert.ok(who.includes(id), `who zone holds ${id}`);
+  const pick = SOURCE.slice(SOURCE.indexOf('title="직접 고르기"'), SOURCE.indexOf('</ValidatedForm>'));
+  for (const id of ['recipient-status-filter', 'recipient-group-filter', 'recipient-search', 'recipient-selected-only', 'recipient-clear-all']) assert.ok(pick.includes(id), `the list dialog holds ${id}`);
+  assert.ok(SOURCE.indexOf('title="직접 고르기"') > SOURCE.indexOf('</fieldset>', SOURCE.indexOf('className={styles.composeLock}')), 'the dialog follows the composer fieldset');
   const how = SOURCE.slice(SOURCE.indexOf('id="campaign-how-panel"'), SOURCE.indexOf('id="campaign-schedule"'));
-  for (const id of ['campaign-channel', 'campaign-sms-fallback']) assert.ok(how.includes(id), `how panel holds ${id}`);
-  assert.match(how, /campaignDraft\.channel === "ALIMTALK" \? templatePickerNode : null/u, 'alimtalk template picker lives in the how panel');
+  for (const id of ['campaign-channel', 'campaign-sms-fallback', 'campaign-image']) assert.ok(how.includes(id), `how zone holds ${id}`);
+  assert.doesNotMatch(how, /templatePickerNode/u, 'the alimtalk template is chosen in zone 4, not in zone 2');
   const when = SOURCE.slice(SOURCE.indexOf('id="campaign-schedule"'), SOURCE.indexOf('id="campaign-content"'));
-  for (const id of ['campaign-schedule-choice', 'campaign-event-offset', 'campaign-event-time', 'campaign-scheduled', 'campaign-schedule-mode']) assert.ok(when.includes(id), `when panel holds ${id}`);
-  assert.match(when, /effectiveScheduleChoice === "DATE" \? <div>[\s\S]*?id="campaign-scheduled"/u, 'the exact date input appears only when 날짜·시각 지정 is chosen');
-  // Order: sentence, panels, content, preview, send area, dock with the one submit.
-  const order = ['id="campaign-sentence"', 'id="campaign-recipients"', 'id="campaign-how-panel"', 'id="campaign-schedule"', 'id="campaign-content"', 'id="campaign-body"', 'className={styles.previewPane}', 'className={styles.sendArea}', 'id="campaign-review-heading"', 'className={styles.sendDock}', 'id="campaign-submit"'].map(id => SOURCE.indexOf(id));
+  for (const id of ['campaign-schedule-choice', 'campaign-event-offset', 'campaign-event-time', 'campaign-scheduled', 'campaign-schedule-mode']) assert.ok(when.includes(id), `when zone holds ${id}`);
+  assert.match(when, /effectiveScheduleChoice === "DATE" \? <div className=\{styles\.dateField\}>[\s\S]*?id="campaign-scheduled"/u, 'the exact date input appears only when 날짜·시각 지정 is chosen');
+  const what = SOURCE.slice(SOURCE.indexOf('id="campaign-content"'), SOURCE.indexOf('className={styles.recordName}'));
+  assert.match(what, /id="campaign-template-cards"/u, 'alimtalk shows the approved templates as cards');
+  assert.match(what, /campaignDraft\.channel !== "ALIMTALK" \? templatePickerNode : null/u, 'the saved-template picker belongs to the text channels');
+  assert.match(what, /hidden=\{campaignDraft\.channel === "ALIMTALK"\}/u, 'approved text is never edited');
+  // Order: sentence, zones, content, preview rail with the dock, send area.
+  const order = ['id="campaign-sentence"', 'id="campaign-recipients"', 'id="campaign-how-panel"', 'id="campaign-schedule"', 'id="campaign-content"', 'id="campaign-body"', 'className={styles.previewPane}', 'className={styles.sendDock}', 'id="campaign-submit"', 'className={styles.sendArea}', 'id="campaign-review-heading"'].map(id => SOURCE.indexOf(id));
   assert.ok(order.every(at => at !== -1), 'every landmark exists');
-  assert.deepEqual([...order].sort((a, b) => a - b), order, 'zones follow the sentence order');
+  assert.deepEqual([...order].sort((a, b) => a - b), order, 'zones follow the sentence order, the dock follows the preview');
   assert.equal((SOURCE.match(/id="campaign-submit"/gu) ?? []).length, 1);
   // The heading landings that survive keep their focus-landing contract.
   assert.match(SOURCE, /id="campaign-content" tabIndex=\{-1\}/u);
@@ -135,7 +144,8 @@ test('the preview stays beside the writing and becomes a dismissible bottom shee
   assert.doesNotMatch(SOURCE.slice(SOURCE.indexOf('function openPreview()'), SOURCE.indexOf('useEffect(() => {\n    if (!previewOpen) return;')), /postCommand|executeCampaignCreate|setCampaignDraft|setSelectedIds/u);
   // Desktop shows the pane; ≤1024px it is hidden until opened as a fixed bottom sheet.
   const CSS = fs.readFileSync(path.join(ROOT, 'apps/web/app/console/events/[id]/messages/MessagingWorkspace.module.css'), 'utf8');
-  assert.match(CSS, /\.previewPane \{ position: sticky;/u);
+  // Reopened 2026-11-26: the preview and the send dock share one sticky rail.
+  assert.match(CSS, /\.rail \{ position: sticky;/u);
   assert.match(CSS, /@media \(max-width: 1024px\) \{[\s\S]*?\.previewPane \{ display: none; position: static; \}[\s\S]*?\.previewPane\[data-open="true"\] \{ display: grid; position: fixed; inset: auto 0 0 0;/u);
   assert.match(CSS, /\.previewClose, \.previewOpen \{ display: inline-flex;/u, 'the opener and closer only exist where the sheet does');
 });

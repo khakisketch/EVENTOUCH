@@ -24,15 +24,13 @@ const CSS = fs.readFileSync(
   'utf8'
 );
 
-test('no step jump remains: panels are folded and the submit is reachable without a jump control', () => {
+test('no step jump remains: the four zones are always mounted and the submit is reachable without a jump control', () => {
   assert.doesNotMatch(SOURCE, /campaign-send-skip|jumpToCampaignSubmit|jumpToCampaignTitle|goComposeStep|발송 검토로 이동/u, 'the step-era jumps are gone');
-  // Folded panels use the hidden attribute so their controls leave the tab order and the a11y tree.
-  assert.match(SOURCE, /id="campaign-recipients"[^>]*hidden=\{openPanel !== "who"\}/u);
-  assert.match(SOURCE, /id="campaign-how-panel"[^>]*hidden=\{openPanel !== "how"\}/u);
-  assert.match(SOURCE, /id="campaign-schedule"[^>]*hidden=\{openPanel !== "when"\}/u);
-  assert.match(CSS, /\.panel\[hidden\] \{ display: none; \}/u, 'a hidden panel is never drawn or tabbed');
-  // The recipient list is closed by default; it opens from 직접 고르기 or a flow that needs review.
-  assert.match(SOURCE, /const \[recipientListOpen, setRecipientListOpen\] = useState\(false\)/u, 'the long list starts folded');
+  // Reopened 2026-11-26: nothing is folded away from the tab order any more; the only mounted-on-demand part is the list dialog.
+  for (const zone of ['campaign-recipients', 'campaign-how-panel', 'campaign-schedule']) assert.doesNotMatch(SOURCE, new RegExp(`id="${zone}"[^>]*hidden=`, 'u'), `${zone} is never hidden`);
+  assert.doesNotMatch(CSS, /\.panel\[hidden\]/u, 'the folded-panel rule is gone');
+  // The recipient list dialog is closed by default; it opens from 직접 고르기 or a flow that needs review.
+  assert.match(SOURCE, /const \[recipientListOpen, setRecipientListOpen\] = useState\(false\)/u, 'the long list starts closed');
   // The submit follows every panel, the body and the photo field in DOM order.
   const submitAt = SOURCE.indexOf('id="campaign-submit"');
   for (const id of ['id="campaign-recipients"', 'id="campaign-schedule"', 'id="campaign-body"', 'id="campaign-image"', 'id="campaign-title"']) {
@@ -50,12 +48,10 @@ test('the dock lands on the review summary or the submit without sending', () =>
   assert.match(submit, /!selectedIds\.length/u);
   assert.match(submit, /!campaignDraft\.body\.trim\(\)/u);
   assert.match(submit, /event\.preventDefault\(\)/u);
-  // Field errors open the folded panel that owns the field, then focus it.
-  const reveal = SOURCE.slice(SOURCE.indexOf('The field lives in a folded panel'), SOURCE.indexOf('if (recipientReviewRequired) return;'));
-  assert.match(reveal, /field === "ids"\) setOpenPanel\("who"\)/u);
-  assert.match(reveal, /field === "scheduled"\) setOpenPanel\("when"\)/u);
-  // Reopened 2026-11-25 (owner): the folded 더 보기 block is gone, so only the 알림톡 template needs a panel opened.
-  assert.match(reveal, /field === "templateId" && campaignDraft\.channel === "ALIMTALK"\) setOpenPanel\("how"\)/u);
+  // Field errors focus the field that owns them; every zone is visible, so nothing has to be unfolded first.
+  const reveal = SOURCE.slice(SOURCE.indexOf('if (!campaignFieldError) return;'), SOURCE.indexOf('if (recipientReviewRequired) return;'));
+  assert.match(reveal, /field === "title"\) setTitleOpen\(true\)/u);
+  assert.doesNotMatch(reveal, /setOpenPanel/u);
   assert.doesNotMatch(reveal, /postCommand|executeCampaignCreate|requestSubmit|\.click\(/u);
 });
 
@@ -67,9 +63,9 @@ test('submit button id and labelling are preserved', () => {
   const submitWindow = SOURCE.slice(submitAt, submitEnd);
   assert.match(submitWindow, /type="submit"/u);
   assert.match(submitWindow, /발송 검토/u);
-  // The submit lives in a sticky dock beside the preview opener (시안 A).
-  assert.match(SOURCE, /<div className=\{styles\.sendDock\}>[\s\S]*?id="message-preview-open"[\s\S]*?id="campaign-submit"/u);
-  assert.match(CSS, /\.sendDock \{[^}]*position: sticky;[^}]*bottom: 0/u);
+  // The submit lives in the send dock beside the preview opener, under the preview in the rail.
+  assert.match(SOURCE, /<div className=\{styles\.sendDock\}[^>]*>[\s\S]*?id="message-preview-open"[\s\S]*?id="campaign-submit"/u);
+  assert.match(CSS, /@media \(max-width: 1024px\) \{[\s\S]*?\.sendDock \{ position: sticky; bottom: 0;/u, 'on small screens the dock sticks to the bottom');
   // Scroll target stays reachable for sighted operators.
   assert.match(CSS, /#campaign-submit/u);
   assert.match(CSS, /scroll-margin-top/u);
@@ -100,7 +96,7 @@ test('touch target and token-only styling hold', () => {
   assert.match(CSS, /\.sendDock \{[^}]*env\(safe-area-inset-bottom/u, 'the dock clears the device inset');
   assert.match(
     CSS,
-    /@media \(max-width: 1024px\) \{[\s\S]*?\.sendDock \{ border-top: 1px solid var\(--line\); \}/u,
+    /@media \(max-width: 1024px\) \{[\s\S]*?\.sendDock \{[^}]*border-top: 1px solid var\(--line\)/u,
     'the phone dock is separated from the fields it floats over'
   );
 });

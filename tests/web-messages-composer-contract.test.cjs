@@ -132,12 +132,17 @@ test('approved messages design stays locked', () => {
   // 보낼 때 are three pill buttons that each open one inline panel (one at a time); audience presets
   // lead the who panel, purpose chips load starting text, the preview stays beside the writing, and
   // rarely used options fold into 더 보기. No checklist, step row or review card remains.
+  // Reopened 2026-11-26 (owner: 한 화면 네 구역): the three pills only scroll to four always-mounted zones;
+  // 누구에게 · 어떻게 · 언제 · 무엇을 are cards, the direct-pick list is a dialog, and the chosen pill is ink.
   assert.match(SOURCE, /<p className=\{styles\.sentence\} id="campaign-sentence">/u, 'one sentence names the choices');
-  for (const [pill, panel] of [['campaign-who-pill', 'campaign-recipients'], ['campaign-how-pill', 'campaign-how-panel'], ['campaign-when-pill', 'campaign-schedule']]) {
-    assert.match(SOURCE, new RegExp(`id="${pill}"[^>]*aria-expanded=\\{openPanel === "${pill.split('-')[1]}"\\}[^>]*aria-controls="${panel}"`, 'u'), `${pill} controls ${panel}`);
+  for (const [pill, zone] of [['campaign-who-pill', 'campaign-recipients'], ['campaign-how-pill', 'campaign-how-panel'], ['campaign-when-pill', 'campaign-schedule']]) {
+    assert.match(SOURCE, new RegExp(`id="${pill}"[^>]*aria-controls="${zone}"[^>]*onClick=\\{\\(\\) => jumpToSection\\("${zone}"\\)\\}`, 'u'), `${pill} scrolls to ${zone}`);
+    assert.doesNotMatch(SOURCE, new RegExp(`id="${zone}"[^>]*hidden=`, 'u'), `${zone} is always mounted and visible`);
   }
-  assert.match(CSS, /\.pill\[aria-expanded="true"\]\s*\{[^}]*border-color: var\(--ink\)/u, 'the open pill reads as ink, not orange');
-  assert.match(SOURCE, /className=\{styles\.audiencePresets\} role="group" aria-label="받는 사람 묶음"/u, 'audience presets lead the recipient panel');
+  assert.doesNotMatch(SOURCE, /openPanel|togglePanel|closePanel/u, 'no folded panels remain');
+  assert.match(CSS, /\.pill\[data-set="true"\]\s*\{[^}]*background: var\(--ink\)/u, 'a chosen pill reads as ink, not orange');
+  assert.match(SOURCE, /className=\{styles\.audiencePresets\} role="group" aria-label="받는 사람 묶음"/u, 'audience presets lead the recipient zone');
+  assert.match(SOURCE, /id="recipient-direct-open"[^>]*aria-haspopup="dialog"/u, '직접 고르기 is the fourth audience card and opens a dialog');
   assert.match(SOURCE, /PURPOSE_TEMPLATES\.map\(purpose =>/u, 'purpose templates load starting text');
   assert.doesNotMatch(SOURCE, /composeSteps|data-step=|stepActions|composeChecklist|goComposeStep|composeStep|summaryCard|draftSummary|reviewCard/u, 'no step-only navigation or review card remains');
   assert.doesNotMatch(CSS, /\.historyOverview/u, 'the history filter cards are gone');

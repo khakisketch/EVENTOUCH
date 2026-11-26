@@ -25,7 +25,8 @@ const CSS = fs.readFileSync(
 // recipientTopBar and its 수신자 다시 확인 / 내용 작성으로 계속 jumps left with the steps.
 test('recipient state heads the compose form as the sentence\'s first pill with a folded picker', () => {
   assert.doesNotMatch(SOURCE, /recipientTopBar|수신자 다시 확인|recipient-heading/u);
-  assert.match(SOURCE, /id="campaign-who-pill"[^>]*aria-expanded=\{openPanel === "who"\}[^>]*aria-controls="campaign-recipients"/u);
+  // Reopened 2026-11-26: the pill scrolls to the always-visible zone; the list is a dialog opened by 직접 고르기.
+  assert.match(SOURCE, /id="campaign-who-pill"[^>]*aria-controls="campaign-recipients"[^>]*onClick=\{\(\) => jumpToSection\("campaign-recipients"\)\}/u);
   assert.match(SOURCE, /id="campaign-recipients"/u);
   assert.match(SOURCE, /getElementById\("campaign-recipients"\)\?\.scrollIntoView/u);
   assert.match(SOURCE, /getElementById\("recipient-status-filter"\)\?\.focus/u);
@@ -35,12 +36,12 @@ test('recipient state heads the compose form as the sentence\'s first pill with 
   assert.ok(head < SOURCE.indexOf('id="campaign-body"'), 'sentence must precede the message body');
   assert.ok(head < SOURCE.indexOf('id="campaign-body"'), 'sentence must precede the body field');
   assert.ok(SOURCE.indexOf('id="campaign-who-pill"') > head && SOURCE.indexOf('id="campaign-who-pill"') < SOURCE.indexOf('id="campaign-recipients"'), 'the pill leads the panel it opens');
-  assert.ok(SOURCE.indexOf('id="campaign-recipients"') < SOURCE.indexOf('id="recipient-list-summary"'), 'the long list lives inside the picker panel');
-  // The picker keeps its title and detailed summary, and starts with the audience presets.
-  assert.match(SOURCE, /<legend className=\{styles\.panelTitle\}>누구에게 보낼까요<\/legend>/u);
+  assert.ok(SOURCE.indexOf('id="campaign-recipients"') < SOURCE.indexOf('id="recipient-status-filter"'), 'the long list follows the zone, inside its dialog');
+  // The zone keeps its title and summary, and starts with the audience cards.
+  assert.match(SOURCE, /<legend className=\{styles\.sectionTitle\}><span className=\{styles\.stepNo\} aria-hidden="true">1<\/span>누구에게 보낼까요<\/legend>/u);
   assert.match(SOURCE, /className=\{styles\.audiencePresets\} role="group" aria-label="받는 사람 묶음"/u);
   assert.match(SOURCE, /id="recipient-summary"/u);
-  assert.match(SOURCE, /확정 \{selectedApproved\}명/u);
+  assert.match(SOURCE, /<StatusPill tone="ok">확정 \{selectedApproved\}<\/StatusPill>/u);
   assert.match(CSS, /\.sentence \{/u);
   assert.match(CSS, /\.pill \{/u);
 });

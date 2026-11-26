@@ -30,7 +30,7 @@ import {
 } from "../../../console-ui/ConsolePageHeader";
 import ConsoleSection from "../../../console-ui/ConsoleSection";
 import ConsoleRefreshButton from "../../../console-ui/ConsoleRefreshButton";
-import { MessageIcon, UsersIcon } from "../../../admin-icons";
+import { CalendarIcon, MessageIcon, UsersIcon } from "../../../admin-icons";
 import ConsoleSectionNav, { requestConsoleTask } from "../../../console-ui/ConsoleSectionNav";
 import CountTabs from "../../../console-ui/CountTabs";
 import ConsoleStatePanel from "../../../console-ui/ConsoleStatePanel";
@@ -42,12 +42,16 @@ import { abandonOperatorAttempt, acknowledgeOperatorReceipt, confirmsCharsetRevi
 import { forgetOperatorReceipt, manageOperatorReceipt } from "../../../../../lib/operator-receipts";
 import { useEventReceipts } from "../../../../../lib/use-event-receipts";
 import uiStyles from "../../../console-ui/console-ui.module.css";
-import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, PencilIcon, PlusIcon, XIcon } from "../../../console-ui/ConsoleIcons";
+import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, BangIcon, CheckIcon, ClockIcon, PencilIcon, PlusIcon, UploadIcon, XIcon } from "../../../console-ui/ConsoleIcons";
 import AutoNotifyPanel, { type AutoNotifyRules } from "./AutoNotifyPanel";
+import OptionCards, { type OptionCard } from "./OptionCards";
 import styles from "./MessagingWorkspace.module.css";
 
 // Provider MMS photo limit (JPEG). Photos above it are shrunk in the browser first.
 const MMS_IMAGE_MAX_BYTES = 200000;
+// Approved 알림톡 templates are shown as cards while there are a few; a longer, data-driven list stays the native
+// select (UX-CONTRACT: a list that grows with data is never laid out as radios).
+const ALIMTALK_CARD_LIMIT = 6;
 
 type Template = {
   id: string;
@@ -236,7 +240,7 @@ type AudiencePreset = "approved" | "not-entered" | "pending";
 type EventOffset = { days: number; time: string };
 type PurposeTemplate = { key: string; label: string; hint: string; body: string; audience: AudiencePreset | null; schedule: EventOffset | null };
 const PURPOSE_TEMPLATES: readonly PurposeTemplate[] = [
-  { key: "reminder", label: "전날 리마인드", hint: "참가 확정 · 행사 1일 전 18:00", audience: "approved", schedule: { days: 1, time: "18:00" },
+  { key: "reminder", label: "전날 리마인드", hint: "참가 확정 · 행사 하루 전 18:00", audience: "approved", schedule: { days: 1, time: "18:00" },
     body: "안녕하세요 {{이름}}님, 내일 {{행사명}}에서 뵙겠습니다.\n일시: {{행사일}}\n입장할 때 아래 티켓의 QR을 보여 주세요.\n{{티켓링크}}" },
   { key: "entry", label: "입장 안내", hint: "확정자 중 미입장 · 지금", audience: "not-entered", schedule: null,
     body: "{{이름}}님, {{행사명}} 입장이 시작되었습니다.\n입구에서 아래 티켓의 QR을 보여 주세요.\n{{티켓링크}}" },
@@ -250,7 +254,7 @@ const PURPOSE_TEMPLATES: readonly PurposeTemplate[] = [
 const EVENT_OFFSET_CHOICES = [
   { days: 3, label: "행사 3일 전" },
   { days: 2, label: "행사 2일 전" },
-  { days: 1, label: "행사 1일 전" },
+  { days: 1, label: "행사 하루 전" },
   { days: 0, label: "행사 당일" },
   { days: -1, label: "행사 다음 날" },
 ] as const;
@@ -387,6 +391,23 @@ const TEMPLATE_CHANNEL_CHOICES = MESSAGE_CHANNEL_CHOICES.map(choice => ({ ...cho
 }));
 function textFamilyChannel(channel: string, imageFileId: string): string {
   return channel === "ALIMTALK" ? "ALIMTALK" : imageFileId ? "MMS" : "SMS";
+}
+// Card glyphs that the shared icon set does not have. Decorative; the card text names the choice.
+function PhotoGlyph() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5" /><circle cx="9" cy="10.5" r="1.4" fill="currentColor" stroke="none" /><path d="m5.5 17 4.5-4 3.5 3 2.5-2 3 3" /></svg>;
+}
+function KakaoGlyph() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 3C6.5 3 2 6.8 2 11.5c0 2.7 1.5 5.1 3.8 6.7l-.9 3.3 3.7-1.9c.8.2 1.6.3 2.4.3 5.5 0 10-3.8 10-8.4S17.5 3 12 3z" /></svg>;
+}
+// Reopened 2026-11-26: 사진 문자 is a card the operator chooses before the photo exists, so a draft that
+// already chose it stays 사진 문자 when a template or purpose text is loaded.
+export function keepTextFamily(current: { channel: string; imageFileId: string }, wanted: string): string {
+  if (wanted === "ALIMTALK") return "ALIMTALK";
+  return current.imageFileId || current.channel === "MMS" ? "MMS" : "SMS";
+}
+// A reservation goes out by itself only where this server can really run it; elsewhere it waits for 발송 실행.
+export function scheduleModeDefault(schedule: MessageSchedule | null, connected: boolean): "AUTO" | "MANUAL" {
+  return Boolean(schedule?.eligibleForAuto && schedule.autoConfigured && schedule.workerStarted && connected) ? "AUTO" : "MANUAL";
 }
 // 채널 표기 어휘(의도적 구분, 혼용 아님):
 // - familyLabel: 과금·발송 계열 구분(문자 vs 카카오 알림톡). 수신자 선택·검토 요약에 사용.
@@ -1056,14 +1077,34 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   // show its row; the operator can fold it otherwise.
   const [historyOpen, setHistoryOpen] = useState(true);
   const [composerOpen, setComposerOpen] = useState(false);
-  // Reopened 2026-11-24 (owner: 시안 A): the sentence pills open one inline panel at a time.
-  const [openPanel, setOpenPanel] = useState<"who" | "how" | "when" | null>(null);
+  // Reopened 2026-11-26 (owner: 한 화면 네 구역): the four zones are always mounted and the sentence pills
+  // only scroll to them. The direct-pick list is a dialog (recipientListOpen), not a folded panel.
   const [previewOpen, setPreviewOpen] = useState(false);
-  function togglePanel(panel: "who" | "how" | "when") { setOpenPanel(current => current === panel ? null : panel); }
-  function closePanel(returnFocusId: string) {
-    setOpenPanel(null);
-    window.requestAnimationFrame(() => document.getElementById(returnFocusId)?.focus({ preventScroll: true }));
+  const [flashSection, setFlashSection] = useState<string | null>(null);
+  useEffect(() => {
+    if (!flashSection) return;
+    const timer = window.setTimeout(() => setFlashSection(null), 900);
+    return () => window.clearTimeout(timer);
+  }, [flashSection]);
+  function jumpToSection(sectionId: string) {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    section.scrollIntoView({ block: "start", behavior: calm ? "auto" : "smooth" });
+    setFlashSection(sectionId);
   }
+  // The sentence scrolls away on phones; the send bar then repeats it so the choice never gets lost.
+  const sentenceRef = useRef<HTMLDivElement>(null);
+  const [sentenceOut, setSentenceOut] = useState(false);
+  const scheduleModeTouchedRef = useRef(false);
+  const [photoDrag, setPhotoDrag] = useState(false);
+  useEffect(() => {
+    const node = sentenceRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entry]) => setSentenceOut(!entry.isIntersecting && entry.boundingClientRect.top < 0), { threshold: 0 });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [composerOpen, state.kind]);
   function openPreview() { setPreviewOpen(true); }
   function closePreview() {
     setPreviewOpen(false);
@@ -1078,19 +1119,17 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   }, [previewOpen]);
   useEffect(() => {
     if (!campaignFieldError) return;
-    // The field lives in a folded panel: open it first so the focus below lands on something visible.
-    if (campaignFieldError.field === "ids") setOpenPanel("who");
-    else if (campaignFieldError.field === "channel" || campaignFieldError.field === "smsFallback") setOpenPanel("how");
-    else if (campaignFieldError.field === "scheduled") setOpenPanel("when");
-    else if (campaignFieldError.field === "templateId" && campaignDraft.channel === "ALIMTALK") setOpenPanel("how");
-    else if (campaignFieldError.field === "title") setTitleOpen(true);
+    if (campaignFieldError.field === "title") setTitleOpen(true);
     if (recipientReviewRequired) return;
     const focusOrigin = document.activeElement;
     const timer = window.setTimeout(() => {
       const active = document.activeElement;
       if (active && active !== document.body && active !== focusOrigin && active.isConnected) return;
-      const ids: Record<string, string> = { ids: "recipient-status-filter", title: "campaign-title", body: "campaign-body", smsFallback: "campaign-sms-fallback", templateId: "campaign-template", imageFileId: "campaign-image", scheduled: "campaign-scheduled" };
-      const element = document.getElementById(ids[campaignFieldError.field] || "campaign-body");
+      const ids: Record<string, string> = { ids: "recipient-status-filter", title: "campaign-title", body: "campaign-body", channel: "campaign-channel", smsFallback: "campaign-sms-fallback", templateId: campaignDraft.channel === "ALIMTALK" ? "campaign-template-cards" : "campaign-template", imageFileId: "campaign-image", scheduled: "campaign-scheduled" };
+      // Nobody chosen and the list closed: land on the first audience card instead of a hidden filter.
+      const element = campaignFieldError.field === "ids" && !document.getElementById("recipient-status-filter")
+        ? document.querySelector<HTMLElement>("#campaign-recipients button:not(:disabled)")
+        : document.getElementById(ids[campaignFieldError.field] || "campaign-body") ?? (campaignFieldError.field === "templateId" ? document.getElementById("campaign-template") : null);
       element?.focus();
       if (typeof campaignFieldError.index === "number" && (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement)) {
         const code = element.value.codePointAt(campaignFieldError.index) ?? 0;
@@ -1100,15 +1139,11 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     return () => window.clearTimeout(timer);
   }, [campaignFieldError, recipientReviewRequired]);
   useEffect(() => {
-    if (recipientReviewRequired) setOpenPanel("who");
-  }, [recipientReviewRequired]);
-  useEffect(() => {
-    if (recipientReviewRequired && openPanel === "who" && busyAction === null) {
+    if (recipientReviewRequired && busyAction === null) {
       document.getElementById("recipient-review-refresh")?.focus();
     }
-  }, [busyAction, openPanel, recipientReviewRequired]);
-  useEffect(() => { if (recipientListOpen) setOpenPanel("who"); }, [recipientListOpen]);
-  useEffect(() => { setOpenPanel(null); setTitleOpen(false); setPreviewOpen(false); setPendingTemplateUse(null); setRecipientGroup(""); setCharsetCandidatesOnly(false); setScheduleChoice("NOW"); setEventOffset({ days: 1, time: "18:00" }); setLoadedPurpose(null); setPendingPurpose(null); setComposeNotice(null); }, [eventId]);
+  }, [busyAction, recipientReviewRequired]);
+  useEffect(() => { setRecipientListOpen(false); scheduleModeTouchedRef.current = false; setTitleOpen(false); setPreviewOpen(false); setPendingTemplateUse(null); setRecipientGroup(""); setCharsetCandidatesOnly(false); setScheduleChoice("NOW"); setEventOffset({ days: 1, time: "18:00" }); setLoadedPurpose(null); setPendingPurpose(null); setComposeNotice(null); }, [eventId]);
 
   const focusComposerOnOpenRef = useRef(false);
   const focusHistoryOnCloseRef = useRef(false);
@@ -1730,7 +1765,6 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       else valid.push(id);
     }
     setSelectedIds(valid);
-    if (!(valid.length > 0 && excluded === 0)) setOpenPanel("who");
     setComposerOpen(true);
     setHistoryOpen(false);
     window.setTimeout(() => document.getElementById("campaign-heading")?.scrollIntoView({ block: "start" }), 0);
@@ -2047,10 +2081,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   function applyTemplate(template: Template) {
     setReloadSummary(null);
     if (template.archived) { setTemplateError("보관된 템플릿은 복원한 뒤 사용하세요."); return; }
-    focusComposerOnOpenRef.current = true;
-    revealComposer();
+    if (!composerOpen) { focusComposerOnOpenRef.current = true; revealComposer(); }
     setSelectedTemplateId(template.id);
-    setCampaignDraft((current) => ({ ...current, channel: textFamilyChannel(template.channel, current.imageFileId), body: template.body }));
+    setCampaignDraft((current) => ({ ...current, channel: keepTextFamily(current, template.channel), body: template.body }));
     setPendingTemplateUse(null);
     setCampaignFieldError(null);
     setCampaignError(null);
@@ -2060,7 +2093,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     if (template.archived) { setTemplateError("보관된 템플릿은 복원한 뒤 사용하세요."); return; }
     if (campaignDraft.body.trim() && campaignDraft.body !== template.body) {
       setPendingTemplateUse({ ...template });
-      revealComposer();
+      if (!composerOpen) revealComposer();
       return;
     }
     applyTemplate(template);
@@ -2082,14 +2115,12 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     setShowSelectedOnly(false); setCharsetCandidatesOnly(false);
     setCampaignFieldError(current => current?.field === "ids" ? null : current);
     setComposeNotice(`${label} ${ids.length}명을 받는 사람으로 골랐습니다.`);
-    setOpenPanel(null);
-    window.requestAnimationFrame(() => document.getElementById("campaign-who-pill")?.focus({ preventScroll: true }));
   }
   function applyPurpose(purpose: PurposeTemplate) {
     setPendingPurpose(null);
     setReloadSummary(null);
     setSelectedTemplateId(""); setPendingTemplateUse(null);
-    setCampaignDraft(current => ({ ...current, channel: textFamilyChannel("SMS", current.imageFileId), body: purpose.body }));
+    setCampaignDraft(current => ({ ...current, channel: keepTextFamily(current, "SMS"), body: purpose.body }));
     setLoadedPurpose(purpose);
     setCampaignFieldError(null); setCampaignError(null);
     const filled: string[] = [];
@@ -2105,7 +2136,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       const instant = scheduled ? scheduledInstant(scheduled) : null;
       if (instant && Date.parse(instant) > messageNow()) {
         setScheduleChoice("EVENT"); setEventOffset(purpose.schedule);
-        setCampaignDraft(current => ({ ...current, scheduled }));
+        setCampaignDraft(current => ({ ...current, scheduled, scheduleMode: current.scheduled || scheduleModeTouchedRef.current ? current.scheduleMode : defaultScheduleMode() }));
         filled.push(`보낼 때(${formatWhenShort(scheduled)})`);
       }
     }
@@ -2122,8 +2153,64 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     setScheduleChoice(choice);
     setScheduleBadInput(false);
     setCampaignFieldError(current => current?.field === "scheduled" ? null : current);
-    if (choice === "NOW") setCampaignDraft(current => ({ ...current, scheduled: "", scheduleMode: "MANUAL" }));
-    else if (choice === "EVENT" && state.kind === "ready") setCampaignDraft(current => ({ ...current, scheduled: eventRelativeSchedule(state.eventDate, eventOffset) }));
+    if (choice === "NOW") { scheduleModeTouchedRef.current = false; setCampaignDraft(current => ({ ...current, scheduled: "", scheduleMode: "MANUAL" })); }
+    else if (choice === "EVENT" && state.kind === "ready") setCampaignDraft(current => ({ ...current, scheduled: eventRelativeSchedule(state.eventDate, eventOffset), scheduleMode: current.scheduled || scheduleModeTouchedRef.current ? current.scheduleMode : defaultScheduleMode() }));
+  }
+  // A reservation goes out by itself where this server can run it; otherwise it waits for 발송 실행.
+  function defaultScheduleMode(): "AUTO" | "MANUAL" {
+    return state.kind === "ready" ? scheduleModeDefault(state.messageSchedule, state.integrations.connected) : "MANUAL";
+  }
+  function chooseScheduleMode(mode: "AUTO" | "MANUAL") {
+    if (messagesLocked) return;
+    scheduleModeTouchedRef.current = true;
+    setCampaignDraft(current => ({ ...current, scheduleMode: mode }));
+  }
+  // 보내는 방법 cards. 문자 means no photo; 사진 문자 waits for one; 알림톡 sends the approved template text.
+  function chooseChannel(next: "SMS" | "MMS" | "ALIMTALK") {
+    if (messagesLocked || inFlightRef.current || mmsUploadGateRef.current || uncertainMmsUpload) return;
+    if (state.kind !== "ready") return;
+    const template = state.templates.find(item => item.id === selectedTemplateId);
+    if (template && (template.channel === "ALIMTALK") !== (next === "ALIMTALK")) setSelectedTemplateId("");
+    setCampaignFieldError(current => current && ["channel", "imageFileId", "templateId", "smsFallback"].includes(current.field) ? null : current);
+    if (next === "SMS" && campaignDraft.imageFileId) {
+      setAttachmentRevision(revision => revision + 1);
+      setImagePreviewUrl(null);
+      setCampaignDraft(current => ({ ...current, channel: "SMS", imageFileId: "", imageName: "" }));
+      return;
+    }
+    setCampaignDraft(current => ({ ...current, channel: next }));
+  }
+  function attachPhoto(file: File | undefined) {
+    if (!file || messagesLocked) return;
+    // Any file choice, even a refused one, invalidates a staged send review.
+    setAttachmentRevision(revision => revision + 1);
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setCampaignFieldError({ field: "imageFileId", message: "JPG·PNG·WebP 사진만 올릴 수 있습니다." });
+      return;
+    }
+    setImagePreviewUrl(URL.createObjectURL(file));
+    void uploadMmsImage(file);
+  }
+  function removePhoto() {
+    if (inFlightRef.current || mmsUploadGateRef.current) return;
+    setAttachmentRevision(revision => revision + 1);
+    setImagePreviewUrl(null);
+    // 사진 문자 stays chosen: the drop zone comes back and a photo is still required.
+    setCampaignDraft(current => ({ ...current, imageFileId: "", imageName: "" }));
+    setCampaignFieldError(current => current?.field === "imageFileId" ? null : current);
+  }
+  // 알림톡 card: the approved text is the message. Typed text is replaced only after the existing confirm;
+  // swapping between approved texts needs none.
+  function pickAlimtalkTemplate(template: Template) {
+    if (messagesLocked || state.kind !== "ready") return;
+    const bodyIsApprovedText = state.templates.some(item => item.channel === "ALIMTALK" && item.body === campaignDraft.body);
+    if (campaignDraft.body.trim() && !bodyIsApprovedText && campaignDraft.body !== template.body) { useTemplate(template); return; }
+    setReloadSummary(null);
+    setSelectedTemplateId(template.id);
+    setCampaignDraft(current => ({ ...current, channel: "ALIMTALK", body: template.body }));
+    setPendingTemplateUse(null);
+    setCampaignFieldError(current => current?.field === "templateId" ? null : current);
+    setCampaignError(null);
   }
   function changeEventOffset(next: EventOffset) {
     setEventOffset(next);
@@ -2236,7 +2323,6 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   // reveal it first and land after React commits — never into hidden
   // content. Never sends.
   function jumpToRecipientFilter() {
-    setOpenPanel("who");
     setRecipientListOpen(true);
     window.setTimeout(() => {
       document.getElementById("campaign-recipients")?.scrollIntoView({ block: "start", behavior: "instant" });
@@ -2902,18 +2988,18 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
     setPendingTemplateUse(null);
     setSelectedIds(eligible);
     const nextStep = eligible.length && !excluded && !source.recipientChangeCount ? 2 : 1;
-    if (nextStep === 1) setOpenPanel("who");
     setComposerOpen(true);
     setHistoryOpen(false);
     // Reveal the reloaded set for review: clear the search/status filters
     // and turn on the existing selected-only mode. The saved template
-    // draft (templateDraft) is intentionally untouched.
+    // draft (templateDraft) is intentionally untouched. The list dialog opens
+    // only when something needs a decision (someone was left out or changed).
     setRecipientQuery("");
     setRecipientStatus("ALL");
     setRecipientGroup("");
     setShowSelectedOnly(eligible.length > 0);
     setCharsetCandidatesOnly(false);
-    setRecipientListOpen(true);
+    setRecipientListOpen(nextStep === 1);
     setSendPending(null);
     setHistoryPending(null);
     setReloadPending(null);
@@ -3118,16 +3204,67 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
   });
   // The sentence pills (Reopened 2026-11-24, 시안 A): who / how / when in the operator's words.
   const activePreset = audiencePresets.find(preset => preset.active);
-  const whoLabel = selectedCount === 0 ? "받는 사람 고르기"
+  const whoLabel = selectedCount === 0 ? "받는 사람 선택"
     : activePreset ? `${activePreset.key === "approved" ? "참가 확정" : activePreset.key === "pending" ? "승인 대기" : "미입장 확정자"} ${selectedCount}명`
     : `선택한 ${selectedCount}명`;
   const howLabel = campaignDraft.channel === "ALIMTALK" ? "카카오 알림톡" : campaignDraft.channel === "MMS" ? "사진 문자" : "문자";
   const howJosa = campaignDraft.channel === "ALIMTALK" ? "으로" : "로";
+  const eventDayLabel = (days: number) => EVENT_OFFSET_CHOICES.find(choice => choice.days === days)?.label ?? (days > 0 ? `행사 ${days}일 전` : `행사 ${-days}일 후`);
   const whenLabel = scheduleBadInput ? "시각 확인 필요" : campaignDraft.scheduled
-    ? formatWhenShort(campaignDraft.scheduled) || "시각 확인 필요" : "지금 바로";
+    ? (effectiveScheduleChoice === "EVENT" ? `${eventDayLabel(eventOffset.days)} ${eventOffset.time}` : formatWhenShort(campaignDraft.scheduled)) || "시각 확인 필요" : "지금 바로";
+  // The audience cards: two presets can hold the same people, so only the chosen one reads as chosen.
+  const everyoneAlreadyIn = audiencePresets[0].count > 0 && audiencePresets[0].count === audiencePresets[1].count;
+  const directPicked = selectedCount > 0 && !activePreset;
+  const audienceCardText: Record<AudiencePreset, { hint: string; note: string }> = {
+    approved: { hint: "", note: "" },
+    "not-entered": { hint: everyoneAlreadyIn ? "아직 입장 안 한 분 · 지금은 전원과 같음" : "아직 입장 안 한 분", note: "입장 기록이 확인된 사람만 셉니다. 입장 여부를 알 수 없는 사람은 포함하지 않습니다." },
+    pending: { hint: "승인 전 안내", note: "" },
+  };
+  const channelCards: OptionCard[] = [
+    { value: "SMS", label: "문자", hint: "한글 45자 넘으면 장문", icon: <MessageIcon /> },
+    { value: "MMS", label: "사진 문자", hint: "사진 1장 · 자동 축소", icon: <PhotoGlyph /> },
+    { value: "ALIMTALK", label: "카카오 알림톡", hint: "승인된 문구만 · 안 가면 문자 대체", icon: <KakaoGlyph />, tone: "kakao" },
+  ];
+  const eventResult = state.eventDate ? eventRelativeSchedule(state.eventDate, eventOffset) : "";
+  const scheduleCards: OptionCard[] = [
+    { value: "NOW", label: "지금", hint: "바로 처리", icon: <ArrowRightIcon /> },
+    { value: "EVENT", label: `${eventDayLabel(eventOffset.days)}`, hint: eventResult ? `${formatWhenShort(eventResult)} · 날짜 바뀌면 함께 이동` : "행사일이 없어 쓸 수 없습니다", icon: <ClockIcon />, disabled: !eventDateKnown },
+    { value: "DATE", label: "날짜·시각 지정", hint: "직접 지정", icon: <CalendarIcon /> },
+  ];
+  const serverCanAuto = scheduleModeDefault(state.messageSchedule, state.integrations.connected) === "AUTO";
+  const followText = `${whoLabel}에게 ${howLabel}${howJosa} ${whenLabel}${scheduledDraft ? "에" : ""} 보냅니다`;
   // Approved = an alimtalk template that carries the provider's approval id and is not archived.
   const approvedAlimtalkTemplates = state.templates.filter(template => template.channel === "ALIMTALK" && Boolean(template.solapiTemplateId) && !template.archived);
   const alimtalkNeedsTemplate = campaignDraft.channel === "ALIMTALK" && !approvedAlimtalkTemplates.some(template => template.id === selectedTemplateId);
+  const recipientReviewNode = recipientReviewRequired ? (
+    <div className={uiStyles.formStack}>
+      <ConsoleFeedback kind="warning" id="campaign-recipients-error">{campaignFieldError?.message ?? "최신 목록을 불러와 발송 대상을 다시 확인하세요."}</ConsoleFeedback>
+      <div><ProductButton id="recipient-review-refresh" type="button" variant="secondary" onClick={() => void reloadReviewedRecipients()}>
+        {busyAction === "recipient-review" ? "수신자 불러오는 중" : "최신 수신자 불러오기"}
+      </ProductButton></div>
+    </div>
+  ) : null;
+  const templateUseDialogNode = (
+    <>
+                    {pendingTemplateUse ? (
+                      <ConsoleDialog title="템플릿을 적용할까요?" onClose={() => setPendingTemplateUse(null)} busy={busyAction !== null || uncertainMmsUpload || Boolean(uncertainCreate)}>
+                        <div className={styles.modalConfirm}>
+                        <ConsoleConfirm
+                        summary={`〈${pendingTemplateUse.name}〉 문구로 바꿉니다. 받는 사람과 사진은 그대로 두며, 발송되지 않습니다.`}
+                        confirmLabel="템플릿 적용" cancelLabel="현재 내용 유지"
+                        busy={busyAction !== null || uncertainMmsUpload || Boolean(uncertainCreate)}
+                        onConfirm={() => {
+                          const latest = state.templates.find(item => item.id === pendingTemplateUse.id);
+                          if (!latest || latest.archived || latest.body !== pendingTemplateUse.body || latest.channel !== pendingTemplateUse.channel || latest.solapiTemplateId !== pendingTemplateUse.solapiTemplateId) {
+                            setPendingTemplateUse(null); setCampaignError("템플릿이 변경됐습니다. 최신 템플릿을 다시 선택하세요."); return;
+                          }
+                          applyTemplate(pendingTemplateUse);
+                        }} onCancel={() => setPendingTemplateUse(null)} />
+                        </div>
+                      </ConsoleDialog>
+                    ) : null}
+    </>
+  );
   const templatePickerNode = (
     <div className={styles.templatePicker}>
                     <div className={styles.templatePickerLabel}><label htmlFor="campaign-template">저장한 템플릿</label><ProductButton type="button" className={styles.textButton} variant="ghost" disabled={busyAction !== null || uploadingImage} onClick={openTemplateManager}>템플릿 관리</ProductButton></div>
@@ -3153,30 +3290,13 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                       <p className={styles.help} id="campaign-template-empty" role="note">승인된 알림톡 템플릿이 없습니다. <ProductButton type="button" className={styles.textButton} variant="ghost" disabled={busyAction !== null || uploadingImage} onClick={openTemplateManager}>템플릿 관리에서 등록하세요</ProductButton></p>
                     ) : null}
                     {campaignFieldError?.field === "templateId" ? <p className={styles.fieldError} id="campaign-template-error" role="alert">{campaignFieldError.message}</p> : null}
-                    {pendingTemplateUse ? (
-                      <ConsoleDialog title="템플릿을 적용할까요?" onClose={() => setPendingTemplateUse(null)} busy={busyAction !== null || uncertainMmsUpload || Boolean(uncertainCreate)}>
-                        <div className={styles.modalConfirm}>
-                        <ConsoleConfirm
-                        summary={`〈${pendingTemplateUse.name}〉 문구로 바꿉니다. 받는 사람과 사진은 그대로 두며, 발송되지 않습니다.`}
-                        confirmLabel="템플릿 적용" cancelLabel="현재 내용 유지"
-                        busy={busyAction !== null || uncertainMmsUpload || Boolean(uncertainCreate)}
-                        onConfirm={() => {
-                          const latest = state.templates.find(item => item.id === pendingTemplateUse.id);
-                          if (!latest || latest.archived || latest.body !== pendingTemplateUse.body || latest.channel !== pendingTemplateUse.channel || latest.solapiTemplateId !== pendingTemplateUse.solapiTemplateId) {
-                            setPendingTemplateUse(null); setCampaignError("템플릿이 변경됐습니다. 최신 템플릿을 다시 선택하세요."); return;
-                          }
-                          applyTemplate(pendingTemplateUse);
-                        }} onCancel={() => setPendingTemplateUse(null)} />
-                        </div>
-                      </ConsoleDialog>
-                    ) : null}
                   </div>
   );
 
   function revealComposer() {
     if (messagesLocked && !composeDirty && !uncertainCreate) return;
     if (messagesLocked) {
-      setShowSelectedOnly(true); setRecipientListOpen(true); setOpenPanel("who");
+      setShowSelectedOnly(true); setRecipientListOpen(true);
       window.requestAnimationFrame(() => {
         const heading = document.getElementById("campaign-heading");
         heading?.setAttribute("tabindex", "-1"); heading?.focus({ preventScroll: true });
@@ -3189,8 +3309,6 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       return;
     }
     focusComposerOnOpenRef.current = true;
-    // Nobody chosen yet: open the 누구에게 panel so the first step is visible, not hidden behind a pill.
-    if (!selectedIds.length) setOpenPanel("who");
     setComposerOpen(true);
   }
 
@@ -3355,277 +3473,233 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                 </a>
                 <div className={styles.composeGrid} data-layout="simple">
                   <div className={styles.composeMain}>
-                    <div className={styles.sentenceBlock}>
+                    <div className={styles.sentenceBlock} ref={sentenceRef}>
                       <p className={styles.sentence} id="campaign-sentence">
-                        <button type="button" id="campaign-who-pill" className={styles.pill} data-empty={selectedCount === 0 ? "true" : undefined} aria-expanded={openPanel === "who"} aria-controls="campaign-recipients" onClick={() => togglePanel("who")}>{whoLabel}</button>
+                        <button type="button" id="campaign-who-pill" className={styles.pill} data-empty={selectedCount === 0 ? "true" : undefined} data-set={selectedCount ? "true" : undefined} aria-controls="campaign-recipients" onClick={() => jumpToSection("campaign-recipients")}>{whoLabel}</button>
                         {" "}에게{" "}
-                        <span className={styles.keepTogether}><button type="button" id="campaign-how-pill" className={styles.pill} aria-expanded={openPanel === "how"} aria-controls="campaign-how-panel" onClick={() => togglePanel("how")}>{howLabel}</button>{howJosa}</span>{" "}
-                        <span className={styles.keepTogether}><button type="button" id="campaign-when-pill" className={styles.pill} data-empty={scheduleBadInput ? "true" : undefined} aria-expanded={openPanel === "when"} aria-controls="campaign-schedule" onClick={() => togglePanel("when")}>{whenLabel}</button>{scheduledDraft ? "에" : ""} 보냅니다</span>
+                        <span className={styles.keepTogether}><button type="button" id="campaign-how-pill" className={styles.pill} aria-controls="campaign-how-panel" onClick={() => jumpToSection("campaign-how-panel")}>{howLabel}</button>{howJosa}</span>{" "}
+                        <span className={styles.keepTogether}><button type="button" id="campaign-when-pill" className={styles.pill} data-empty={scheduleBadInput ? "true" : undefined} aria-controls="campaign-schedule" onClick={() => jumpToSection("campaign-schedule")}>{whenLabel}</button>{scheduledDraft ? "에" : ""} 보냅니다</span>
                       </p>
-                      {scheduledDraft && campaignDraft.scheduleMode === "MANUAL" && !scheduleBadInput ? (
-                        <p className={styles.manualRunNote} id="campaign-manual-run" role="note"><strong>예약됨 · 직접 실행 필요</strong> 예약 시각이 지나면 발송 기록에서 ‘발송 실행’을 눌러야 보내집니다.</p>
-                      ) : null}
-                      {reloadSummary ? (
-                        <ConsoleFeedback kind="info" id="campaign-reload-summary">{reloadSummary}</ConsoleFeedback>
+                      {composeNotice ? <p className={styles.composeNotice} role="status">{composeNotice}</p> : null}
+                    </div>
+                    {reloadSummary ? (
+                      <ConsoleFeedback kind="info" id="campaign-reload-summary">{reloadSummary}</ConsoleFeedback>
+                    ) : null}
+
+                    <fieldset id="campaign-recipients" className={styles.section} data-flash={flashSection === "campaign-recipients" ? "true" : undefined} aria-describedby={campaignFieldError?.field === "ids" ? "campaign-recipients-error" : "recipient-summary"}>
+                      <legend className={styles.sectionTitle}><span className={styles.stepNo} aria-hidden="true">1</span>누구에게 보낼까요</legend>
+                      {recipientListOpen ? null : recipientReviewNode}
+                      <div className={styles.audiencePresets} role="group" aria-label="받는 사람 묶음">
+                        {audiencePresets.map(preset => <button key={preset.key} type="button" id={`recipient-preset-${preset.key}`} className={styles.audienceCard} aria-pressed={preset.active} disabled={preset.count === 0 || messagesLocked} title={audienceCardText[preset.key].note || undefined} onClick={() => selectAudience(preset.key, preset.label)}>
+                          <span className={styles.audienceTile} aria-hidden="true">{preset.key === "approved" ? <CheckIcon /> : preset.key === "pending" ? <BangIcon /> : <ClockIcon />}</span>
+                          <span className={styles.audienceText}><strong>{preset.label}</strong>{audienceCardText[preset.key].hint ? <small>{audienceCardText[preset.key].hint}</small> : null}</span>
+                          {preset.count === 0 ? <em className={styles.audienceZero}>0명</em> : <b>{preset.count}</b>}
+                        </button>)}
+                        <button type="button" id="recipient-direct-open" className={styles.audienceCard} aria-haspopup="dialog" aria-expanded={recipientListOpen} data-picked={directPicked ? "true" : undefined} onClick={openDirectPick}>
+                          <span className={styles.audienceTile} aria-hidden="true"><PencilIcon /></span>
+                          <span className={styles.audienceText}><strong>직접 고르기</strong><small>한 명씩 직접</small></span>
+                          <span className={styles.audienceOpen}>{directPicked ? `${selectedCount}명 선택 중` : "열기"}<ArrowRightIcon /></span>
+                        </button>
+                      </div>
+                      <div className={styles.selectionBar} id="recipient-summary" role="status" data-empty={selectedCount === 0 ? "true" : undefined}>
+                        <strong className={styles.selectionCount}>선택 {selectedCount}명</strong>
+                        <span className={styles.selectionPills}>
+                          {selectedApproved > 0 ? <StatusPill tone="ok">확정 {selectedApproved}</StatusPill> : null}
+                          {selectedPending > 0 ? <StatusPill tone="wait">승인 대기 {selectedPending}</StatusPill> : null}
+                          {selectedWaitlist > 0 ? <StatusPill tone="info">대기 명단 {selectedWaitlist}</StatusPill> : null}
+                          {selectedMissing > 0 ? <StatusPill tone="neutral">목록 제외 {selectedMissing}</StatusPill> : null}
+                        </span>
+                      </div>
+                      {pendingRiskCount > 0 ? (
+                        <p className={styles.riskWarning} id="recipient-risk-warning" role="alert">
+                          선택 대상 중 승인 대기·대기 명단이 {pendingRiskCount}명 있습니다. 발송 전에 대상을 다시 확인하세요.
+                        </p>
                       ) : null}
                       {conflictingRecipients > 0 ? <p className={styles.help} role="note">
-                      신청 상태와 취소 기록이 일치하지 않는 {conflictingRecipients}명은 수신 대상에서 제외했습니다. {" "}
-                      <ProductLink className={styles.inkLink} variant="ghost" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>참가자 명단에서 확인</ProductLink>
-                    </p> : null}
-                    {recipientReviewRequired ? (
-                      <div className={uiStyles.formStack}>
-                        <ConsoleFeedback kind="warning" id="campaign-recipients-error">{campaignFieldError?.message ?? "최신 목록을 불러와 발송 대상을 다시 확인하세요."}</ConsoleFeedback>
-                        <div><ProductButton id="recipient-review-refresh" type="button" variant="secondary" onClick={() => void reloadReviewedRecipients()}>
-                          {busyAction === "recipient-review" ? "수신자 불러오는 중" : "최신 수신자 불러오기"}
-                        </ProductButton></div>
-                      </div>
-                    ) : null}
-                    {pendingRiskCount > 0 ? (
-                      <p className={styles.riskWarning} id="recipient-risk-warning" role="alert">
-                        선택 대상 중 승인 대기·대기 명단이 {pendingRiskCount}명 있습니다. 발송 전에 대상을 다시 확인하세요.
-                      </p>
-                    ) : null}
+                        신청 상태와 취소 기록이 일치하지 않는 {conflictingRecipients}명은 수신 대상에서 제외했습니다. {" "}
+                        <ProductLink className={styles.inkLink} variant="ghost" href={`/console/events/${encodeURIComponent(eventId)}/participants?ticket=review`}>참가자 명단에서 확인</ProductLink>
+                      </p> : null}
                       {campaignFieldError?.field === "ids" && !recipientReviewRequired ? <p className={styles.fieldError} id="campaign-recipients-error" role="alert">{campaignFieldError.message}</p> : null}
-                    </div>
-
-                    <fieldset id="campaign-recipients" className={styles.panel} hidden={openPanel !== "who"} aria-describedby={campaignFieldError?.field === "ids" ? "campaign-recipients-error" : "recipient-summary"}>
-                      <legend className={styles.panelTitle}>누구에게 보낼까요</legend>
-                      <div className={styles.audiencePresets} role="group" aria-label="받는 사람 묶음">
-                        {audiencePresets.map(preset => <button key={preset.key} type="button" id={`recipient-preset-${preset.key}`} className={styles.audienceCard} aria-pressed={preset.active} disabled={preset.count === 0 || messagesLocked} onClick={() => selectAudience(preset.key, preset.label)}>
-                          <span><strong>{preset.label}</strong><small>{preset.hint}</small></span>
-                          <b>{preset.count}</b>
-                        </button>)}
-                      </div>
-                      <p className={styles.selectionSummary} id="recipient-summary" role="status" data-empty={selectedCount === 0 ? "true" : undefined}>
-                      <strong className={styles.selectionCount}>선택 {selectedCount}명</strong>
-                      {selectedApproved > 0 ? <> · 확정 {selectedApproved}명</> : null}
-                      {selectedPending > 0 ? <> · 승인 대기 {selectedPending}명</> : null}
-                      {selectedWaitlist > 0 ? <> · 대기 명단 {selectedWaitlist}명</> : null}
-                      {selectedMissing > 0 ? ` · 목록 제외 ${selectedMissing}명` : ""}
-                      {outsideVisibleCount > 0 ? ` · 화면 밖 선택 ${outsideVisibleCount}명 유지 중` : ""}
-                    </p>
-                      <details
-                      className={styles.recipientDetails}
-                      open={recipientListOpen}
-                      onToggle={(event) => setRecipientListOpen((event.target as HTMLDetailsElement).open)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Escape" && event.currentTarget.open) {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          const summary = event.currentTarget.querySelector<HTMLElement>("summary");
-                          setRecipientListOpen(false);
-                          summary?.focus();
-                          // Closing a long list can shift the page after focus
-                          // lands. Follow the focused summary after the DOM
-                          // update, but never steal focus if the user moved on.
-                          requestAnimationFrame(() => {
-                            if (summary && document.activeElement === summary) summary.scrollIntoView({ block: "center", behavior: "instant" });
-                          });
-                        }
-                      }}
-                    >
-                      <summary id="recipient-list-summary" className={styles.recipientSummaryButton} aria-describedby={recipientListOpen ? "recipient-list-keyboard-help" : undefined}>
-                        <span className={styles.recipientSummaryLabel}>{recipientListOpen ? "직접 고르기 · 목록 닫기" : "직접 고르기 · 상태·그룹·이름으로 한 명씩"}</span>
-                        <span className={styles.recipientSummaryCount}>
-                          {recipientSearch || showSelectedOnly || recipientStatus !== "ALL" || recipientGroup
-                            ? `표시 ${visibleRecipients.length}명`
-                            : `발송 가능 ${activeParticipants.length}명`}
-                        </span>
-                      </summary>
-                      <p className={styles.help} id="recipient-list-keyboard-help">Esc를 누르면 선택은 유지하고 목록을 닫습니다.</p>
-                      <div className={styles.recipientFilters}>
-                        <div>
-                          <label htmlFor="recipient-status-filter">수신자 상태</label>
-                          <select
-                            id="recipient-status-filter"
-                            value={recipientStatus}
-                            onChange={(event) => setRecipientStatus(event.target.value)}
-                          >
-                            {RECIPIENT_STATUS_OPTIONS.map((option) => (
-                              <option value={option.value} key={option.value}>{option.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label htmlFor="recipient-group-filter">수신자 그룹</label>
-                          <select id="recipient-group-filter" value={recipientGroup} onChange={event => setRecipientGroup(event.target.value)}>
-                            <option value="">전체 그룹</option>
-                            {recipientGroups.map(group => <option key={group} value={group}>{group}</option>)}
-                          </select>
-                        </div>
-                        <div className={styles.recipientSearch}>
-                          <label htmlFor="recipient-search">
-                            <span className="sr-only">수신자 이름·소속·연락처 검색</span>
-                          </label>
-                          <input
-                            id="recipient-search"
-                            type="search"
-                            placeholder="수신자 이름·소속·연락처 검색"
-                            value={recipientQuery}
-                            onChange={(event) => setRecipientQuery(event.target.value)}
-                          />
-                        </div>
-                      </div>
-                      <div className={styles.recipientTools}>
-                        <label className={styles.selectAllOption}>
-                          <input
-                            type="checkbox"
-                            checked={allVisibleSelected}
-                            disabled={visibleRecipients.length === 0}
-                            ref={(node) => { if (node) node.indeterminate = someVisibleSelected; }}
-                            onChange={(event) => setAllRecipients(event.target.checked, visibleRecipients)}
-                          />
-                          표시 {visibleRecipients.length}명 모두 선택
-                        </label>
-                        <ProductButton type="button" className={styles.textButton} variant="ghost" id="recipient-clear-all" onClick={clearAllRecipients} icon={<XIcon />}>전체 선택 해제</ProductButton>
-                      </div>
-                    <label className={styles.selectedOnlyOption}>
-                      <input
-                        id="recipient-selected-only"
-                        type="checkbox"
-                        checked={showSelectedOnly}
-                        aria-describedby={showSelectedOnly ? "recipient-selected-help" : undefined}
-                        onChange={(event) => { setShowSelectedOnly(event.target.checked); if (event.target.checked) setCharsetCandidatesOnly(false); }}
-                      />
-                      선택 대상만 보기
-                    </label>
-                    {showSelectedOnly ? <p className={styles.help} id="recipient-selected-help">상태·그룹·검색 조건에 관계없이 선택한 {selectedCount}명 전체를 표시합니다. 조건으로 찾으려면 선택 대상만 보기를 끄세요.</p> : null}
-                    {charsetCandidatesOnly ? <p className={styles.help} role="status">현재 선택한 참가자 중 이름에 확인이 필요한 {charsetCandidateIds.size}명을 표시합니다. <ProductButton id="recipient-charset-reset" type="button" className={styles.textButton} variant="ghost" onClick={() => setCharsetCandidatesOnly(false)}>전체 명단으로</ProductButton></p> : null}
-                    {visibleRecipients.length ? (
-                      <ul className={styles.recipientList} aria-label="참가자 선택" tabIndex={messagesLocked || compositionPending ? 0 : undefined} data-locked={messagesLocked || compositionPending ? "true" : undefined}>
-                        {visibleRecipients.map((person) => (
-                          <li key={person.id}>
-                            <label className={styles.recipientRow}>
-                              <input
-                                type="checkbox"
-                                checked={selectedSet.has(person.id)}
-                                onChange={() => toggleRecipient(person.id)}
-                              />
-                              <span className={styles.recipientName}>{person.name}</span><ConsoleAvatar className={styles.recipientAvatar} name={person.name} tone={person.status === "APPROVED" ? "ok" : person.status === "PENDING" ? "wait" : person.status === "WAITLIST" ? "info" : "neutral"} />
-                              <span className={styles.recipientMeta} data-recipient-meta>
-                                {person.company ? `${person.company} · ` : ""}{person.group} · {maskPhone(person.phone)} · {participantStatusLabel(person.status)}
-                              </span>
-                            </label>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : showSelectedOnly ? (
-                      <ConsoleEmptyState kind="filtered" title="선택한 대상이 없습니다." />
-                    ) : activeParticipants.length ? (
-                      <ConsoleEmptyState kind="filtered" title="조건에 맞는 수신자가 없습니다." />
-                    ) : (
-                      <ConsoleEmptyState title="등록된 참가자가 없습니다." />
-                    )}
-                    </details>
-                      <div className={styles.panelFoot}><ProductButton type="button" variant="ghost" onClick={() => closePanel("campaign-who-pill")}>완료</ProductButton></div>
                     </fieldset>
 
-                    <div id="campaign-how-panel" className={styles.panel} hidden={openPanel !== "how"}>
-                      <p className={styles.panelTitle}>어떻게 보낼까요</p>
-                      <div>
-                    <ConsoleChoiceGroup layout="compare" id="campaign-channel" label="보내는 방법" value={campaignDraft.channel === "ALIMTALK" ? "ALIMTALK" : "SMS"}
-                      options={MESSAGE_CHANNEL_CHOICES} invalid={campaignFieldError?.field === "channel"}
-                      describedBy={campaignFieldError?.field === "channel" ? "campaign-channel-error" : undefined}
-                      onChange={(channel) => {
-                        const nextChannel = textFamilyChannel(channel, campaignDraft.imageFileId);
-                        setCampaignDraft({ ...campaignDraft, channel: nextChannel });
-                        const template = state.templates.find((item) => item.id === selectedTemplateId);
-                        if (template && (template.channel === "ALIMTALK") !== (channel === "ALIMTALK")) setSelectedTemplateId("");
-                      }} />
-                    {campaignFieldError?.field === "channel" ? <p className={styles.fieldError} id="campaign-channel-error" role="alert">{campaignFieldError.message}</p> : null}
-                  </div>
-                      {campaignDraft.channel === "ALIMTALK" ? <div>
-                    <ConsoleChoiceGroup id="campaign-sms-fallback" label="알림톡 미전달 시" value={campaignDraft.smsFallback ? "on" : "off"} disabled={messagesLocked}
-                      options={[
-                        { value: "on", label: "문자로 대체", description: ALIMTALK_FALLBACK_NOTICE },
-                        { value: "off", label: "대체하지 않음", description: ALIMTALK_NO_FALLBACK_NOTICE },
-                      ]}
-                      invalid={campaignFieldError?.field === "smsFallback"}
-                      describedBy={campaignFieldError?.field === "smsFallback" ? "campaign-sms-fallback-error" : undefined}
-                      onChange={(value) => { setCampaignDraft({ ...campaignDraft, smsFallback: value === "on" }); setCampaignFieldError(current => current?.field === "smsFallback" ? null : current); }} />
-                    {campaignFieldError?.field === "smsFallback" ? <p id="campaign-sms-fallback-error" className={styles.fieldError} role="alert">{campaignFieldError.message}</p> : null}
-                  </div> : null}
-                      {campaignDraft.channel === "ALIMTALK" ? templatePickerNode : null}
-                      <div className={styles.panelFoot}><ProductButton type="button" variant="ghost" onClick={() => closePanel("campaign-how-pill")}>완료</ProductButton></div>
-                    </div>
+                    <fieldset id="campaign-how-panel" className={styles.section} data-flash={flashSection === "campaign-how-panel" ? "true" : undefined}>
+                      <legend className={styles.sectionTitle}><span className={styles.stepNo} aria-hidden="true">2</span>어떻게 보낼까요</legend>
+                      <OptionCards
+                        id="campaign-channel"
+                        legend="보내는 방법"
+                        value={campaignDraft.channel === "ALIMTALK" ? "ALIMTALK" : campaignDraft.channel === "MMS" ? "MMS" : "SMS"}
+                        options={channelCards}
+                        columns={3}
+                        invalid={campaignFieldError?.field === "channel"}
+                        describedBy={campaignFieldError?.field === "channel" ? "campaign-channel-error" : undefined}
+                        onChange={(value) => chooseChannel(value === "ALIMTALK" ? "ALIMTALK" : value === "MMS" ? "MMS" : "SMS")}
+                      />
+                      {campaignFieldError?.field === "channel" ? <p className={styles.fieldError} id="campaign-channel-error" role="alert">{campaignFieldError.message}</p> : null}
+                      {campaignDraft.channel === "ALIMTALK" ? (
+                        <div className={styles.channelExtra}>
+                          <ConsoleChoiceGroup id="campaign-sms-fallback" label="알림톡 미전달 시" value={campaignDraft.smsFallback ? "on" : "off"} disabled={messagesLocked}
+                            options={[
+                              { value: "on", label: "문자로 대체", description: ALIMTALK_FALLBACK_NOTICE },
+                              { value: "off", label: "대체하지 않음", description: ALIMTALK_NO_FALLBACK_NOTICE },
+                            ]}
+                            invalid={campaignFieldError?.field === "smsFallback"}
+                            describedBy={campaignFieldError?.field === "smsFallback" ? "campaign-sms-fallback-error" : undefined}
+                            onChange={(value) => { setCampaignDraft({ ...campaignDraft, smsFallback: value === "on" }); setCampaignFieldError(current => current?.field === "smsFallback" ? null : current); }} />
+                          {campaignFieldError?.field === "smsFallback" ? <p id="campaign-sms-fallback-error" className={styles.fieldError} role="alert">{campaignFieldError.message}</p> : null}
+                        </div>
+                      ) : null}
+                      {campaignDraft.channel === "MMS" ? (
+                        <div className={styles.photo} data-message-attachment>
+                          <input
+                            id="campaign-image"
+                            className={styles.photoInput}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            disabled={uploadingImage || messagesLocked}
+                            title={messagesLocked ? messagesLockReason : undefined}
+                            aria-invalid={campaignFieldError?.field === "imageFileId"}
+                            aria-describedby={campaignFieldError?.field === "imageFileId" ? "campaign-image-error" : "campaign-image-help"}
+                            onChange={(event) => { attachPhoto(event.target.files?.[0]); event.target.value = ""; }}
+                          />
+                          {campaignDraft.imageFileId ? (
+                            <div className={styles.photoRow}>
+                              <img className={styles.photoThumb} src={imagePreviewUrl ?? `/api/events/${encodeURIComponent(eventId)}/files/${encodeURIComponent(campaignDraft.imageFileId)}`} alt="첨부한 사진 미리보기" />
+                              <span className={styles.photoMeta}><strong>{campaignDraft.imageName || "사진 1장"}</strong><small>사진 1장 · 사진 문자로 발송</small></span>
+                              <label className={styles.photoAction} htmlFor="campaign-image">바꾸기</label>
+                              <ProductButton type="button" variant="ghost" disabled={uploadingImage || messagesLocked || uncertainMmsUpload} onClick={removePhoto}>삭제</ProductButton>
+                            </div>
+                          ) : (
+                            <label
+                              className={styles.drop}
+                              htmlFor="campaign-image"
+                              data-over={photoDrag ? "true" : undefined}
+                              data-busy={uploadingImage ? "true" : undefined}
+                              onDragOver={(event) => { event.preventDefault(); setPhotoDrag(true); }}
+                              onDragLeave={() => setPhotoDrag(false)}
+                              onDrop={(event) => { event.preventDefault(); setPhotoDrag(false); attachPhoto(event.dataTransfer.files?.[0]); }}
+                            >
+                              <UploadIcon />
+                              <strong>{uploadingImage ? "사진을 준비해 올리는 중입니다" : "사진을 끌어다 놓거나 눌러서 선택"}</strong>
+                              <small>사진 1장 · JPG·PNG·WebP · 큰 사진은 자동으로 줄입니다</small>
+                            </label>
+                          )}
+                          <p className={styles.help} id="campaign-image-help" role="status">{uploadingImage ? "사진을 준비해 올리는 중입니다." : campaignDraft.imageFileId ? `첨부됨: ${campaignDraft.imageName || "사진 1장"} · 사진 문자로 보냅니다. 별도 요금이 발생합니다.` : "사진 문자는 별도 요금이 발생합니다."}</p>
+                          {campaignFieldError?.field === "imageFileId" ? <p className={styles.fieldError} id="campaign-image-error" role="alert">{campaignFieldError.message}</p> : null}
+                        </div>
+                      ) : null}
+                    </fieldset>
 
-                    <div id="campaign-schedule" className={styles.panel} hidden={openPanel !== "when"}>
-                      <p className={styles.panelTitle}>언제 보낼까요</p>
-                      <div className={styles.scheduleFields}>
-                    <ConsoleChoiceGroup id="campaign-schedule-choice" label="보내는 시점" value={effectiveScheduleChoice} disabled={messagesLocked}
-                      options={[
-                        { value: "NOW", label: "지금", description: "발송 검토 후 바로 처리합니다." },
-                        { value: "EVENT", label: "행사 기준", description: eventDateKnown ? "행사일에서 며칠 전·후 시각으로 예약합니다." : "행사일이 없어 쓸 수 없습니다." },
-                        { value: "DATE", label: "날짜·시각 지정", description: "원하는 날짜와 시각으로 예약합니다." },
-                      ]}
-                      onChange={(value) => chooseSchedule(value === "EVENT" ? (eventDateKnown ? "EVENT" : "DATE") : value === "DATE" ? "DATE" : "NOW")} />
-                    {effectiveScheduleChoice === "EVENT" ? <div className={styles.eventOffsetRow}>
-                      <div>
-                        <label htmlFor="campaign-event-offset">행사 기준</label>
-                        <select id="campaign-event-offset" value={eventOffset.days} onChange={(event) => changeEventOffset({ ...eventOffset, days: Number(event.target.value) })}>
-                          {EVENT_OFFSET_CHOICES.map(choice => <option key={choice.days} value={choice.days}>{choice.label}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label htmlFor="campaign-event-time">시각 (한국 시간)</label>
-                        <input id="campaign-event-time" type="time" step={60} value={eventOffset.time} onChange={(event) => { if (/^([01]\d|2[0-3]):[0-5]\d$/.test(event.target.value)) changeEventOffset({ ...eventOffset, time: event.target.value }); }} />
-                      </div>
-                      <p className={styles.eventOffsetResult} id="campaign-event-result" aria-live="polite">{campaignDraft.scheduled ? `→ ${formatScheduledInput(campaignDraft.scheduled)}` : "행사일을 확인할 수 없습니다."}</p>
-                      <p className={styles.help}>행사 날짜가 바뀌면 이 예약도 같은 기준으로 함께 옮겨집니다. 옮긴 시각이 이미 지났다면 발송하지 않고 예약을 취소합니다.</p>
-                    </div> : null}
-                    {effectiveScheduleChoice === "DATE" ? <div>
-                    <label htmlFor="campaign-scheduled">예약 시각 (한국 시간)</label>
-                    <input
-                      id="campaign-scheduled"
-                      ref={scheduleInputRef}
-                      type="datetime-local"
-                      step={60}
-                      value={campaignDraft.scheduled}
-                      aria-invalid={campaignFieldError?.field === "scheduled"}
-                      aria-describedby={campaignFieldError?.field === "scheduled" ? "campaign-scheduled-error campaign-scheduled-help" : "campaign-scheduled-help"}
-                      onChange={(event) => {
-                        setScheduleBadInput(event.target.validity.badInput);
-                        setCampaignDraft({ ...campaignDraft, scheduled: event.target.value, scheduleMode: event.target.value ? campaignDraft.scheduleMode : "MANUAL" });
-                        setCampaignFieldError((current) => current?.field === "scheduled" ? null : current);
-                      }}
-                      onInput={(event) => {
-                        if (!event.currentTarget.validity.badInput) {
-                          setScheduleBadInput(false);
-                          setCampaignFieldError((current) => current?.field === "scheduled" ? null : current);
-                        }
-                      }}
-                      onKeyUp={(event) => setScheduleBadInput(event.currentTarget.validity.badInput)}
-                      onBlur={(event) => {
-                        if (event.target.validity.badInput) {
-                          setScheduleBadInput(true);
-                          setCampaignFieldError({ field: "scheduled", message: "예약 날짜와 시간을 모두 입력하거나 지워 주세요." });
-                        }
-                      }}
-                    />
-                    <p className={styles.help} id="campaign-scheduled-help">
-                      {!campaignDraft.scheduled
-                        ? "한국 시간 기준입니다. 시각을 입력하지 않으면 즉시 처리합니다."
-                        : campaignDraft.simulate
-                        ? "한국 시간 기준입니다. 모의 예약은 시각 이후 직접 실행하며, 실행해도 수신자에게 전달되지 않습니다."
-                        : "한국 시간 기준입니다. 선택한 실행 방식과 서버 상태는 아래 발송 전 확인에서 볼 수 있습니다."}
-                    </p>
-                    </div> : null}
-                    {campaignDraft.scheduled && !campaignDraft.simulate ? <ConsoleChoiceGroup id="campaign-schedule-mode" label="예약 실행 방식"
-                      value={campaignDraft.scheduleMode} onChange={(value) => setCampaignDraft({ ...campaignDraft, scheduleMode: value === "AUTO" ? "AUTO" : "MANUAL" })}
-                      options={[{ value: "MANUAL", label: "수동 실행" }, { value: "AUTO", label: "자동 실행" }]} /> : null}
-                    {campaignFieldError?.field === "scheduled" ? <p className={styles.fieldError} id="campaign-scheduled-error" role="alert">{campaignFieldError.message}</p> : null}
-                  </div>
-                      {scheduledDraft && !simulateDraft ? <p className={styles.help} role="note">{scheduleModeNotice(campaignDraft.scheduleMode)}</p> : null}
-                      {scheduledDraft && !simulateDraft ? <p className={styles.help}>{scheduleServerStatus(state.messageSchedule)} 현재 서버 기준이며 실제 발송 성공을 보장하지 않습니다.</p> : null}
-                      <div className={styles.panelFoot}><ProductButton type="button" variant="ghost" onClick={() => closePanel("campaign-when-pill")}>완료</ProductButton></div>
-                    </div>
+                    <fieldset id="campaign-schedule" className={styles.section} data-flash={flashSection === "campaign-schedule" ? "true" : undefined}>
+                      <legend className={styles.sectionTitle}><span className={styles.stepNo} aria-hidden="true">3</span>언제 보낼까요</legend>
+                      <OptionCards
+                        id="campaign-schedule-choice"
+                        legend="보내는 시점"
+                        value={effectiveScheduleChoice}
+                        options={scheduleCards}
+                        columns={3}
+                        disabled={messagesLocked}
+                        onChange={(value) => chooseSchedule(value === "EVENT" ? (eventDateKnown ? "EVENT" : "DATE") : value === "DATE" ? "DATE" : "NOW")}
+                      />
+                      {effectiveScheduleChoice === "EVENT" ? <div className={styles.eventOffsetRow}>
+                        <div>
+                          <label htmlFor="campaign-event-offset">행사 기준</label>
+                          <select id="campaign-event-offset" value={eventOffset.days} onChange={(event) => changeEventOffset({ ...eventOffset, days: Number(event.target.value) })}>
+                            {EVENT_OFFSET_CHOICES.map(choice => <option key={choice.days} value={choice.days}>{choice.label}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor="campaign-event-time">시각 (한국 시간)</label>
+                          <input id="campaign-event-time" type="time" step={60} value={eventOffset.time} onChange={(event) => { if (/^([01]\d|2[0-3]):[0-5]\d$/.test(event.target.value)) changeEventOffset({ ...eventOffset, time: event.target.value }); }} />
+                        </div>
+                        <p className={styles.eventOffsetResult} id="campaign-event-result" aria-live="polite">{campaignDraft.scheduled ? `→ ${formatScheduledInput(campaignDraft.scheduled)}` : "행사일을 확인할 수 없습니다."}</p>
+                        <p className={styles.help}>행사 날짜가 바뀌면 이 예약도 같은 기준으로 함께 옮겨집니다. 옮긴 시각이 이미 지났다면 발송하지 않고 예약을 취소합니다.</p>
+                      </div> : null}
+                      {effectiveScheduleChoice === "DATE" ? <div className={styles.dateField}>
+                        <label htmlFor="campaign-scheduled">예약 시각 (한국 시간)</label>
+                        <input
+                          id="campaign-scheduled"
+                          ref={scheduleInputRef}
+                          type="datetime-local"
+                          step={60}
+                          value={campaignDraft.scheduled}
+                          aria-invalid={campaignFieldError?.field === "scheduled"}
+                          aria-describedby={campaignFieldError?.field === "scheduled" ? "campaign-scheduled-error campaign-scheduled-help" : "campaign-scheduled-help"}
+                          onChange={(event) => {
+                            setScheduleBadInput(event.target.validity.badInput);
+                            const value = event.target.value;
+                            setCampaignDraft(current => ({ ...current, scheduled: value, scheduleMode: !value ? "MANUAL" : current.scheduled || scheduleModeTouchedRef.current ? current.scheduleMode : defaultScheduleMode() }));
+                            setCampaignFieldError((current) => current?.field === "scheduled" ? null : current);
+                          }}
+                          onInput={(event) => {
+                            if (!event.currentTarget.validity.badInput) {
+                              setScheduleBadInput(false);
+                              setCampaignFieldError((current) => current?.field === "scheduled" ? null : current);
+                            }
+                          }}
+                          onKeyUp={(event) => setScheduleBadInput(event.currentTarget.validity.badInput)}
+                          onBlur={(event) => {
+                            if (event.target.validity.badInput) {
+                              setScheduleBadInput(true);
+                              setCampaignFieldError({ field: "scheduled", message: "예약 날짜와 시간을 모두 입력하거나 지워 주세요." });
+                            }
+                          }}
+                        />
+                        <p className={styles.help} id="campaign-scheduled-help">
+                          {!campaignDraft.scheduled
+                            ? "한국 시간 기준입니다. 시각을 입력하지 않으면 즉시 처리합니다."
+                            : campaignDraft.simulate
+                            ? "한국 시간 기준입니다. 모의 예약은 시각 이후 직접 실행하며, 실행해도 수신자에게 전달되지 않습니다."
+                            : "한국 시간 기준입니다."}
+                        </p>
+                      </div> : null}
+                      {scheduledDraft && !simulateDraft && !scheduleBadInput ? (
+                        <div className={styles.execution} id="campaign-schedule-mode" role="group" aria-label="예약 실행 방식" data-mode={campaignDraft.scheduleMode} data-ready={campaignDraft.scheduleMode === "AUTO" && serverCanAuto ? "true" : undefined}>
+                          <p role="note">
+                            {campaignDraft.scheduleMode === "AUTO"
+                              ? serverCanAuto
+                                ? `→ ${formatScheduledInput(campaignDraft.scheduled)}에 자동으로 나갑니다.`
+                                : `→ ${formatScheduledInput(campaignDraft.scheduled)} 예약. 이 서버는 지금 자동 발송이 꺼져 있어, 켜지기 전에는 나가지 않습니다.`
+                              : `→ ${formatScheduledInput(campaignDraft.scheduled)} 이후, 발송 기록에서 ‘발송 실행’을 눌러야 나갑니다.${serverCanAuto ? "" : " 이 서버는 자동 발송이 꺼져 있습니다."}`}
+                          </p>
+                          <ProductButton type="button" variant="ghost" className={styles.textButton} onClick={() => chooseScheduleMode(campaignDraft.scheduleMode === "AUTO" ? "MANUAL" : "AUTO")}>
+                            {campaignDraft.scheduleMode === "AUTO" ? "직접 실행으로 바꾸기" : "자동 발송으로 바꾸기"}
+                          </ProductButton>
+                        </div>
+                      ) : null}
+                      {scheduledDraft && simulateDraft && effectiveScheduleChoice !== "DATE" ? <p className={styles.help} role="note">모의 예약은 시각 이후 직접 실행하며, 실행해도 수신자에게 전달되지 않습니다.</p> : null}
+                      {campaignFieldError?.field === "scheduled" ? <p className={styles.fieldError} id="campaign-scheduled-error" role="alert">{campaignFieldError.message}</p> : null}
+                    </fieldset>
 
-                    {composeNotice ? <p className={styles.composeNotice} role="status">{composeNotice}</p> : null}
-                    <div className={styles.composeContent}>
-                      <h3 className={styles.fieldLabel} id="campaign-content" tabIndex={-1}>무엇을 보낼까요</h3>
+                    <div className={styles.composeContent} data-flash={flashSection === "campaign-content" ? "true" : undefined}>
+                      <h3 className={styles.sectionTitle} id="campaign-content" tabIndex={-1}><span className={styles.stepNo} aria-hidden="true">4</span>무엇을 보낼까요</h3>
                       {loadedPurpose?.key === "reminder" && autoReminderOn ? (
                         <ConsoleFeedback kind="warning" id="campaign-auto-reminder-overlap">자동 리마인드가 이미 켜져 있습니다. 같은 문자가 두 번 갈 수 있어요. 자동 안내에서 확인하세요.</ConsoleFeedback>
                       ) : null}
+                      {campaignDraft.channel === "ALIMTALK" ? (
+                        <div className={styles.templateCards}>
+                          {approvedAlimtalkTemplates.length > ALIMTALK_CARD_LIMIT ? templatePickerNode : approvedAlimtalkTemplates.length ? (
+                            <OptionCards
+                              id="campaign-template-cards"
+                              legend="승인된 알림톡 템플릿"
+                              value={alimtalkNeedsTemplate ? "" : selectedTemplateId}
+                              columns={2}
+                              invalid={campaignFieldError?.field === "templateId"}
+                              describedBy={campaignFieldError?.field === "templateId" ? "campaign-template-error" : undefined}
+                              options={approvedAlimtalkTemplates.map((template): OptionCard => ({ value: template.id, label: template.name, hint: template.description || undefined, icon: <KakaoGlyph />, tone: "kakao" }))}
+                              onChange={(value) => { const template = approvedAlimtalkTemplates.find(item => item.id === value); if (template) pickAlimtalkTemplate(template); }}
+                            />
+                          ) : (
+                            <p className={styles.help} id="campaign-template-empty" role="note">승인된 알림톡 템플릿이 없습니다. <ProductButton type="button" className={styles.textButton} variant="ghost" disabled={busyAction !== null || uploadingImage} onClick={openTemplateManager}>템플릿 관리에서 등록하세요</ProductButton></p>
+                          )}
+                          {campaignFieldError?.field === "templateId" ? <p className={styles.fieldError} id="campaign-template-error" role="alert">{campaignFieldError.message}</p> : null}
+                          <div className={styles.templateHelp}>
+                            <p className={styles.help}>승인된 문구는 바꿀 수 없고, 받는 사람마다 이름 등만 바뀝니다.</p>
+                            <ProductButton type="button" className={styles.textButton} variant="ghost" disabled={busyAction !== null || uploadingImage} onClick={openTemplateManager}>템플릿 관리</ProductButton>
+                          </div>
+                          {templateUseDialogNode}
+                        </div>
+                      ) : null}
+                      {campaignDraft.channel !== "ALIMTALK" ? (
                       <div className={styles.purposeLoader} role="group" aria-labelledby="campaign-purpose-label">
                     <p id="campaign-purpose-label" className={styles.purposeLabel}>템플릿으로 시작</p>
                     <div className={styles.purposeChips}>
@@ -3645,7 +3719,9 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                         </div>
                       </ConsoleDialog>
                     ) : null}
+                    {templateUseDialogNode}
                   </div>
+                      ) : null}
                       <div>
                   <label className="sr-only" htmlFor="campaign-body">메시지 내용</label>
                   {campaignDraft.channel !== "ALIMTALK" ? (
@@ -3662,6 +3738,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     rows={5}
                     value={campaignDraft.body}
                     readOnly={campaignDraft.channel === "ALIMTALK"}
+                    hidden={campaignDraft.channel === "ALIMTALK"}
                     aria-invalid={campaignFieldError?.field === "body"}
                     aria-describedby={campaignFieldError?.field === "body" ? "campaign-body-error campaign-variables campaign-body-length" : "campaign-variables campaign-body-length"}
                     onChange={(event) => {
@@ -3691,52 +3768,13 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                       return <ProductButton key={name} type="button" variant="ghost" aria-label={`${label} 넣기`} disabled={messagesLocked} onClick={() => insertPersonalization(name)}>{label}</ProductButton>;
                     })}
                   </div> : null}
-                  <p className={styles.help} id="campaign-variables">
+                  <p className={styles.help} id="campaign-variables" hidden={campaignDraft.channel === "ALIMTALK"}>
                     {campaignDraft.channel === "ALIMTALK" ? "선택한 템플릿 문구를 그대로 쓰고 개인화 정보만 자동으로 바뀝니다. 문구를 바꾸려면 템플릿 관리에서 승인 내용과 맞추거나 문자로 바꾸세요." : "받는 사람마다 이름 등이 자동으로 바뀝니다."}
                     {campaignDraft.body.includes("{{럭키번호}}") ? <> 럭키 번호는 추첨·투표에서 먼저 발급해야 합니다. <ProductLink className={styles.guideAction} variant="ghost" href={`/console/events/${encodeURIComponent(eventId)}/draws`}>추첨·투표 열기 <ArrowRightIcon /></ProductLink></> : null}
                   </p>
                 </div>
                     </div>
 
-                  {campaignDraft.channel !== "ALIMTALK" ? (
-                    <div className={styles.sendBlock} data-message-attachment>
-              <label htmlFor="campaign-image">사진 (선택)</label>
-              <input
-                id="campaign-image"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                disabled={uploadingImage || messagesLocked}
-                title={messagesLocked ? messagesLockReason : undefined}
-                aria-invalid={campaignFieldError?.field === "imageFileId"}
-                aria-describedby={campaignFieldError?.field === "imageFileId" ? "campaign-image-error" : "campaign-image-help"}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file && !messagesLocked) {
-                    setAttachmentRevision((revision) => revision + 1);
-                    setImagePreviewUrl(URL.createObjectURL(file));
-                    void uploadMmsImage(file);
-                  }
-                  event.target.value = "";
-                }}
-              />
-              <p className={styles.help} id="campaign-image-help">
-                {uploadingImage
-                  ? "사진을 준비해 올리는 중입니다."
-                  : campaignDraft.imageFileId
-                    ? `첨부됨: ${campaignDraft.imageName || "사진 1장"} · MMS로 보냅니다. 큰 사진은 자동으로 줄입니다. MMS는 별도 요금이 발생합니다.`
-                    : "사진을 넣으면 MMS로, 없으면 문자(SMS/LMS)로 보냅니다. 큰 사진은 자동으로 줄입니다."}
-              </p>
-              {imagePreviewUrl && campaignDraft.imageFileId ? <img className={styles.attachPreview} src={imagePreviewUrl} alt="첨부한 사진 미리보기" /> : null}
-              {campaignDraft.imageFileId ? <ProductButton type="button" className={styles.textButton} variant="ghost" disabled={uploadingImage || messagesLocked || uncertainMmsUpload} onClick={() => {
-                if (inFlightRef.current || mmsUploadGateRef.current) return;
-                setAttachmentRevision(revision => revision + 1);
-                setImagePreviewUrl(null);
-                setCampaignDraft(current => ({ ...current, channel: current.channel === "ALIMTALK" ? "ALIMTALK" : "SMS", imageFileId: "", imageName: "" }));
-                setCampaignFieldError(current => current?.field === "imageFileId" ? null : current);
-              }}>사진 첨부 해제</ProductButton> : null}
-              {campaignFieldError?.field === "imageFileId" ? <p className={styles.fieldError} id="campaign-image-error" role="alert">{campaignFieldError.message}</p> : null}
-            </div>
-                  ) : null}
                   <div className={styles.recordName}>
                     <p>기록 이름 <strong>{campaignDraft.title.trim() || autoTitlePreview}</strong></p>
                     <ProductButton type="button" variant="ghost" id="campaign-title-edit" aria-expanded={titleOpen} aria-controls="campaign-title-field" onClick={() => setTitleOpen((open) => !open)}>{titleOpen ? "닫기" : "바꾸기"}</ProductButton>
@@ -3757,6 +3795,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   </div>
                   </div>
 
+                  <div className={styles.rail}>
                   <aside className={styles.previewPane} data-open={previewOpen ? "true" : undefined} aria-labelledby="message-preview-heading">
                     <div className={styles.previewHead}>
                       <h3 id="message-preview-heading">받는 화면 예시</h3>
@@ -3779,6 +3818,22 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     </div>
                     <p className={styles.help}>{authoringTypeLabel(campaignDraft.channel)} · 이름·티켓 링크·번호는 예시이고 받는 사람마다 달라집니다.</p>
                   </aside>
+                  <div className={styles.sendDock} data-follow={sentenceOut && selectedCount > 0 ? "true" : undefined}>
+                      <p className={styles.dockFollow} aria-hidden="true">{followText}</p>
+                      {selectedCount === 0 && !messagesLocked ? <p className={styles.sendDockReason} id="campaign-submit-reason">받는 사람을 고르면 발송 검토를 누를 수 있습니다.</p> : null}
+                      <button type="button" id="message-preview-open" className={styles.previewOpen} aria-expanded={previewOpen} onClick={openPreview}>미리보기</button>
+                      <ProductButton
+                    id="campaign-submit"
+                    variant="primary"
+                    type="submit"
+                    disabled={selectedCount === 0 || busyAction !== null || uploadingImage || messagesLocked || otherCreateReceipt || uncertainMmsUpload}
+                    aria-describedby={campaignError && !uncertainCreate ? "campaign-submit-warning campaign-request-error" : "campaign-submit-warning"}
+                    title={messagesLocked ? messagesLockReason : selectedCount === 0 ? "수신자를 먼저 고르세요." : undefined}
+                  >
+                    {busyAction === "campaign" ? "요청 중…" : "발송 검토"}
+                  </ProductButton>
+                    </div>
+                  </div>
                 </div>
 
                 <div className={styles.sendArea}>
@@ -3824,21 +3879,118 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                   </p>
                     </div>
                 </div>
-                <div className={styles.sendDock}>
-                      {selectedCount === 0 && !messagesLocked ? <p className={styles.sendDockReason} id="campaign-submit-reason">받는 사람을 고르면 발송 검토를 누를 수 있습니다.</p> : null}
-                      <button type="button" id="message-preview-open" className={styles.previewOpen} aria-expanded={previewOpen} onClick={openPreview}>미리보기</button>
-                      <ProductButton
-                    id="campaign-submit"
-                    variant="primary"
-                    type="submit"
-                    disabled={selectedCount === 0 || busyAction !== null || uploadingImage || messagesLocked || otherCreateReceipt || uncertainMmsUpload}
-                    aria-describedby={campaignError && !uncertainCreate ? "campaign-submit-warning campaign-request-error" : "campaign-submit-warning"}
-                    title={messagesLocked ? messagesLockReason : selectedCount === 0 ? "수신자를 먼저 고르세요." : undefined}
-                  >
-                    {busyAction === "campaign" ? "요청 중…" : "발송 검토"}
-                  </ProductButton>
-                    </div>
                 </fieldset>
+                    {recipientListOpen ? (
+                      <ConsoleDialog
+                        title="직접 고르기"
+                        presentation="drawer"
+                        onClose={() => setRecipientListOpen(false)}
+                        stickyChrome
+                        footer={
+                          <div className={styles.pickFoot}>
+                            <span><strong>선택 {selectedCount}명</strong>{outsideVisibleCount > 0 ? <small>화면 밖 선택 {outsideVisibleCount}명 유지 중</small> : null}</span>
+                            <ProductButton id="recipient-list-close" type="button" variant="ghost" className={styles.doneInk} icon={<CheckIcon />} onClick={() => setRecipientListOpen(false)}>{selectedCount > 0 ? `선택 ${selectedCount}명 완료` : "완료"}</ProductButton>
+                          </div>
+                        }
+                      >
+                        <div className={styles.pickBody}>
+                          {recipientReviewNode}
+                          <p className={styles.help} role="status">
+                            {recipientSearch || showSelectedOnly || recipientStatus !== "ALL" || recipientGroup
+                              ? `표시 ${visibleRecipients.length}명`
+                              : `발송 가능 ${activeParticipants.length}명`} · 상태·그룹·이름으로 한 명씩 고릅니다.
+                          </p>
+                          <div className={styles.recipientFilters}>
+                            <div>
+                              <label htmlFor="recipient-status-filter">수신자 상태</label>
+                              <select
+                                id="recipient-status-filter"
+                                value={recipientStatus}
+                                disabled={messagesLocked || compositionPending}
+                                onChange={(event) => setRecipientStatus(event.target.value)}
+                              >
+                                {RECIPIENT_STATUS_OPTIONS.map((option) => (
+                                  <option value={option.value} key={option.value}>{option.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label htmlFor="recipient-group-filter">수신자 그룹</label>
+                              <select id="recipient-group-filter" value={recipientGroup} disabled={messagesLocked || compositionPending} onChange={event => setRecipientGroup(event.target.value)}>
+                                <option value="">전체 그룹</option>
+                                {recipientGroups.map(group => <option key={group} value={group}>{group}</option>)}
+                              </select>
+                            </div>
+                            <div className={styles.recipientSearch}>
+                              <label htmlFor="recipient-search">
+                                <span className="sr-only">수신자 이름·소속·연락처 검색</span>
+                              </label>
+                              <input
+                                id="recipient-search"
+                                type="search"
+                                disabled={messagesLocked || compositionPending}
+                                placeholder="수신자 이름·소속·연락처 검색"
+                                value={recipientQuery}
+                                onChange={(event) => setRecipientQuery(event.target.value)}
+                                onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }}
+                              />
+                            </div>
+                          </div>
+                          <div className={styles.recipientTools}>
+                            <label className={styles.selectAllOption}>
+                              <input
+                                type="checkbox"
+                                checked={allVisibleSelected}
+                                disabled={visibleRecipients.length === 0 || messagesLocked || compositionPending}
+                                ref={(node) => { if (node) node.indeterminate = someVisibleSelected; }}
+                                onChange={(event) => setAllRecipients(event.target.checked, visibleRecipients)}
+                              />
+                              표시 {visibleRecipients.length}명 모두 선택
+                            </label>
+                            <ProductButton type="button" className={styles.textButton} variant="ghost" id="recipient-clear-all" disabled={messagesLocked || compositionPending} onClick={clearAllRecipients} icon={<XIcon />}>전체 선택 해제</ProductButton>
+                          </div>
+                          <label className={styles.selectedOnlyOption}>
+                            <input
+                              id="recipient-selected-only"
+                              type="checkbox"
+                              disabled={messagesLocked || compositionPending}
+                              checked={showSelectedOnly}
+                              aria-describedby={showSelectedOnly ? "recipient-selected-help" : undefined}
+                              onChange={(event) => { setShowSelectedOnly(event.target.checked); if (event.target.checked) setCharsetCandidatesOnly(false); }}
+                            />
+                            선택 대상만 보기
+                          </label>
+                          {showSelectedOnly ? <p className={styles.help} id="recipient-selected-help">상태·그룹·검색 조건에 관계없이 선택한 {selectedCount}명 전체를 표시합니다. 조건으로 찾으려면 선택 대상만 보기를 끄세요.</p> : null}
+                          {charsetCandidatesOnly ? <p className={styles.help} role="status">현재 선택한 참가자 중 이름에 확인이 필요한 {charsetCandidateIds.size}명을 표시합니다. <ProductButton id="recipient-charset-reset" type="button" className={styles.textButton} variant="ghost" disabled={messagesLocked || compositionPending} onClick={() => setCharsetCandidatesOnly(false)}>전체 명단으로</ProductButton></p> : null}
+                          {visibleRecipients.length ? (
+                            <ul className={styles.recipientList} aria-label="참가자 선택" tabIndex={messagesLocked || compositionPending ? 0 : undefined} data-locked={messagesLocked || compositionPending ? "true" : undefined}>
+                              {visibleRecipients.map((person) => (
+                                <li key={person.id}>
+                                  <label className={styles.recipientRow}>
+                                    <input
+                                      type="checkbox"
+                                      disabled={messagesLocked || compositionPending}
+                                      checked={selectedSet.has(person.id)}
+                                      onChange={() => toggleRecipient(person.id)}
+                                    />
+                                    <span className={styles.recipientName}>{person.name}</span><ConsoleAvatar className={styles.recipientAvatar} name={person.name} tone={person.status === "APPROVED" ? "ok" : person.status === "PENDING" ? "wait" : person.status === "WAITLIST" ? "info" : "neutral"} />
+                                    <span className={styles.recipientMeta} data-recipient-meta>
+                                      {person.company ? `${person.company} · ` : ""}{person.group} · {maskPhone(person.phone)} · {participantStatusLabel(person.status)}
+                                    </span>
+                                  </label>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : showSelectedOnly ? (
+                            <ConsoleEmptyState kind="filtered" title="선택한 대상이 없습니다." />
+                          ) : activeParticipants.length ? (
+                            <ConsoleEmptyState kind="filtered" title="조건에 맞는 수신자가 없습니다." />
+                          ) : (
+                            <ConsoleEmptyState title="등록된 참가자가 없습니다." />
+                          )}
+                        </div>
+                      </ConsoleDialog>
+                    ) : null}
               </ValidatedForm>
             </ConsoleSection>
             </div>

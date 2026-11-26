@@ -100,11 +100,13 @@ test('preparation feedback and editing-unit actions use the shared components', 
     assert.match(source, /<ConsoleFormActions/u, `${pageId} closes editing units with shared actions`);
   }
   assert.match(PAGES.messages, /<ConsoleFormActions/u);
-  // Reopened 2026-11-24 (owner: 시안 A): the review bar became the send area + dock; the target/mode
-  // summary still sits directly above the one submit.
-  assert.match(PAGES.messages, /className=\{styles\.sendArea\}/u, 'compose keeps its target/mode safeguard beside the submit');
+  // Reopened 2026-11-24 (owner: 시안 A): the review bar became the send area + dock. Reopened 2026-11-26: the dock
+  // moved under the phone preview, so the one submit comes first; the target/mode summary stays in the send area it
+  // describes, still bound to the submit by aria-describedby, and the review step that follows repeats it in full.
+  assert.match(PAGES.messages, /className=\{styles\.sendArea\}/u, 'compose keeps its target/mode safeguard');
   assert.match(PAGES.messages, /className=\{styles\.reviewSummary\} id="campaign-submit-warning"/u);
-  assert.ok(PAGES.messages.indexOf('id="campaign-submit-warning"') < PAGES.messages.indexOf('id="campaign-submit"'), 'summary precedes the submit');
+  assert.ok(PAGES.messages.indexOf('id="campaign-submit"') < PAGES.messages.indexOf('id="campaign-submit-warning"'), 'the submit sits in the dock under the preview, ahead of the send area');
+  assert.match(PAGES.messages, /aria-describedby=\{campaignError && !uncertainCreate \? "campaign-submit-warning campaign-request-error" : "campaign-submit-warning"\}/u, 'the submit still names its summary');
   assert.match(PAGES.messages, /id="campaign-submit-warning"/u);
 });
 

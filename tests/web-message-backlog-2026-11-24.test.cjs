@@ -44,8 +44,13 @@ test('M1: MMS photo upload shrinks to JPEG 200,000 bytes before upload and uses 
   assert.doesNotMatch(WORKSPACE, /JPG 200KB 이하/u);
 });
 
-test('M2: manual reservations say 예약됨 · 직접 실행 필요 in the sentence, the confirm and the history', () => {
-  assert.match(WORKSPACE, /id="campaign-manual-run"[^>]*>.*예약됨 · 직접 실행 필요/su);
+test('M2: manual reservations say 직접 실행 필요 in the schedule zone, the confirm and the history', () => {
+  // Reopened 2026-11-26 (owner): a reservation goes out by itself where the server can run it, so 직접 실행 is the
+  // fallback; its line, not a sentence note, tells the operator what to press.
+  assert.match(WORKSPACE, /id="campaign-schedule-mode"[^>]*aria-label="예약 실행 방식"/u);
+  assert.match(WORKSPACE, /이후, 발송 기록에서 ‘발송 실행’을 눌러야 나갑니다/u);
+  assert.match(WORKSPACE, /에 자동으로 나갑니다/u);
+  assert.match(WORKSPACE, /scheduleModeDefault\(state\.messageSchedule, state\.integrations\.connected\)/u, 'automatic only where this server can run it');
   assert.match(WORKSPACE, /예약됨 · 직접 실행 필요\\n/u, 'the review confirm leads with it');
   assert.match(WORKSPACE, /<StatusPill tone="neutral">예약됨 · 직접 실행 필요<\/StatusPill>/u);
   assert.match(WORKSPACE, /id="message-overdue-alert"/u);
