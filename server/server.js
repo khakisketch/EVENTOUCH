@@ -9,6 +9,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { openStore } = require('./store');
 const { createDatabase } = require('./db');
+const { apiSessionLimits } = require('./database-config');
+const { startCredentialPruning } = require('./expired-credentials');
 const { createDatabaseAuth } = require('./auth');
 const { createAccess } = require('./access');
 const { createState } = require('./state');
@@ -30,7 +32,7 @@ const { createEmailTransport } = require('./email-transport');
 const { createAccountRecovery } = require('./account-recovery');
 const { attachOrgRequest, stampOrgHeaders } = require('./tenancy');
 const { createSignupProtection } = require('./signup-protection.ts');
-const { createRequestObservability } = require('./request-observability.ts');
+const { createRequestObservability, reportUnexpectedError } = require('./request-observability.ts');
 const { developmentLoginEmail, createClientAddressResolver } = require('./runtime-security.ts');
 const { maintenanceConfig, runMessageMaintenance } = require('./message-maintenance');
 
@@ -276,6 +278,11 @@ function createHttpServer(store, auth, access, database, { storageDir, fileStora
     return String(site).trim().toLowerCase() === 'same-origin';
   }
 
+  const unexpected = (req, res) => (error) => {
+    reportUnexpectedError(req, error);
+    sendJson(res, 500, { error: '요청을 처리하지 못했습니다' });
+  };
+
   const server = http.createServer((req, res) => {
     observations.attach(req, res);
     if (!fetchSiteAllowed(req)) {
@@ -329,16 +336,20 @@ function createHttpServer(store, auth, access, database, { storageDir, fileStora
           contextVersion: account.contextVersion ?? null,
           outboxPending: pending,
         });
-      }).catch(error => sendJson(res, error.status || 500, {
-        error: failureMessage(error, '상태를 확인하지 못했습니다'),
-        ...(error.code ? { code: error.code } : {}),
-      }));
+      }).catch(error => {
+        reportUnexpectedError(req, error);
+        sendJson(res, error.status || 500, {
+          error: failureMessage(error, '상태를 확인하지 못했습니다'),
+          ...(error.code ? { code: error.code } : {}),
+        });
+      });
       return;
     }
     if (urlPath === '/api/health') {
       healthReady.then(
         () => healthApp.routing(req, res),
-        () => {
+        (error) => {
+          reportUnexpectedError(req, error);
           res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify({ ok: false, error: '상태를 확인할 수 없습니다' }));
         }
@@ -363,11 +374,15 @@ function createHttpServer(store, auth, access, database, { storageDir, fileStora
       database.query('SELECT 1').then(
         async () => {
           try { await storage.ready(); }
-          catch { return sendJson(res, 503, { ok: false, db: true, storage: false }); }
+          catch (error) {
+            reportUnexpectedError(req, error);
+            return sendJson(res, 503, { ok: false, db: true, storage: false });
+          }
           res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
           res.end(JSON.stringify({ ok: true, db: true }));
         },
-        () => {
+        (error) => {
+          reportUnexpectedError(req, error);
           res.writeHead(503, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
           res.end(JSON.stringify({ ok: false, db: false }));
         }
@@ -377,7 +392,7 @@ function createHttpServer(store, auth, access, database, { storageDir, fileStora
     if ((urlPath === '/api/public' || urlPath.startsWith('/api/public/')) && req.method === 'GET') {
       publicReadsReady.then(
         () => publicReadsApp.routing(req, res),
-        () => sendJson(res, 500, { error: '요청을 처리하지 못했습니다' })
+        unexpected(req, res)
       );
       return;
     }
@@ -389,29 +404,27 @@ function createHttpServer(store, auth, access, database, { storageDir, fileStora
         if (scopedReadsPath(urlPath, req.method)) {
           scopedReadsReady.then(
             () => scopedReadsApp.routing(req, res),
-            () => sendJson(res, 500, { error: '요청을 처리하지 못했습니다' })
+            unexpected(req, res)
           );
           return;
         }
         if (organizationRestPath(urlPath, req.method)) {
           organizationRestReady.then(
             () => organizationRestApp.routing(req, res),
-            () => sendJson(res, 500, { error: '요청을 처리하지 못했습니다' })
+            unexpected(req, res)
           );
           return;
         }
         if (commandPathPath(urlPath, req.method)) {
           commandPathReady.then(
             () => commandPathApp.routing(req, res),
-            () => sendJson(res, 500, { error: '요청을 처리하지 못했습니다' })
+            unexpected(req, res)
           );
           return;
         }
       }
       if (urlPath.startsWith('/api/auth/')) {
-        auth.handleAuth(req, res, urlPath).catch(() => {
-          sendJson(res, 500, { error: '요청을 처리하지 못했습니다' });
-        });
+        auth.handleAuth(req, res, urlPath).catch(unexpected(req, res));
         return;
       }
       handleApi(req, res, store, urlPath, {
@@ -426,9 +439,7 @@ function createHttpServer(store, auth, access, database, { storageDir, fileStora
         attendeeAccess,
         publicArrival,
         database,
-      }).catch(() => {
-        sendJson(res, 500, { error: '요청을 처리하지 못했습니다' });
-      });
+      }).catch(unexpected(req, res));
       return;
     }
     // No repository files are served. The only non-API route is the worker
@@ -467,11 +478,15 @@ async function startServer() {
   // Reject an unsafe/malformed runtime before opening or migrating a database.
   developmentLoginEmail();
   createClientAddressResolver();
+  apiSessionLimits();
   const fileStorage = createFileStorage();
   await fileStorage.ready();
-  const database = createDatabase();
+  // Migrations may run long, so they use their own pool without the API limits.
+  const migrations = createDatabase();
+  try { await migrations.migrate(); }
+  finally { await migrations.close(); }
+  const database = createDatabase({ apiLimits: true });
   try {
-    await database.migrate();
     // Explicit SMTP or development mock only. Configuration readiness does
     // not assert delivery; bearer tokens and provider errors are never logged.
     const emailTransport = createEmailTransport();
@@ -526,16 +541,19 @@ async function startServer() {
     }, Number.isFinite(interval) ? Math.min(3600000, Math.max(1000, interval)) : 60000) : null;
     messageMaintenance.workerStarted = Boolean(maintenanceTimer);
     maintenanceTimer?.unref();
+    const credentialPruning = startCredentialPruning(database);
     let closing = null;
     const close = () => {
       if (closing) return closing;
       server.eventouchDraining = true;
       if (maintenanceTimer) clearInterval(maintenanceTimer);
       messageMaintenance.workerStarted = false;
+      const pruningStopped = credentialPruning.stop();
       closing = (async () => {
         await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
         await bootDrain;
         if (maintenanceRun) await maintenanceRun;
+        await pruningStopped;
         await database.close();
       })();
       return closing;

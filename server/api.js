@@ -6,6 +6,7 @@
 
 const { sendJson, readJsonBody, failureMessage } = require('./http');
 const { stampOrgHeaders } = require('./tenancy');
+const { reportUnexpectedError } = require('./request-observability.ts');
 function stampOrg(res, account) {
   stampOrgHeaders((name, value) => res.setHeader(name, value), account);
 }
@@ -32,6 +33,12 @@ function err(res, status, message, field, code) {
   if (field) body.field = field;
   if (code) body.code = code;
   sendJson(res, status, body);
+}
+
+// A catch that may answer 5xx goes through here; business statuses stay silent.
+function failed(req, res, error, message, field, code) {
+  reportUnexpectedError(req, error);
+  return err(res, error.status || 500, message, field, code);
 }
 
 function isEmail(value) {
@@ -188,7 +195,10 @@ async function streamPhotoArchive(req, res, security, { account, eventId, refs, 
     }
     if (!aborted) zip.end();
   } catch (error) {
-    if (!aborted) res.destroy();
+    if (!aborted) {
+      reportUnexpectedError(req, error);
+      res.destroy();
+    }
   } finally {
     currentStream = null;
   }
@@ -209,7 +219,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       const body = await readJsonBody(req);
       return sendJson(res, 200, await publicArrival.handle({ slug, body, req }));
     } catch (error) {
-      return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), error.field, error.code);
+      return failed(req, res, error, failureMessage(error, '요청을 처리하지 못했습니다'), error.field, error.code);
     }
   }
 
@@ -227,7 +237,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       stampOrg(res, account);
       return sendJson(res, 200, view);
     } catch (error) {
-      return err(res, error.status || 500, failureMessage(error, '도착 목록을 불러오지 못했습니다'), error.field, error.code);
+      return failed(req, res, error, failureMessage(error, '도착 목록을 불러오지 못했습니다'), error.field, error.code);
     }
   }
 
@@ -287,7 +297,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       return sendJson(res, 200, { ok: true, expiresAt: confirmed.session.expiresAt, ticket });
     } catch (error) {
       if (error && error.code === 'NEEDS_CONNECTION') return err(res, 503, error.message);
-      return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), error.field, error.code);
+      return failed(req, res, error, failureMessage(error, '요청을 처리하지 못했습니다'), error.field, error.code);
     }
   }
 
@@ -301,7 +311,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       stampOrg(res, account);
       return sendJson(res, 200, { state: projection, serverTimeMs: Date.now() });
     } catch (error) {
-      return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), undefined, error.code);
+      return failed(req, res, error, failureMessage(error, '요청을 처리하지 못했습니다'), undefined, error.code);
     }
   }
 
@@ -312,9 +322,9 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         const file = await files.readPublic({slug:decodedSegment(parts[3]),fileId:decodedSegment(parts[5])});
         const stream = await file.openReadStream();
         res.writeHead(200, {'content-type':file.type,'content-length':file.size,'x-content-type-options':'nosniff'});
-        stream.on('error', () => res.destroy()).pipe(res);
+        stream.on('error', (error) => { reportUnexpectedError(req, error); res.destroy(); }).pipe(res);
         return;
-      } catch (error) { return err(res,error.status || 500,error.status ? error.message : '파일을 읽지 못했습니다'); }
+      } catch (error) { return failed(req, res, error, error.status ? error.message : '파일을 읽지 못했습니다'); }
     }
     if (req.method === 'POST' && parts[2] === 'events' && parts[4] === 'files' && parts.length === 5 && files) {
       res.setHeader('cache-control', 'no-store');
@@ -332,7 +342,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         });
         return sendJson(res, result.replayed ? 200 : 201, { file: result.file });
       } catch (error) {
-        return err(res, error.status || 500, failureMessage(error, '사진을 저장하지 못했습니다'));
+        return failed(req, res, error, failureMessage(error, '사진을 저장하지 못했습니다'));
       }
     }
     if (req.method !== 'GET' || !publicEvents) {
@@ -360,12 +370,13 @@ async function handleApi(req, res, store, urlPath, security = {}) {
           if (granted) return sendJson(res, 200, { ...granted, serverTimeMs: Date.now() });
         } catch (error) {
           // Fall through to the generic ticket failure below.
+          reportUnexpectedError(req, error);
         }
       }
       if (!result) return err(res, 404, '티켓 링크를 확인할 수 없습니다');
       return sendJson(res, 200, { ...result, serverTimeMs: Date.now() });
     } catch (error) {
-      return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), undefined, error.code);
+      return failed(req, res, error, failureMessage(error, '요청을 처리하지 못했습니다'), undefined, error.code);
     }
   }
 
@@ -382,7 +393,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         const stream = await file.openReadStream();
         stampOrg(res, account);
         res.writeHead(200,{'content-type':file.type,'content-length':file.size,'x-content-type-options':'nosniff'});
-        stream.on('error', () => res.destroy()).pipe(res);
+        stream.on('error', (error) => { reportUnexpectedError(req, error); res.destroy(); }).pipe(res);
         return;
       }
       const params = new URL(req.url,'http://localhost').searchParams;
@@ -390,7 +401,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       const result = await files.upload({account,eventId,commandId:params.get('commandId'),name:params.get('name'),
         contentType:String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase(),bytes});
       return sendJson(res,result.replayed ? 200 : 201,{file:result.file});
-    } catch (error) { return err(res,error.status || 500,error.status ? error.message : '파일을 저장하지 못했습니다', undefined, error.code); }
+    } catch (error) { return failed(req, res, error, error.status ? error.message : '파일을 저장하지 못했습니다', undefined, error.code); }
   }
   // Operator-only bulk photo export. No public archive exists: both routes
   // require the same grant as operator file read (AGENCY or event-member
@@ -436,10 +447,11 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       });
     } catch (error) {
       if (res.headersSent) {
+        reportUnexpectedError(req, error);
         res.destroy();
         return;
       }
-      return err(res, error.status || 500, error.status ? error.message : '사진 묶음을 만들지 못했습니다', undefined, error.code);
+      return failed(req, res, error, error.status ? error.message : '사진 묶음을 만들지 못했습니다', undefined, error.code);
     }
   }
   // Organization-level client files (logos, registration documents). No
@@ -455,7 +467,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         const stream = await file.openReadStream();
         stampOrg(res, account);
         res.writeHead(200,{'content-type':file.type,'content-length':file.size,'x-content-type-options':'nosniff'});
-        stream.on('error', () => res.destroy()).pipe(res);
+        stream.on('error', (error) => { reportUnexpectedError(req, error); res.destroy(); }).pipe(res);
         return;
       }
       const params = new URL(req.url,'http://localhost').searchParams;
@@ -463,14 +475,14 @@ async function handleApi(req, res, store, urlPath, security = {}) {
       const result = await files.uploadClientFile({account,clientId,commandId:params.get('commandId'),name:params.get('name'),
         contentType:String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase(),bytes});
       return sendJson(res,result.replayed ? 200 : 201,{file:result.file});
-    } catch (error) { return err(res,error.status || 500,error.status ? error.message : '파일을 저장하지 못했습니다', undefined, error.code); }
+    } catch (error) { return failed(req, res, error, error.status ? error.message : '파일을 저장하지 못했습니다', undefined, error.code); }
   }
   if (req.method === 'POST' && parts[1] === 'events' && parts[3] === 'files' && parts.length === 4) {
     try {
       ensureLegacySeed(store);
       return await handleLegacyUpload(req, res, store, parts[2], req.url || urlPath, auth, access);
     } catch (e) {
-      return err(res, e.status || 500, failureMessage(e, '요청을 처리하지 못했습니다'), e.field);
+      return failed(req, res, e, failureMessage(e, '요청을 처리하지 못했습니다'), e.field);
     }
   }
 
@@ -537,7 +549,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         const result = await state.saveClient(account, body);
         return sendJson(res, result.replayed ? 200 : 201, { client: result.client });
       } catch (error) {
-        return err(res, error.status || 500, failureMessage(error, '고객사 정보를 저장하지 못했습니다'), error.field, error.code);
+        return failed(req, res, error, failureMessage(error, '고객사 정보를 저장하지 못했습니다'), error.field, error.code);
       }
     }
 
@@ -548,7 +560,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         const result = await state.saveOrgPermissions(account, decodedSegment(parts[2]), body);
         return sendJson(res, result.replayed ? 200 : 201, { account: result.account });
       } catch (error) {
-        return err(res, error.status || 500, failureMessage(error, '조직 권한을 저장하지 못했습니다'), error.field, error.code);
+        return failed(req, res, error, failureMessage(error, '조직 권한을 저장하지 못했습니다'), error.field, error.code);
       }
     }
 
@@ -574,7 +586,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         }
         return sendJson(res, result.status, result.body);
       } catch (error) {
-        return err(res, error.status || 500, failureMessage(error, '요청을 처리하지 못했습니다'), error.field, error.code);
+        return failed(req, res, error, failureMessage(error, '요청을 처리하지 못했습니다'), error.field, error.code);
       }
     }
 
@@ -587,7 +599,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
         const result = await state.assignMember(account, eventId, body);
         return sendJson(res, result.replayed ? 200 : 201, { membership: result.membership });
       } catch (error) {
-        return err(res, error.status || 500, failureMessage(error, '행사 권한을 저장하지 못했습니다'), error.field, error.code);
+        return failed(req, res, error, failureMessage(error, '행사 권한을 저장하지 못했습니다'), error.field, error.code);
       }
     }
 
@@ -717,7 +729,7 @@ async function handleApi(req, res, store, urlPath, security = {}) {
     }
     return sendJson(res, 404, { error: '요청한 API를 찾을 수 없습니다' });
   } catch (e) {
-    return err(res, e.status || 500, failureMessage(e, '요청을 처리하지 못했습니다'), e.field, e.code);
+    return failed(req, res, e, failureMessage(e, '요청을 처리하지 못했습니다'), e.field, e.code);
   }
 }
 

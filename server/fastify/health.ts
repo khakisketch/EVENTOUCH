@@ -11,6 +11,7 @@
 // stripping) and is verified by `npm run server:typecheck`.
 
 import fastify, { type FastifyInstance } from "fastify";
+import { reportUnexpectedError } from "../request-observability.ts";
 
 export type HealthStatus = {
   connected: boolean;
@@ -26,6 +27,7 @@ export type HealthDeps = {
 
 export function buildHealthApp(deps: HealthDeps): FastifyInstance {
   const app = fastify({ logger: false });
+  app.addHook("onError", async (request, _reply, error) => reportUnexpectedError(request.raw, error));
   app.get("/api/health", async () => {
     const messaging = deps.getMessaging();
     const base: Record<string, unknown> = {

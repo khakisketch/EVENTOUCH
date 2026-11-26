@@ -37,6 +37,7 @@
 
 import fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { decodedSegment, fail, failureFields } from "./legacy-http.mts";
+import { reportUnexpectedError } from "../request-observability.ts";
 
 export type ScopedReadsDeps = {
   /** Session lookup for the cookie the browser already holds. */
@@ -75,6 +76,7 @@ async function currentAccount(deps: ScopedReadsDeps, request: FastifyRequest): P
 }
 
 function failWith(deps: ScopedReadsDeps, reply: FastifyReply, error: unknown, fallback: string) {
+  reportUnexpectedError(reply.request.raw, error);
   const mapped = failureFields(error, fallback, deps.failureMessage);
   return fail(reply, mapped.status, mapped.message, mapped.field, mapped.code);
 }
@@ -138,6 +140,7 @@ export function buildScopedReadsApp(deps: ScopedReadsDeps): FastifyInstance {
     },
   });
 
+  app.addHook("onError", async (request, _reply, error) => reportUnexpectedError(request.raw, error));
   app.get("/api/*", async (request, reply) => scopedReads(deps, request, reply));
   return app;
 }

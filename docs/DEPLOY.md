@@ -66,6 +66,29 @@ The automated `--verify` and Compose restore paths remain for the default public
 - A sign-in lasts `SESSION_TTL_HOURS` (default 12) and is renewed while in use, but never past `SESSION_MAX_DAYS` (default 14) from the moment of sign-in. After that the person signs in again. Existing sessions older than the limit stop working when this ships.
 - `/account/password` lets a signed-in person change their own password (current password, new password, confirmation). Success ends every other session of that account and keeps the one that made the change. Wrong current passwords count against the same limits as sign-in, under separate counters, so guessing here cannot lock the sign-in form.
 
+## API database limits
+
+The running API's connection pool limits each session. Migrations (at API startup and `npm run db:migrate`), backup, restore and maintenance scripts do not set these limits; a limit configured on the PostgreSQL role or database still applies to them.
+
+| Variable | Default | Ends |
+|---|---|---|
+| `EVENTOUCH_DB_STATEMENT_TIMEOUT_MS` | 15000 | one statement, including its wait for a row or advisory lock |
+| `EVENTOUCH_DB_IDLE_TRANSACTION_TIMEOUT_MS` | 30000 | a session that holds a transaction open without sending a statement |
+
+Both take whole milliseconds from 1000 to 600000; anything else stops startup. The two Compose files do not forward these variables, so add them to the API service environment to override them there.
+
+An event or organization command that hits a limit inside its transaction answers 5xx, never success or a business refusal. Treat the result as unconfirmed and retry with the same command ID. Account sign-in and recovery endpoints keep their own answers, which are not all 5xx. Background message work that hits a limit is reviewed again under the existing outbox rules.
+
+Why these defaults: arrival and public signup requests queue in memory before they reach a row lock (one event's arrivals share one locked transaction, at most five signups per event hold a connection), and time in that queue does not count against either limit. The venue measurement below saw whole requests up to 9.6 s at 150 concurrent signups and 95% within 21 s at 300. Lock wait per statement was not measured on its own; it is only the part spent behind the few transactions holding a connection, so 15 s is expected to leave ample room. Do not lower it without measuring at real data size, and re-measure when workspaces grow. The idle limit also covers the time an upload spends writing bytes to file storage inside its transaction: a write slower than the limit fails that upload and removes its bytes.
+
+The limits are sent as PostgreSQL startup parameters. A connection pooler in front of PostgreSQL may reject or ignore them; this has not been verified against a Supabase pooler.
+
+## Server error lines and expired credentials
+
+An unexpected failure in the API's request routing writes one JSON line to stderr (failures answered inside the account endpoints do not yet): `{"type":"error","requestId":…,"route":…,"name":…,"code":…}`. `requestId` matches the response's `x-request-id`; `route` is a template. The message, stack, parameters and request data are not written. Responses below 500 write no such line.
+
+The API deletes expired rows from `sessions`, `attendee_sessions`, `attendee_grants` and `account_email_proofs` at startup and hourly. An expired mail proof is kept until the hourly and daily send limits no longer count it (past the day it was created). This cleanup deletes nothing else; phone verification challenges remain. A failed cleanup writes one line naming the table and error code and is retried on the next run.
+
 ## Release and human acceptance
 
 The automated release check reads evidence; it does not send messages, deploy, or modify a database. Copy [`ops/acceptance.example.json`](../ops/acceptance.example.json) outside the repository and have the named reviewers record only observed results. Run:
@@ -92,7 +115,7 @@ A release record requires explicit policy review and actual operator-journey, iO
 
 ## Retention and deletion
 
-Backup expiry is decided above (14 days, newest 7 kept). Retention periods for event, account, receipt, attendee and file data, deletion authority and exceptions are not approved. Until they are, do not permanently delete events, accounts, receipts, attendee data, or file bytes. `npm run event:purge:review -- --org-id <organization-id> --event-id <event-id>` reports review information only; it does not purge data.
+Backup expiry is decided above (14 days, newest 7 kept). Retention periods for event, account, receipt, attendee and file data, deletion authority and exceptions are not approved. Until they are, do not permanently delete events, accounts, receipts, attendee data, or file bytes. The expired credential cleanup above is an exception for rows that have already expired. `npm run event:purge:review -- --org-id <organization-id> --event-id <event-id>` reports review information only; it does not purge data.
 
 ## 배포 전 점검 (2026-11-20 사고 기록)
 - 호스트 디스크 여유가 5GB 아래이면 `docker build`가 Docker VM 디스크를 늘리지 못해 VM 파일시스템이 읽기 전용이 되고 컨테이너가 멈춘다. 배포 전에 `df -h`로 여유를 확인한다.

@@ -2,8 +2,26 @@
 
 const fs = require('node:fs');
 
+// Session limits for the running API's pool only. Migrations, backup, restore
+// and maintenance scripts may run long on purpose and never ask for them.
+// Defaults and their reasoning: docs/DEPLOY.md.
+const API_SESSION_LIMITS = [
+  ['statement_timeout', 'EVENTOUCH_DB_STATEMENT_TIMEOUT_MS', 15000],
+  ['idle_in_transaction_session_timeout', 'EVENTOUCH_DB_IDLE_TRANSACTION_TIMEOUT_MS', 30000],
+];
+
+function apiSessionLimits(env = process.env) {
+  return Object.fromEntries(API_SESSION_LIMITS.map(([option, name, fallback]) => {
+    const value = Number(env[name] || fallback);
+    if (!Number.isInteger(value) || value < 1000 || value > 600000) {
+      throw new Error(`${name}는 1000~600000 정수(밀리초)여야 합니다`);
+    }
+    return [option, value];
+  }));
+}
+
 // Keep driver URL parsing from weakening the explicitly selected TLS policy.
-function databaseConnectionOptions({ connectionString, env = process.env } = {}) {
+function databaseConnectionOptions({ connectionString, env = process.env, apiLimits = false } = {}) {
   const value = connectionString || env.DATABASE_URL;
   if (!value) throw new Error('DATABASE_URL을 설정하세요');
   let url;
@@ -37,6 +55,7 @@ function databaseConnectionOptions({ connectionString, env = process.env } = {})
   const options = {
     connectionString: url.toString(), ssl, max,
     connectionTimeoutMillis: 5000, idleTimeoutMillis: 30000,
+    ...(apiLimits ? apiSessionLimits(env) : {}),
   };
   if (env.DATABASE_SCHEMA) {
     const schema = env.DATABASE_SCHEMA;
@@ -48,4 +67,4 @@ function databaseConnectionOptions({ connectionString, env = process.env } = {})
   return options;
 }
 
-module.exports = { databaseConnectionOptions };
+module.exports = { apiSessionLimits, databaseConnectionOptions };

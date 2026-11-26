@@ -4,8 +4,10 @@ const { Pool } = require('pg');
 
 const { databaseConnectionOptions } = require('./database-config');
 
-function createDatabase({ connectionString, PoolClass = Pool, env = process.env } = {}) {
-  const pool = new PoolClass(databaseConnectionOptions({ connectionString, env }));
+const STATEMENT_CANCELED = '57014';
+
+function createDatabase({ connectionString, PoolClass = Pool, env = process.env, apiLimits = false } = {}) {
+  const pool = new PoolClass(databaseConnectionOptions({ connectionString, env, apiLimits }));
   let closed = false;
 
   if (typeof pool.on === 'function') {
@@ -27,15 +29,32 @@ function createDatabase({ connectionString, PoolClass = Pool, env = process.env 
       const client = await pool.connect();
       let began = false;
       let committing = false;
+      // A canceled statement or a lost session stays the reported failure even
+      // when the callback rewrote it (for example into a 403): callers must see
+      // an unconfirmed failure, never a business refusal.
+      let cause = null;
+      const lostSession = (error) => { cause = cause || error; };
+      const canceledStatement = (error) => { if (error && error.code === STATEMENT_CANCELED) lostSession(error); };
+      // pg emits an error on a checked-out client when the server ends the
+      // session (idle-in-transaction limit); unheard, it would end the process.
+      client.on?.('error', lostSession);
+      client.connection?.on('errorMessage', canceledStatement);
       try {
         await client.query('BEGIN');
         began = true;
         const result = await fn(client);
         committing = true;
-        await client.query('COMMIT');
+        const committed = await client.query('COMMIT');
         began = false;
+        // PostgreSQL answers COMMIT with ROLLBACK, not an error, when an earlier
+        // statement failed and the callback swallowed it. Nothing was saved.
+        if (committed?.command === 'ROLLBACK') {
+          committing = false;
+          throw Object.assign(new Error('트랜잭션이 취소되었습니다'), { code: '25P02' });
+        }
         return result;
-      } catch (error) {
+      } catch (thrown) {
+        const error = cause || thrown;
         // A lost COMMIT reply is not proof of rollback. File compensation
         // must retain bytes until the original receipt can be reconciled.
         if (committing) Object.defineProperty(error, 'transactionOutcome', { value: 'unknown', configurable: true });
@@ -48,6 +67,8 @@ function createDatabase({ connectionString, PoolClass = Pool, env = process.env 
         }
         throw error;
       } finally {
+        client.connection?.removeListener('errorMessage', canceledStatement);
+        client.removeListener?.('error', lostSession);
         client.release();
       }
     },

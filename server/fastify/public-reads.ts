@@ -21,6 +21,7 @@
 import fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import type { Readable } from "node:stream";
 import { bearerToken, decodedSegment, errorStatus } from "./legacy-http.mts";
+import { reportUnexpectedError } from "../request-observability.ts";
 
 export type PublicEventReader = {
   loadPublicEvent: (slug: string) => Promise<unknown | null>;
@@ -103,8 +104,12 @@ async function publicRead(deps: PublicReadsDeps, request: FastifyRequest, reply:
         .header("content-type", file.type)
         .header("content-length", file.size)
         .header("x-content-type-options", "nosniff");
-      return reply.send(stream.on("error", () => reply.raw.destroy()));
+      return reply.send(stream.on("error", (error) => {
+        reportUnexpectedError(request.raw, error);
+        reply.raw.destroy();
+      }));
     } catch (error) {
+      reportUnexpectedError(request.raw, error);
       const status = errorStatus(error);
       return reply.code(status).send({ error: status === 500 ? FILE_READ_FAILURE : errorMessage(error, NOT_FOUND_FILE) });
     }
@@ -130,13 +135,15 @@ async function publicRead(deps: PublicReadsDeps, request: FastifyRequest, reply:
       try {
         const granted = await events.loadSessionTicket(slug, request.headers.cookie);
         if (granted) return reply.send(typeof granted === "object" && !Array.isArray(granted) ? { ...granted, serverTimeMs: Date.now() } : granted);
-      } catch {
+      } catch (error) {
         // The session fallback is best-effort; the bearer answer below stands.
+        reportUnexpectedError(request.raw, error);
       }
     }
     if (!ticket) return reply.code(404).send({ error: NOT_FOUND_TICKET });
     return reply.send(typeof ticket === "object" && !Array.isArray(ticket) ? { ...ticket, serverTimeMs: Date.now() } : ticket);
   } catch (error) {
+    reportUnexpectedError(request.raw, error);
     return reply.code(errorStatus(error)).send({ error: deps.failureMessage(error, GENERIC_FAILURE) });
   }
 }
@@ -150,9 +157,12 @@ export function buildPublicReadsApp(deps: PublicReadsDeps): FastifyInstance {
       const rawRequest = request as unknown as FastifyRequest;
       const rawReply = reply as unknown as FastifyReply;
       if (error.code === "FST_ERR_BAD_URL") return malformedUrl(deps, rawRequest, rawReply);
+      reportUnexpectedError(rawRequest.raw, error);
       return rawReply.code(500).send({ error: GENERIC_FAILURE });
     },
   });
+
+  app.addHook("onError", async (request, _reply, error) => reportUnexpectedError(request.raw, error));
 
   // Legacy parity: every /api/public response is uncacheable.
   app.addHook("onRequest", async (_request, reply) => {

@@ -22,6 +22,7 @@
 
 import fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { bearerToken, bodyOf, decodedSegment, fail, failureFields, readBody } from "./legacy-http.mts";
+import { reportUnexpectedError } from "../request-observability.ts";
 
 export type CommandResult = { status?: unknown; body?: unknown };
 
@@ -103,6 +104,7 @@ async function currentAccount(deps: CommandPathDeps, request: FastifyRequest): P
 }
 
 function failWith(deps: CommandPathDeps, reply: FastifyReply, error: unknown, fallback: string) {
+  reportUnexpectedError(reply.request.raw, error);
   const mapped = failureFields(error, fallback, deps.failureMessage);
   return fail(reply, mapped.status, mapped.message, mapped.field, mapped.code, mapped.details);
 }
@@ -262,6 +264,7 @@ export function buildCommandPathApp(deps: CommandPathDeps): FastifyInstance {
     },
   });
 
+  app.addHook("onError", async (request, _reply, error) => reportUnexpectedError(request.raw, error));
   app.removeAllContentTypeParsers();
   app.addContentTypeParser("*", (_request, payload, done) => {
     readBody(payload).then((result) => done(null, result));

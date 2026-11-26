@@ -19,6 +19,10 @@ const routes: [RegExp, string][] = [
   [/^\/api\/events\/[^/]+\/files(?:\/[^/]+)?$/, "/api/events/:eventId/files/:fileId"],
   [/^\/api\/events\/[^/]+\/(commands|signup|members|bootstrap|evidence-photos\.zip|attendee-photos\.zip)$/, "/api/events/:eventId/$1"],
   [/^\/api\/events\/[^/]+\/duplicate$/, "/api/events/:eventId/duplicate"],
+  [/^\/api\/events\/[^/]+\/desks\/[^/]+\/arrivals$/, "/api/events/:eventId/desks/:deskId/arrivals"],
+  [/^\/api\/events\/[^/]+\/command-receipts\/[^/]+$/, "/api/events/:eventId/command-receipts/:commandId"],
+  [/^\/api\/command-receipts\/[^/]+$/, "/api/command-receipts/:commandId"],
+  [/^\/api\/clients\/[^/]+\/files(?:\/[^/]+)?$/, "/api/clients/:clientId/files/:fileId"],
   [/^\/api\/accounts\/[^/]+\/org-permissions$/, "/api/accounts/:accountId/org-permissions"],
   [/^\/api\/console\/directory$/, "/api/console/directory"],
   [/^\/api\/(bootstrap|events|clients)$/, "/api/$1"],
@@ -34,7 +38,35 @@ export function requestRoute(url: string | undefined): string {
   return "/unmatched";
 }
 
-export function createRequestObservability({ env = process.env, write = (line: string) => process.stderr.write(line) }:
+type Failures = { requestId: string; route: string; write: (line: string) => unknown; reported: boolean };
+const failures = new WeakMap<IncomingMessage, Failures>();
+const writeStderr = (line: string) => process.stderr.write(line);
+
+// Names and codes are identifiers; anything else could carry typed data.
+function identifier(value: unknown): string | null {
+  const text = typeof value === "number" ? String(value) : value;
+  return typeof text === "string" && /^[A-Za-z0-9_.-]{1,64}$/.test(text) ? text : null;
+}
+
+/**
+ * One stderr line per request for an unexpected failure: never the message,
+ * stack, parameters or URL. Errors carrying a status below 500 are expected
+ * business answers and stay silent.
+ */
+export function reportUnexpectedError(request: IncomingMessage, error: unknown): void {
+  const fields = (error && typeof error === "object" ? error : {}) as
+    { status?: unknown; statusCode?: unknown; name?: unknown; code?: unknown };
+  const status = fields.status ?? fields.statusCode;
+  if (typeof status === "number" && status < 500) return;
+  const known = failures.get(request);
+  if (known?.reported) return;
+  if (known) known.reported = true;
+  const line = { type: "error", requestId: known?.requestId ?? null, route: known?.route ?? requestRoute(request.url),
+    name: identifier(fields.name) ?? "unknown", code: identifier(fields.code) };
+  try { (known?.write ?? writeStderr)(`${JSON.stringify(line)}\n`); } catch { /* logging cannot change a committed outcome */ }
+}
+
+export function createRequestObservability({ env = process.env, write = writeStderr }:
   { env?: Environment; write?: (line: string) => unknown } = {}) {
   const startedAt = new Date().toISOString();
   const release = /^[A-Za-z0-9_.-]{1,64}$/.test(env.EVENTOUCH_BUILD_REVISION || "") ? env.EVENTOUCH_BUILD_REVISION : "unknown";
@@ -47,6 +79,7 @@ export function createRequestObservability({ env = process.env, write = (line: s
       const route = requestRoute(request.url);
       const method = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].includes(request.method || "") ? request.method! : "OTHER";
       response.setHeader("x-request-id", requestId);
+      failures.set(request, { requestId, route, write, reported: false });
       let recorded = false;
       const finish = () => {
         if (recorded) return;

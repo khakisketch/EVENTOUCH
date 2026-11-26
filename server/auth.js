@@ -1852,7 +1852,8 @@ function createDatabaseAuth(database, options = {}) {
     // are never read. Invitation acceptance never counts as verification.
     if (urlPath === '/api/auth/email/verify/request' && req.method === 'POST') {
       res.setHeader('cache-control', 'no-store');
-      const user = await sessionFromCookie(req.headers.cookie).catch(() => null);
+      // A failed lookup is a server failure (500, logged), never "please log in".
+      const user = await sessionFromCookie(req.headers.cookie);
       if (!user) {
         sendJson(res, 401, { error: '로그인이 필요합니다' });
         return;
@@ -1889,7 +1890,8 @@ function createDatabaseAuth(database, options = {}) {
     }
     if (urlPath === '/api/auth/email/verify/confirm' && req.method === 'POST') {
       res.setHeader('cache-control', 'no-store');
-      const user = await sessionFromCookie(req.headers.cookie).catch(() => null);
+      // A failed lookup is a server failure (500, logged), never "please log in".
+      const user = await sessionFromCookie(req.headers.cookie);
       if (!user) {
         sendJson(res, 401, { error: '로그인이 필요합니다' });
         return;
@@ -1922,7 +1924,8 @@ function createDatabaseAuth(database, options = {}) {
     }
     if (urlPath === '/api/auth/email/status' && req.method === 'GET') {
       res.setHeader('cache-control', 'no-store');
-      const user = await sessionFromCookie(req.headers.cookie).catch(() => null);
+      // A failed lookup is a server failure (500, logged), never "please log in".
+      const user = await sessionFromCookie(req.headers.cookie);
       if (!user) {
         sendJson(res, 401, { error: '로그인이 필요합니다' });
         return;
@@ -1997,7 +2000,8 @@ function createDatabaseAuth(database, options = {}) {
     }
     if (urlPath === '/api/auth/password' && req.method === 'POST') {
       res.setHeader('cache-control', 'no-store');
-      const user = await sessionFromCookie(req.headers.cookie).catch(() => null);
+      // A failed lookup is a server failure (500, logged), never "please log in".
+      const user = await sessionFromCookie(req.headers.cookie);
       if (!user) {
         sendJson(res, 401, { error: '로그인이 필요합니다' });
         return;

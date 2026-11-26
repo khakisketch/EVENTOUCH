@@ -26,6 +26,7 @@
 
 import fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { bodyOf, decodedSegment, fail, failureFields, readBody } from "./legacy-http.mts";
+import { reportUnexpectedError } from "../request-observability.ts";
 
 export type OrganizationRestDeps = {
   /** Session lookup for the cookie the browser already holds. */
@@ -78,6 +79,7 @@ async function currentAccount(deps: OrganizationRestDeps, request: FastifyReques
 }
 
 function failWith(deps: OrganizationRestDeps, reply: FastifyReply, error: unknown, fallback: string) {
+  reportUnexpectedError(reply.request.raw, error);
   const mapped = failureFields(error, fallback, deps.failureMessage);
   return fail(reply, mapped.status, mapped.message, mapped.field, mapped.code);
 }
@@ -178,6 +180,7 @@ export function buildOrganizationRestApp(deps: OrganizationRestDeps): FastifyIns
     },
   });
 
+  app.addHook("onError", async (request, _reply, error) => reportUnexpectedError(request.raw, error));
   // The legacy router never cared about the media type; '' matches requests
   // without a content-type header as well, which Fastify's JSON parser
   // would otherwise reject.
