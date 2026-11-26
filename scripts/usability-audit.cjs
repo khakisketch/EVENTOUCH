@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep, openStudioPanel, chooseScheduleDate, openMessagePanel, closeMessagePanel, openMessageMore } = require('./ui-journey-helpers.cjs');
+const { messageStep, openStudioPanel, chooseScheduleDate, openMessagePanel, closeMessagePanel, openMessageMore, openRecipientList } = require('./ui-journey-helpers.cjs');
 
 
 // Usability audit: measures how many user operations it takes to finish real
@@ -834,13 +834,13 @@ async function main() {
         await page.locator('#campaign-sentence').waitFor();
         await verifySkipLink(page, task);
         await installScrollCounter(page);
-        // 받는 사람 pill → 직접 고르기 → one checkbox. The step buttons are gone, so there is nothing to press between
-        // zones: the body is always mounted and the 발송 검토 button sits in the dock. The optional record title (kept
-        // here so the history row can be found by name) opens from 더 보기.
-        await act(task, () => openMessagePanel(page, 'who'));
-        await act(task, () => page.locator('#recipient-list-summary').click());
+        // 받는 사람 구역 → 직접 고르기 대화상자 → one checkbox. The step buttons are gone, so there is nothing to press
+        // between zones: the body is always mounted and the 발송 검토 button sits in the dock. The optional record title
+        // (kept here so the history row can be found by name) opens from 더 보기.
+        // Reopened 2026-11-26: 직접 고르기 is a modal dialog (#recipient-direct-open); the old inline summary id is gone.
+        await act(task, () => openRecipientList(page));
         await act(task, () => page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check());
-        // 완료 folds the panel (and its long list) out of the Tab order, the way an operator who is done choosing would.
+        // 완료 closes the dialog (inside openMessageMore) before the next zone, the way an operator who is done choosing would.
         await act(task, () => closeMessagePanel(page, 'who'));
         await act(task, () => openMessageMore(page));
         await act(task, () => page.locator('#campaign-title').fill(title));
@@ -1282,8 +1282,8 @@ async function main() {
         await page.locator('#campaign-sentence').waitFor(); // Reopened 2026-11-24 (시안 A): see the 발송 요청 task
         await verifySkipLink(page, task);
         await installScrollCounter(page);
-        await act(task, () => openMessagePanel(page, 'who'));
-        await act(task, () => page.locator('#recipient-list-summary').click());
+        // Reopened 2026-11-26: 직접 고르기 is a modal dialog (#recipient-direct-open); the old inline summary id is gone.
+        await act(task, () => openRecipientList(page));
         await act(task, () => page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check());
         await act(task, () => openMessageMore(page));
         await act(task, () => page.locator('#campaign-title').fill(title));
