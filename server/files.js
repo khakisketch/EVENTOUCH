@@ -133,7 +133,7 @@ function createFileService(database, { storageDir, fileStorage, env = process.en
   }
   async function stored(eventId,fileId) {
     if (!ID.test(String(fileId || ''))) throw failure(404,'파일을 찾을 수 없습니다');
-    const row = (await database.query('SELECT * FROM stored_files WHERE id=$1 AND event_id=$2',[fileId,eventId])).rows[0];
+    const row = (await database.query('SELECT * FROM stored_files WHERE id=$1 AND event_id=$2 AND deleted_at IS NULL',[fileId,eventId])).rows[0];
     if (!row) throw failure(404,'파일을 찾을 수 없습니다');
     await storage.inspect(row.storage_key,Number(row.size_bytes));
     return {...fileRef(row),openReadStream:() => storage.openReadStream(row.storage_key,Number(row.size_bytes))};
@@ -211,7 +211,7 @@ function createFileService(database, { storageDir, fileStorage, env = process.en
     if (!ID.test(String(fileId || ''))) throw failure(404,'파일을 찾을 수 없습니다');
     const row = (await database.query(
       `SELECT f.* FROM stored_files f JOIN clients c ON c.id = f.client_id
-       WHERE f.id=$1 AND f.client_id=$2`,[fileId,String(clientId || '')])).rows[0];
+       WHERE f.id=$1 AND f.client_id=$2 AND f.deleted_at IS NULL`,[fileId,String(clientId || '')])).rows[0];
     if (!row) throw failure(404,'파일을 찾을 수 없습니다');
     const org = await database.transaction(async client => authorizeAgency(client,account,false));
     const owner = await database.query('SELECT org_id FROM clients WHERE id=$1 LIMIT 1', [String(clientId || '')]);
@@ -234,6 +234,59 @@ function createFileService(database, { storageDir, fileStorage, env = process.en
     if (!refs.some(ref => ref && ref.fileId === fileId)) throw failure(404,'파일을 찾을 수 없습니다');
     return stored(projection.event.id,fileId);
   }
-  return {upload,uploadGuest,uploadClientFile,readOperator,readPublic,readClientFile};
+  // Deletion has two steps because the bytes live outside the database: a
+  // command marks the row (serving stops at once) and this job unlinks the
+  // bytes, then records that it did. A crash between the two leaves a marked
+  // row, which the next run picks up — so the retry path is the job itself.
+  async function purgeDeletedFiles({ limit = 100, write = (line) => process.stderr.write(line) } = {}) {
+    const rows = (await database.query(
+      `SELECT id, storage_key FROM stored_files
+        WHERE deleted_at IS NOT NULL AND bytes_purged_at IS NULL
+        ORDER BY deleted_at LIMIT $1`,
+      [limit]
+    )).rows;
+    const purged = [];
+    for (const row of rows) {
+      try {
+        await storage.remove(row.storage_key);
+        purged.push(String(row.id));
+      } catch (error) {
+        const code = /^[A-Za-z0-9_]{1,64}$/.test(String(error?.code || '')) ? ` (${error.code})` : '';
+        write(`[eventouch] file purge failed for one file${code}\n`);
+      }
+    }
+    if (purged.length) {
+      await database.query(
+        'UPDATE stored_files SET bytes_purged_at = now() WHERE id = ANY($1::text[]) AND bytes_purged_at IS NULL',
+        [purged]
+      );
+    }
+    return { considered: rows.length, purged: purged.length };
+  }
+  return {upload,uploadGuest,uploadClientFile,readOperator,readPublic,readClientFile,purgeDeletedFiles};
 }
-module.exports = {createFileService, MAX_FILE_BYTES};
+module.exports = {createFileService, MAX_FILE_BYTES, startFilePurge};
+
+// Runs the purge now and then every minute, one run at a time. A person who was
+// just erased is unservable immediately (the row is marked) and their bytes are
+// gone within the interval; nothing here may take the server down.
+function startFilePurge(files, { intervalMs = 60000, write = (line) => process.stderr.write(line) } = {}) {
+  let stopped = false;
+  let running = null;
+  const run = () => {
+    if (stopped || running) return;
+    running = files.purgeDeletedFiles({ write })
+      .catch(() => {})
+      .finally(() => { running = null; });
+  };
+  const timer = setInterval(run, intervalMs);
+  timer.unref();
+  run();
+  return {
+    async stop() {
+      stopped = true;
+      clearInterval(timer);
+      await running;
+    },
+  };
+}

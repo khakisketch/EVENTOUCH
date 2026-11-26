@@ -10,7 +10,7 @@ const { managerWriteAllowed } = require('../event-permissions');
 const { createAttendeeAccess, normalizePhone: attendeePhone } = require('../attendees');
 const { arrivalReview, deskTakesArrivals, recordArrival } = require('../arrivals');
 const { createGate } = require('../event-queue');
-const { ERASED_NAME, anonymizeParticipant, eraseWorkspaceCopies, redactReceiptResult } = require('../participant-erasure');
+const { ERASED_NAME, anonymizeParticipant, eraseWorkspaceCopies, participantFileIds, redactReceiptResult } = require('../participant-erasure');
 const { ticketExpiry, TICKET_TOKEN } = require('../ticket-lifetime');
 const { cancellationConflictFingerprint, cancellationConflictIdentity } = require('../cancellation-conflict-review');
 const {
@@ -497,6 +497,18 @@ async function eraseParticipant({ client, event, workspace, input, account, comm
   }
   anonymizeParticipant(person, now);
   const cleaned = eraseWorkspaceCopies(workspace, person.id, formerName);
+  // The person's uploaded files stop being served now and lose their bytes on
+  // the next purge run (server/files.js). Marking is inside this transaction so
+  // a rollback leaves everything readable; a crash after commit leaves a marked
+  // row that the same job picks up.
+  const ownedFiles = participantFileIds(workspace, person.id);
+  cleaned.files = ownedFiles.length
+    ? (await client.query(
+      `UPDATE stored_files SET deleted_at = now()
+        WHERE event_id = $1 AND id = ANY($2::text[]) AND deleted_at IS NULL`,
+      [event.id, ownedFiles]
+    )).rowCount
+    : 0;
 
   // Copies outside the workspace document (same transaction).
   const checkins = await client.query(

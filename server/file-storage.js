@@ -97,6 +97,20 @@ function createFileStorage({ storageDir, env = process.env } = {}) {
     await handle.close();
     return {rollback};
   }
-  return {ready,put,inspect,readBytes,openReadStream};
+  // Removes one object. A missing file is already the wanted outcome (a retry
+  // after a partial run), so ENOENT is success; anything else is reported so the
+  // caller can try again later. The path is unlinked, never followed.
+  async function remove(key) {
+    const absolute = objectPath(key);
+    await ready();
+    try {
+      const current = await fs.lstat(absolute);
+      if (!current.isFile() && !current.isSymbolicLink()) throw unavailable();
+      await fs.unlink(absolute);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+  return {ready,put,inspect,readBytes,openReadStream,remove};
 }
 module.exports = {createFileStorage};

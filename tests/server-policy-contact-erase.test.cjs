@@ -172,7 +172,9 @@ async function seedPerson(eventId, { inside = false, status = 'APPROVED' } = {})
   row.visits = [{ id: 'v1', boothId: 'b', participantId: person.id, name: NAME, at: '2026-12-01T01:00:00.000Z' }];
   row.responses = [{ id: 'r1', moduleId: 'm', participantId: person.id, answer: '보기 1', comment: '개인 연락처 010-7777-8888 로 연락주세요', at: 'x' }];
   row.questions = [{ id: 'q1', moduleId: 'm', participantId: person.id, name: NAME, text: '질문입니다', answer: '', approved: true, likes: [], at: 'x' }];
-  row.photos = [{ id: 'ph1', participantId: person.id, name: NAME, image: { fileId: 'f1' }, caption: '우리 가족', status: 'APPROVED', at: 'x' }];
+  // One file id per event: the row is a primary key shared by every event in this test run.
+  const photoFileId = `f1-${eventId}`;
+  row.photos = [{ id: 'ph1', participantId: person.id, name: NAME, image: { fileId: photoFileId }, caption: '우리 가족', status: 'APPROVED', at: 'x' }];
   row.posts = [{ id: 'po1', participantId: person.id, name: NAME, body: '안녕하세요', status: 'APPROVED', at: 'x' }];
   row.messages = [{ id: 'msg1', status: 'DONE', recipientIds: [person.id, other.id],
     recipientSnapshot: [{ id: person.id, name: NAME, phone: PHONE }, { id: other.id, name: '박다른', phone: '01099990000' }],
@@ -182,6 +184,13 @@ async function seedPerson(eventId, { inside = false, status = 'APPROVED' } = {})
   row.audit = [{ id: 'au1', type: 'participant.resolve-cancellation-conflict', actor: 'x', at: 'x', detail: `${NAME} · 사유`, eventId, cancellationResolution: { participantId: person.id, participantName: NAME } }];
   await harness.database.query('UPDATE event_workspaces SET payload = $2::jsonb WHERE event_id = $1', [eventId, JSON.stringify(row)]);
   await harness.database.query(`INSERT INTO checkin_records (id, event_id, participant_id, name, action) VALUES ($1, $2, $3, $4, 'IN')`, [`chk-${suffix}-${eventId}`, eventId, person.id, NAME]);
+  // The uploaded photo behind ws.photos[0].image (marked deleted by the erase, unlinked by the purge job).
+  await harness.database.query(
+    `INSERT INTO stored_files (id, event_id, storage_key, original_name, content_type, size_bytes)
+     VALUES ($4, $1, $2, $3, 'image/jpeg', 3)
+     ON CONFLICT (id) DO UPDATE SET deleted_at = NULL, bytes_purged_at = NULL`,
+    [eventId, `key-${suffix}-${eventId}`, `${NAME}.jpg`, photoFileId]
+  );
   await harness.database.query(`INSERT INTO attendee_challenges (id, event_id, phone, purpose, code_hash, expires_at) VALUES ($1, $2, $3, 'RECOVER', 'h', now() + interval '1 hour')`, [`ch-${suffix}-${eventId}`, eventId, PHONE]);
   await harness.database.query(`INSERT INTO attendee_challenges (id, event_id, phone, purpose, code_hash, expires_at) VALUES ($1, $2, $3, 'RECOVER', 'h', now() + interval '1 hour')`, [`ch2-${suffix}-${eventId}`, eventId, '01099990000']);
   return { person, other };
@@ -229,7 +238,13 @@ test('participant.erase anonymizes the record and every copy, audits without val
   assert.equal(ws.responses[0].comment, '');
   assert.equal(ws.questions[0].approved, false);
   assert.equal(ws.photos[0].status, 'HIDDEN');
-  assert.equal(ws.photos[0].image.fileId, 'f1', 'bytes and reference are never deleted');
+  assert.equal(ws.photos[0].image.fileId, `f1-${ids.live}`, 'the workspace keeps a reference so ids still resolve');
+  // The photo's own file row is marked for deletion inside the same transaction,
+  // so it stops being served even before its bytes are unlinked.
+  const photoFile = (await harness.database.query('SELECT deleted_at, bytes_purged_at FROM stored_files WHERE id = $1', [`f1-${ids.live}`])).rows[0];
+  assert.ok(photoFile.deleted_at, 'the participant photo is marked deleted');
+  assert.equal(photoFile.bytes_purged_at, null, 'the bytes leave on the purge run, not in the transaction');
+  assert.equal(erased.json.cleaned.files, 1, 'the response says how many files were marked');
   assert.equal(ws.posts[0].status, 'HIDDEN');
   assert.equal(ws.rewards[0].name, '상품권');
   assert.equal(ws.rewards[0].participantId, person.id);

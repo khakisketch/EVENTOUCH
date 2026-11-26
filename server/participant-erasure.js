@@ -5,9 +5,10 @@
 // Erasure anonymizes one participant in place. The row stays (ids, status,
 // check-in rows, votes, rewards and counts keep their meaning); every personal
 // value on it and every copy of that value in other records is removed.
-// Nothing here touches files: stored bytes are never deleted (see
-// docs/ARCHITECTURE.md, retention), so a participant-uploaded photo is hidden
-// instead and its bytes stay until the separate purge procedure.
+// Files are the one thing this module cannot finish alone: the rows this
+// command marks (server/commands/participants.js) stop being served at once,
+// and the purge job unlinks the bytes right after the transaction commits
+// (server/files.js). See docs/ARCHITECTURE.md, retention.
 
 const ERASED_NAME = '삭제된 참가자';
 const ERASED_TEXT = '삭제된 내용입니다';
@@ -209,10 +210,28 @@ function redactReceiptResult(result, participantId) {
   return changed;
 }
 
+// Uploaded files this participant owns: their photos and any picture attached
+// to a post or question they wrote. Event, reward and staff files never match,
+// because ownership is read from the record's own participant id.
+function participantFileIds(workspace, participantId) {
+  const pid = String(participantId);
+  const own = (row) => row && typeof row === 'object' && String(row.participantId) === pid;
+  const ids = new Set();
+  for (const key of ['photos', 'posts', 'questions']) {
+    for (const row of list(workspace[key])) {
+      if (!own(row)) continue;
+      const image = plain(row.image);
+      if (image && typeof image.fileId === 'string' && image.fileId) ids.add(image.fileId);
+    }
+  }
+  return [...ids];
+}
+
 module.exports = {
   ERASED_NAME,
   ERASED_TEXT,
   anonymizeParticipant,
   eraseWorkspaceCopies,
+  participantFileIds,
   redactReceiptResult,
 };

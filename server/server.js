@@ -19,7 +19,7 @@ const { createParticipantCommands } = require('./commands/participants');
 const { createOperationsCommands, appendSelfExit } = require('./commands/operations');
 const { createPublicArrival } = require('./public-arrival');
 const { createDomainCommands } = require('./commands/domain');
-const { createFileService } = require('./files');
+const { createFileService, startFilePurge } = require('./files');
 const { createFileStorage } = require('./file-storage');
 const { handleApi } = require('./api');
 const { applySecurityHeaders, failureMessage } = require('./http');
@@ -542,6 +542,8 @@ async function startServer() {
     messageMaintenance.workerStarted = Boolean(maintenanceTimer);
     maintenanceTimer?.unref();
     const credentialPruning = startCredentialPruning(database);
+    // Files marked by a participant deletion lose their bytes here (server/files.js).
+    const filePurge = startFilePurge(createFileService(database, { fileStorage }));
     let closing = null;
     const close = () => {
       if (closing) return closing;
@@ -549,11 +551,13 @@ async function startServer() {
       if (maintenanceTimer) clearInterval(maintenanceTimer);
       messageMaintenance.workerStarted = false;
       const pruningStopped = credentialPruning.stop();
+      const purgeStopped = filePurge.stop();
       closing = (async () => {
         await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
         await bootDrain;
         if (maintenanceRun) await maintenanceRun;
         await pruningStopped;
+        await purgeStopped;
         await database.close();
       })();
       return closing;
