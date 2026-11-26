@@ -1,7 +1,7 @@
 'use strict';
 // Synthetic, isolated browser + API journey; no real participant or prizes.
 const assert = require('node:assert/strict');
-const { selectDrawStage } = require('./ui-journey-helpers.cjs');
+const { selectDrawStage, settleLayout } = require('./ui-journey-helpers.cjs');
 const crypto = require('node:crypto');
 const path = require('node:path');
 const { source: axeSource } = require('axe-core');
@@ -100,6 +100,8 @@ async function main() {
       await p.evaluate(axeSource);
       for (const width of [320,390,1280]) {
         await p.setViewportSize({width,height:900});
+        // Reopened 2026-11-26: 미리보기 기기 배율이 새 폭에 맞춰진 뒤 측정한다(ResizeObserver 반영 전의 한 프레임은 실제 화면이 아님).
+        await settleLayout(p);
         assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth <= innerWidth + 1),`overflow ${width}`);
         assert.deepEqual(await p.evaluate(async()=>(await window.axe.run()).violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>v.id)),[]);
       }
