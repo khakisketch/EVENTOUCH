@@ -7,7 +7,7 @@ const axeSource = require('axe-core').source;
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
-const { openSettingsBasics } = require('./ui-journey-helpers.cjs');
+const { openSettingsBasics, settleLayout } = require('./ui-journey-helpers.cjs');
 (async () => {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private capture root');
   const out = path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'ticket-postponement');
@@ -70,6 +70,8 @@ const { openSettingsBasics } = require('./ui-journey-helpers.cjs');
     await page.keyboard.press('Shift+Tab');
     assert.equal(await saveBasics.evaluate(el => document.activeElement === el), true, 'keyboard can return to the failed action');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+    // axe samples colours; wait for the settings dialog's entrance fade to finish first.
+    await settleLayout(page);
     assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious','critical'].includes(v.impact)).map(v => v.id)), []);
     await page.screenshot({ path: path.join(out, 'old-server-rejection-390.png'), fullPage: true });
     await page.setViewportSize({ width: 1280, height: 900 });

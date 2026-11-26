@@ -557,6 +557,8 @@ async function main() {
       const clientBack = freshDialog.getByRole('button', { name: '행사 입력으로 돌아가기' });
       const clientSubmit = freshDialog.getByRole('button', { name: '고객사 등록' });
       const freshHeaderClose = freshDialog.getByRole('button', { name: '닫기', exact: true });
+      // The subview is still animating in; measure it once it has settled, as the other dialog checks do.
+      await settleLayout(page);
       await expectStickyVisible(`client subview header close at ${tag}`, freshHeaderClose);
       await expectStickyVisible(`client subview back at ${tag}`, clientBack);
       await expectStickyVisible(`client subview submit at ${tag}`, clientSubmit);
