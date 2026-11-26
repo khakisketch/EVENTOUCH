@@ -396,7 +396,7 @@ export default async function EventPage({
                 description={venueDescription}
                 contact={venueContact}
                 // A normal image/link preserves zoom and the browser's download controls.
-                map={venueMap ? { ...venueMap, caption: <Link className="button button-secondary" href={venueMap.src} target="_blank" rel="noopener noreferrer">안내도 크게 보기 (새 탭)</Link> } : null}
+                map={venueMap ? { ...venueMap, caption: <a className="button button-secondary" href={venueMap.src} target="_blank" rel="noopener noreferrer">안내도 크게 보기 (새 탭)</a> } : null}
               />
             </GuideSection>
           ) : null}

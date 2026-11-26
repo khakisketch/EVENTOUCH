@@ -1,7 +1,7 @@
 "use client";
 
 import QRCode from "react-qr-code";
-import { useCallback, useEffect, useRef, useState, type SubmitEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type Ref, type SubmitEvent } from "react";
 import ProductButton from "../../../ui/ProductButton";
 import ProductLink from "../../../ui/ProductLink";
 import { postAttendeeRequest } from "../attendee-request";
@@ -16,7 +16,7 @@ type ArrivalResponse = Partial<Desk> & Partial<Outcome> & { error?: unknown; cod
 
 const UNKNOWN = "접수 결과를 확인하지 못했습니다. 같은 버튼을 다시 눌러 주세요.";
 
-function Pass({ outcome, ticket, nametag }: { outcome: Outcome; ticket: string; nametag: boolean }) {
+function Pass({ outcome, ticket, nametag, headingRef }: { outcome: Outcome; ticket: string; nametag: boolean; headingRef: Ref<HTMLHeadingElement> }) {
   const tone = outcome.result === "waiting" || outcome.result === "left" ? "good" : outcome.result === "review" || outcome.result === "notInside" ? "wait" : "in";
   const head = { waiting: "접수됐습니다", review: "확인이 필요합니다", inside: "이미 입장하셨어요", left: "퇴장했습니다", notInside: "입장 기록이 없습니다" }[outcome.result];
   const next = outcome.result === "waiting" ? `${outcome.deskName}에서 ${nametag ? "명찰을 받으세요" : "입장 확인을 받으세요"}`
@@ -25,8 +25,9 @@ function Pass({ outcome, ticket, nametag }: { outcome: Outcome; ticket: string; 
   return (
     <section className={styles.pass} aria-live="polite">
       <div className={styles.band} data-tone={tone}>
-        <p className={styles.bandHead}>{head}</p>
-        <h1 className={styles.bandName}>{outcome.name}</h1>
+        <p id="arrive-result-head" className={styles.bandHead}>{head}</p>
+        {/* Takes focus after a tap; the description reads the verdict and the next step with the name. */}
+        <h1 ref={headingRef} tabIndex={-1} aria-describedby="arrive-result-head arrive-result-next" className={styles.bandName}>{outcome.name}</h1>
         {outcome.company ? <p className={styles.bandSub}>{outcome.company}</p> : null}
       </div>
       <div className={styles.passBody}>
@@ -37,7 +38,7 @@ function Pass({ outcome, ticket, nametag }: { outcome: Outcome; ticket: string; 
             <figcaption>이 화면을 데스크에 보여 주세요</figcaption>
           </figure>
         ) : null}
-        <p className={styles.next}>{next}</p>
+        <p id="arrive-result-next" className={styles.next}>{next}</p>
       </div>
     </section>
   );
@@ -56,6 +57,9 @@ export default function ArriveView({ slug, deskId }: { slug: string; deskId: str
   // One command id per intent, kept while the result is unknown so a retry cannot arrive twice.
   const attempt = useRef<{ key: string; commandId: string } | null>(null);
   const gate = useRef(false);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  // Set by a tap that replaces what is on screen; loading the page never moves focus.
+  const focusHeading = useRef(false);
   const url = `/api/public/events/${encodeURIComponent(slug)}/arrival`;
 
   const load = useCallback(async () => {
@@ -75,6 +79,12 @@ export default function ArriveView({ slug, deskId }: { slug: string; deskId: str
   }, [url, deskId]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (!focusHeading.current) return;
+    focusHeading.current = false;
+    headingRef.current?.focus();
+  }, [outcome, typing]);
 
   // The ticket for the desk scanner: this tab's own, or the one this browser's session holds.
   useEffect(() => {
@@ -111,6 +121,7 @@ export default function ArriveView({ slug, deskId }: { slug: string; deskId: str
         return;
       }
       attempt.current = null;
+      focusHeading.current = true;
       setOutcome(data as Outcome);
     } catch {
       setFailure(UNKNOWN);
@@ -145,7 +156,7 @@ export default function ArriveView({ slug, deskId }: { slug: string; deskId: str
   if (outcome) {
     return (
       <>
-        <Pass outcome={outcome} ticket={typing ? "" : ticket} nametag={desk.nametag} />
+        <Pass outcome={outcome} ticket={typing ? "" : ticket} nametag={desk.nametag} headingRef={headingRef} />
         {outcome.result === "waiting" || outcome.result === "review" ? <p className={styles.foot}><ProductLink variant="ghost" href={`/event/${encodeURIComponent(slug)}/home`}>참가자 홈으로</ProductLink></p> : null}
       </>
     );
@@ -164,7 +175,7 @@ export default function ArriveView({ slug, deskId }: { slug: string; deskId: str
         </>
       ) : form ? (
         <form className={styles.form} onSubmit={submit} noValidate>
-          <h1 id="arrive-title" className={styles.title}>{leaving ? "퇴장하실 분을 확인할게요" : "신청하신 분인지 확인할게요"}</h1>
+          <h1 ref={headingRef} id="arrive-title" tabIndex={-1} className={styles.title}>{leaving ? "퇴장하실 분을 확인할게요" : "신청하신 분인지 확인할게요"}</h1>
           <label className={styles.field}>
             <span>이름</span>
             <input id="arrive-name" type="text" autoComplete="name" maxLength={60} value={name} onChange={(event) => setName(event.target.value)} />
@@ -184,7 +195,7 @@ export default function ArriveView({ slug, deskId }: { slug: string; deskId: str
           {desk.known!.company ? <p className={styles.knownSub}>{desk.known!.company}</p> : null}
           {failure ? <p role="alert" className={styles.alert}>{failure}</p> : null}
           <ProductButton type="button" variant="primary" className={styles.cta} disabled={sending} onClick={() => void arrive(null)}>{press}</ProductButton>
-          <button type="button" className={styles.quiet} onClick={() => { setTyping(true); setFailure(""); }}>내가 아니에요</button>
+          <button type="button" className={styles.quiet} onClick={() => { focusHeading.current = true; setTyping(true); setFailure(""); }}>내가 아니에요</button>
         </div>
       )}
     </section>

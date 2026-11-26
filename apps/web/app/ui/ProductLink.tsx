@@ -11,8 +11,9 @@ type ProductLinkProps = ComponentProps<typeof NextLink> & {
 };
 
 const ProductLink = forwardRef<HTMLAnchorElement, ProductLinkProps>(function ProductLink({
-  children, className, variant, size = "md", type, href, as, color, ...props
+  children, className, variant, size = "md", type, href, as, color, ...rest
 }, ref) {
+  let props = rest;
   const asAction = variant !== undefined || /(?:^|\s)button(?:\s|-|$)/.test(className ?? "");
   const classes = productActionClass(className, asAction ? "product-action product-link" : "product-link");
   const presentation = {
@@ -21,6 +22,8 @@ const ProductLink = forwardRef<HTMLAnchorElement, ProductLinkProps>(function Pro
     "data-action-variant": asAction ? productActionVariant(className, variant) : undefined,
     "data-action-size": asAction ? size : undefined,
   };
+  // A file or API address is not a page: prefetching one starts a download nothing reads.
+  if (typeof href === "string" && href.startsWith("/api/")) props = { ...props, prefetch: false };
   // Structured destinations, route aliases and MIME types belong to Next's anchor API.
   if (typeof href !== "string" || type || as || color) {
     return <NextLink {...props} {...presentation} href={href} as={as} ref={ref} type={type} color={color}>{children}</NextLink>;

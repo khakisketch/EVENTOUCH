@@ -50,6 +50,8 @@
   font-size: var(--body);
 }
 .field input:focus-visible,
+.title:focus-visible,
+.bandName:focus-visible,
 .quiet:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
 .cta { min-height: 56px; justify-content: center; font-size: var(--text-lg); }

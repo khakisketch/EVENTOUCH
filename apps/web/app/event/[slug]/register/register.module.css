@@ -266,6 +266,11 @@
   word-break: keep-all;
 }
 
+.outcomeFee {
+  display: block;
+  margin-top: var(--s1);
+}
+
 .outcomeIcon {
   display: inline-flex;
   flex: none;

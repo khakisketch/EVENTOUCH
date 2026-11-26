@@ -22,7 +22,10 @@ export default function AttendeeStateMessage({
   icon,
   action,
   className,
+  id,
 }: {
+  /** Set when an input points to this message with aria-describedby. */
+  id?: string;
   kind: AttendeeStateKind;
   title: ReactNode;
   /** The explanation: what happened and what to do next. */
@@ -33,7 +36,7 @@ export default function AttendeeStateMessage({
 }) {
   const classes = [styles.message, styles[kind], className].filter(Boolean).join(" ");
   return (
-    <div className={classes} role={kind === "error" ? "alert" : "status"} data-state-kind={kind}>
+    <div id={id} className={classes} role={kind === "error" ? "alert" : "status"} data-state-kind={kind}>
       <span className={styles.icon} aria-hidden="true"><AttendeeIcon name={icon ?? DEFAULT_ICON[kind]} size={22} /></span>
       <div className={styles.body}>
         <p className={styles.title}>{title}</p>

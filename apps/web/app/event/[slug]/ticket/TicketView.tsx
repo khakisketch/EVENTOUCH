@@ -22,6 +22,7 @@ import { noTicketHereNote, organizerContactLine, TICKET_BROWSER_NOTE } from "../
 import type { PublicEventContext as EventContext } from "../../../../lib/public-event-context";
 import { allowSessionForTab, clearSessionForTab, clearTicketRejected, getAllowedTicketForTab, isTicketRejected, markTicketRejected, REJECTED_TICKET_BEARER, ticketStorageAvailable } from "../../../../lib/attendee-ticket-identity";
 import { clearStoredTicket, readStoredTicket, storeTicket } from "../../../../lib/attendee-ticket-storage";
+import { asRecord } from "../../../../lib/json-guards";
 
 type TicketState =
   | { kind: "loading" }
@@ -36,6 +37,8 @@ type TicketState =
       paymentStatus: string;
       inside: boolean;
       everIn: boolean;
+      // The event's re-entry rule; anything but an explicit yes sends the guest to the desk.
+      allowReentry: boolean;
       eventName: string;
       eventDate: string;
       eventContext: EventContext;
@@ -52,6 +55,7 @@ type TicketState =
 function entryLabel(state: {
   inside: boolean;
   everIn: boolean;
+  allowReentry: boolean;
   status: string;
   paymentStatus: string;
   ticket: string;
@@ -62,7 +66,7 @@ function entryLabel(state: {
     (state.paymentStatus === "FREE" || state.paymentStatus === "PAID");
   if (usable) {
     if (state.inside) return "입장 중";
-    if (state.everIn) return "퇴장 · 재입장 정책 확인";
+    if (state.everIn) return state.allowReentry ? "퇴장 · 재입장할 수 있어요" : "퇴장 · 재입장은 데스크에 문의하세요";
     return "참가 확정";
   }
   if (state.status === "PENDING") return "승인 대기";
@@ -130,7 +134,15 @@ function firstSentence(text: string): { head: string; rest: string } {
   return cut < 0 ? { head: text, rest: "" } : { head: text.slice(0, cut + 1), rest: text.slice(cut + 2) };
 }
 
-function unusableCopy(state: { status: string; paymentStatus?: string; ticket: string }): { text: string; showRegister: boolean } {
+// The product takes no payment: the organizer confirms a fee, so the guest is sent to them.
+function feeNote(contact: string): string {
+  return `참가비는 주최 측에서 확인합니다. ${organizerContactLine(contact)}`;
+}
+
+// No text message is promised for a decision: it depends on the event.
+const DECISION_NOTE = "결과는 이 화면에서 확인할 수 있습니다. 행사에 따라 안내 문자가 오지 않을 수 있으니 상태를 다시 확인해 주세요.";
+
+function unusableCopy(state: { status: string; paymentStatus?: string; ticket: string; contact: string }): { text: string; showRegister: boolean } {
   // A submitted application must read as a receipt, never as a broken
   // ticket. Each state names what happens next.
   // The server marks payment PENDING even while approval is still pending,
@@ -142,15 +154,15 @@ function unusableCopy(state: { status: string; paymentStatus?: string; ticket: s
     case "PENDING":
       return {
         text: paymentGate
-          ? "신청이 접수되었습니다. 운영자 승인과 결제 확인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다."
+          ? `신청이 접수되었습니다. 운영자 승인과 참가비 확인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다. ${feeNote(state.contact)}`
           : "신청이 접수되었습니다. 운영자 승인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다.",
         showRegister: false,
       };
     case "WAITLIST":
       return {
         text: paymentGate
-          ? "대기 명단에 등록되어 있습니다. 자리가 나면 운영자가 확정할 수 있습니다. 확정과 결제 확인 후 상태를 다시 확인하세요."
-          : "대기 명단에 등록되어 있습니다. 자리가 나면 운영자가 확정할 수 있습니다. 확정 안내를 받았다면 상태를 다시 확인하세요.",
+          ? `대기 명단에 등록되어 있습니다. 자리가 나면 운영자가 확정할 수 있습니다. 확정과 참가비 확인이 끝나면 입장 QR을 볼 수 있습니다. ${feeNote(state.contact)}`
+          : "대기 명단에 등록되어 있습니다. 자리가 나면 운영자가 확정할 수 있습니다.",
         showRegister: false,
       };
     case "CANCELLED":
@@ -159,8 +171,8 @@ function unusableCopy(state: { status: string; paymentStatus?: string; ticket: s
       if ((state.paymentStatus === "FREE" || state.paymentStatus === "PAID") && !state.ticket) {
         return { text: "입장 QR을 확인할 수 없습니다. 상태를 다시 확인하고, 계속되면 행사 운영자에게 문의하세요.", showRegister: false };
       }
-      if (state.paymentStatus === "PENDING") return { text: "참가 확정까지 결제 확인이 남았습니다. 안내받은 방법으로 결제를 마친 뒤 다시 여세요.", showRegister: false };
-      return { text: "결제 상태를 확인할 수 없습니다. 상태를 다시 확인하고, 계속되면 행사 운영자에게 문의하세요.", showRegister: false };
+      if (state.paymentStatus === "PENDING") return { text: `참가 확정 전에 참가비 확인이 남았습니다. ${feeNote(state.contact)}`, showRegister: false };
+      return { text: `참가비 확인 상태를 알 수 없습니다. 상태를 다시 확인해 주세요. ${feeNote(state.contact)}`, showRegister: false };
     default:
       return { text: "신청 상태를 확인할 수 없습니다. 상태를 다시 확인하고, 계속되면 행사 운영자에게 문의하세요.", showRegister: false };
   }
@@ -316,6 +328,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
             paymentStatus: text(participant.paymentStatus),
             inside: participant.inside === true,
             everIn: participant.everIn === true,
+            allowReentry: asRecord(data.workspace)?.allowReentry === true,
             eventName: text(data.event?.name),
             eventDate: text(data.event?.date),
             eventContext: readPublicEventContext(data.event, data.workspace),
@@ -350,6 +363,9 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
   const usable = state.kind === "ready" && Boolean(state.ticket) && state.status === "APPROVED" &&
     (state.paymentStatus === "FREE" || state.paymentStatus === "PAID");
   const showingQr = usable && mode === "ticket";
+  // Left, and the event does not let them back in on their own: not a "good" state.
+  const reentryAtDesk = state.kind === "ready" && usable && !state.inside && state.everIn && !state.allowReentry;
+  const awaitingDecision = state.kind === "ready" && ["PENDING", "WAITLIST"].includes(state.status);
   // The attendee holds this screen up at the desk: do not let it dim there.
   useScreenWakeLock(showingQr);
   const recheckSeqRef = useRef(0);
@@ -411,6 +427,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
         paymentStatus: text(participant.paymentStatus),
         inside: participant.inside === true,
         everIn: participant.everIn === true,
+        allowReentry: asRecord(data.workspace)?.allowReentry === true,
         eventName: text(data.event?.name),
         eventDate: text(data.event?.date),
         eventContext: readPublicEventContext(data.event, data.workspace),
@@ -555,7 +572,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
           <h1>내 신청 정보</h1>
           <p className={styles.ticketEventName}>{state.eventName}</p>
           <PublicEventContext slug={slug} context={state.eventContext} showDate={false} />
-          <p className={styles.ticketEntryState} aria-live="polite" data-tone={usable ? "good" : state.status === "CANCELLED" ? "bad" : "wait"}>{entryLabel(state)}</p>
+          <p className={styles.ticketEntryState} aria-live="polite" data-tone={usable && !reentryAtDesk ? "good" : state.status === "CANCELLED" ? "bad" : "wait"}>{entryLabel(state)}</p>
         </header>
         <p>신청한 정보를 확인할 수 있습니다. 변경이 필요하면 행사 운영자{state.contact ? `(${state.contact})` : ""}에게 문의하세요.</p>
         {state.application.length ? <dl className={styles.applicationList}>
@@ -567,7 +584,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
     );
   }
   const statusUnconfirmed = showingQr && (rechecking || Boolean(recheckError));
-  const tone = usable && !statusUnconfirmed
+  const tone = usable && !statusUnconfirmed && !reentryAtDesk
     ? (state.inside ? "in" : "good")
     : state.status === "CANCELLED" ? "bad" : "wait";
   const facts = (
@@ -646,6 +663,7 @@ export default function TicketView({ slug, initialTicket = "", mode = "ticket", 
               <AttendeeStateMessage kind={state.status === "CANCELLED" ? "error" : "info"} icon="info" title={firstSentence(unusableCopy(state).text).head}>
                 {firstSentence(unusableCopy(state).text).rest || null}
               </AttendeeStateMessage>
+              {awaitingDecision ? <p className={styles.ticketDecisionNote}>{DECISION_NOTE}</p> : null}
               {recheckFeedback}
               <BottomAction label="다음 행동" primary={recheckAction} />
               {unusableCopy(state).showRegister ? (

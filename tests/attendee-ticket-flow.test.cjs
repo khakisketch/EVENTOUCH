@@ -97,8 +97,12 @@ test("a fresh receipt never claims admission before the QR exists", () => {
 // 표현 고정 갱신(추가 재검수): 대기열은 자리 비움이 자동 승격시키지 않는다
 // (setParticipantStatus에 자동 승격 없음·명시적 APPROVED 전이만). "자리가
 // 나면 표시됩니다"는 거짓 약속이므로 운영자 승인 조건으로 고친다.
+// Reopened 2026-11-26 (attendee audit): a text may never come, so the waitlist no longer waits for
+// a "확정 안내"; the shared note says the result shows on this screen.
 test("the waitlist names operator approval, not automatic display", () => {
-  assert.match(ticket, /자리가 나면 운영자가 확정할 수 있습니다\. 확정 안내를 받았다면 상태를 다시 확인하세요/u);
+  assert.match(ticket, /자리가 나면 운영자가 확정할 수 있습니다\./u);
+  assert.match(ticket, /결과는 이 화면에서 확인할 수 있습니다\. 행사에 따라 안내 문자가 오지 않을 수 있으니 상태를 다시 확인해 주세요\./u);
+  assert.doesNotMatch(ticket, /확정 안내를 받았다면/u);
   assert.doesNotMatch(ticket, /자리가 나면 이 화면에 입장 QR이 표시됩니다/u);
 });
 
@@ -114,9 +118,13 @@ test("late responses never clobber the current tab bearer", () => {
 // 표현 고정 갱신(추가 재검수 2): 승인+결제 복합 조건의 영수증도 양쪽 문을
 // 말한다. 결제 플래그가 명시된 경우에만 복합 문구를 쓰고, 기존 문구·핀은
 // 그대로 둔다.
+// Reopened 2026-11-26 (attendee audit): the product takes no payment, so the gate is the organizer
+// confirming the fee ("참가비 확인"), with who to contact.
 test("combined gates name approval and payment together", () => {
-  assert.match(ticket, /운영자 승인과 결제 확인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다/u);
-  assert.match(ticket, /확정과 결제 확인 후 상태를 다시 확인하세요/u);
+  assert.match(ticket, /운영자 승인과 참가비 확인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다/u);
+  assert.match(ticket, /확정과 참가비 확인이 끝나면 입장 QR을 볼 수 있습니다/u);
+  assert.match(ticket, /참가비는 주최 측에서 확인합니다\. \$\{organizerContactLine\(contact\)\}/u);
+  assert.doesNotMatch(ticket, /결제를 마친|안내받은 방법으로/u);
   assert.match(ticket, /신청이 접수되었습니다\. 운영자 승인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다/u);
 });
 

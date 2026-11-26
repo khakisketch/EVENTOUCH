@@ -522,7 +522,8 @@ function publicWorkspace(value, event, participant = null) {
     branding: publicPage(source, new Set(modules.map(module => module.id))).branding,
     pageExperience: publicPage(source, new Set(modules.map(module => module.id))).pageExperience,
     stampMode: source.stampMode === 'SELF' ? 'SELF' : 'STAFF',
-    allowReentry: source.allowReentry !== false,
+    // Same reading as the entry scan: only an unset value or true allows it.
+    allowReentry: source.allowReentry === undefined || source.allowReentry === true,
     price: Math.max(0, Number(source.price) || 0),
     verificationRequired: source.verificationRequired === true,
   };

@@ -199,12 +199,14 @@ type LoadState =
 
 type Tab = HomeMenuKey;
 
+const OTHER_TICKET_RESULT = "앞서 열었던 티켓으로 보낸 내용은 확인했습니다. 지금 티켓의 결과가 아니니 그 티켓을 다시 열어 확인해 주세요.";
+
 function guestCommandName(command: string): string {
   if (command === "lucky.assign") return "럭키번호 발급";
   if (command === "roulette.spin") return "룰렛 추첨";
   if (command === "vote.ranked") return "순위 투표";
   if (command === "booth.visit") return "부스 인증";
-  return "참가 요청";
+  return "참가 활동";
 }
 
 function recoveredCommandMessage(pending: PendingGuestCommand, data: Record<string, unknown>): string {
@@ -234,7 +236,7 @@ function recoveredCommandMessage(pending: PendingGuestCommand, data: Record<stri
     const booth = text(data.booth, "부스");
     return `${booth} 인증을 기록했습니다.`;
   }
-  return "요청 처리를 확인했습니다.";
+  return "반영된 것을 확인했습니다.";
 }
 
 function PendingGuestCommandRecovery({
@@ -266,7 +268,7 @@ function PendingGuestCommandRecovery({
     <section className={styles.commandRecovery} aria-labelledby="pending-command-recovery-title">
       <h2 id="pending-command-recovery-title" className={styles.commandRecoveryTitle}>처리 여부를 확인하지 못한 요청</h2>
       <p className={styles.commandRecoveryMemory}>
-        원래 입력은 이 화면에서만 유지됩니다. {storageAvailable ? "새로고침 후에는 처리 여부만 확인할 수 있습니다." : "화면을 떠나기 전에 원래 요청을 확인하세요."}
+        입력한 내용은 이 화면에만 남아 있습니다. {storageAvailable ? "새로고침하면 반영됐는지만 확인할 수 있습니다." : "화면을 떠나기 전에 아래에서 결과를 확인해 주세요."}
       </p>
       {!storageAvailable ? <p role="alert">이 브라우저에서 결과 확인 정보를 저장할 수 없습니다.</p> : null}
       {receiptMessage ? <p role="status">{receiptMessage}</p> : null}
@@ -279,17 +281,17 @@ function PendingGuestCommandRecovery({
           <article className={styles.commandRecoveryItem} key={command.commandId}>
             <h3 className={styles.commandRecoveryItemTitle}>{guestCommandName(command.command)}</h3>
             <p className={styles.commandRecoveryMessage} role="alert">
-              {command.message} 처음 보낸 행사·티켓·내용은 바뀌지 않습니다.
+              {command.message}
             </p>
             {!sameContext ? (
               <p className={styles.commandRecoveryNote} role="note">
-                이전 티켓으로 보낸 요청입니다. 현재 티켓과 섞지 않고 원래 티켓으로만 다시 확인합니다.
+                앞서 열었던 티켓으로 보낸 내용입니다. 아래에서 확인해도 그 티켓의 결과만 확인합니다.
               </p>
             ) : null}
             <p className={styles.commandRecoveryNote}>
-              확인 중단은 서버 요청을 취소하거나 이미 기록된 결과를 되돌리지 않습니다. 진행 중인 확인의 늦은 응답은 이후 요청의 결과로 표시하지 않습니다.
+              ‘확인 중단’을 눌러도 이미 반영된 내용은 취소되지 않습니다.
             </p>
-            {recovering ? <p className={styles.commandRecoveryProgress} role="status">같은 요청을 확인하고 있습니다.</p> : null}
+            {recovering ? <p className={styles.commandRecoveryProgress} role="status">결과를 확인하고 있습니다.</p> : null}
             <div className={styles.commandRecoveryActions}>
               {pointer ? <button type="button" className={styles.recoveryRetryButton} disabled={recoveringCommandKey !== null} onClick={() => onCheck(pointer)}>서버 처리 확인</button> : null}
               <button
@@ -313,7 +315,7 @@ function PendingGuestCommandRecovery({
       })}
       {savedOnly.map((pointer) => <article className={styles.commandRecoveryItem} key={pointer.commandId}>
         <h3 className={styles.commandRecoveryItemTitle}>{guestCommandName(pointer.command)}</h3>
-        <p className={styles.commandRecoveryNote}>서버 처리 여부만 확인하며 요청을 다시 보내지 않습니다.</p>
+        <p className={styles.commandRecoveryNote}>반영됐는지만 확인합니다. 다시 보내지 않습니다.</p>
         <div className={styles.commandRecoveryActions}>
           <button type="button" className={styles.recoveryRetryButton} disabled={recoveringCommandKey !== null} onClick={() => onCheck(pointer)}>서버 처리 확인</button>
           <button type="button" className={styles.recoveryAbandonButton} disabled={recoveringCommandKey !== null} onClick={() => onForget(pointer)}>목록에서 지우기</button>
@@ -337,7 +339,7 @@ function CompletedGuestCommandNotices({
         <p className={styles.commandCompleted} role="status" key={key}>
           {isCurrentContext(command)
             ? command.message
-            : "이전 티켓 요청은 확인되었지만 현재 티켓과 달라 결과를 표시하지 않습니다."}
+            : OTHER_TICKET_RESULT}
         </p>
       ))}
     </div>
@@ -371,7 +373,7 @@ export default function HomeShell({ slug }: { slug: string }) {
   const hasPendingWork = Object.keys(pendingCommands).length > 0 || activeWrites > 0;
   useUnsavedNavigationGuard(detailDirty || hasPendingWork,
     hasPendingWork
-      ? "처리 결과를 확인 중입니다. 이동해도 서버 처리는 취소되지 않으며 원래 요청을 다시 보낼 수 없을 수 있습니다."
+      ? "결과를 확인하는 중입니다. 지금 이동해도 보낸 내용은 취소되지 않지만, 다시 보낼 수 없게 될 수 있습니다."
       : "선택하거나 입력한 내용이 있습니다. 이동하면 저장하지 않은 내용이 사라집니다.");
   const detailBackRef = useRef<HTMLButtonElement>(null);
   const menuButtonRefs = useRef<Record<Tab, HTMLButtonElement | null>>({
@@ -458,7 +460,7 @@ export default function HomeShell({ slug }: { slug: string }) {
     const data = (await response.json()) as Record<string, unknown> | null;
     if (!response.ok) {
       throw {
-        message: typeof data?.error === "string" ? data.error : "요청을 처리하지 못했습니다.",
+        message: typeof data?.error === "string" ? data.error : "반영하지 못했습니다. 다시 시도해 주세요.",
         status: response.status,
         code: data?.code,
       };
@@ -894,8 +896,8 @@ export default function HomeShell({ slug }: { slug: string }) {
   ): Promise<Record<string, unknown>> {
     const key = `${slug}:${formKey}`;
     const pending = pendingCommandsRef.current[key];
-    if (pending) throw { kind: "uncertain", message: "먼저 이전 요청의 처리 여부를 확인하세요." };
-    if (currentCommandIdsRef.current[key]) throw { kind: "in-flight", message: "요청을 처리하고 있습니다." };
+    if (pending) throw { kind: "uncertain", message: "먼저 앞에서 보낸 내용의 결과를 확인해 주세요." };
+    if (currentCommandIdsRef.current[key]) throw { kind: "in-flight", message: "보내는 중입니다. 잠시만 기다려 주세요." };
     setCompletedCommands((current) => {
       const next = { ...current };
       delete next[key];
@@ -911,7 +913,7 @@ export default function HomeShell({ slug }: { slug: string }) {
       command,
       payload: JSON.parse(JSON.stringify(payload)) as Record<string, unknown>,
       teamNames: state.kind === "ready" ? Object.fromEntries(state.teams.map((team) => [team.id, team.name])) : {},
-      message: "처리 여부를 확인하지 못했습니다. 원래 요청 그대로 다시 확인하거나 확인을 중단하세요.",
+      message: "보낸 내용이 반영됐는지 아직 알 수 없습니다. 아래 버튼으로 확인해 주세요.",
     };
     currentCommandIdsRef.current[key] = snapshot.commandId;
     rememberReceipt(snapshot);
@@ -928,7 +930,7 @@ export default function HomeShell({ slug }: { slug: string }) {
             eventId: snapshot.eventId,
             slug: snapshot.slug,
             ticketToken: snapshot.ticketToken,
-            message: "이전 티켓의 요청 처리는 확인했지만, 현재 티켓의 결과로 표시하지 않습니다.",
+            message: OTHER_TICKET_RESULT,
           },
         }));
         throw { kind: "context-changed" };
@@ -938,7 +940,7 @@ export default function HomeShell({ slug }: { slug: string }) {
       if ((failure as { kind?: unknown }).kind === "context-changed") throw failure;
       if (currentCommandIdsRef.current[key] !== snapshot.commandId) throw { kind: "context-changed" };
       const details = failure as { message?: unknown; status?: unknown; code?: unknown };
-      const message = typeof details.message === "string" ? details.message : "요청을 처리하지 못했습니다.";
+      const message = typeof details.message === "string" ? details.message : "반영하지 못했습니다. 다시 시도해 주세요.";
       const status = typeof details.status === "number" ? details.status : 0;
       if (status >= 400 && status < 500 && ![408, 425, 429].includes(status)) {
         forgetReceipt(snapshot.commandId);
@@ -949,8 +951,8 @@ export default function HomeShell({ slug }: { slug: string }) {
         }
         throw { kind: "definite", message, code: details.code };
       }
-      updatePendingCommand(key, { ...snapshot, message: "응답을 확인하지 못했습니다. 같은 요청을 다시 확인하거나 확인을 중단하세요." });
-      throw { kind: "uncertain", message: "응답을 확인하지 못했습니다. 아래에서 같은 요청을 다시 확인하세요." };
+      updatePendingCommand(key, { ...snapshot, message: "결과를 받지 못했습니다. 아래 버튼으로 확인해 주세요." });
+      throw { kind: "uncertain", message: "결과를 받지 못했습니다. 아래에서 확인해 주세요." };
     } finally {
       if (currentCommandIdsRef.current[key] === snapshot.commandId) delete currentCommandIdsRef.current[key];
       setActiveWrites((count) => Math.max(0, count - 1));
@@ -1008,7 +1010,7 @@ export default function HomeShell({ slug }: { slug: string }) {
           eventId: pending.eventId,
           slug: pending.slug,
           ticketToken: pending.ticketToken,
-          message: isCurrentTicket ? resultMessage : "이전 티켓의 요청 처리는 확인했지만, 현재 티켓의 결과로 표시하지 않습니다.",
+          message: isCurrentTicket ? resultMessage : OTHER_TICKET_RESULT,
         },
       }));
       forgetReceipt(pending.commandId);
@@ -1019,7 +1021,7 @@ export default function HomeShell({ slug }: { slug: string }) {
         currentCommandIdsRef.current[key] === pending.commandId) {
         updatePendingCommand(key, {
           ...pending,
-          message: "아직 처리 여부를 확인하지 못했습니다. 원래 요청 그대로 다시 확인하거나 확인을 중단하세요.",
+          message: "아직 결과를 확인하지 못했습니다. 연결을 확인한 뒤 다시 눌러 주세요.",
         });
       }
     } finally {
@@ -1042,7 +1044,7 @@ export default function HomeShell({ slug }: { slug: string }) {
     const entry = Object.entries(pendingCommandsRef.current).find(([, pending]) => pending.commandId === pointer.commandId);
     const pending = entry?.[1];
     const token = pending?.ticketToken || ticketRef.current;
-    if (!token) { setReceiptMessage("원래 참가자의 티켓을 연결한 뒤 확인하세요."); return; }
+    if (!token) { setReceiptMessage("이 내용을 보낸 티켓이 열려 있지 않습니다. 그 티켓을 다시 연 뒤 확인해 주세요."); return; }
     setRecoveringCommandKey(`receipt:${pointer.commandId}`);
     setReceiptMessage(null);
     try {
@@ -1067,13 +1069,13 @@ export default function HomeShell({ slug }: { slug: string }) {
         forgetReceipt(pointer.commandId);
         const currentTicket = pending ? isCurrentRequestContext(pending) : ticketRef.current === token;
         setReceiptMessage(currentTicket
-          ? pointer.command === "booth.visit" ? "서버에 부스 인증 기록이 있습니다. 인증 내역에서 대상 부스를 확인하세요." : "서버에 반영된 것을 확인했습니다. 최신 내용을 다시 불러옵니다."
-          : "이전 티켓의 처리는 확인했지만 현재 티켓의 결과로 표시하지 않습니다.");
+          ? pointer.command === "booth.visit" ? "서버에 부스 인증 기록이 있습니다. 인증 내역에서 대상 부스를 확인하세요." : "반영된 것을 확인했습니다. 최신 내용을 불러오니 잠시만 기다려 주세요."
+          : OTHER_TICKET_RESULT);
         if (currentTicket) refresh();
       } else if (response.ok && body?.status === "UNCONFIRMED") {
-        setReceiptMessage("아직 처리 여부를 확인할 수 없습니다. 잠시 후 다시 확인하세요.");
-      } else setReceiptMessage("현재 티켓과 연결 상태를 확인하지 못했습니다. 원래 참가자의 티켓을 확인하세요.");
-    } catch { setReceiptMessage("연결하지 못했습니다. 요청은 다시 보내지 않았습니다."); }
+        setReceiptMessage("아직 반영됐는지 알 수 없습니다. 잠시 후 다시 확인해 주세요.");
+      } else setReceiptMessage("결과를 확인하지 못했습니다. 이 내용을 보낸 티켓이 열려 있는지 확인해 주세요.");
+    } catch { setReceiptMessage("연결하지 못했습니다. 다시 보내지는 않았으니 연결을 확인한 뒤 다시 눌러 주세요."); }
     finally { setRecoveringCommandKey(null); }
   }
 
@@ -1097,7 +1099,7 @@ export default function HomeShell({ slug }: { slug: string }) {
 
   function returnToMenu() {
     if ((detailDirty || activeWrites > 0) && !window.confirm(activeWrites > 0
-      ? "요청을 처리 중입니다. 이동해도 서버 처리는 취소되지 않습니다. 참가자 홈으로 이동할까요?"
+      ? "아직 보내는 중입니다. 이동해도 보낸 내용은 취소되지 않습니다. 참가자 홈으로 이동할까요?"
       : "선택하거나 입력한 내용이 사라집니다. 참가자 홈으로 이동할까요?")) return;
     const historyState = asRecord(window.history.state);
     if (historyState?.eventouchAttendeeDetail === true) {
@@ -1123,9 +1125,9 @@ export default function HomeShell({ slug }: { slug: string }) {
       onRetry={(key) => void retryPendingCommand(key)}
       onCheck={(pointer) => void checkReceipt(pointer)}
       onForget={(pointer) => {
-        if (!window.confirm("목록에서 지워도 서버 처리는 취소되지 않습니다. 이미 반영됐을 수 있습니다. 지울까요?")) return;
+        if (!window.confirm("목록에서 지워도 보낸 내용은 취소되지 않고, 이미 반영됐을 수 있습니다. 지울까요?")) return;
         forgetReceipt(pointer.commandId);
-        setReceiptMessage("목록에서 지웠습니다. 서버 처리는 취소되지 않았습니다.");
+        setReceiptMessage("목록에서 지웠습니다. 보낸 내용은 취소되지 않았습니다.");
       }}
       onAbandon={abandonPendingCommand}
     />
@@ -1930,14 +1932,14 @@ function StampTab({
                     <p className={styles.stampBoothSchedule}>
                       {[booth.startsAt ? `시작 ${formatBoothScheduleTime(booth.startsAt)}` : null,
                         booth.endsAt ? `종료 ${formatBoothScheduleTime(booth.endsAt)}` : null]
-                        .filter(Boolean).join(" · ") || "운영 시간 미설정"}
+                        .filter(Boolean).join(" · ") || "운영 시간은 부스에서 확인해 주세요"}
                     </p>
                     {operatingStatus === "운영 시간 확인 필요" ? <p className={styles.stampBoothSchedule}>운영 시간은 현장 스태프에게 문의하세요.</p> : null}
                     {operatingStatus === "인증 시 시간 확인" ? <p className={styles.stampBoothSchedule}>운영 시각을 확인할 수 없어 인증할 때 서버에서 확인합니다.</p> : null}
                     <p className={styles.stampBoothInventory}>
                       {booth.capacity > 0
-                        ? `재고 잔여 ${Math.max(0, booth.capacity - booth.used)} / ${booth.capacity}`
-                        : "재고 제한 없음"}
+                        ? `남은 수량 ${Math.max(0, booth.capacity - booth.used)}개 (전체 ${booth.capacity}개)`
+                        : "수량 제한 없음"}
                     </p>
                   </div>
                   <div className={styles.stampBoothProgress}>

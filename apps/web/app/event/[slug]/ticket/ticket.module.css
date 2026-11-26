@@ -376,6 +376,15 @@
   margin: 0;
 }
 
+.ticketDecisionNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--small);
+  line-height: 1.65;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
 .ticketPending .ticketMessageActions .buttonSecondary {
   min-height: 52px;
   border-radius: var(--radius-large);

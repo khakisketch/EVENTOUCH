@@ -3,7 +3,7 @@
 import ValidatedForm from "../../../../ui/ValidatedForm";
 
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ProductLink from "../../../../ui/ProductLink";
 import ProductButton from "../../../../ui/ProductButton";
 import { useRouter } from "next/navigation";
@@ -13,10 +13,13 @@ import { postAttendeeRequest } from "../../attendee-request";
 import { holdRecoveredTicket } from "../recovered-ticket";
 import AttendeeStateMessage from "../../ui/AttendeeStateMessage";
 import BottomAction from "../../ui/BottomAction";
+import { organizerContactLine } from "../../attendee-guidance";
 
 type Failure = { message: string; field?: string };
 
-export default function RecoverForm({ slug }: { slug: string }) {
+const ERROR_ID = "recover-error";
+
+export default function RecoverForm({ slug, contact = "" }: { slug: string; contact?: string }) {
   const router = useRouter();
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -30,6 +33,12 @@ export default function RecoverForm({ slug }: { slug: string }) {
   useUnsavedNavigationGuard(Boolean(phone.trim() || code.trim() || working), working
     ? "인증 요청이 처리 중입니다. 이동해도 서버의 처리는 취소되지 않습니다."
     : "입력 중인 인증 정보가 있습니다. 이동하면 다시 입력해야 합니다.");
+
+  // A refused value takes focus once its field is editable again. A step that
+  // does not show that field keeps focus where it is.
+  useEffect(() => {
+    if (!working && failure?.field) document.getElementById(`recover-${failure.field}`)?.focus();
+  }, [failure, working]);
 
   async function sendCode() {
     if (workRef.current) return;
@@ -166,10 +175,11 @@ export default function RecoverForm({ slug }: { slug: string }) {
               disabled={working}
               onChange={(event) => setPhone(event.target.value)}
               aria-invalid={failure?.field === "phone" || undefined}
+              aria-describedby={failure?.field === "phone" ? ERROR_ID : undefined}
               required
             />
           </div>
-          {failure ? <AttendeeStateMessage kind="error" title={failure.message} /> : null}
+          {failure ? <AttendeeStateMessage kind="error" id={ERROR_ID} title={failure.message} /> : null}
           <BottomAction
             label="다음 행동"
             primary={{ label: working ? "보내는 중입니다" : "인증번호 받기", type: "submit", disabled: working }}
@@ -191,6 +201,10 @@ export default function RecoverForm({ slug }: { slug: string }) {
           <p className="recover-note">
             문자가 오지 않으면 아래에서 다시 받으세요. 새 번호를 요청하면 이전 번호를 사용할 수 없을 수 있습니다.
           </p>
+          {/* Said for every number: it never tells whether a number is registered. */}
+          <p className="recover-note">
+            문자가 오지 않거나 티켓이 열리지 않으면 신청할 때 쓴 번호가 맞는지 확인해 주세요. {organizerContactLine(contact)}
+          </p>
           <div className="form-field">
             <label htmlFor="recover-code">인증번호 6자리</label>
             <input
@@ -203,10 +217,11 @@ export default function RecoverForm({ slug }: { slug: string }) {
               disabled={working}
               onChange={(event) => setCode(event.target.value)}
               aria-invalid={failure?.field === "code" || undefined}
+              aria-describedby={failure?.field === "code" ? ERROR_ID : undefined}
               required
             />
           </div>
-          {failure ? <AttendeeStateMessage kind="error" title={failure.message} /> : null}
+          {failure ? <AttendeeStateMessage kind="error" id={ERROR_ID} title={failure.message} /> : null}
           <p className={ticketStyles.ticketMessageActions}>
             <ProductButton type="button" variant="ghost" disabled={working} onClick={sendCode}>
               {working ? "보내는 중입니다" : "인증번호 다시 받기"}

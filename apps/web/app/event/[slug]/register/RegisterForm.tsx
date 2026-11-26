@@ -627,13 +627,16 @@ export default function RegisterForm(initial: Props) {
           {waitlist
             ? "정원이 마감되어 대기 명단으로 접수됩니다. 자리가 나면 운영자가 확정하고, 확정되면 입장 QR이 표시됩니다."
             : approvalRequired && paymentPending
-            ? "신청 접수 후 운영자 승인과 결제 확인이 모두 끝나면 입장 QR이 표시됩니다."
+            ? "신청 접수 후 운영자 승인과 참가비 확인이 모두 끝나면 입장 QR이 표시됩니다."
             : approvalRequired
               ? "신청 접수 후 운영자가 승인하면 입장 QR이 표시됩니다."
               : paymentPending
-                ? "신청 접수 후 결제 확인이 끝나면 입장 QR이 표시됩니다."
+                ? "신청 접수 후 참가비 확인이 끝나면 입장 QR이 표시됩니다."
                 : "신청하면 입장 티켓이 바로 발급됩니다."}
+          {waitlist || approvalRequired ? " 결과는 신청 후 열리는 내 티켓 화면에서 확인합니다. 행사에 따라 안내 문자가 오지 않을 수 있습니다." : null}
           {verificationRequired ? " 신청 전 연락처 인증이 필요합니다." : null}
+          {/* The product takes no payment: the organizer confirms a fee, so the guest is sent to them. */}
+          {paymentPending ? <span className={styles.outcomeFee}>참가비는 주최 측에서 확인합니다. {organizerContactLine(recoveryContact)}</span> : null}
           </span>
         </p>
       </section>

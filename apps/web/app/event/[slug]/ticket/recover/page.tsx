@@ -17,10 +17,8 @@ export default async function TicketRecoverPage({
   params: Promise<{ slug: string }>;
 }) {
   const [{ slug }, verificationMode] = await Promise.all([params, loadVerificationMode()]);
-  const [theme, contact] = await Promise.all([
-    loadAttendeeTheme(slug),
-    verificationMode === "mock" || verificationMode === "none" ? loadPublicRecoveryContact(slug) : Promise.resolve(""),
-  ]);
+  // The contact is needed in every mode: a code that never arrives ends at the organizer too.
+  const [theme, contact] = await Promise.all([loadAttendeeTheme(slug), loadPublicRecoveryContact(slug)]);
   const look = attendeeLook(theme.homeStyle, theme.accent);
   return (
     <AttendeeSurface as="main" id="main-content" tabIndex={-1} color={look.color} mode={look.mode} ground={look.ground} className={`site-page registration-page ${styles.ticketPage}`} style={attendeeGroundStyle(theme)}>
@@ -31,11 +29,13 @@ export default async function TicketRecoverPage({
       <section className={styles.sheet}>
         <span className={styles.messageIcon} data-tone="info"><AttendeeIcon name="ticket" size={26} /></span>
         <h1 className="registration-title">참가 정보 다시 연결</h1>
-        <p className={styles.sheetLead}>신청할 때 입력한 연락처를 확인하면 티켓을 다시 연결할 수 있습니다.</p>
+        <p className={styles.sheetLead}>{verificationMode === "mock" || verificationMode === "none"
+          ? "지금은 휴대폰 번호로 다시 연결할 수 없어, 다른 방법을 안내합니다."
+          : "신청할 때 입력한 연락처를 확인하면 티켓을 다시 연결할 수 있습니다."}</p>
         {verificationMode === "mock" || verificationMode === "none" ? (
-          <VerificationUnavailable slug={slug} mode={verificationMode} contact={contact} />
+          <VerificationUnavailable slug={slug} mode={verificationMode} contact={contact} purpose="recover" />
         ) : (
-          <RecoverForm slug={slug} />
+          <RecoverForm slug={slug} contact={contact} />
         )}
       </section>
     </AttendeeSurface>

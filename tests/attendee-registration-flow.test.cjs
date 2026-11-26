@@ -34,7 +34,9 @@ test("an approval-gated event promises a receipt, not an instant ticket", () => 
 // 프로젝션의 features·price만 읽고 결제 동작은 건드리지 않는다.
 test("a payment-pending event promises confirmation after payment", () => {
   assert.match(form, /paymentPending\?: boolean/u);
-  assert.match(form, /신청 접수 후 결제 확인이 끝나면 입장 QR이 표시됩니다/u);
+  // Reopened 2026-11-26 (attendee audit): no payment function exists; the organizer confirms the fee.
+  assert.match(form, /신청 접수 후 참가비 확인이 끝나면 입장 QR이 표시됩니다/u);
+  assert.match(form, /참가비는 주최 측에서 확인합니다\. \{organizerContactLine\(recoveryContact\)\}/u);
 });
 
 // 표현 고정 갱신(추가 재검수 2): 승인+결제 복합 조건에서 승인 단독 약속은
@@ -42,7 +44,7 @@ test("a payment-pending event promises confirmation after payment", () => {
 // 양쪽 문구를 모두 명시하고, 결제 동작·정책은 건드리지 않는다.
 test("a combined approval and payment gate names both", () => {
   assert.match(form, /approvalRequired && paymentPending/u);
-  assert.match(form, /운영자 승인과 결제 확인이 모두 끝나면 입장 QR이 표시됩니다/u);
+  assert.match(form, /운영자 승인과 참가비 확인이 모두 끝나면 입장 QR이 표시됩니다/u);
 });
 
 test("phone verification is announced before fields and requested after the phone input", () => {
