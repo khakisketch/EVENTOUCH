@@ -687,9 +687,7 @@ async function main() {
         }
         // Reopened 2026-11-24 (시안 A): the list lives in the 받는 사람 panel (one pill click) and is folded
         // (one more click); the optional record title sits under 더 보기. No step buttons remain to press.
-        await act('click', () => openMessagePanel(page, 'who'));
-        const list = page.locator('#recipient-list-summary');
-        if (!await list.locator('..').evaluate(element => element.open)) await act('click', () => list.click());
+        await act('click', () => openRecipientList(page));
         await act('check', () => page.getByRole('checkbox', { name: /표시 \d+명 모두 선택/ }).check());
         await act('click', () => openMessageMore(page));
         await act('fill', () => page.locator('#campaign-title').fill(MSG_TITLE));
