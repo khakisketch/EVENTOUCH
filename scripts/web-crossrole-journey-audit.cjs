@@ -1071,7 +1071,7 @@ async function main() {
     {
       const { ctx, page } = await signupFresh('unpaid', '여정 참가자 무', '01055500105', async (form) => {
         check('paid register lead promises confirmation after payment, not instant entry',
-          (await form.getByText('신청 접수 후 결제 확인이 끝나면 입장 QR이 표시됩니다.').count()) === 1
+          (await form.getByText('신청 접수 후 참가비 확인이 끝나면 입장 QR이 표시됩니다.').count()) === 1
           && (await form.getByText(/바로 발급됩니다/).count()) === 0);
         await form.screenshot({ path: path.join(OUT, 'u-register-paid-390.png') });
       });
@@ -1103,7 +1103,7 @@ async function main() {
       await page.goto(`${fixture.baseUrl}/event/${fixture.slug}/register`);
       await page.locator('form.registration-form').waitFor();
       check('combined register lead names both gates',
-        (await page.getByText('신청 접수 후 운영자 승인과 결제 확인이 모두 끝나면 입장 QR이 표시됩니다.').count()) === 1
+        (await page.getByText('신청 접수 후 운영자 승인과 참가비 확인이 모두 끝나면 입장 QR이 표시됩니다.').count()) === 1
         && (await page.getByText(/바로 발급됩니다/).count()) === 0);
       await page.screenshot({ path: path.join(OUT, 'k-register-combined-390.png') });
       await page.locator('#field-name').fill('복합 조건 참가자');
@@ -1112,7 +1112,7 @@ async function main() {
       await page.getByRole('button', { name: '신청하기', exact: true }).click();
       await page.getByText('승인 대기').first().waitFor({ timeout: 15000 });
       check('combined receipt names both gates',
-        (await page.getByText('운영자 승인과 결제 확인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다.').count()) === 1);
+        (await page.getByText('운영자 승인과 참가비 확인 후 상태를 다시 확인하면 입장 QR을 볼 수 있습니다.').count()) === 1);
       check('combined pending shows no entry QR', (await page.getByRole('img', { name: /님의 행사 입장 및 퇴장용 QR/ }).count()) === 0);
       await page.screenshot({ path: path.join(OUT, 'k-ticket-combined-pending-390.png'), fullPage: true });
       const stored = (await snapshot()).participants.find((p) => p.phone === '01055500602');

@@ -172,7 +172,8 @@ async function checkLiveOverviewRefresh(browser, fixture, participant, out, chec
         check(name + ': no horizontal overflow', await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
       };
       await page.setViewportSize({ width: 1280, height: 960 });
-      const drawLink = page.getByRole('link', { name: '무대 운영 화면 (추첨·룰렛·순위 투표)' });
+      // Reopened 2026-11-26: the link uses the menu name 추첨·투표.
+      const drawLink = page.getByRole('link', { name: '추첨·투표 (무대 운영·룰렛)' });
       check('participation has a specialized draw link', await drawLink.isVisible());
       check('draw management is a separate action with its existing destination',
         await drawLink.getAttribute('href') === `/console/events/${f.eventId}/draws` &&

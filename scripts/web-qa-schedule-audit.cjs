@@ -79,7 +79,9 @@ const snapshot = async (page, name) => {
     await manager.locator(`#review-question-${mine.id}`).waitFor();
     await snapshot(manager, 'operator-before-edit');
     await manager.goto(`${f.baseUrl}/console/events/${f.eventId}/messages`, { waitUntil: 'networkidle' });
-    await manager.getByText(/발송 연결 ·/).first().click();
+    // Reopened 2026-11-25 (owner: 작성 화면 사용성): 발송 연결은 접기 없는 상시 한 줄이라 눌러 펼칠 것이 없다.
+    const connectionRow = manager.getByRole('status').filter({ hasText: '현재 조직 발송 연결:' });
+    await connectionRow.getByText('미연동', { exact: true }).waitFor();
     await snapshot(manager, 'schedule-before');
     // Only the author has an edit control. Approval-pending questions save directly.
     const ownRow = guest.locator('li').filter({ hasText: '나의 기존 질문' }).last();
@@ -292,10 +294,9 @@ const snapshot = async (page, name) => {
       scheduled: '2020-01-01T00:00:00Z', at: '2020-01-01T00:00:00Z', recipientIds: [owner.id], deliveries: [], simulate: false, attempts: 0 });
     await db.query('UPDATE event_workspaces SET payload=$2 WHERE event_id=$1', [f.eventId, latest]);
     await manager.goto(`${f.baseUrl}/console/events/${f.eventId}/messages`, { waitUntil: 'networkidle' });
-    await manager.getByText(/발송 연결 ·/).first().click();
-    // Reopened 2026-11-24: 서버 예약 실행 설정 문구는 발송 연결 안의 '자세히'로 한 단계 더 접혀 있다.
-    await manager.locator('details').filter({ has: manager.locator('summary', { hasText: /^발송 연결 ·/ }) }).first().locator('summary', { hasText: '자세히' }).click();
-    await manager.getByText('이 서버의 예약 자동 실행 설정이 꺼져 있습니다.', { exact: false }).first().waitFor();
+    // Reopened 2026-11-25: 서버 예약 자동 실행이 꺼진 사실은 발송 연결 한 줄에 접기 없이 바로 보인다(꺼진 경우에만 주석).
+    await connectionRow.getByText('이 서버의 예약 자동 실행 설정이 꺼져 있습니다.', { exact: false }).waitFor();
+    assert.equal(await connectionRow.evaluate(el => !!el.closest('details')), false, 'the automatic-run limit is not folded away');
     await manager.getByRole('button', { name: '예약 점검 상세', exact: true }).click();
     await manager.getByText(/수신자 1명의 럭키번호가 배정되지 않았습니다/).waitFor();
     await snapshot(manager, 'schedule-after');
@@ -328,6 +329,8 @@ const snapshot = async (page, name) => {
       assert.ok(box && box.width >= 44 && box.height >= 44, 'schedule choice has a 44px touch target');
     }
     await manager.getByRole('button', { name: '예약 등록', exact: true }).click();
+    // 기록 이름 글자는 서버 저장이 끝나기 전에도 화면에 있어 이름만 기다리면 DB를 너무 일찍 읽는다. 저장 확인 안내를 먼저 기다린다.
+    await manager.getByText('예약 등록했습니다. 예약 시각이 되면 자동으로 발송을 시도합니다.', { exact: false }).first().waitFor();
     await manager.getByText('새 자동 예약 검증', { exact: true }).first().waitFor();
     const stored = (await db.query('SELECT payload FROM event_workspaces WHERE event_id=$1', [f.eventId])).rows[0].payload;
     assert.equal(stored.messages.find(item => item.title === '새 자동 예약 검증').scheduleMode, 'AUTO');

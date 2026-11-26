@@ -41,7 +41,10 @@ async function main() {
     await page.getByRole('heading', { name: '내 티켓' }).waitFor();
     const newTab = await guest.newPage();
     await newTab.goto(`${f.baseUrl}/event/${f.slug}/ticket`);
-    await newTab.getByText('신청을 완료한 브라우저 탭', { exact: false }).waitFor();
+    // Reopened 2026-11-24 (전수 점검): 티켓 보관 안내를 실제 쿠키 동작에 맞춰 '탭'이 아니라 '신청한 기기의 같은 브라우저'로 설명한다.
+    await newTab.getByRole('heading', { name: '티켓이 확인되지 않습니다' }).waitFor();
+    await newTab.getByText('신청을 완료한 기기의 같은 브라우저에서 열어 주세요.', { exact: false }).waitFor();
+    await newTab.getByText('이 행사는 문자로 티켓을 다시 연결할 수 없습니다.', { exact: false }).waitFor();
     assert.equal(await newTab.getByRole('link', { name: '행사 안내 확인' }).count(), 1);
     assert.equal(await newTab.getByRole('link', { name: '처음 신청하기' }).count(), 1);
     assert.equal(await newTab.getByText('신청한 기기에서만', { exact: false }).count(), 0);
@@ -49,7 +52,8 @@ async function main() {
     stage = 'missing contact and protected form exit';
     await newTab.getByRole('link', { name: '행사 안내 확인' }).click();
     await newTab.locator('summary').filter({ hasText: '이미 신청하셨나요?' }).click();
-    await newTab.getByText('행사 초대 안내', { exact: false }).waitFor();
+    // Reopened 2026-11-24: 문의처가 없으면 '행사 초대 안내' 대신 같은 브라우저 안내와 주최 측 문의 문장을 보인다.
+    await newTab.getByRole('note').filter({ hasText: '이 행사는 문자로 티켓을 다시 연결할 수 없습니다. 행사 주최 측에 문의하세요.' }).waitFor();
     await newTab.getByRole('link', { name: '참가 신청하기' }).click();
     await newTab.locator('#field-name').fill('합성 신청자');
     newTab.on('dialog', dialog => dialog.dismiss());
@@ -61,11 +65,14 @@ async function main() {
     stage = 'visible contact and hidden contact';
     const contactWorkspace = await read();
     contactWorkspace.venue.contact = '합성 문의 010-0000-0000';
+    contactWorkspace.consentText = '합성 정보 수집 안내';
     await write(contactWorkspace);
     await contactTab.goto(`${f.baseUrl}/event/${f.slug}/ticket/recover`);
     await contactTab.getByText('문의: 합성 문의 010-0000-0000', { exact: false }).waitFor();
     await contactTab.goto(`${f.baseUrl}/event/${f.slug}/register`);
-    await contactTab.getByText('문의: 합성 문의 010-0000-0000', { exact: false }).waitFor();
+    // Reopened 2026-11-24 (티켓 안내를 한 곳에서): 열린 신청서의 상시 '문자 복구 불가 · 문의' 줄은 없어졌고,
+    // 신청서에서 주최 측 문의처는 정보 수집 동의의 파기 기준 문장에 보인다.
+    await contactTab.getByText('행사 주최 측(합성 문의 010-0000-0000)에 확인하세요.', { exact: false }).waitFor();
     const hidden = await read();
     hidden.pageExperience ||= {};
     hidden.pageExperience.published ||= {};
@@ -89,7 +96,8 @@ async function main() {
     const restrictedPage = await restricted.newPage();
     await restrictedPage.goto(`${f.baseUrl}/event/${f.slug}/ticket?ticket=${encodeURIComponent(people[0].ticket)}`);
     await restrictedPage.getByRole('heading', { name: '내 티켓' }).waitFor();
-    await restrictedPage.getByText('탭 보관이 차단되어 있습니다', { exact: false }).waitFor();
+    // Reopened 2026-11-24: 안내는 '티켓 보관 차단'으로 말하고, 다시 열 수 없을 때를 대비한 화면 캡처를 함께 알린다.
+    await restrictedPage.getByText(/이 브라우저에서 티켓 보관이 차단되어 있습니다\..*다시 확인해야 할 수 있습니다\. 입장 QR 화면을 캡처해 두세요\./).waitFor();
     assert.equal(new URL(restrictedPage.url()).searchParams.has('ticket'), false, 'one-time ticket is removed from the address');
     await restrictedPage.screenshot({ path: path.join(out, 'ticket-storage-blocked-390.png') });
     await restrictedPage.reload();

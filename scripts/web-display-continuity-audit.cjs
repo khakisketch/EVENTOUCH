@@ -43,7 +43,7 @@ async function main() {
     const publicContext = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
     const screen = await publicContext.newPage();
     const heading = screen.locator('.display-frame h2');
-    const inactive = screen.getByRole('heading', { name: '행사장 출력이 꺼져 있습니다', exact: true });
+    const inactive = screen.getByRole('heading', { name: '잠시 후 화면이 표시됩니다', exact: true });
     await screen.goto(`${baseUrl}/screen/${slug}`, { waitUntil: 'networkidle' });
     await heading.waitFor();
     const initial = await heading.innerText();
@@ -64,7 +64,7 @@ async function main() {
       const staleFrame = screen.getByRole('status').filter({ hasText: '마지막 화면입니다' });
       await staleFrame.waitFor();
       assert.equal(await heading.innerText(), lastFrame);
-      await screen.getByRole('button', { name: '새로고침', exact: true }).press('Enter');
+      // The screen has no refresh button: its own next poll recovers it.
       await staleFrame.waitFor({ state: 'hidden' });
       assert.equal(await heading.innerText(), lastFrame, 'recovering must not immediately advance the last good frame');
     }
@@ -106,7 +106,6 @@ async function main() {
     await screen.route(publicUrl, route => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }), { times: 1 });
     await screen.getByRole('status').filter({ hasText: '마지막으로 확인한 상태입니다' }).waitFor();
     assert.equal(await heading.count(), 0, 'an unavailable read must keep disabled output off');
-    await screen.getByRole('button', { name: '새로고침', exact: true }).press('Enter');
     await screen.getByRole('status').filter({ hasText: '마지막으로 확인한 상태입니다' }).waitFor({ state: 'hidden' });
     assert.equal(await inactive.isVisible(), true);
     await setEnabled(true);

@@ -112,7 +112,7 @@ async function main() {
       const top = await room(page).locator('header').innerText();
       assert.match(top, /감사 검증 행사/);
       assert.match(top, /13:24/);
-      assert.match(top, /입장 5 \/ 등록 8/);
+      assert.match(top, /누적 입장 5 \/ 승인 8/);
       assert.match(top, /행사장 화면 송출 중/);
       assert.equal(await page.getByRole('link', { name: '관리 화면으로' }).getAttribute('href'), `/console/events/${f.eventId}`);
       assert.equal(await page.locator('[data-console-page="live"]').count(), 1);

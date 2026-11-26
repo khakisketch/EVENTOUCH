@@ -123,7 +123,8 @@ async function main() {
         check(`${width} overview return reads updated stage`, s.stage === 'READY' && (await page.locator('main').textContent()).includes('운영 준비'));
         if (!BEFORE) {
           check(`${width} sidebar and overview stage agree`, (await page.locator('.console-sidebar').textContent()).includes('운영 준비'));
-          check(`${width} next LIVE condition visible on overview`, (await page.locator('main').textContent()).includes('진행 중 단계로 넘어가기까지') && (await page.locator('main').textContent()).includes('등록 데스크 0개 · 배정 0건'));
+          // Reopened 2026-11-25 (owner): 진행 중 전환 조건이 '데스크 + 스태프 배정'에서 '가동 중인 입장 데스크 하나'로 바뀌었다.
+          check(`${width} next LIVE condition visible on overview`, (await page.locator('main').textContent()).includes('진행 중 단계로 넘어가기까지') && (await page.locator('main').textContent()).includes('가동 중인 입장 데스크가 없습니다'));
         }
         await capture('04-ready-overview');
       });
@@ -192,9 +193,11 @@ async function main() {
       await anon.close();
       await phase('다음 LIVE 전제 확인', async act => {
         await toStage(act);
-        check(`${width} LIVE blocked without desks or assignment`, await page.getByRole('button', { name: '진행 중 단계로 전환', exact: true }).isDisabled());
+        check(`${width} LIVE blocked without a running entry desk`, await page.getByRole('button', { name: '진행 중 단계로 전환', exact: true }).isDisabled());
         const reason = await page.locator('#settings-stage-precondition').textContent();
-        check(`${width} blocker is desk and assignment, not custom design`, reason.includes('등록 데스크') && reason.includes('데스크 배정') && !reason.includes('미게시'), reason);
+        // Reopened 2026-11-25: 사유는 가동 중인 입장 데스크 하나만 요구한다(배정·꾸미기는 전제가 아니다). 해결하러 갈 링크가 함께 있다.
+        check(`${width} blocker is a running entry desk, not assignment or custom design`, reason.includes('입장 데스크를 하나 이상 가동하세요') && !reason.includes('배정') && !reason.includes('미게시'), reason);
+        check(`${width} blocker links to the desk setup`, await page.getByRole('link', { name: '입장 데스크 열러 가기', exact: true }).getAttribute('href') === `${base}/operations`);
         s = await snapshot('next-live-blocked');
         check(`${width} blocked action writes no LIVE`, s.stage === 'READY' && s.desks === 0 && s.assignments === 0, s);
         await capture('07-live-blocked');

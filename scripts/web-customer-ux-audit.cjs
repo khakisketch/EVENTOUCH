@@ -105,7 +105,13 @@ async function main() {
       await openMessageMore(page);
       await page.locator('#campaign-title').fill('검수 안내');
       await page.locator('#campaign-body').fill('행사 안내를 확인해 주세요.');
-      check(`messages@${width}: delivery limit visible without opening help`, await page.getByText('발송 연결 · 미연동 · 실제 전달 안 됨', { exact: true }).isVisible());
+      // Reopened 2026-11-25 (owner: 작성 화면 사용성): 발송 연결은 접기 없는 상시 한 줄(미연동 알약 + 조직 상태 문장)이다.
+      // '발송 연결 · 미연동 · 실제 전달 안 됨' 요약 줄은 없어졌으므로, 같은 줄에서 미연동과 전달되지 않는다는 한계가 함께 보이는지 확인한다.
+      const connection = page.getByRole('status').filter({ hasText: '현재 조직 발송 연결:' });
+      check(`messages@${width}: delivery limit visible without opening help`, await connection.isVisible()
+        && await connection.getByText('미연동', { exact: true }).isVisible()
+        && await connection.getByText(/실제로 전달되지 않/).isVisible()
+        && await connection.evaluate(el => !el.closest('details')));
       await messageStep(page, 3);
       // Reopened 2026-11-24 (시안 A): the 발송 검토 button lives in a sticky dock (an opaque strip that keeps it in reach
       // while writing). At the end of the form the dock must sit below the send summary, never over it.

@@ -65,6 +65,11 @@ async function main() {
     // Reopened 2026-11-23: no step buttons or folded 예약 등록; choose 날짜·시각 지정 in the 보낼 때 zone.
     await messageStep(current, 3);
     await (await chooseScheduleDate(current)).fill('2027-01-10T10:00');
+    // Reopened 2026-11-24 (owner decision 11): 미연동이면 모의 발송이 기본 켜짐이고 모의 발송에는 실행 방식 선택이 없다.
+    const simulate = current.getByLabel('모의 발송으로 기록', { exact: false });
+    assert.equal(await simulate.isChecked(), true, 'an unconnected organisation defaults to simulation');
+    assert.equal(await current.getByRole('radio', { name: '자동 실행' }).count(), 0, 'a simulation offers no run-mode choice');
+    await simulate.uncheck();
     assert.equal(await current.getByRole('radio', { name: '수동 실행' }).isChecked(), true, 'new reservation defaults to manual');
     await current.getByRole('radio', { name: '자동 실행' }).check();
     await current.getByRole('radio', { name: '수동 실행' }).check();
@@ -97,7 +102,9 @@ async function main() {
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['이름', '연락처', '소속'], ['합성 업로드', '01000001234', '합성 기관']]), '명단');
     for (const format of ['xls', 'xlsx']) {
       await imports.goto(`${f.baseUrl}/console/events/${f.eventId}/participants/import`);
-      await imports.locator('p').filter({ hasText: 'CSV·TXT·XLS·XLSX' }).waitFor();
+      // Reopened 2026-11-24 (가져오기 열 안내): 보이는 형식 안내는 끌어 놓기 아래 한 줄이고, 전체 형식 목록은 파일 입력의 이름에 있다.
+      await imports.getByText('엑셀(XLS·XLSX)과 CSV 파일을 읽어요.', { exact: false }).waitFor();
+      await imports.getByLabel('CSV·TXT·XLS·XLSX 파일 선택').waitFor({ state: 'attached' });
       const buffer = XLSX.write(workbook, { type: 'buffer', bookType: format === 'xls' ? 'biff8' : 'xlsx' });
       await imports.locator('input[type=file]').setInputFiles({ name: `synthetic.${format}`, mimeType: format === 'xls' ? 'application/vnd.ms-excel' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer });
       await imports.getByRole('region', { name: '가져올 명단 확인' }).waitFor({ state: 'attached' });

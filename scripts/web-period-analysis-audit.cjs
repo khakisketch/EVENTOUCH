@@ -37,6 +37,15 @@ async function assertNumbers(page, expected, days, showZero = false) {
   assert.match(await chart.getAttribute('aria-label'), new RegExp(`기간 신청 ${expected[0]}명, 일별 입장 합 ${expected[1]}명, 기간 고유 입장 ${expected[2]}명`));
 }
 
+// Reopened 2026-11-24 (전수 점검): 끝난 행사(종료 단계이거나 행사 날짜가 지남)의 기간 분석은 '행사 전체'가 기본이다.
+// 이 감사의 합성 행사는 11-10에 끝났으므로, 새로 연 화면은 먼저 그 기본값을 확인한 뒤 '최근 7일'을 골라 같은 값을 대조한다.
+async function chooseLast7FromDefault(page) {
+  const whole = page.getByRole('radio', { name: '행사 전체', exact: true });
+  await whole.waitFor();
+  assert.equal(await whole.isChecked(), true, '끝난 행사는 새로 열면 행사 전체가 선택돼 있다');
+  await page.getByRole('radio', { name: '최근 7일', exact: true }).check();
+}
+
 async function main() {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private EVENTOUCH_CAPTURE_ROOT');
   const out = prepareCaptureDir(path.join(process.env.EVENTOUCH_CAPTURE_ROOT, 'period-analysis'));
@@ -89,7 +98,17 @@ async function main() {
       await link.click();
       await page.waitForURL(analysis);
       await page.getByRole('heading', { level: 1, name: '기간 분석', exact: true }).waitFor();
+      assert.equal(await page.getByRole('radio', { name: '행사 전체', exact: true }).isChecked(), true);
+      await assertNumbers(page, [6, 6, 5], FULL);
+      // 행사 중(행사 날짜가 오늘)에는 최근 7일이 기본이다.
+      const setDate = day => db.query("UPDATE events SET payload=jsonb_set(payload, '{date}', to_jsonb($2::text)), revision=revision+1 WHERE id=$1", [f.eventId, day]);
+      await setDate('2026-11-18');
+      await page.reload();
+      await assertNumbers(page, [4, 6, 5], LAST7);
       assert.equal(await page.getByRole('radio', { name: '최근 7일', exact: true }).isChecked(), true);
+      await setDate('2026-11-10');
+      await page.reload();
+      await chooseLast7FromDefault(page);
       await assertNumbers(page, [4, 6, 5], LAST7);
       // Reopened 2026-11-20: 기간 분석 has no rail item; the 결과 보고서 item stays active and the report page links to it.
       assert.equal(await page.locator(`.console-sidebar a[href="/console/events/${f.eventId}/analysis"]:visible`).count(), 0);
@@ -191,6 +210,7 @@ async function main() {
       await page.getByRole('alert').filter({ hasText: FAILURE }).waitFor();
       await page.unroute(bootstrap);
       await page.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+      await chooseLast7FromDefault(page);
       await assertNumbers(page, [4, 6, 5], LAST7);
 
       await page.getByRole('radio', { name: '직접 선택', exact: true }).check();
@@ -231,18 +251,21 @@ async function main() {
         assert.equal(await page.getByRole('table', { name: '선택 기간 일별 신청·입장' }).count(), 0);
         await write(seeded);
         await page.getByRole('button', { name: '새로고침', exact: true }).click();
+        await chooseLast7FromDefault(page);
         await assertNumbers(page, [4, 6, 5], LAST7);
       }
     });
     await step('빈 자료는 실제 0명과 빈 날짜로 표시한다', async () => {
       await write({ ...seeded, participants: [], checks: [] });
       await page.reload();
+      await chooseLast7FromDefault(page);
       await assertNumbers(page, [0, 0, 0], LAST7.map(([day]) => [day, 0, 0]));
       await page.getByRole('button', { name: '0명 7일 보기', exact: true }).click();
       await assertNumbers(page, [0, 0, 0], LAST7.map(([day]) => [day, 0, 0]), true);
       await page.screenshot({ path: path.join(out, 'analysis-empty.png'), fullPage: true });
       await write(seeded);
       await page.reload();
+      await chooseLast7FromDefault(page);
       await assertNumbers(page, [4, 6, 5], LAST7);
     });
     await step('실제 운영자·스태프 세션과 접근 거절·로그인 이동', async () => {
@@ -252,6 +275,7 @@ async function main() {
       const ownerPage = await owner.newPage();
       await ownerPage.clock.setFixedTime(FIXED_NOW);
       await ownerPage.goto(analysis);
+      await chooseLast7FromDefault(ownerPage);
       await assertNumbers(ownerPage, [4, 6, 5], LAST7);
       await owner.close();
       const staff = await browser.newContext({ locale: 'ko-KR' });

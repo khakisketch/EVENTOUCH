@@ -6,6 +6,7 @@ const path=require('node:path');
 const {prepareCaptureDir,ensureRunTmpDir}=require('./capture-dir.cjs');
 const {startAuditFixture,cookieForContext}=require('./audit-fixture.cjs');
 const {launchBrowser}=require('./audit-browser.cjs');
+const {settleLayout}=require('./ui-journey-helpers.cjs');
 const axeSource=require('axe-core').source;
 async function main(){
  if(!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private EVENTOUCH_CAPTURE_ROOT');
@@ -47,7 +48,10 @@ async function main(){
    assert.equal(await b.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
    await b.keyboard.press('Tab');
    assert.equal(await b.evaluate(()=>Boolean(document.activeElement?.closest('[role="dialog"]'))),true);
-   assert.deepEqual(await b.evaluate(async()=>(await window.axe.run()).violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>v.id)),[]);
+   // The dialog fades in; colours sampled mid-transition are not what anyone reads. Measure at rest.
+   await settleLayout(b);
+   const blocking=await b.evaluate(async()=>(await window.axe.run()).violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>({id:v.id,nodes:v.nodes.map(n=>({target:n.target.join(' '),html:n.html.slice(0,200),why:n.failureSummary}))})));
+   assert.deepEqual(blocking.map(v=>v.id),[],`${width}px: ${JSON.stringify(blocking)}`);
    await b.screenshot({path:path.join(out,`remove-review-${width}.png`)});
   }
   await confirm.getByRole('button',{name:'목록에서 지우기'}).click();

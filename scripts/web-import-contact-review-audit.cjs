@@ -124,7 +124,13 @@ async function main() {
     const roster = await context.newPage();
     await roster.setViewportSize({ width: 390, height: 850 });
     await roster.goto(`${f.baseUrl}/console/events/${f.eventId}/participants`);
-    await roster.getByRole('button', { name: '명단 가져오기' }).click();
+    // Reopened 2026-11-21 (owner: 시안 A, 모바일): 휴대폰 폭에서는 명단 가져오기가 도구 줄의 ⋯ 메뉴 안에 접힌다.
+    const utilities = roster.locator('summary[aria-label="내보내기·가져오기"]');
+    await utilities.waitFor();
+    const utilityBox = await utilities.boundingBox();
+    assert.ok(utilityBox.width >= 44 && utilityBox.height >= 44, 'phone ⋯ menu keeps a 44px target');
+    await utilities.click();
+    await roster.getByRole('button', { name: '명단 가져오기', exact: true }).click();
     const dialog = roster.getByRole('dialog', { name: '명단 가져오기' });
     await dialog.locator('input[type=file]').setInputFiles({ name: '모달.csv', mimeType: 'text/csv', buffer: Buffer.from('이름,연락처\n모달검토,1090002099\n') });
     await dialog.getByText('자동으로 맞춘 항목 1건').click();

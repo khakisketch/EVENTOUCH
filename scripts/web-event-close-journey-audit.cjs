@@ -830,7 +830,8 @@ async function main() {
       await page.locator(HUB.nextAction).click();
       const endedDialog = page.getByRole('dialog');
       await endedDialog.getByText(/종료 이후에는 참가자 승인 상태를 변경할 수 없습니다/).waitFor();
-      assert.equal(await endedDialog.getByRole('link', { name: '참가자에서 승인 처리하기', exact: true }).count(), 0, 'ENDED create dialog must not offer an impossible approval action');
+      // Reopened 2026-11-26: the link uses the menu name 참가자 명단.
+      assert.equal(await endedDialog.getByRole('link', { name: '참가자 명단에서 승인 처리하기', exact: true }).count(), 0, 'ENDED create dialog must not offer an impossible approval action');
       await shotBoth('states-ended-pending-create-dialog');
       await page.keyboard.press('Escape');
       stateChecks.push('ENDED pending: immutable warning, no impossible approval next; old PUBLISHED not auto-selected; Enter/Space disclosure');

@@ -128,7 +128,8 @@ async function main() {
     assert.equal(await retry.isEnabled(), true, 'refresh must not disable original role retry');
     await retry.click();
     await panel.getByRole('group', { name: '실행 확인' }).getByRole('button', { name: '같은 요청으로 다시 시도' }).click();
-    await page.getByText(/조직 역할을 현장 스태프.*바꿨습니다/).waitFor();
+    // Reopened 2026-11-24: 상태·역할 안내는 바뀐 값을 ‘현장 스태프’처럼 따옴표로 묶는다.
+    await page.getByText(/조직 역할을 ‘현장 스태프’로 바꿨습니다/).waitFor();
     assert.equal(attempts.length, 2);
     assert.deepEqual(attempts[1], attempts[0]);
     assert.equal(await drawer.count(), 0, 'a proven role change closes the drawer');

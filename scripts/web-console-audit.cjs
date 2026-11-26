@@ -321,7 +321,9 @@ async function waitForMarker(page, marker, timeout = 15000) {
 async function assertConsoleScreen(page, screen, eventId, eventName) {
   const url = page.url();
   const pathname = new URL(url).pathname;
-  if (pathname !== screenPath(screen, eventId)) {
+  // Reopened 2026-11-25: the desk setup view is opened by ?setup=1 or any #ops- link, so a registry path may
+  // carry a query. The route must match; the screen's loaded marker below proves which view opened.
+  if (pathname !== new URL(screenPath(screen, eventId), url).pathname) {
     throw new Error(`${screen.key}: landed on ${pathname} (login redirect or reroute)`);
   }
   // Client-side navigation lands before the page's bootstrap data arrives, so
@@ -1880,7 +1882,8 @@ async function main() {
         await page.goto(`${baseUrl}/console/events/${eventId}/programs`, { waitUntil: 'networkidle', timeout: 30000 });
         await assertConsoleScreen(page, SCREENS.find((screen) => screen.key === 'programs'), eventId, eventName);
         // Stage draws live on 추첨·투표; the content list ends with one link there.
-        const link = page.getByRole('link', { name: '무대 운영 화면 (추첨·룰렛·순위 투표)', exact: true });
+        // Reopened 2026-11-26: the link uses the menu name 추첨·투표.
+        const link = page.getByRole('link', { name: '추첨·투표 (무대 운영·룰렛)', exact: true });
         if (!await link.count() || !(await link.getAttribute('href')).endsWith('/draws')) {
           throw new Error('programs list does not link to the draws screen');
         }
@@ -2104,7 +2107,8 @@ async function main() {
         await page.getByRole('button', { name: '보고서 만들기', exact: true }).click();
         const warning = page.getByText(/승인 대기 2명이 남아 있습니다/);
         await warning.first().waitFor({ timeout: 10000 });
-        const pendingLink = page.getByRole('dialog').getByRole('link', { name: '참가자에서 승인 처리하기' });
+        // Reopened 2026-11-26: the link uses the menu name 참가자 명단.
+        const pendingLink = page.getByRole('dialog').getByRole('link', { name: '참가자 명단에서 승인 처리하기' });
         if (!await pendingLink.count() || !(await pendingLink.getAttribute('href')).includes('status=PENDING')) {
           throw new Error('report dialog does not link to the pending queue');
         }
@@ -2209,7 +2213,8 @@ async function main() {
         const rows = page.locator('li').filter({ hasText: '통합 감사 추첨 프로그램' });
         await rows.first().waitFor({ timeout: 10000 });
         if (await page.getByText('연결 추첨 확인 필요').count()) throw new Error('a draw prize still hides its program name');
-        const link = page.getByRole('link', { name: /^추첨에서 수령자 지정/ });
+        // Reopened 2026-11-26: the link uses the menu name 추첨·투표.
+        const link = page.getByRole('link', { name: /^추첨·투표에서 수령자 지정/ });
         await link.first().waitFor({ timeout: 10000 });
         const href = await link.first().getAttribute('href');
         if (!href || !href.includes('#draw-program-')) throw new Error(`reward link misses the program anchor: ${href}`);

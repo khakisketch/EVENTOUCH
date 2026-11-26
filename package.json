@@ -30,6 +30,7 @@
     "mobile": "node scripts/mobile-audit.cjs",
     "web:audit": "node scripts/web-audit.cjs",
     "web:console:audit": "node scripts/web-console-audit.cjs",
+    "web:extra:audit": "node scripts/web-extra-audits.cjs",
     "web:period-analysis:audit": "node scripts/web-period-analysis-audit.cjs",
     "web:white:audit": "node scripts/web-white-product-audit.cjs",
     "web:system:audit": "node scripts/web-system-improvement-audit.cjs",

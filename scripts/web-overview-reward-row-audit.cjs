@@ -52,7 +52,8 @@ async function main() {
     await row.waitFor({ timeout: 10000 });
     await row.getByText('경품 확인 필요', { exact: true }).waitFor();
     await row.getByText('3건', { exact: true }).waitFor();
-    const link = row.getByRole('link', { name: '경품 지급 현황' });
+    // Reopened 2026-11-26: the link uses the menu name of the destination.
+    const link = row.getByRole('link', { name: '경품 지급', exact: true });
     assert.equal(await link.getAttribute('href'), `/console/events/${f.eventId}/rewards`);
     // LIVE overview already spends its one orange action on 현장 운영 열기: the queue adds none.
     assert.equal(await link.getAttribute('data-action-variant'), 'ghost', 'the reward row is a quiet link, not the orange action');

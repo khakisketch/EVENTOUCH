@@ -56,7 +56,9 @@ function chunkWith(marker, { many = false } = {}) {
   try {
     browser = await launchBrowser();
     // Client render exception inside a lazy child, caught by app/error.tsx.
-    const runtime = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    // Reopened 2026-11-25 (owner: 노트북은 카메라 없이): 1024px 이상에 마우스·트랙패드인 기기는 카메라를 띄우지 않는다.
+    // 넓은 화면의 카메라 오류 경계는 카메라를 계속 쓰는 기기(터치 태블릿)로 확인한다.
+    const runtime = await browser.newContext({ viewport: { width: 1280, height: 900 }, hasTouch: true });
     await runtime.addCookies([cookie]);
     const runtimePage = await runtime.newPage();
     observe(runtimePage);
@@ -118,7 +120,10 @@ function chunkWith(marker, { many = false } = {}) {
       await confirmInitialStaffDesk(chunkPage);
       await chunkPage.getByRole('button', { name: '카메라 켜기', exact: true }).click();
       await chunkPage.getByRole('region', { name: '카메라 스캔', exact: true }).waitFor();
-      check('explicit reload clears rejected chunk and preserves staff route', chunkPage.url() === staffUrl && recoveredChunks > 0);
+      // Reopened 2026-11-25 (노트북 데스크): 선택한 데스크와 방향을 주소(?desk=&as=)에 남긴다. 같은 경로와 같은 데스크로 돌아와야 한다.
+      const landed = new URL(chunkPage.url());
+      check('explicit reload clears rejected chunk and preserves staff route', landed.pathname === new URL(staffUrl).pathname
+        && landed.searchParams.get('desk') === fixture.deskId && landed.searchParams.get('as') === 'IN' && recoveredChunks > 0, { url: chunkPage.url(), staffUrl, recoveredChunks });
     }
     await chunk.close();
 

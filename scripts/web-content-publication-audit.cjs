@@ -34,22 +34,23 @@ async function checkDisplayRecovery(page, baseUrl, slug, body, out, check) {
 
     await stalledHeaders();
     setStalled(false);
-    await page.getByRole('button', { name: '새로고침', exact: true }).click();
-    await stale.waitFor({ state: 'hidden', timeout: 3000 });
+    // Reopened 2026-11-26: the venue screen has no refresh button; the poll gives up on the hung
+    // response by itself and restores the same frame.
+    await stale.waitFor({ state: 'hidden', timeout: 25000 });
     await waitForClosed(1);
-    check('manual refresh cancels the hung poll and restores the same frame', await lastFrame.isVisible());
+    check('the poll cancels the hung response and restores the same frame by itself', await lastFrame.isVisible());
 
     setStalled(true);
     await Promise.all([stalledHeaders(), page.goto(origin + screenPath, { waitUntil: 'domcontentloaded' })]);
-    const retry = page.getByRole('button', { name: '다시 시도', exact: true });
-    await retry.waitFor({ timeout: 11000 });
+    const waiting = page.getByRole('status').filter({ hasText: '잠시 후 화면이 표시됩니다.' });
+    await waiting.waitFor({ timeout: 11000 });
     await waitForClosed(2);
-    check('a stalled first load offers a retry instead of loading forever', await retry.isVisible());
+    check('a stalled first load says the screen is coming instead of loading forever', await waiting.isVisible()
+      && await page.getByRole('button', { name: '다시 시도', exact: true }).count() === 0);
     await page.screenshot({ path: path.join(out, 'screen-first-timeout-1280.png') });
     setStalled(false);
-    await retry.click();
-    await lastFrame.waitFor();
-    check('first-load retry restores the actual published frame', await lastFrame.isVisible());
+    await lastFrame.waitFor({ timeout: 25000 });
+    check('the next poll restores the actual published frame by itself', await lastFrame.isVisible());
     await page.screenshot({ path: path.join(out, 'screen-recovered-1280.png') });
     await page.goto(baseUrl + screenPath, { waitUntil: 'networkidle' });
   } catch (error) {
@@ -322,7 +323,7 @@ async function checkDisplayRecovery(page, baseUrl, slug, body, out, check) {
       await page.goto(`${f.baseUrl}/console/events/${f.eventId}/content`, { waitUntil: 'networkidle' });
       await openItem('입장 장소 변경 안내');
       await page.getByRole('button', { name: '게시 검토', exact: true }).click();
-      check('content review explains why published notices can remain hidden', await dialog.getByText(/참가자 페이지 설정에서 공지 표시가 꺼져/).isVisible() && await dialog.getByText(/공지 메뉴가 숨겨져/).isVisible());
+      check('content review explains why published notices can remain hidden', await dialog.getByText(/참가자 화면 설정에서 공지 표시가 꺼져/).isVisible() /* Reopened 2026-11-26: menu name */ && await dialog.getByText(/공지 메뉴가 숨겨져/).isVisible());
       await capture('09-hidden-destinations-1280');
 
     }

@@ -1,5 +1,5 @@
 'use strict';
-const { openCreateSettings } = require('./ui-journey-helpers.cjs');
+const { openCreateSettings, settleLayout } = require('./ui-journey-helpers.cjs');
 
 // Event-card product audit: the current directory-row implementation,
 // published-only theme link, and
@@ -466,6 +466,8 @@ async function main() {
       await page.getByRole('button', { name: '새 행사 만들기' }).click();
       const stickyDialog = page.getByRole('dialog');
       await stickyDialog.waitFor({ state: 'visible' });
+      // The dialog scales in; a box read mid-transition reports a target nobody ever presses. Measure at rest.
+      await settleLayout(page);
       const headerClose = stickyDialog.getByRole('button', { name: '닫기', exact: true });
       const footerCancel = stickyDialog.getByRole('button', { name: '취소', exact: true });
       const footerSubmit = stickyDialog.getByRole('button', { name: '행사 만들기', exact: true });

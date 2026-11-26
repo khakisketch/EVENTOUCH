@@ -728,7 +728,7 @@ async function main() {
     const eventBasePath = `/console/events/${f.eventId}`;
     const approvedDestinations = [
       {label:'운영 현황',href:eventBasePath},
-      ...[['참가자 명단','participants'],['메시지','messages'],['참가자 화면','page'] /* Reopened 2026-11-20: 참가자 페이지·공지·안내·참여 이벤트 share one 참가자 화면 rail entry */,['입장 관리','operations'],['행사 설정','settings'],['현장 모드','live'],['결과 보고서','reports'],['경품 지급','rewards'],['현장 사진','photos']].map(([label,route])=>({label,href:`${eventBasePath}/${route}`})),
+      ...[['참가자 명단','participants'],['메시지','messages'],['참가자 화면','page'] /* Reopened 2026-11-20: 참가자 페이지·공지·안내·참여 이벤트 share one 참가자 화면 rail entry */,['행사 설정','settings'],['입장 관리','operations'] /* Reopened 2026-11-26: 입장 관리 leads the 당일 group */,['현장 모드','live'],['결과 보고서','reports'],['경품 지급','rewards'],['현장 사진','photos']].map(([label,route])=>({label,href:`${eventBasePath}/${route}`})),
     ];
 
     check(

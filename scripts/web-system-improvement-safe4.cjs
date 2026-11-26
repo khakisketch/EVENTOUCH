@@ -1,5 +1,5 @@
 'use strict';
-const { openCreateSettings, chooseRadio } = require('./ui-journey-helpers.cjs');
+const { openCreateSettings, chooseRadio, settleLayout } = require('./ui-journey-helpers.cjs');
 // Safe4 product audit: optional event format, row-reuse registration,
 // arbitrary period analysis, frozen-report A4/16:9 presentation.
 // Standalone main (parent runs it after the build); also exports
@@ -79,8 +79,11 @@ async function runSafe4Audit() {
     const capture = async (name) => { await page.screenshot({ path: `${OUT}/${name}.png`, fullPage: false }); };
     const inspect = async (name) => {
       check(`${name} no horizontal overflow`, await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      // Colours sampled while a state change is still transitioning are not what anyone reads. Measure at rest.
+      await settleLayout(page);
       await page.evaluate(require('axe-core').source);
-      const violations = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] } })).violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length })));
+      const violations = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa'] } })).violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length,
+        targets: v.nodes.map((node) => ({ target: node.target.join(' '), html: node.html.slice(0, 160), why: node.failureSummary })) })));
       axe.push({ name, violations });
       check(`${name} no serious/critical axe`, !violations.some((v) => ['serious', 'critical'].includes(v.impact)), violations);
     };
@@ -129,7 +132,16 @@ async function runSafe4Audit() {
     await page.waitForFunction(() => document.activeElement && document.activeElement.id === 'participant-add-phone', null, { timeout: 5000 }).catch(() => {});
     check('reuse focuses the first empty required input', await page.evaluate(() => document.activeElement && document.activeElement.id) === 'participant-add-phone');
     await capture('safe4-reuse-prefill-1280');
-    await page.keyboard.press('Escape');
+    // Reopened 2026-11-25 (참가자 상세 시트): 상세에서 연 등록 창을 닫으면 그 참가자의 상세 시트로 돌아온다. 시트를 닫아야 명단을 조작할 수 있다.
+    const returnToRoster = async (label) => {
+      await page.keyboard.press('Escape');
+      const sheet = page.getByRole('dialog', { name: '검증 재사용 원본', exact: true });
+      await sheet.waitFor();
+      check(`${label}: closing the reused form returns to the source participant detail`, await page.locator('#participant-add-form:visible').count() === 0);
+      await sheet.getByRole('button', { name: '닫기', exact: true }).last().click();
+      await sheet.waitFor({ state: 'hidden' });
+    };
+    await returnToRoster('prefill');
     // Dirty guard: typed content is never overwritten by another row.
     await page.getByRole('button', { name: '참가자 추가', exact: true }).first().click();
     await page.locator('#participant-add-name').fill('작성 중인 등록');
@@ -139,6 +151,7 @@ async function runSafe4Audit() {
     check('dirty form is never overwritten by another row', await page.locator('#participant-add-name').inputValue() === '작성 중인 등록'
       && await page.getByText(/작성 중인 새 등록 내용/, { exact: false }).count() > 0);
     await capture('safe4-reuse-dirty-guard-1280');
+    await returnToRoster('dirty guard');
     // Uncertain guard: committed-but-unseen create blocks reuse until the same retry.
     let createLost = false;
     await page.route('**/api/events/*/commands', async (route) => {
@@ -149,7 +162,6 @@ async function runSafe4Audit() {
       createLost = true;
       await route.fulfill({ status: 502, json: { error: '합성 등록 응답 유실' } });
     });
-    await page.keyboard.press('Escape');
     await page.getByRole('button', { name: '참가자 추가', exact: true }).first().click();
     await page.locator('#participant-add-name').fill('검증 유실 등록');
     await page.locator('#participant-add-phone').fill('01055556666');

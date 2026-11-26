@@ -87,7 +87,8 @@ async function main() {
       await page.getByRole('button', { name: '상태 다시 확인' }).click(); await qr.waitFor();
     }
     await open(waiting.ticket); await page.getByText('대기 명단', { exact: true }).waitFor();
-    assert.match(await page.innerText('body'), /확정 안내를 받았다면 상태를 다시 확인하세요/);
+    // Reopened 2026-11-26: the result shows on this screen; a text may not come.
+    assert.match(await page.innerText('body'), /결과는 이 화면에서 확인할 수 있습니다/);
     await page.screenshot({ path: path.join(out, 'waitlist-390.png'), fullPage: true });
     await visibility('hidden'); assert.equal((await status(waiting, 'APPROVED', 'WAITLIST')).status, 200);
     await page.route(ticketApi, route => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }), { times: 1 });

@@ -94,7 +94,9 @@ async function main() {
     const publicContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     const publicPage = await publicContext.newPage();
     await publicPage.goto(fixture.baseUrl, { waitUntil: 'networkidle' });
-    const publicAction = publicPage.locator('a[class*="primaryAction"]').first();
+    // Reopened 2026-11-25 (owner: 랜딩 문의 모달과 새 CTA): 랜딩의 주 행동은 링크가 아니라 문의 창을 여는 '도입 문의하기' 버튼이다.
+    const publicAction = publicPage.getByRole('main').getByRole('button', { name: '도입 문의하기', exact: true }).first();
+    assert.match(await publicAction.getAttribute('class'), /primaryAction/, 'the sampled control is the landing primary action');
     await publicAction.hover(); await sampleContrast('landing-hover', publicAction);
     await publicPage.screenshot({ path: path.join(out, 'landing-primary-hover.png') });
     await publicPage.mouse.move(0, 0); await sampleContrast('landing-leave', publicAction);
