@@ -180,7 +180,12 @@ test('the privacy text says what the code does: roles, no auto purge, cookie lif
   const body = text(pages.privacy);
   assert.match(body, /주최 측이 개인정보를 처리하는 책임자입니다/);
   assert.match(body, /EVENTOUCH는 주최 측의 위탁을 받아[^.]*수탁자/);
-  assert.match(body, /시스템은 기간이 지났다고 자동으로 삭제하지 않습니다/);
+  // Participant data is never purged on a timer, but the phone verification
+  // trail is: the text must carry the same number the cleanup code uses.
+  assert.match(body, /참가자 신청 정보는 기간이 지났다고 자동으로 삭제하지 않습니다/);
+  const retention = require('../server/expired-credentials');
+  assert.equal(retention.challengeRetentionHours(undefined), 24, 'the default window is the documented one');
+  assert.match(body, new RegExp(`인증번호가 만료된 뒤 ${retention.challengeRetentionHours(undefined)}시간이 지나면 자동으로 지웁니다`));
   assert.match(body, /Solapi/);
   assert.match(body, /계정 메일/);
   // What is not decided is listed, not promised.

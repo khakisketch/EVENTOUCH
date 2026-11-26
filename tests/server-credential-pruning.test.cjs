@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const { setTimeout: delay } = require('node:timers/promises');
 const { createDatabase } = require('../server/db');
-const { pruneExpiredCredentials, startCredentialPruning } = require('../server/expired-credentials');
+const { pruneExpiredCredentials, startCredentialPruning, challengeRetentionHours } = require('../server/expired-credentials');
 const { testDatabaseUrl } = require('./helpers/postgres-test.cjs');
 
 const databaseUrl = testDatabaseUrl();
@@ -53,18 +53,20 @@ test('expired credential rows are removed and everything else survives', async (
     ('p-live', 'a1', 'a1@example.test', 'VERIFY', 'h3', ${FUTURE}, now()),
     ('p-live-old', 'a1', 'a1@example.test', 'VERIFY', 'h4', ${FUTURE}, now() - interval '3 days')`);
   await database.query(`INSERT INTO attendee_challenges (id, event_id, phone, purpose, code_hash, expires_at, created_at)
-    VALUES ('c-old', 'e1', '01000000001', 'ENROLL', 'x', now() - interval '3 days', now() - interval '3 days')`);
+    VALUES ('c-old', 'e1', '01000000001', 'ENROLL', 'x', now() - interval '3 days', now() - interval '3 days'),
+      ('c-just-expired', 'e1', '01000000002', 'ENROLL', 'y', now() - interval '1 hour', now() - interval '2 hours')`);
   await database.query(`INSERT INTO command_receipts (command_id, event_id, actor_id, result, created_at)
     VALUES ('r-old', 'e1', 'a1', '{}'::jsonb, now() - interval '30 days')`);
 
   const removed = await pruneExpiredCredentials(database, { batchSize: 2 });
 
-  assert.deepEqual(removed, { sessions: 3, attendee_sessions: 1, attendee_grants: 1, account_email_proofs: 1 });
+  assert.deepEqual(removed, { sessions: 3, attendee_sessions: 1, attendee_grants: 1, account_email_proofs: 1, attendee_challenges: 1 });
   assert.deepEqual(await keys('sessions', 'token_hash'), ['s-live']);
   assert.deepEqual(await keys('attendee_sessions', 'token_hash'), ['v-live']);
   assert.deepEqual(await keys('attendee_grants', 'token_hash'), ['g-live', 'g-used-live']);
   assert.deepEqual(await keys('account_email_proofs', 'id'), ['p-counted', 'p-live', 'p-live-old']);
-  assert.deepEqual(await keys('attendee_challenges', 'id'), ['c-old']);
+  // A challenge keeps its phone for the grace period after it expires; only the stale one leaves.
+  assert.deepEqual(await keys('attendee_challenges', 'id'), ['c-just-expired']);
   assert.deepEqual(await keys('command_receipts', 'command_id'), ['r-old']);
   assert.deepEqual(await keys('accounts', 'id'), ['a1']);
   assert.deepEqual(await keys('events', 'id'), ['e1']);
@@ -81,6 +83,17 @@ test('a row another request holds is skipped instead of waited for', async () =>
   assert.equal((await pruneExpiredCredentials(database)).attendee_sessions, 1);
 });
 
+nodeTest('challenge retention accepts a sane window and ignores a nonsensical one', () => {
+  assert.equal(challengeRetentionHours(undefined), 24);
+  assert.equal(challengeRetentionHours(''), 24);
+  assert.equal(challengeRetentionHours('6'), 6);
+  assert.equal(challengeRetentionHours('720'), 720);
+  assert.equal(challengeRetentionHours('0'), 24, 'a zero window would delete a row a daily cap still counts');
+  assert.equal(challengeRetentionHours('-5'), 24);
+  assert.equal(challengeRetentionHours('abc'), 24);
+  assert.equal(challengeRetentionHours('100000'), 24);
+});
+
 nodeTest('failures are logged without their message and do not stop the other tables or later runs', async () => {
   const lines = [];
   const tables = [];
@@ -94,7 +107,7 @@ nodeTest('failures are logged without their message and do not stop the other ta
   await delay(90);
   await pruning.stop();
   assert.ok(tables.length >= 8, `ran at startup and again: ${tables.length}`);
-  assert.deepEqual(tables.slice(0, 4), ['sessions', 'attendee_sessions', 'attendee_grants', 'account_email_proofs']);
+  assert.deepEqual(tables.slice(0, 5), ['sessions', 'attendee_sessions', 'attendee_grants', 'account_email_proofs', 'attendee_challenges']);
   assert.equal(lines[0], '[eventouch] expired credential cleanup failed for sessions (57014)\n');
   assert.doesNotMatch(lines.join(''), /private/);
   const after = tables.length;
