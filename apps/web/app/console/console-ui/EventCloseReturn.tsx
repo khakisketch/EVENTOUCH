@@ -42,7 +42,9 @@ export default function EventCloseReturn({ eventId, pageId, snapshot, noticeStat
   return (
     <ConsoleFeedback kind="info">
       <div className={styles.closeReturn} data-close-progress>
-        <div><strong>{progress ? `마감 ${progress.position}/7 · ${progress.label}${progress.complete ? progress.position === 6 ? " · 안내 기록 확인" : " · 완료" : ""}` : "행사 마감 경로"}</strong>
+        {/* Reserve the 6/7 swap height so the confirm control below does not
+            jump when the progress copy changes. Longer copy still grows. */}
+        <div className={progress && [6, 7].includes(progress.position) ? styles.closeLeadStable : undefined}><strong>{progress ? `마감 ${progress.position}/7 · ${progress.label}${progress.complete ? progress.position === 6 ? " · 안내 기록 확인" : " · 완료" : ""}` : "행사 마감 경로"}</strong>
           <p>{progress?.detail || "현재 화면의 상태가 준비되면 다음 단계를 표시합니다."}</p>
           {progress?.warnings.length ? <p role="note">미충족 조건: {progress.warnings.join(" · ")}. 이동은 막지 않습니다.</p> : null}
         </div>

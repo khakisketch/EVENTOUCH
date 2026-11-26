@@ -20,7 +20,11 @@ export default function StageTransitionConfirmation({ label, busy, disabled = fa
   children?: ReactNode;
 }) {
   const confirmRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => { confirmRef.current?.focus(); }, []);
+  // Move keyboard focus without forcing a scroll: the confirmation replaces an
+  // inline control, so a focus-driven jump would move the very button the
+  // operator (or a stability check) is about to press. Matches the hash-link
+  // focus contract in DESIGN.md (focus the heading/control, never steal scroll).
+  useEffect(() => { confirmRef.current?.focus({ preventScroll: true }); }, []);
   const actionText = busy ? "전환 중입니다" : retry ? "같은 요청 다시 시도" : "정말 전환합니다";
   return (
     <div className={className} role="group" aria-label="단계 전환 확인">

@@ -1087,6 +1087,14 @@
   gap: var(--s3);
 }
 
+/* Archive swap guard: positions 6/7 exchange the "next" link for the confirm
+   group in place, so reserve the tallest copy height and the confirm control
+   below never moves. Longer copy still grows; older engines keep the px line. */
+.closeLeadStable {
+  min-height: calc(var(--s1) + 96px);
+  min-height: calc(var(--s1) + 4lh);
+}
+
 .closeReturn p {
   margin: var(--s1) 0 0;
 }
