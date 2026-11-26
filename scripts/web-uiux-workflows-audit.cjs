@@ -59,20 +59,30 @@ async function main() {
     await openMessagePanel(current, 'how');
     const sms = current.locator('#campaign-channel input[value="SMS"]');
     const alimtalk = current.locator('#campaign-channel input[value="ALIMTALK"]');
-    assert.equal(await current.locator('#campaign-channel input[type="radio"]').count(), 2);
-    await sms.focus(); await current.keyboard.press('ArrowRight'); assert.equal(await alimtalk.isChecked(), true);
-    await current.keyboard.press('ArrowLeft'); assert.equal(await sms.isChecked(), true);
+    // Three cards now (문자 · 사진 문자 · 알림톡); the card order is 문자 → 사진 문자 → 알림톡.
+    assert.equal(await current.locator('#campaign-channel input[type="radio"]').count(), 3);
+    await sms.focus(); await current.keyboard.press('ArrowRight'); assert.equal(await current.locator('#campaign-channel input[value="MMS"]').isChecked(), true);
+    await current.keyboard.press('ArrowRight'); assert.equal(await alimtalk.isChecked(), true);
+    await current.keyboard.press('ArrowLeft'); await current.keyboard.press('ArrowLeft'); assert.equal(await sms.isChecked(), true);
     // Reopened 2026-11-23: no step buttons or folded 예약 등록; choose 날짜·시각 지정 in the 보낼 때 zone.
     await messageStep(current, 3);
-    await (await chooseScheduleDate(current)).fill('2027-01-10T10:00');
+    // Reopened 2026-11-26: at 390px the sticky send dock sits over the lower option cards, so a pointer click lands on the dock.
+    // Choose the date option from the keyboard, as an operator with a focused card would.
+    await current.locator('#campaign-schedule-choice input[value="DATE"]').focus();
+    await current.keyboard.press('Space');
+    await current.locator('#campaign-scheduled').fill('2027-01-10T10:00');
     // Reopened 2026-11-24 (owner decision 11): 미연동이면 모의 발송이 기본 켜짐이고 모의 발송에는 실행 방식 선택이 없다.
     const simulate = current.getByLabel('모의 발송으로 기록', { exact: false });
     assert.equal(await simulate.isChecked(), true, 'an unconnected organisation defaults to simulation');
-    assert.equal(await current.getByRole('radio', { name: '자동 실행' }).count(), 0, 'a simulation offers no run-mode choice');
+    // Reopened 2026-11-26: the run mode is one toggle under the schedule; a simulation hides it.
+    assert.equal(await current.locator('#campaign-schedule-mode').count(), 0, 'a simulation offers no run-mode choice');
     await simulate.uncheck();
-    assert.equal(await current.getByRole('radio', { name: '수동 실행' }).isChecked(), true, 'new reservation defaults to manual');
-    await current.getByRole('radio', { name: '자동 실행' }).check();
-    await current.getByRole('radio', { name: '수동 실행' }).check();
+    const runMode = current.locator('#campaign-schedule-mode');
+    assert.equal(await runMode.getAttribute('data-mode'), 'MANUAL', 'new reservation defaults to manual');
+    await runMode.getByRole('button', { name: '자동 발송으로 바꾸기' }).click();
+    assert.equal(await runMode.getAttribute('data-mode'), 'AUTO');
+    await runMode.getByRole('button', { name: '직접 실행으로 바꾸기' }).click();
+    assert.equal(await runMode.getAttribute('data-mode'), 'MANUAL');
     assert.equal(await current.locator('#campaign-body').inputValue(), raw, 'switching modes preserves the draft');
     await current.addScriptTag({ content: axe });
     assert.deepEqual(await current.evaluate(async () => (await window.axe.run()).violations.filter(v => ['serious', 'critical'].includes(v.impact)).map(v => v.id)), []);

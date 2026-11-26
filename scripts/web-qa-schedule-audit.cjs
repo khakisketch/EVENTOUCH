@@ -310,23 +310,28 @@ const snapshot = async (page, name) => {
     await (await chooseScheduleDate(manager)).fill('2099-01-16T10:00');
     // Reopened 2026-11-24 (owner decision 11): 미연동이면 모의 발송이 기본 켜짐이고, 모의 발송에는 실행 방식 선택이 없다.
     await manager.getByLabel('모의 발송으로 기록', { exact: false }).uncheck();
-    const manual = manager.getByRole('radio', { name: '수동 실행', exact: true });
-    const automatic = manager.getByRole('radio', { name: '자동 실행', exact: true });
-    assert.equal(await manual.isChecked(), true);
-    await automatic.check();
+    // Reopened 2026-11-26: the run mode is one toggle under the schedule ("자동 발송으로 바꾸기" / "직접 실행으로 바꾸기").
+    // A simulation hides it, because a simulated run is always run by hand.
+    const modeGroup = manager.locator('#campaign-schedule-mode');
+    const modeToggle = modeGroup.getByRole('button', { name: /(자동 발송|직접 실행)으로 바꾸기/ });
+    assert.equal(await modeGroup.getAttribute('data-mode'), 'MANUAL');
+    await modeToggle.click();
+    assert.equal(await modeGroup.getAttribute('data-mode'), 'AUTO');
     await manager.getByLabel('모의 발송으로 기록', { exact: false }).check();
+    assert.equal(await manager.locator('#campaign-schedule-mode').count(), 0, 'simulation hides the run-mode toggle');
     await manager.getByLabel('모의 발송으로 기록', { exact: false }).uncheck();
-    assert.equal(await manual.isChecked(), true, 'simulation clears the prior auto choice');
-    await automatic.check();
+    assert.equal(await modeGroup.getAttribute('data-mode'), 'MANUAL', 'simulation clears the prior auto choice');
+    await modeToggle.click();
+    assert.equal(await modeGroup.getAttribute('data-mode'), 'AUTO');
     await manager.locator('#campaign-submit').click();
     await manager.getByText(/나중에 설정을 켜면 발송될 수 있습니다/).last().waitFor();
     await snapshot(manager, 'schedule-auto-review');
     await manager.addScriptTag({ content: axeSource });
     const scheduleAxe = await manager.evaluate(async () => window.axe.run());
     assert.deepEqual(scheduleAxe.violations.filter(v => v.impact === 'serious' || v.impact === 'critical').map(v => v.id), []);
-    for (const radio of [manual, automatic]) {
-      const box = await radio.locator('xpath=..').boundingBox();
-      assert.ok(box && box.width >= 44 && box.height >= 44, 'schedule choice has a 44px touch target');
+    {
+      const box = await modeToggle.boundingBox();
+      assert.ok(box && box.width >= 44 && box.height >= 44, 'schedule run-mode toggle has a 44px touch target');
     }
     await manager.getByRole('button', { name: '예약 등록', exact: true }).click();
     // 기록 이름 글자는 서버 저장이 끝나기 전에도 화면에 있어 이름만 기다리면 DB를 너무 일찍 읽는다. 저장 확인 안내를 먼저 기다린다.

@@ -9,7 +9,7 @@ const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const axeSource = require('axe-core').source;
-const { settleLayout } = require('./ui-journey-helpers.cjs');
+const { settleLayout, openRecipientList } = require('./ui-journey-helpers.cjs');
 
 const before = process.argv.includes('--before');
 let phase = 'setup';
@@ -108,7 +108,10 @@ async function main() {
     await page.getByRole('link', { name: /메시지 작성/ }).click();
     await page.getByText(/명단에서 .*명.*인계받았습니다/).first().waitFor();
     assert.match(await page.getByText(/명단에서 .*명.*인계받았습니다/).first().innerText(), /제외 1명\(취소·삭제\)/);
-    assert.ok((await page.getByText('검증 대기', { exact: false }).count()) > 0, 'pending selection remains for explicit review');
+    // The handoff closes the list and keeps a summary (selected N + pills); the pending names are checked in the list itself.
+    await openRecipientList(page);
+    assert.ok((await page.getByRole('dialog').getByText('검증 대기', { exact: false }).count()) > 0, 'pending selection remains for explicit review');
+    await page.keyboard.press('Escape');
     await page.screenshot({ path: path.join(out, 'message-handoff-1280.png'), fullPage: true });
 
     phase = 'mobile';

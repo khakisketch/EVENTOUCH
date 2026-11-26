@@ -98,9 +98,10 @@ async function main() {
       await page.locator('#message-compose-open').click();
       // Reopened 2026-11-24 (owner: 시안 A): one sentence with folded panels. Open 받는 사람 → 직접 고르기, pick a
       // recipient, write the body, and check the same intent at the end (the send dock never covers the send summary above it).
-      const recipientDetails = page.locator('#campaign-recipients details');
+      // Reopened 2026-11-26: the list is a dialog opened from the 받는 사람 card.
       await openRecipientList(page);
-      await recipientDetails.locator('ul input[type="checkbox"]').first().check();
+      await page.getByRole('dialog').locator('ul input[type="checkbox"]').first().check();
+      await page.locator('#recipient-list-close').click();
       await messageStep(page, 2);
       await openMessageMore(page);
       await page.locator('#campaign-title').fill('검수 안내');
@@ -120,11 +121,15 @@ async function main() {
         // Scroll every scroller to its end: a sticky element is already "in view", so scrollIntoView would not move it.
         for (let node = dock.parentElement; node; node = node.parentElement) if (node.scrollHeight > node.clientHeight + 1) node.scrollTop = node.scrollHeight;
         window.scrollTo(0, document.documentElement.scrollHeight);
-        const area = dock.parentElement.querySelector('[class*="sendArea"]');
+        // Reopened 2026-11-26: the send summary (sendArea) is a sibling of the dock's wrapper, not inside it.
+        const area = document.querySelector('[class*="sendArea"]');
         const style = getComputedStyle(dock);
-        return { position: style.position, background: style.backgroundColor, dockTop: dock.getBoundingClientRect().top, areaBottom: area.getBoundingClientRect().bottom, areaHeight: area.getBoundingClientRect().height };
+        const dockRect = dock.getBoundingClientRect(); const areaRect = area.getBoundingClientRect(); return { position: style.position, background: style.backgroundColor, dockTop: dockRect.top, dockBottom: dockRect.bottom, areaTop: areaRect.top, areaBottom: areaRect.bottom, areaHeight: area.getBoundingClientRect().height };
       });
-      check(`messages@${width}: review dock never covers the send summary above it`, geometry.position === 'sticky' && geometry.background !== 'rgba(0, 0, 0, 0)' && geometry.areaHeight > 0 && geometry.dockTop >= geometry.areaBottom - 1, geometry);
+      // Reopened 2026-11-26: on a phone the dock is an opaque sticky strip; on a desktop it sits in the flow. Either way it never covers the summary.
+      const overlaps = geometry.dockTop < geometry.areaBottom - 1 && geometry.areaTop < geometry.dockBottom - 1;
+      const sticky = width <= 768;
+      check(`messages@${width}: review dock never covers the send summary above it`, (sticky ? geometry.position === 'sticky' && geometry.background !== 'rgba(0, 0, 0, 0)' : geometry.position === 'static') && geometry.areaHeight > 0 && !overlaps, geometry);
       await capture('messages', width);
 
       await page.goto(`${base}/reports`);
@@ -175,9 +180,9 @@ async function main() {
     await page.goto(`${base}/messages`);
     await page.locator('#message-compose-open').click();
     // Reopened 2026-11-24 (시안 A): 받는 사람 panel → 직접 고르기 list → body → review; the title is optional, under 더 보기.
-    const recipients = page.locator('#campaign-recipients details');
     await openRecipientList(page);
-    await recipients.locator('ul input[type="checkbox"]').first().check();
+    await page.getByRole('dialog').locator('ul input[type="checkbox"]').first().check();
+    await page.locator('#recipient-list-close').click();
     await messageStep(page, 2);
     await openMessageMore(page);
     await page.locator('#campaign-title').fill('검수 안내');
