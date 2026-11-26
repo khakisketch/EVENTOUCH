@@ -104,7 +104,11 @@ function seedSampleParticipants() {
         cancelled: false,
       }));
     }
-  } catch (err) {}
+  } catch (err) {
+    // A JSON fallback that cannot be read used to look like "no events".
+    // Keep the empty answer (callers depend on it) but say it happened.
+    require('./request-observability.ts').reportBackgroundError('legacy-events-read', err);
+  }
   return [];
 }
 

@@ -104,6 +104,26 @@ test('business answers are not logged', async () => {
   assert.deepEqual(lines, []);
 });
 
+test('a background failure names only its place and its error class', async () => {
+  const { reportBackgroundError } = require('../server/request-observability.ts');
+  const original = process.stderr.write;
+  const captured = [];
+  process.stderr.write = (chunk) => { captured.push(String(chunk)); return true; };
+  try {
+    reportBackgroundError('session-renewal', boom());
+    reportBackgroundError('session-renewal', Object.assign(new Error(SECRET), { status: 409 }));
+  } finally { process.stderr.write = original; }
+  assert.equal(captured.length, 1, 'a business answer stays silent');
+  assert.equal(captured[0], `${JSON.stringify({ type: 'error', where: 'session-renewal', name: 'TypeError', code: 'ECONNRESET' })}\n`);
+  assert.doesNotMatch(captured[0], /private|010-1234|failed for/);
+});
+
+test('a legacy JSON store that cannot be read is reported instead of silently empty', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'server', 'legacy-events.js'), 'utf8');
+  assert.match(source, /reportBackgroundError\('legacy-events-read'/, 'the read failure names its place');
+  assert.doesNotMatch(source, /catch \(err\) \{\}/, 'no empty catch is left in the legacy reader');
+});
+
 test('an error that escapes a route handler is logged once without its message', async () => {
   const app = buildHealthApp({ getMessaging: () => { throw boom(); }, getVerificationMode: () => 'mock', countOutbox: null, includeDevLogin: false });
   const original = process.stderr.write;

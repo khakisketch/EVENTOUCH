@@ -5,6 +5,7 @@ const { loginHistoryPolicy, pruneLoginHistory } = require('./login-history');
 const crypto = require('node:crypto');
 const { sendJson, readJsonBody, failureMessage } = require('./http');
 const { createClientAddressResolver, developmentLoginEmail } = require('./runtime-security.ts');
+const { reportBackgroundError } = require('./request-observability.ts');
 const {
   LEGACY_ORG_ID,
   normalizeOrgId,
@@ -426,7 +427,9 @@ function createDatabaseAuth(database, options = {}) {
         rememberRefreshedSession(token, Math.max(1, Math.floor(Number(renewed.rows[0].remaining_seconds))));
       }
     } catch (error) {
-      // Renewal is a convenience: the request still has a valid session.
+      // Renewal is a convenience: the request still has a valid session. A
+      // failing database is not, so it earns one identifier-only line.
+      reportBackgroundError('session-renewal', error);
     }
   }
 

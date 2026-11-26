@@ -66,6 +66,22 @@ export function reportUnexpectedError(request: IncomingMessage, error: unknown):
   try { (known?.write ?? writeStderr)(`${JSON.stringify(line)}\n`); } catch { /* logging cannot change a committed outcome */ }
 }
 
+/**
+ * One stderr line for an unexpected failure outside an HTTP request (a
+ * background job, a renewal on the response path). Same rule as
+ * reportUnexpectedError: identifiers only, and errors that carry a status
+ * below 500 are expected business answers and stay silent.
+ */
+export function reportBackgroundError(where: string, error: unknown): void {
+  const fields = (error && typeof error === "object" ? error : {}) as
+    { status?: unknown; statusCode?: unknown; name?: unknown; code?: unknown };
+  const status = fields.status ?? fields.statusCode;
+  if (typeof status === "number" && status < 500) return;
+  const line = { type: "error", where: identifier(where) ?? "unknown",
+    name: identifier(fields.name) ?? "unknown", code: identifier(fields.code) };
+  try { writeStderr(`${JSON.stringify(line)}\n`); } catch { /* logging cannot change a committed outcome */ }
+}
+
 export function createRequestObservability({ env = process.env, write = writeStderr }:
   { env?: Environment; write?: (line: string) => unknown } = {}) {
   const startedAt = new Date().toISOString();
