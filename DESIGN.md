@@ -278,6 +278,17 @@ Reopened 2026-11-19 (owner: 얇은 선·작은 회색 글씨). 구성은 그대�
 
 Reopened 2026-11-20 (디자인 시스템 적용, C1): composition unchanged. The coverage band is flat (hairline, no grey box) with one bar segment per section, and a section with no photos is amber everywhere it appears (bar segment, dashed tile, `StatusPill` 비어 있음). Empty gallery uses `ConsoleEmptyState`. `evidence-photos.module.css` was rewritten without the dead pre-redesign rules and uses only tokens (weights 400/600/800, `--text-*`, `--r-*`).
 
+## 감사 개선 (2026-11-26)
+
+Reopened 2026-11-26 (owner: 감사에서 찾은 항목 모두 개선). Where this differs from a block below, this block wins.
+
+- Console menu: 입장 관리 leads the 당일 group, before 현장 모드; the landing preview draws the same rail. Menu search offers 기간 분석. Links name a destination by its menu label (참가자 화면, 참여 이벤트, 추첨·투표, 경품 지급, 참가자 명단). The dead "서비스 연동 · 준비 중" item is gone.
+- Settings: one "참가자 문의처가 없습니다" warning in every verification mode; where phone recovery is unavailable it says a guest who loses a ticket has no one to ask. The 보관 confirmation states that edits, messages and report corrections lock for good.
+- Staff and 입장 관리: an expired sign-in shows "다시 로그인" (new tab, typed input kept). Pending, waitlisted and unpaid scans read as needs-confirmation with who to ask; an exit for someone already out reads as information. On a re-entry card an event lead gets "이번 한 번 재입장" with a required reason; staff are told to ask the lead.
+- 현장 모드: 누적 입장 over approved people, 지금 안에 by the desk's rule, and 도착 대기 counting what the desks list.
+- 행사장 화면: guests never read operator instructions or press buttons; a lost connection is one small line over the last good frame.
+- 참가자: recovery says to check the applying number and shows the contact in every mode; the ticket says plainly whether re-entry is possible (amber when the desk decides); fees are "confirmed by the organizer", never paid in the product; approval and waitlist results are said to appear on the ticket screen; arrival moves focus to its result.
+
 ## 경품 지급 현황 확정 구성
 
 The owner approved this composition on 2026-11-14 (`apps/web/app/console/events/[id]/rewards/`, option V1). Change it only on a new owner decision; a redesign pass on another screen is not one. `tests/web-rewards-composition.test.cjs` guards it. This is the operator oversight list (blocked prizes, missing recipients, uncertain outcomes); handing a prize to a person at the venue belongs to the staff exit desk.
