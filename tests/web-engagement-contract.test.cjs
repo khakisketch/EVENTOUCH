@@ -124,8 +124,9 @@ test('web-console-shell-links-programs-between-operations-and-settings', () => {
   assert.match(navigation, /return `\$\{base\}\/programs`/);
   // Hub order is the operator's setup-to-live sequence: preparation (settings
   // through programs) before the onsite hub that holds operations.
-  assert.match(navigation, /pageIds: \["attendeePage", "content", "programs", "operations", "settings"\]/);
-  assert.match(navigation, /pageIds: \["live"\]/);
+  // Reopened 2026-11-26: 입장 관리 moved from 행사 준비 to the 당일 group, before 현장 모드.
+  assert.match(navigation, /pageIds: \["attendeePage", "content", "programs", "settings"\]/);
+  assert.match(navigation, /pageIds: \["operations", "live"\]/);
   const hubsBlock = navigation.slice(navigation.indexOf('EVENT_HUBS'));
   const prepareAt = hubsBlock.indexOf('"prepare"');
   const onsiteAt = hubsBlock.indexOf('"onsite"');

@@ -490,7 +490,8 @@ test('rewards desk filters its loaded list with search and status buckets', () =
   // Domain semantics survive the toolbar: company PENDING display/link,
   // feature-off gates, fulfill/cancel receipts, ARCHIVED/permission gates.
   assert.match(desk, /업체 당첨/u);
-  assert.match(desk, /추첨에서 수령자 지정/u);
+  // Reopened 2026-11-26: the link uses the menu name 추첨·투표.
+  assert.match(desk, /추첨·투표에서 수령자 지정/u);
   assert.match(desk, /경품 기능이 꺼져 있습니다/u);
   assert.match(desk, /rewardRecordMatches/u, 'fulfill/cancel receipts stay');
   assert.match(desk, /보관된 행사는 변경할 수 없습니다/u);

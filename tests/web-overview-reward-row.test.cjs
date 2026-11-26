@@ -29,7 +29,8 @@ test('the row is appended after every other task so it cannot become the primary
   const row = overview.slice(rewardAt, overview.indexOf('});', rewardAt));
   assert.match(row, /title: "경품 확인 필요"/);
   assert.match(row, /href: `\$\{base\}\/rewards`/);
-  assert.match(row, /action: "경품 지급 현황"/);
+  // Reopened 2026-11-26: the link uses the menu name of the destination.
+  assert.match(row, /action: "경품 지급",/);
 });
 
 // Reopened 2026-11-24 (owner: 경품 대기 한 줄, 링 필수 기준): a 경품 지급 대기 row joins the same list while live.

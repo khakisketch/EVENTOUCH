@@ -19,7 +19,10 @@ test('the console preview draws the real menu and an overview built around one e
   const preview = read('ProductPreview.tsx');
   const navigation = read('console/console-navigation.ts');
   const real = new Set([...navigation.matchAll(/label: "([^"]+)"/gu)].map((match) => match[1]));
-  const rail = ['운영 현황', '참가자 명단', '메시지', '참가자 페이지', '공지·안내', '참여 이벤트', '입장 관리', '행사 설정', '현장 모드', '결과 보고서'];
+  // The rail shows its own name for the merged attendee screen item.
+  for (const match of navigation.matchAll(/RAIL_LABELS[^=]*= \{ attendeePage: "([^"]+)"/gu)) real.add(match[1]);
+  // Reopened 2026-11-26: the preview shows the current rail (입장 관리 sits under 당일).
+  const rail = ['운영 현황', '참가자 명단', '메시지', '참가자 화면', '행사 설정', '입장 관리', '현장 모드', '결과 보고서'];
   for (const label of rail) {
     assert.ok(real.has(label), `${label} is a menu name of the product`);
     assert.ok(preview.includes(label), `${label} is in the drawn menu`);

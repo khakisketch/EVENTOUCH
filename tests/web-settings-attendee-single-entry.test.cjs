@@ -31,7 +31,8 @@ test('settings-attendee-single-entry: page editing lives only in the theme edito
   assert.match(theme, /attendee\.page\.save/);
   assert.match(theme, /attendee\.page\.publish/);
   assert.doesNotMatch(settings, /label: "참가자 페이지"/u);
-  assert.match(settings, /참가자 페이지 편집으로 이동/);
+  // Reopened 2026-11-26: the link uses the menu name 참가자 화면.
+  assert.match(settings, /참가자 화면으로 이동/);
   assert.match(settings, /\/console\/events\/\$\{encodeURIComponent\(eventId\)\}\/page/);
   assert.match(settings, /pagePublishedAt/);
   assert.match(settings, /최근 게시/);
@@ -69,7 +70,8 @@ test('settings-attendee-single-entry: zones stay in preparation order with deep-
     assert.ok(settings.includes(id), `deep-link anchor survives: ${id}`);
   }
   // The attendee-page supporting block is content, never a zone of its own.
-  assert.match(settings, /참가자 페이지 편집으로 이동/);
+  // Reopened 2026-11-26: the link uses the menu name 참가자 화면.
+  assert.match(settings, /참가자 화면으로 이동/);
   assert.doesNotMatch(settings, /label: "참가자 페이지"/u);
 });
 

@@ -87,8 +87,9 @@ test('navigation exposes rail order, root ids and existing routes', () => {
   assert.match(nav, /export const EVENT_PAGE_IDS: readonly ConsolePageId\[\] = EVENT_HUBS\.flatMap\(\(hub\) => hub\.pageIds\);/u, 'hubs own the order');
   for (const pages of [
     'pageIds: ["overview", "participants", "messages"]',
-    'pageIds: ["attendeePage", "content", "programs", "operations", "settings"]',
-    'pageIds: ["live"]',
+    // Reopened 2026-11-26: 입장 관리 moved from 행사 준비 to the 당일 group, before 현장 모드.
+    'pageIds: ["attendeePage", "content", "programs", "settings"]',
+    'pageIds: ["operations", "live"]',
     'pageIds: ["reports", "rewards", "photos", "analysis"]',
   ]) assert.ok(nav.includes(pages), `work group keeps ${pages}`);
   // Reopened 2026-11-20 (현장·참여 재구성): preparation, then the day-of mode, then results;

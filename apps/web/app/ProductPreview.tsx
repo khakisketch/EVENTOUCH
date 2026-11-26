@@ -8,8 +8,8 @@ type Variant = "console" | "live" | "home" | "ticket" | "staff" | "report";
 // four labelled groups, 운영 현황 first. Names here must stay product names.
 const RAIL: ReadonlyArray<readonly [string, readonly string[]]> = [
   ["운영", ["운영 현황", "참가자 명단", "메시지"]],
-  ["행사 준비", ["참가자 페이지", "공지·안내", "참여 이벤트", "입장 관리", "행사 설정"]],
-  ["당일", ["현장 모드"]],
+  ["행사 준비", ["참가자 화면", "행사 설정"]],
+  ["당일", ["입장 관리", "현장 모드"]],
   ["결과", ["결과 보고서"]],
 ];
 

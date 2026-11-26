@@ -2202,7 +2202,7 @@ function CreateDialog({
                 <span>종료 이후에는 참가자 승인 상태를 변경할 수 없습니다. 현재 상태 그대로 취소 제외 등록 집계에 포함됩니다.</span>
               ) : (
                 <ProductLink href={closeHandoffHref(`/console/events/${encodeURIComponent(eventId)}/participants?status=PENDING`, eventId)}>
-                  참가자에서 승인 처리하기
+                  참가자 명단에서 승인 처리하기
                 </ProductLink>
               )}
             </div>

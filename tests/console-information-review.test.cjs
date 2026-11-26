@@ -44,7 +44,7 @@ test("reward list keeps connection-only gifts in 확인 필요 with their own pi
 
 test("program draw box points at the quota draw screen and quiz grading names its rule", () => {
   const programs = read("console/events/[id]/programs/ProgramsWorkspace.tsx");
-  assert.match(programs, /쿼터·등급·업체 대상 추첨과 경품 연동은\{" "\}\s*<(?:Link|ProductLink) href=\{props\.closeHref\(`\/console\/events\/\$\{encodeURIComponent\(props\.eventId\)\}\/draws`\)\}>추첨<\/(?:Link|ProductLink)> 화면에서 관리합니다/u);
+  assert.match(programs, /쿼터·등급·업체 대상 추첨과 경품 연동은\{" "\}\s*<(?:Link|ProductLink) href=\{props\.closeHref\(`\/console\/events\/\$\{encodeURIComponent\(props\.eventId\)\}\/draws`\)\}>추첨·투표<\/(?:Link|ProductLink)> 화면에서 관리합니다/u); // Reopened 2026-11-26: the link uses the menu name 추첨·투표.
   assert.match(programs, /자동 비교는 앞뒤 공백을 제외한 완전 일치 기준입니다/u);
 });
 

@@ -2047,8 +2047,15 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           {!state.participantContact && state.recoveryContact ? (
             <p className={styles.help} role="note">문의처가 비어 있어 장소 안내의 연락처({state.recoveryContact})를 대신 보여 줍니다.</p>
           ) : null}
-          {!state.participantContact && !state.recoveryContact && !(isRecoveryBlocked(verificationMode)) ? (
-            <ConsoleFeedback kind="warning">참가자 문의처가 없습니다. 티켓을 잃은 참가자가 연락할 곳이 없습니다.</ConsoleFeedback>
+          {!state.participantContact && !state.recoveryContact ? (
+            <ConsoleFeedback kind="warning">
+              {isRecoveryBlocked(verificationMode) ? (
+                <>
+                  <p className={styles.intakeWarningText}>참가자 문의처가 없습니다. 문자로 티켓을 다시 연결할 수 없어, 문의처를 저장하기 전까지 티켓을 잃은 참가자는 물어볼 곳이 없습니다.</p>
+                  <ProductLink variant="ghost" className={styles.intakeWarningLink} href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내의 문의 정보</ProductLink>
+                </>
+              ) : "참가자 문의처가 없습니다. 티켓을 잃은 참가자가 연락할 곳이 없습니다."}
+            </ConsoleFeedback>
           ) : null}
         </div>
         {!canWriteIntake ? (
@@ -2092,12 +2099,6 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
             </>
           ) : null}
         </div>
-        {isRecoveryBlocked(verificationMode) && !state.recoveryContact ? (
-          <ConsoleFeedback kind="warning">
-            <p className={styles.intakeWarningText}>문자로 티켓을 다시 연결할 수 없고 참가자에게 표시되는 문의처도 없습니다. 탭을 잃은 참가자가 도움을 받을 수 있도록 위의 참가자 문의처를 입력하세요.</p>
-            <ProductLink variant="ghost" className={styles.intakeWarningLink} href={`/console/events/${encodeURIComponent(eventId)}/content#content-venue`}>장소 안내의 문의 정보</ProductLink>
-          </ConsoleFeedback>
-        ) : null}
         {currentStage === "DRAFT" && !state.registrationOpen ? (
           <p className={styles.help} role="note">
             공개 접수: 닫힘 — 기획 단계에서는 공개 페이지가 열리지 않습니다. 접수를 열려면 양식을 게시하고,{" "}
@@ -2366,7 +2367,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
           푸터 뒤의 종속 안내로 둔다. 두 번째 primary를 두지 않는다. */}
       <details className={styles.pageDisclosure} id="settings-page">
         <summary data-disclosure-indicator="">
-          참가자 페이지 · 선택 사항 · {state.pagePublishedAt
+          참가자 화면 · 선택 사항 · {state.pagePublishedAt
             ? `게시 버전 ${state.pagePublishedVersion}${state.pageDraftVersion > state.pagePublishedVersion ? " · 새 초안" : ""}`
             : `초안 ${state.pageDraftVersion} · 미게시`}
         </summary>
@@ -2377,7 +2378,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               : `초안 ${state.pageDraftVersion} · 아직 게시하지 않음`}
           </p>
           <p className={styles.help}>
-            소개·강조색·노출 항목과 디자인은 참가자 페이지 편집기에서 저장·게시합니다. 이 화면에서는 바꾸지 않습니다.
+            소개·강조색·노출 항목과 디자인은 참가자 화면에서 저장·게시합니다. 이 화면에서는 바꾸지 않습니다.
             게시하지 않아도 공개·접수·진행에 영향이 없습니다.
           </p>
           <p>
@@ -2385,7 +2386,7 @@ export default function SettingsWorkspace({ eventId }: { eventId: string }) {
               className="button button-secondary"
               href={`/console/events/${encodeURIComponent(eventId)}/page`}
             >
-              참가자 페이지 편집으로 이동
+              참가자 화면으로 이동
             </ProductLink>
           </p>
         </div>

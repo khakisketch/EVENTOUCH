@@ -146,5 +146,6 @@ test('web-console-shell-groups-content-before-field-programs-and-settings', () =
   assert.match(navigation, /return `\$\{base\}\/content`/);
   // Preparation hub order: settings opens the setup sequence, content feeds
   // programs, so content sits before programs inside one hub.
-  assert.match(navigation, /pageIds: \["attendeePage", "content", "programs", "operations", "settings"\]/);
+  // Reopened 2026-11-26: 입장 관리 moved to the 당일 group.
+  assert.match(navigation, /pageIds: \["attendeePage", "content", "programs", "settings"\]/);
 });

@@ -132,13 +132,14 @@ test("the optional page disclosure sits after the return footer, not as a sectio
   // a ConsoleSection heading, placed after the return footer.
   assert.match(source, /<details className=\{styles\.pageDisclosure\} id="settings-page"/u);
   assert.doesNotMatch(source, /headingId="settings-page"/u);
-  assert.match(source, /참가자 페이지 · 선택 사항/u);
+  // Reopened 2026-11-26: the disclosure and its link use the menu name 참가자 화면.
+  assert.match(source, /참가자 화면 · 선택 사항/u);
   assert.match(source, /현황으로 돌아가기/u);
   assert.ok(
     source.indexOf("현황으로 돌아가기") < source.indexOf('id="settings-page"'),
     "return footer precedes the optional disclosure"
   );
-  assert.match(source, /참가자 페이지 편집으로 이동/u);
+  assert.match(source, /참가자 화면으로 이동/u);
   assert.match(source, /\/console\/events\/\$\{encodeURIComponent\(eventId\)\}\/page/);
   assert.match(source, /pagePublishedAt/u);
   assert.match(source, /최근 게시/u);

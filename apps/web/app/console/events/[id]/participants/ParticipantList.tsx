@@ -1792,7 +1792,7 @@ export default function ParticipantList({ eventId }: { eventId: string }) {
       pendingRewardRef.current = null;
       setRewardUncertain(false);
       setApprovedHandoffIds(null);
-      setNotice(`${attempt.target.name}님의 경품을 등록했습니다. 경품 화면에서 지급 처리하세요.`);
+      setNotice(`${attempt.target.name}님의 경품을 등록했습니다. 경품 지급에서 지급 처리하세요.`);
       setRewardTarget(null);
       setRewardDraft({ name: "", method: "ONSITE" });
       rewardDraftOwnerRef.current = null;

@@ -37,7 +37,8 @@ test('a blocked prize never offers 수령 처리; cancel hides inside the row; c
   assert.match(rewards, /<ConsoleConfirm/u, 'fulfil and cancel keep their in-place confirmation');
   assert.match(rewards, /reward-recovery-heading/u, 'uncertain-outcome recovery stays at the top');
   assert.match(rewards, /id=\{`reward-participant-\$\{reward\.id\}`\} role="note"/u, 'the full reason sentence stays readable');
-  assert.match(rewards, /추첨에서 수령자 지정/u);
+  // Reopened 2026-11-26: the link uses the menu name 추첨·투표.
+  assert.match(rewards, /추첨·투표에서 수령자 지정/u);
   assert.match(rewards, /참가자 명단에서 확인/u);
   assert.match(rewards, /기프티콘 지급\(모의\)/u, 'gift fulfilment still says mock');
 });

@@ -663,7 +663,7 @@ export default function RewardsWorkspace({ eventId }: { eventId: string }) {
           ) : needsLink ? (
             <ProductLink variant="secondary" href={participantsHref} aria-describedby={`reward-participant-${reward.id}`}>참가자 명단에서 확인 ›</ProductLink>
           ) : unassigned && canAct && state.featureOn ? (
-            <ProductLink variant="secondary" href={drawHref}>추첨에서 수령자 지정 ›</ProductLink>
+            <ProductLink variant="secondary" href={drawHref}>추첨·투표에서 수령자 지정 ›</ProductLink>
           ) : null}
           <ProductButton
             type="button"

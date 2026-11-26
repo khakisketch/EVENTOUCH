@@ -593,7 +593,7 @@ export default function ProgramsWorkspace({ eventId, afterHeader }: { eventId: s
     if (!handoff) return;
     handoffAppliedRef.current = eventId;
     const fromOverview = url.searchParams.get("from") === "overview";
-    const returnTo = { label: fromOverview ? "운영 현황으로" : "참여 진행으로", href: fromOverview ? `/console/events/${encodeURIComponent(eventId)}` : `/console/events/${encodeURIComponent(eventId)}/operations#ops-participation` };
+    const returnTo = { label: fromOverview ? "운영 현황으로" : "현장 모드로", href: fromOverview ? `/console/events/${encodeURIComponent(eventId)}` : `/console/events/${encodeURIComponent(eventId)}/live` };
     ["review", "module", "status", "from"].forEach(key => url.searchParams.delete(key));
     window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
     if (handoff.kind === "invalid") {
@@ -1775,7 +1775,7 @@ export default function ProgramsWorkspace({ eventId, afterHeader }: { eventId: s
   const reviewPosts = state.kind === "ready" ? state.posts.filter((post) => post.status === "PENDING").length : 0;
   const reviewTotal = reviewQuestions + reviewPhotos + reviewPosts;
   const runningCount = state.modules.filter((module) => module.status === "OPEN").length;
-  const returnBack = handoffReturn?.href ?? `/console/events/${encodeURIComponent(eventId)}/operations#ops-participation`;
+  const returnBack = handoffReturn?.href ?? `/console/events/${encodeURIComponent(eventId)}/operations`;
   const returnLabel = handoffReturn?.label ?? "입장 관리";
 
   return (
@@ -2064,7 +2064,7 @@ export default function ProgramsWorkspace({ eventId, afterHeader }: { eventId: s
               />
             )}
             <p className={styles.drawsLink}>
-              <ProductLink variant="ghost" href={closeHref(`/console/events/${encodeURIComponent(eventId)}/draws`)}>무대 운영 화면 (추첨·룰렛·순위 투표)</ProductLink>
+              <ProductLink variant="ghost" href={closeHref(`/console/events/${encodeURIComponent(eventId)}/draws`)}>추첨·투표 (무대 운영·룰렛)</ProductLink>
             </p>
           </section>
         ) : (
@@ -2452,7 +2452,7 @@ function ModuleCard(props: {
           )}
           <p className={styles.help}>
             쿼터·등급·업체 대상 추첨과 경품 연동은{" "}
-            <ProductLink href={props.closeHref(`/console/events/${encodeURIComponent(props.eventId)}/draws`)}>추첨</ProductLink> 화면에서 관리합니다.
+            <ProductLink href={props.closeHref(`/console/events/${encodeURIComponent(props.eventId)}/draws`)}>추첨·투표</ProductLink> 화면에서 관리합니다.
           </p>
         </div>
       ) : null}

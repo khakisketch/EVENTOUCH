@@ -32,7 +32,6 @@ type ShellData = {
   canSeeEvents: boolean;
   canSeeClients: boolean;
   canManageTeam: boolean;
-  canManageIntegrations: boolean;
   canManageEvidencePhotos: boolean;
   scopedEventId: string | null;
   currentEventFeatures: string[];
@@ -324,7 +323,6 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
               orgPermissions.includes("events.view") || orgPermissions.includes("events.all"),
             canSeeClients: hasOrgPermission("clients.manage"),
             canManageTeam: hasOrgPermission("team.manage"),
-            canManageIntegrations: hasOrgPermission("integrations.manage"),
             canManageEvidencePhotos: role === "AGENCY" || (role === "MANAGER" && hasCurrentMembership),
             scopedEventId: eventId,
             currentEventFeatures: Array.isArray(currentEvent?.features)
@@ -454,7 +452,6 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
   const canSeeEvents = shellData?.canSeeEvents ?? false;
   const canSeeClients = shellData?.canSeeClients ?? false;
   const canManageTeam = shellData?.canManageTeam ?? false;
-  const canManageIntegrations = shellData?.canManageIntegrations ?? false;
   // The top "메뉴" trigger only exists when at least one permitted
   // destination exists. An event is a destination too: an event-scoped
   // operator without the organization roots still needs the event hubs.
@@ -1073,7 +1070,6 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
         canSeeEvents ? "행사" : null,
         canSeeClients ? "고객사" : null,
         canManageTeam ? "팀·권한" : null,
-        canManageIntegrations ? "서비스 연동" : null,
       ].filter((label): label is string => label !== null).join(" · ") || "조직 메뉴 권한 없음"
     : "확인 중";
 
@@ -1133,12 +1129,7 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
               <span>{CONSOLE_PAGES.team.label}</span>
             </Link>
           ) : null}
-          {canManageIntegrations ? (
-            <ProductButton type="button" className="operator-menu-item" disabled>
-              <span>서비스 연동</span><span className="operator-menu-status">준비 중</span>
-            </ProductButton>
-          ) : null}
-          {(canManageTeam || canManageIntegrations) ? (
+          {canManageTeam ? (
             <div className="operator-menu-divider" aria-hidden="true" />
           ) : null}
           <ProductButton

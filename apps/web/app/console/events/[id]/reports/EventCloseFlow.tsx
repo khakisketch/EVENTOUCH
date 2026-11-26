@@ -36,7 +36,7 @@ export default function EventCloseFlow({ eventId, inputs, loadedAt, report, hasR
     : step === "features"
       ? { label: "프로그램 기능 설정 확인하기", href: href(`${base}/settings?closeStep=programs#settings-features`), detail: "기능이 꺼진 진행 프로그램이 있습니다. 해당 기능을 켜서 저장한 뒤 프로그램을 닫으세요. 자동으로 활성화하지 않습니다." }
       : step === "programs"
-        ? { label: "참여 콘텐츠 닫기", href: href(`${base}/programs`), detail: "진행 중인 참여 콘텐츠를 모두 닫은 뒤 이 화면의 ‘다음’으로 바로 이어가세요." }
+        ? { label: "참여 이벤트 닫기", href: href(`${base}/programs`), detail: "진행 중인 참여 콘텐츠를 모두 닫은 뒤 이 화면의 ‘다음’으로 바로 이어가세요." }
         : step === "intake"
           ? { label: "참가 접수 닫기", href: href(`${base}/settings?closeStep=intake#settings-intake`), detail: "새 신청을 받지 않도록 접수를 닫으세요. 같은 설정 화면에서 진행 단계도 확인할 수 있습니다." }
           : step === "stage"
@@ -100,8 +100,8 @@ export default function EventCloseFlow({ eventId, inputs, loadedAt, report, hasR
           <div><dt>진행 프로그램</dt><dd>{inputs.openModules.length}개</dd></div>
         </dl>
         <ol className={styles.archiveList}>
-          <li>승인 대기 {inputs.pending}명 — 참가 확정과 구분되며 취소 제외 등록 집계에는 포함됩니다. 종료 전에 필요한 처리를 마치세요. {!["ENDED", "ARCHIVED"].includes(inputs.stage) ? <ProductLink variant="secondary" href={href(`${base}/participants?status=PENDING`)}>참가자에서 승인 처리하기</ProductLink> : "종료 이후 참가자 변경 불가"}</li>
-          <li>{inputs.openModules.length ? `진행 중인 참여 콘텐츠 ${inputs.openModules.length}개 — 보관 전에 모두 닫기가 필요합니다: ${inputs.openModules.map((module) => module.name).join(" · ")}` : "진행 중인 참여 콘텐츠 없음"} <ProductLink variant="secondary" href={href(`${base}/programs`)}>참여 콘텐츠에서 닫기</ProductLink> <ProductLink variant="secondary" href={href(`${base}/draws`)}>추첨·투표에서 닫기</ProductLink></li>
+          <li>승인 대기 {inputs.pending}명 — 참가 확정과 구분되며 취소 제외 등록 집계에는 포함됩니다. 종료 전에 필요한 처리를 마치세요. {!["ENDED", "ARCHIVED"].includes(inputs.stage) ? <ProductLink variant="secondary" href={href(`${base}/participants?status=PENDING`)}>참가자 명단에서 승인 처리하기</ProductLink> : "종료 이후 참가자 변경 불가"}</li>
+          <li>{inputs.openModules.length ? `진행 중인 참여 콘텐츠 ${inputs.openModules.length}개 — 보관 전에 모두 닫기가 필요합니다: ${inputs.openModules.map((module) => module.name).join(" · ")}` : "진행 중인 참여 콘텐츠 없음"} <ProductLink variant="secondary" href={href(`${base}/programs`)}>참여 이벤트에서 닫기</ProductLink> <ProductLink variant="secondary" href={href(`${base}/draws`)}>추첨·투표에서 닫기</ProductLink></li>
           <li>{inputs.registrationOpen ? "참가 접수 열림 — 보관 전에 접수 닫기가 필요합니다." : "참가 접수 닫힘"} <ProductLink variant="secondary" href={href(`${base}/settings#settings-intake`)}>참가 접수에서 닫기</ProductLink></li>
           <li>현재 단계: {eventStageLabel(inputs.stage)} <ProductLink variant="secondary" href={href(`${base}/settings#settings-stage`)}>진행 단계에서 확인·전환</ProductLink></li>
           <li>보고서 생성·검토·공유 완료 기록 — 초안도 집계가 고정됩니다. 편집·공유 완료 기록은 집계를 갱신하지 않습니다. 현재 집계가 필요하면 새 보고서나 ‘현재 집계를 새로 반영’하는 후속 버전을 만드세요.</li>

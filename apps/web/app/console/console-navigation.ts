@@ -92,8 +92,9 @@ export const CONSOLE_PAGES: Record<ConsolePageId, ConsolePageMeta> = {
  */
 export const EVENT_HUBS: readonly ConsoleHub[] = [
   { id: "today", label: "운영", pageIds: ["overview", "participants", "messages"], defaultPageId: "overview" },
-  { id: "prepare", label: "행사 준비", pageIds: ["attendeePage", "content", "programs", "operations", "settings"], defaultPageId: "attendeePage" },
-  { id: "onsite", label: "당일", pageIds: ["live"], defaultPageId: "live" },
+  { id: "prepare", label: "행사 준비", pageIds: ["attendeePage", "content", "programs", "settings"], defaultPageId: "attendeePage" },
+  // Reopened 2026-11-26: 입장 관리 is used on the day, so it leads the 당일 group, before 현장 모드.
+  { id: "onsite", label: "당일", pageIds: ["operations", "live"], defaultPageId: "live" },
   { id: "results", label: "결과", pageIds: ["reports", "rewards", "photos", "analysis"], defaultPageId: "reports" },
 ];
 
@@ -166,6 +167,7 @@ const SETTINGS_MENU_SHORTCUTS = [
  * Search can lead to a section of a visible page without adding more rail items.
  * Reopened 2026-11-21: 공지·안내 and 참여 이벤트 no longer have rail items, so a
  * search that matches them leads straight to their tab of 참가자 화면.
+ * Reopened 2026-11-26: 기간 분석 has no rail item either; a matching search leads to it from the 결과 group.
  */
 export function eventMenuShortcuts(pageId: ConsolePageId, eventId: string | undefined, query: string, features: readonly string[] = []) {
   if (!query.trim()) return [];
@@ -178,6 +180,11 @@ export function eventMenuShortcuts(pageId: ConsolePageId, eventId: string | unde
         const href = consolePageHref(id, eventId);
         return href ? [{ label: CONSOLE_PAGES[id].label, href }] : [];
       });
+  }
+  if (pageId === "reports") {
+    const href = consolePageHref("analysis", eventId);
+    const { label } = CONSOLE_PAGES.analysis;
+    return href && matchesMenuWords(`${label} ${EVENT_MENU_TERMS.analysis ?? ""}`, query) ? [{ label, href }] : [];
   }
   if (pageId !== "settings") return [];
   const href = consolePageHref(pageId, eventId);

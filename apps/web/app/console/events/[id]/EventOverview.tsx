@@ -972,7 +972,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
         title: "경품 확인 필요",
         count: `${overview.rewardAttention}건`,
         hint: "수령자나 참가 상태를 확인해야 지급할 수 있는 경품이 있습니다.",
-        action: "경품 지급 현황",
+        action: "경품 지급",
         href: `${base}/rewards`,
       });
     }
@@ -1029,7 +1029,7 @@ export default function EventOverview({ eventId }: { eventId: string }) {
     },
     {
       key: "page",
-      label: "참가자 페이지",
+      label: "참가자 화면",
       state: overview.pagePublished ? "done" : "optional",
       text: overview.pagePublished ? (overview.pageDraftDiffers ? "게시됨 · 새 초안 있음" : "게시됨") : "기본 디자인 사용 중 · 꾸미기는 선택 사항입니다",
       action: "디자인 편집",

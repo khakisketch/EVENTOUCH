@@ -1502,7 +1502,7 @@ export default function ContentWorkspace({ eventId, afterHeader }: { eventId: st
         title: publication.published ? "공지 게시 검토" : "공지 게시 내리기",
         changes: noticeChanges(item, publication.published), stale: item.version !== publication.version || destinationsChanged, destinationsChanged,
         destinations: [
-          { label: "행사 안내 · 공지", detail: showNotice ? hidden || "게시 후 공개됩니다." : "참가자 페이지 설정에서 공지 표시가 꺼져 있어 현재 보이지 않습니다.", href: `${eventUrl}#public-notices`, warning: !showNotice },
+          { label: "행사 안내 · 공지", detail: showNotice ? hidden || "게시 후 공개됩니다." : "참가자 화면 설정에서 공지 표시가 꺼져 있어 현재 보이지 않습니다.", href: `${eventUrl}#public-notices`, warning: !showNotice },
           { label: "참가자 홈 · 공지", detail: homeHidden ? "참가자 페이지의 공지 메뉴가 숨겨져 있습니다. 게시 후에도 메뉴를 켜야 보입니다." : hidden || "게시 후 같은 내용이 보입니다.", href: `${eventUrl}/home`, warning: homeHidden },
           { label: "행사장 전광판", detail: selected && state.screenEnabled
             ? publication.published ? "이 공지가 출력으로 선택되어 있어 게시하면 전광판 내용도 즉시 바뀝니다." : "이 공지가 출력으로 선택되어 있습니다. 게시를 내리면 전광판에서도 공지가 사라집니다."
@@ -1516,12 +1516,12 @@ export default function ContentWorkspace({ eventId, afterHeader }: { eventId: st
       if (!item) return null;
       const visible = state.publishedPage.showPrograms !== false;
       return { title: publication.published ? "일정 게시 검토" : "일정 게시 내리기", changes: programChanges(item, publication.published), stale: item.version !== publication.version || destinationsChanged, destinationsChanged,
-        destinations: [{ label: "행사 안내 · 프로그램", detail: visible ? hidden || "게시하면 행사 안내의 프로그램 일정과 첨부 자료에 반영됩니다." : "참가자 페이지 설정에서 프로그램 표시가 꺼져 있어 현재 보이지 않습니다.", href: `${eventUrl}#public-program`, warning: !visible }] };
+        destinations: [{ label: "행사 안내 · 프로그램", detail: visible ? hidden || "게시하면 행사 안내의 프로그램 일정과 첨부 자료에 반영됩니다." : "참가자 화면 설정에서 프로그램 표시가 꺼져 있어 현재 보이지 않습니다.", href: `${eventUrl}#public-program`, warning: !visible }] };
     }
     const venueEnabled = state.features.includes("venue");
     const visible = venueEnabled && state.publishedPage.showVenue !== false;
     return { title: "장소 안내 게시 검토", changes: venueChanges(state.venue), stale: state.venue.version !== publication.version || destinationsChanged, destinationsChanged,
-      destinations: [{ label: "행사 안내 · 장소 안내", detail: visible ? "장소 문구와 안내도가 행사 안내에 반영됩니다. 초안의 안내도 파일은 게시 전까지 공개되지 않습니다." : !venueEnabled ? "행사 설정에서 장소 안내 기능이 꺼져 있어 현재 보이지 않습니다." : "참가자 페이지 설정에서 장소 안내 표시가 꺼져 있어 현재 보이지 않습니다.", href: `${eventUrl}#public-venue`, warning: !visible }] };
+      destinations: [{ label: "행사 안내 · 장소 안내", detail: visible ? "장소 문구와 안내도가 행사 안내에 반영됩니다. 초안의 안내도 파일은 게시 전까지 공개되지 않습니다." : !venueEnabled ? "행사 설정에서 장소 안내 기능이 꺼져 있어 현재 보이지 않습니다." : "참가자 화면 설정에서 장소 안내 표시가 꺼져 있어 현재 보이지 않습니다.", href: `${eventUrl}#public-venue`, warning: !visible }] };
   }
 
   async function applyPublication() {
