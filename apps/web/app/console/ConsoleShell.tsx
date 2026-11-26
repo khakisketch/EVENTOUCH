@@ -16,7 +16,7 @@ import EventMenuSearch from "./console-ui/EventMenuSearch";
 import EventSwitcher from "./console-ui/EventSwitcher";
 import { ConsolePageSkeleton } from "./console-ui/ConsoleSkeleton";
 import { useConsoleLeaveConfirmation } from "./console-draft-guard";
-import { consoleFetch, invalidateConsoleReads, subscribeConsoleFreshness, warmConsoleRead } from "../../lib/console-api";
+import { consoleFetch, invalidateConsoleReads, SESSION_EXPIRED_EVENT, subscribeConsoleFreshness, warmConsoleRead } from "../../lib/console-api";
 import freshnessStyles from "./console-ui/freshness.module.css";
 import OrganizationSwitcher, { OrganizationContextNotice } from "../OrganizationSwitcher";
 import { ensureOperatorContext, getOperatorContextSnapshot, isOrganizationContextBlock, isOrganizationSelectionRequired, resetOperatorContext } from "../../lib/operator-context";
@@ -354,6 +354,17 @@ export default function ConsoleShell({ children }: { children: React.ReactNode }
       cancelled = true;
     };
   }, [eventId, router, shellTick, organization.context?.contextVersion]);
+
+  // Any console read or write that answers 401 raises one signal (see
+  // lib/console-api.ts). Screens keep their own recovery text; the shell
+  // sends the operator to the login screen with this address as the way back.
+  useEffect(() => {
+    const goToLogin = () => {
+      router.replace(loginHrefForLocation(window.location.pathname, window.location.search));
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, goToLogin);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, goToLogin);
+  }, [router]);
 
   useEffect(() => {
     if (!eventId || shellData?.scopedEventId !== eventId || !shellData.canAccessCurrentEvent ||

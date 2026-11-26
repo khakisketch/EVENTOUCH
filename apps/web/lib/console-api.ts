@@ -186,7 +186,26 @@ async function checkSharedMeAuthority(response: Response): Promise<Response> {
   throw supersededMeError();
 }
 
+// A 401 from a console read or write means the sign-in ended while the screen
+// was open. Each screen already shows its own recovery text, but nothing moved
+// the operator back to the login screen, so every retry failed the same way.
+// One shell-level signal does that with the current address kept as the return
+// path. The login and session endpoints are excluded: their 401 is an answer
+// the caller handles, not an ended session.
+export const SESSION_EXPIRED_EVENT = "eventouch:session-expired";
+
+function reportEndedSession(input: string, response: Response): Response {
+  if (response.status !== 401 || typeof window === "undefined") return response;
+  if (/^\/api\/auth\/(login|logout|me|setup|organizations)/.test(input)) return response;
+  window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+  return response;
+}
+
 export async function consoleFetch(input: string, init?: RequestInit): Promise<Response> {
+  return reportEndedSession(input, await consoleFetchResponse(input, init));
+}
+
+async function consoleFetchResponse(input: string, init?: RequestInit): Promise<Response> {
   ensureOrgSubscribed();
   const method = (init?.method ?? "GET").toUpperCase();
   if (typeof window === "undefined") return fetch(input, init);
