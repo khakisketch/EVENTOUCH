@@ -8,6 +8,7 @@ const axeSource = require('axe-core').source;
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { startAuditFixture } = require('./audit-fixture.cjs');
+const { settleLayout } = require('./ui-journey-helpers.cjs');
 const before = process.argv.includes('--before');
 let stage = 'setup';
 
@@ -97,6 +98,8 @@ async function main() {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: path.join(out, 'client-unconfirmed-390.png'), fullPage: true });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
+    // Reopened 2026-11-26: colour contrast is sampled mid-transition (the dialog fades in) unless the page has settled first.
+    await settleLayout(page);
     await page.evaluate(axeSource);
     assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations.filter((v) => ['serious', 'critical'].includes(v.impact)).map((v) => v.id)), []);
     const clientPosts = clientIds.length;
