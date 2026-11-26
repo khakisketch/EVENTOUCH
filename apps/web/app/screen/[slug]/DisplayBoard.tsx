@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import ProductLink from "../../ui/ProductLink";
-import ProductButton from "../../ui/ProductButton";
 import drawStyles from "./draw-stage.module.css";
 import stageStyles from "./board-stage.module.css";
 import { richPlainText } from "../../../lib/rich-text";
@@ -12,6 +11,9 @@ import JoinCard from "./JoinCard";
 // Venue-screen status vocabulary (design-system application 2026-11-20): every
 // state is an icon, words and a tone on the dark stage; colour never carries
 // the meaning alone. The stale notice keeps its role and text for the audits.
+// Reopened 2026-11-26: guests read this screen, so it gives no operator
+// instructions and no refresh control (it polls by itself), and a stale
+// connection is only a small quiet line.
 function StaleNotice({ children }: { children: string }) {
   return (
     <p className={`display-stale ${stageStyles.stale}`} role="status">
@@ -84,7 +86,7 @@ type BoardData = {
 type BoardState =
   | { kind: "loading" }
   | { kind: "missing" }
-  | { kind: "failed"; message: string }
+  | { kind: "failed" }
   | { kind: "disabled"; stale: boolean }
   | { kind: "ready"; data: BoardData; frame: number; frameSince: number; stale: boolean };
 
@@ -451,10 +453,6 @@ function NeutralRouletteWheel({ className, spinning = false }: { className?: str
 export default function DisplayBoard({ slug, publicBase = null }: { slug: string; publicBase?: string | null }) {
   const [state, setState] = useState<BoardState>({ kind: "loading" });
   const [revealId, setRevealId] = useState<string | null>(null);
-  // Manual recovery trigger: the poll loop already retries on its own, but a
-  // staffer standing in front of the venue screen needs a visible control
-  // that fetches now instead of waiting out the next interval.
-  const [retryTick, setRetryTick] = useState(0);
   // Server clock for the "in progress" line: the response's Date header gives
   // the offset from this screen's clock; a minute-scale highlight needs no more.
   const serverOffsetRef = useRef(0);
@@ -465,9 +463,6 @@ export default function DisplayBoard({ slug, publicBase = null }: { slug: string
     const id = window.setInterval(tick, 30000);
     return () => window.clearInterval(id);
   }, []);
-  function refreshNow() {
-    setRetryTick((tick) => tick + 1);
-  }
   const displayedDrawIdRef = useRef<string | null | undefined>(undefined);
   const visibleDrawReady = state.kind === "ready" && (
     state.data.display.type === "draw" || state.data.modules.some((module) => module.type === "draw")
@@ -489,10 +484,10 @@ export default function DisplayBoard({ slug, publicBase = null }: { slug: string
     let timer: number | null = null;
     let inFlight: AbortController | null = null;
     let backoff = false;
-    function markUnavailable(message: string) {
+    function markUnavailable() {
       setState((prev) => prev.kind === "ready" || prev.kind === "disabled"
         ? { ...prev, stale: true }
-        : { kind: "failed", message });
+        : { kind: "failed" });
     }
     function scheduleNext() {
       if (stopped) return;
@@ -527,7 +522,7 @@ export default function DisplayBoard({ slug, publicBase = null }: { slug: string
         }
         if (!res.ok) {
           failed = true;
-          markUnavailable("화면 정보를 불러오지 못했습니다.");
+          markUnavailable();
           return;
         }
         const serverDate = Date.parse(res.headers.get("date") ?? "");
@@ -568,10 +563,7 @@ export default function DisplayBoard({ slug, publicBase = null }: { slug: string
         if (!stopped) {
           // A failed poll keeps the last good frame: a venue screen must
           // never go blank on a transient network drop.
-          const message = controller.signal.aborted
-            ? "화면 응답이 지연되고 있습니다. 다시 시도하세요."
-            : "연결하지 못했습니다. 다시 시도하세요.";
-          markUnavailable(message);
+          markUnavailable();
         }
       } finally {
         window.clearTimeout(timeout);
@@ -597,7 +589,7 @@ export default function DisplayBoard({ slug, publicBase = null }: { slug: string
       document.removeEventListener("visibilitychange", onVisibilityChange);
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [slug, pollDelay, retryTick]);
+  }, [slug, pollDelay]);
 
   if (state.kind === "loading") {
     return (
@@ -612,7 +604,7 @@ export default function DisplayBoard({ slug, publicBase = null }: { slug: string
       <section className={stageStyles.stateStage}>
         <StateTile tone="danger" />
         <h1>행사를 찾을 수 없습니다</h1>
-        <p>출력 주소를 확인하세요.</p>
+        <p>표시할 행사 화면이 없습니다.</p>
         <p>
           <ProductLink className="button button-secondary" href="/">처음으로</ProductLink>
         </p>
@@ -621,17 +613,11 @@ export default function DisplayBoard({ slug, publicBase = null }: { slug: string
   }
   if (state.kind === "failed") {
     // First load never produced a frame, so there is nothing to keep: the
-    // poll loop retries on its own, and this button fetches now for the
-    // staffer standing in front of the screen.
+    // poll loop retries on its own.
     return (
       <section className={stageStyles.stateStage} aria-label="화면 오류">
-        <StateTile tone="danger" />
-        <p role="alert">{state.message}</p>
-        <p>
-          <ProductButton type="button" className="button button-secondary" onClick={refreshNow}>
-            다시 시도
-          </ProductButton>
-        </p>
+        <StateTile tone="info" />
+        <p role="status">잠시 후 화면이 표시됩니다.</p>
       </section>
     );
   }
@@ -639,12 +625,9 @@ export default function DisplayBoard({ slug, publicBase = null }: { slug: string
     return (
       <section className={stageStyles.stateStage} aria-labelledby="display-disabled-heading">
         <StateTile tone="info" />
-        <h1 id="display-disabled-heading">행사장 출력이 꺼져 있습니다</h1>
-        <p>운영자가 행사 설정에서 출력을 켜면 화면이 자동으로 표시됩니다.</p>
-        {state.stale ? <>
-          <StaleNotice>연결 확인 중 · 마지막으로 확인한 상태입니다</StaleNotice>
-          <p><ProductButton type="button" className="button button-secondary" onClick={refreshNow}>새로고침</ProductButton></p>
-        </> : null}
+        <h1 id="display-disabled-heading">잠시 후 화면이 표시됩니다</h1>
+        <p>행사 안내를 준비하고 있습니다.</p>
+        {state.stale ? <StaleNotice>연결 확인 중 · 마지막으로 확인한 상태입니다</StaleNotice> : null}
       </section>
     );
   }
@@ -759,11 +742,6 @@ export default function DisplayBoard({ slug, publicBase = null }: { slug: string
         <header className="display-header">
           {!drawSelected ? <span className="display-brand">EVENTOUCH</span> : null}
           {stale ? <StaleNotice>연결 확인 중 · 마지막 화면입니다</StaleNotice> : null}
-          {stale ? (
-            <ProductButton type="button" className="button button-secondary" onClick={refreshNow}>
-              새로고침
-            </ProductButton>
-          ) : null}
           <p className="display-date">{data.date}</p>
         </header>
         <div
@@ -838,13 +816,6 @@ export default function DisplayBoard({ slug, publicBase = null }: { slug: string
         <h1>{data.name}</h1>
         <p>{data.date}</p>
         {stale ? <StaleNotice>연결 확인 중 · 마지막 화면입니다</StaleNotice> : null}
-        {stale ? (
-          <p>
-            <ProductButton type="button" className="button button-secondary" onClick={refreshNow}>
-              새로고침
-            </ProductButton>
-          </p>
-        ) : null}
         <p>화면 준비 중</p>
         {data.venueName ? <footer className="display-footer"><span>{data.venueName}</span></footer> : null}
       </section>
@@ -856,11 +827,6 @@ export default function DisplayBoard({ slug, publicBase = null }: { slug: string
       <header className="display-header">
         <span className="display-brand">EVENTOUCH</span>
         {stale ? <StaleNotice>연결 확인 중 · 마지막 화면입니다</StaleNotice> : null}
-        {stale ? (
-          <ProductButton type="button" className="button button-secondary" onClick={refreshNow}>
-            새로고침
-          </ProductButton>
-        ) : null}
         <p className="display-date">{data.date}</p>
       </header>
       <div className="display-content">

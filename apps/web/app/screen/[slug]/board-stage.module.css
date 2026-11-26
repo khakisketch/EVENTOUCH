@@ -263,10 +263,11 @@
 }
 
 /* Reopened 2026-11-20: states on the stage.
-   The stale notice, the refresh button and the four whole-screen states
-   (loading, missing, failed, output off) use one vocabulary: icon + words +
-   tone, on the stage ink. Sizes stay room-scale clamp() values for the same
-   reason as above. */
+   The stale notice and the four whole-screen states (loading, missing,
+   failed, output off) use one vocabulary: icon + words + tone, on the stage
+   ink. Sizes stay room-scale clamp() values for the same reason as above.
+   Reopened 2026-11-26: guests see this screen, so there is no refresh button
+   and a stale connection is a small quiet line, not a warning pill. */
 .stale {
   display: inline-flex;
   align-items: center;
@@ -276,22 +277,20 @@
 .stale svg:global(.action-icon) { width: 1.1em; height: 1.1em; stroke-width: 3; }
 
 .dark :global(.display-stale),
+.dark:global(.display-idle) > :global(.display-stale),
 .stateStage .stale {
   margin: 0;
-  padding: 0.28em 0.9em;
-  border: 1px solid var(--warning-line);
-  border-radius: var(--r-pill);
-  background: var(--warning-soft);
-  color: var(--warning);
-  font-size: clamp(14px, 1.4vw, 28px);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--side-muted);
+  font-size: clamp(11px, 0.9vw, 18px);
   font-weight: var(--fw-strong);
   max-width: none;
 }
 
-/* The refresh button on the stage: a white face with ink text, large enough
-   to hit from a step away. The shared button has no dark-surface variant yet. */
-.dark :global(.display-header) [data-product-action],
-.stateStage [data-product-action],
+/* The one link on the stage ("처음으로" on a wrong address): a white face with
+   ink text. The shared link has no dark-surface variant yet. */
 .stateStage [data-product-link] {
   min-height: clamp(44px, 3.4vw, 72px);
   padding-inline: clamp(16px, 1.6vw, 32px);

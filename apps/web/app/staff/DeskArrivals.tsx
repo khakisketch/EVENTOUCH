@@ -24,6 +24,8 @@ export type DeskArrival = {
 };
 export type DeskArrivalView = {
   eventName: string; stage: string; canApprove: boolean; arrivals: DeskArrival[]; entered: number; total: number;
+  // This account may admit someone once more at an event that does not allow re-entry.
+  canReadmit?: boolean;
   // Server time when read, and how far this device's clock is from it.
   now?: string; skew: number;
   // Who just left through an exit desk, newest first.
@@ -36,12 +38,22 @@ const REVIEW_TEXT: Record<string, string> = {
   REENTRY: "재입장 불가", STATUS: "참가 상태 확인", EXPIRED: "티켓 만료",
 };
 
-type CommandResult = { ok: true; data: Record<string, unknown> } | { ok: false; message: string; code: string };
+type CommandResult = { ok: true; data: Record<string, unknown> } | { ok: false; message: string; code: string; status: number };
 
-// Arrival requests are safe to repeat (the server keeps one open arrival per person), so an
-// unconfirmed one is dropped here and the next poll shows what actually happened.
+// Handing over, turning away and approving keep one request id until the server gives a definite
+// answer, so pressing again after a lost response replays the recorded result instead of being
+// refused as already done. Memory only. Printing and line scans take a new id each time: the
+// server judges them on the current record, and replaying an old print claim could print twice.
+const REPLAYABLE = new Set(["arrival.handover", "arrival.cancel", "participant.status"]);
+const unsettled = new Map<string, string>();
+// Only these prove that the request recorded nothing; any other failure may hide an applied one.
+const refused = (status: number, code: string) => [400, 404, 409, 422].includes(status) && code !== "ORGANIZATION_CONTEXT_CHANGED";
+
+// The shared receipt pointer is dropped either way: the next poll shows what actually happened.
 export async function sendDeskCommand(eventId: string, command: string, assignmentId: string, payload: Record<string, unknown>): Promise<CommandResult> {
-  const commandId = randomCommandId();
+  const request = REPLAYABLE.has(command) ? JSON.stringify([eventId, command, assignmentId, payload]) : "";
+  const commandId = unsettled.get(request) ?? randomCommandId();
+  if (request) unsettled.set(request, commandId);
   const forget = () => { abandonOperatorAttempt(commandId); forgetOperatorReceipt(commandId); };
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 12000);
@@ -51,12 +63,17 @@ export async function sendDeskCommand(eventId: string, command: string, assignme
       body: JSON.stringify({ commandId, command, assignmentId, payload }),
     });
     const data = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-    if (res.ok && data) return { ok: true, data };
+    if (res.ok && data) {
+      unsettled.delete(request);
+      return { ok: true, data };
+    }
     forget();
-    return { ok: false, message: typeof data?.error === "string" ? data.error : "처리하지 못했습니다. 목록을 확인하세요.", code: typeof data?.code === "string" ? data.code : "" };
+    const code = typeof data?.code === "string" ? data.code : "";
+    if (refused(res.status, code)) unsettled.delete(request);
+    return { ok: false, message: typeof data?.error === "string" ? data.error : "처리하지 못했습니다. 목록을 확인하세요.", code, status: res.status };
   } catch {
     forget();
-    return { ok: false, message: "연결을 확인하세요. 목록이 다시 읽히면 처리 여부가 보입니다.", code: "NETWORK" };
+    return { ok: false, message: "연결을 확인하세요. 목록이 다시 읽히면 처리 여부가 보입니다.", code: "NETWORK", status: 0 };
   } finally {
     window.clearTimeout(timeout);
   }
@@ -65,6 +82,8 @@ export async function sendDeskCommand(eventId: string, command: string, assignme
 export function useDeskArrivals(eventId: string, deskId: string, assignmentId: string, enabled: boolean) {
   const [view, setView] = useState<DeskArrivalView | null>(null);
   const [error, setError] = useState("");
+  // The last read was refused because the login ended.
+  const [expired, setExpired] = useState(false);
   const request = useRef<symbol | null>(null);
   const key = `${eventId}/${deskId}`;
   const refresh = useCallback(async () => {
@@ -75,6 +94,7 @@ export function useDeskArrivals(eventId: string, deskId: string, assignmentId: s
       const res = await operatorFetch(`/api/events/${encodeURIComponent(eventId)}/desks/${encodeURIComponent(deskId)}/arrivals?assignmentId=${encodeURIComponent(assignmentId)}`, { cache: "no-store" });
       const data = (await res.json().catch(() => null)) as (DeskArrivalView & { error?: string }) | null;
       if (request.current !== mine) return;
+      setExpired(res.status === 401);
       if (!res.ok || !data || !Array.isArray(data.arrivals)) {
         setError(data?.error || "도착 목록을 불러오지 못했습니다.");
         return;
@@ -89,12 +109,13 @@ export function useDeskArrivals(eventId: string, deskId: string, assignmentId: s
   useEffect(() => {
     setView(null);
     setError("");
+    setExpired(false);
     if (!enabled || !deskId) return;
     void refresh();
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") void refresh(); }, POLL_MS);
     return () => { window.clearInterval(timer); request.current = null; };
   }, [key, enabled, deskId, refresh]);
-  return { view: view && view.desk.id === deskId ? view : null, error, refresh };
+  return { view: view && view.desk.id === deskId ? view : null, error, expired, refresh };
 }
 
 const ago = (at: string, now: number) => {
@@ -131,11 +152,14 @@ export function useCurrentArrival(view: DeskArrivalView | null, selected: string
 }
 
 const SETTLE_MS = 1500;
+const REENTRY_REASONS = ["식사·외출", "기타"] as const;
 
-export function ArrivalNow({ view, arrival, replaced, busy: working, message, onHand, onApprove, onPrint, onCancel }: {
+export function ArrivalNow({ view, arrival, replaced, busy: working, message, onHand, onApprove, onReadmit, onPrint, onCancel }: {
   view: DeskArrivalView; arrival: DeskArrival; replaced: boolean; busy: boolean; message: string;
-  onHand: () => void; onApprove: () => void; onPrint: () => void; onCancel: () => void;
+  onHand: () => void; onApprove: () => void; onReadmit: (reason: string) => void; onPrint: () => void; onCancel: () => void;
 }) {
+  // The one-time re-entry question belongs to the person it was opened for.
+  const [readmit, setReadmit] = useState<{ id: string; preset: "" | (typeof REENTRY_REASONS)[number]; other: string } | null>(null);
   const [settled, setSettled] = useState("");
   const settling = replaced && settled !== arrival.id;
   useEffect(() => {
@@ -148,6 +172,9 @@ export function ArrivalNow({ view, arrival, replaced, busy: working, message, on
   const { nametag } = view.desk;
   const review = arrival.review;
   const approvable = (review === "PENDING" || review === "WAITLIST") && view.canApprove;
+  const readmittable = review === "REENTRY" && view.canReadmit === true;
+  const asking = readmittable && readmit?.id === arrival.id ? readmit : null;
+  const reason = !asking ? "" : asking.preset === "기타" ? asking.other.trim() : asking.preset;
   const kicker = review ? `${REVIEW_TEXT[review]} · 명찰 출력 안 함`
     : arrival.printFailedAt ? "도착 · 명찰 출력 실패"
       : stale(arrival, now) ? "도착한 지 30분이 지났습니다"
@@ -164,11 +191,28 @@ export function ArrivalNow({ view, arrival, replaced, busy: working, message, on
         <ProductButton type="button" variant="primary" className={styles.hand} disabled={busy} onClick={onHand}>{nametag ? "건넸어요 · 입장" : "입장 처리"}</ProductButton>
       ) : approvable ? (
         <ProductButton type="button" variant="primary" className={styles.hand} disabled={busy} onClick={onApprove}>승인하고 입장</ProductButton>
+      ) : asking ? (
+        <div className={styles.readmit} role="group" aria-label="이번 한 번 재입장 확인">
+          <p className={styles.changed}>{arrival.name}님만 이번 한 번 다시 입장합니다. 행사 설정은 바뀌지 않고 사유가 기록됩니다.</p>
+          <div className={styles.reasons} role="group" aria-label="재입장 사유">
+            {REENTRY_REASONS.map((preset) => (
+              <button key={preset} type="button" aria-pressed={asking.preset === preset} disabled={busy} onClick={() => setReadmit({ ...asking, preset })}>{preset}</button>
+            ))}
+          </div>
+          {asking.preset === "기타" ? (
+            <input className={styles.search} aria-label="재입장 사유 직접 입력" placeholder="사유를 입력하세요" maxLength={200} autoComplete="off"
+              value={asking.other} disabled={busy} onChange={(event) => setReadmit({ ...asking, other: event.target.value })} />
+          ) : null}
+          <ProductButton type="button" variant="primary" className={styles.hand} disabled={busy || !reason} onClick={() => onReadmit(reason)}>재입장 확정</ProductButton>
+        </div>
+      ) : readmittable ? (
+        <ProductButton type="button" variant="primary" className={styles.hand} disabled={busy} onClick={() => setReadmit({ id: arrival.id, preset: "", other: "" })}>이번 한 번 재입장</ProductButton>
       ) : (
-        <p className={styles.problem}>현장 책임자에게 확인을 요청하세요.</p>
+        <p className={styles.problem}>{review === "REENTRY" ? "재입장은 행사 책임자에게 요청하세요." : "현장 책임자에게 확인을 요청하세요."}</p>
       )}
       <div className={styles.nowActions}>
         {nametag && !review ? <ProductButton type="button" variant="ghost" disabled={busy} onClick={onPrint}>{arrival.printedAt || arrival.printFailedAt ? "다시 출력" : "지금 출력"}</ProductButton> : null}
+        {asking ? <ProductButton type="button" variant="ghost" disabled={busy} onClick={() => setReadmit(null)}>그만두기</ProductButton> : null}
         <ProductButton type="button" variant="ghost" disabled={busy} onClick={onCancel}>{review ? "돌려보내기" : "취소"}</ProductButton>
       </div>
     </section>

@@ -29,19 +29,20 @@ function person(eventId, name, phone, extra = {}) {
   };
 }
 
-async function fixture({ stage = 'LIVE', people = () => [] } = {}) {
+async function fixture({ stage = 'LIVE', people = () => [], exit = false, allowReentry = true } = {}) {
   counter += 1;
   const id = `arrive-${counter}-${suffix}`;
   const desks = [
     { id: `gate-${counter}-${suffix}`, name: '정문 데스크', action: 'IN', mode: 'desk', open: true },
     { id: `side-${counter}-${suffix}`, name: '옆문 데스크', action: 'IN', mode: 'desk', open: true, nametag: false },
+    ...(exit ? [{ id: `exit-${counter}-${suffix}`, name: '출구 데스크', action: 'OUT', mode: 'desk', open: true }] : []),
   ];
   const participants = people(id);
   await insertEvent(harness.database, {
     orgId: LEGACY_ORG, id, slug: id,
     payload: { id, slug: id, name: '도착 검증 행사', date: '2026-12-01', start: '09:00', end: '17:00', capacity: 100, stage, features: [] },
     workspace: {
-      participants, desks, booths: [], assignments: [], checks: [], visits: [], audit: [],
+      participants, desks, booths: [], assignments: [], checks: [], visits: [], audit: [], allowReentry,
       registrationOpen: true, publishedVersion: 1, formVersion: 1, consentText: '',
       publishedFields: [{ id: 'name', label: '이름', type: 'text', required: true }, { id: 'phone', label: '연락처', type: 'tel', required: true }],
     },
@@ -50,7 +51,7 @@ async function fixture({ stage = 'LIVE', people = () => [] } = {}) {
   await insertMembership(harness.database, accounts.viewer, id, ['messages']);
   const assignmentId = `assignment-${crypto.randomUUID()}`;
   await insertAssignment(harness.database, { id: assignmentId, accountId: accounts.staff, eventId: id, type: 'DESK', targetId: desks[0].id });
-  return { id, slug: id, gate: desks[0].id, side: desks[1].id, assignmentId, participants };
+  return { id, slug: id, gate: desks[0].id, side: desks[1].id, exit: desks[2]?.id, assignmentId, participants };
 }
 
 const run = (event, name, payload, { actor = 'manager', assignmentId, id = command() } = {}) =>
@@ -211,10 +212,12 @@ test('typed numbers with a country code match, and erasing leaves no identity in
   const body = { action: 'arrive', deskId: event.gate, commandId: id, name: '남도현', phone: '+82 10-6363-6363' };
   assert.equal((await arrive(event, body)).json.result, 'waiting');
   const stored = async () => JSON.stringify((await harness.database.query('SELECT result FROM command_receipts WHERE command_id=$1', [id])).rows[0].result);
-  assert.equal(/남도현|도현 상사|6363/.test(await stored()), false);
+  // The whole number: a random id or hash can contain a few of its digits by chance.
+  const identity = /남도현|도현 상사|010-?6363-?6363|82 ?10-?6363-?6363/;
+  assert.equal(identity.test(await stored()), false);
   const erased = await run(event, 'participant.erase', { id: event.participants[0].id }, { actor: 'owner' });
   assert.equal(erased.status, 200, JSON.stringify(erased.json));
-  assert.equal(/남도현|도현 상사|6363/.test(await stored()), false);
+  assert.equal(identity.test(await stored()), false);
   assert.equal((await arrive(event, body)).status, 404);
 });
 
@@ -230,7 +233,7 @@ test('an expired ticket is held for review and namesakes are marked on the desk'
   const view = (await list(event, event.gate)).json;
   assert.ok(Number.isFinite(Date.parse(view.now)));
   assert.deepEqual(view.arrivals.map((item) => [item.review, item.namesake]), [['EXPIRED', false], [null, true]]);
-  assert.equal(JSON.stringify(view).includes('6565'), false);
+  assert.equal(JSON.stringify(view).includes('01065656565'), false);
 });
 
 test('approving from a stale card never revives a cancelled registration', async () => {
@@ -324,8 +327,136 @@ test('one switch: the same poster admits through the desk in 입장 and records 
   assert.equal((await arrive(event, body('임다온', '01072727272'))).json.result, 'notInside', 'someone never admitted cannot leave');
   const exits = (await list(event, event.gate)).json;
   assert.deepEqual(exits.left.map((person) => person.name), ['조은솔'], 'the exit desk shows who just left');
-  assert.equal(JSON.stringify(exits.left).includes('0107'), false);
+  assert.equal(/0107\d{7}/.test(JSON.stringify(exits.left)), false);
   // Without the switch flag a direction change still stops the desk.
   const plain = await run(event, 'desk.save', { id: event.gate, name: '정문 데스크', action: 'IN', mode: 'desk', open: true, confirmDirectionChange: true });
   assert.equal(plain.json.desk.open, false);
+});
+
+// Reopened 2026-11-26 (door-day audit): refusals the door can act on, and a one-time re-entry.
+test('a pending, waitlisted or unpaid ticket gets its own code and says who settles it', async () => {
+  const event = await fixture({ exit: true, people: (id) => [
+    person(id, '승인대기', '01021000001', { status: 'PENDING' }),
+    person(id, '대기명단', '01021000002', { status: 'WAITLIST' }),
+    person(id, '결제대기', '01021000003', { paymentStatus: 'PENDING' }),
+  ] });
+  const expected = [['TICKET_APPROVAL_PENDING', /승인을 요청/], ['TICKET_WAITLISTED', /참가 확정을 요청/], ['TICKET_PAYMENT_REQUIRED', /결제 확인을 요청/]];
+  for (const [index, [code, nextStep]] of expected.entries()) {
+    const ticket = event.participants[index].ticket;
+    const refused = await run(event, 'check.scan', { deskId: event.gate, ticket, expectedAction: 'IN' });
+    assert.deepEqual([refused.status, refused.json.code, refused.json.details], [409, code, { waiting: false }], JSON.stringify(refused.json));
+    assert.match(refused.json.error, /행사 책임자/);
+    assert.match(refused.json.error, nextStep);
+    // An exit desk has nothing to admit: its refusal is unchanged.
+    const leaving = await run(event, 'check.scan', { deskId: event.exit, ticket, expectedAction: 'OUT' });
+    assert.deepEqual([leaving.status, leaving.json.code], [409, undefined]);
+  }
+  // The public poster still answers only "waiting for the desk".
+  const arrived = await arrive(event, { action: 'arrive', deskId: event.gate, commandId: command(), name: '승인대기', phone: '01021000001' });
+  assert.deepEqual(Object.keys(arrived.json).sort(), ['company', 'deskName', 'name', 'result']);
+  assert.equal(arrived.json.result, 'review');
+  const listed = await run(event, 'check.scan', { deskId: event.gate, ticket: event.participants[0].ticket, expectedAction: 'IN' });
+  assert.deepEqual(listed.json.details, { waiting: true }, 'this desk already lists the person');
+  const elsewhere = await run(event, 'check.scan', { deskId: event.side, ticket: event.participants[0].ticket, expectedAction: 'IN' });
+  assert.deepEqual(elsewhere.json.details, { waiting: false });
+  assert.equal((await workspace(event)).checks.length, 0);
+});
+
+test('an exit scan for someone already out says so with the time', async () => {
+  const event = await fixture({ exit: true, people: (id) => [person(id, '나간사람', '01022000001'), person(id, '안온사람', '01022000002')] });
+  const [gone, never] = event.participants;
+  const scanAt = (deskId, who, expectedAction) => run(event, 'check.scan', { deskId, ticket: who.ticket, expectedAction });
+  assert.equal((await scanAt(event.gate, gone, 'IN')).status, 200);
+  assert.equal((await scanAt(event.exit, gone, 'OUT')).status, 200);
+  const leftAt = (await workspace(event)).checks[0].at;
+  const again = await scanAt(event.exit, gone, 'OUT');
+  assert.deepEqual([again.status, again.json.code, again.json.details],
+    [409, 'ALREADY_CHECKED_OUT', { name: '나간사람', lastCheckedOutAt: leftAt }], JSON.stringify(again.json));
+  const unseen = await scanAt(event.exit, never, 'OUT');
+  assert.deepEqual([unseen.status, unseen.json.code], [409, undefined], 'someone who never entered did not leave');
+  assert.match(unseen.json.error, /현재 입장 상태가 아닙니다/);
+  assert.equal((await workspace(event)).checks.length, 2);
+});
+
+test('one re-entry: the event lead admits with a reason, staff cannot, and the event rule stays', async () => {
+  const event = await fixture({ exit: true, allowReentry: false, people: (id) => [
+    person(id, '다시온', '01023000001', { everIn: true }),
+    person(id, '또다시', '01023000002', { everIn: true }),
+    person(id, '결제전', '01023000003', { everIn: true, paymentStatus: 'PENDING' }),
+  ] });
+  for (const phone of ['01023000001', '01023000002', '01023000003']) {
+    const name = event.participants.find((item) => item.phone === phone).name;
+    assert.equal((await arrive(event, { action: 'arrive', deskId: event.gate, commandId: command(), name, phone })).status, 200);
+  }
+  const view = (await list(event, event.gate)).json;
+  assert.equal(view.canReadmit, true);
+  assert.equal((await list(event, event.gate, 'owner')).json.canReadmit, true);
+  assert.equal((await list(event, event.gate, 'staff', `?assignmentId=${event.assignmentId}`)).json.canReadmit, false);
+  const arrivalOf = (index) => view.arrivals.find((item) => item.participantId === event.participants[index].id);
+  assert.deepEqual([0, 1, 2].map((index) => arrivalOf(index).review), ['REENTRY', 'REENTRY', 'PAYMENT']);
+  const payload = (index, extra = {}) => ({ deskId: event.gate, arrivalId: arrivalOf(index).id, ...extra });
+  const staff = { actor: 'staff', assignmentId: event.assignmentId };
+
+  const plain = await run(event, 'arrival.handover', payload(0));
+  assert.deepEqual([plain.status, plain.json.code], [409, 'REENTRY_NOT_ALLOWED'], 'without a reason the rule holds');
+  assert.match(plain.json.error, /행사 책임자에게 요청/);
+  const refused = await run(event, 'arrival.handover', payload(0, { reentryReason: '식사·외출' }), staff);
+  assert.deepEqual([refused.status, refused.json.code], [403, 'REENTRY_OVERRIDE_FORBIDDEN']);
+  assert.match(refused.json.error, /행사 책임자에게 요청/);
+  assert.equal((await run(event, 'arrival.handover', payload(0, { reentryReason: '식사·외출' }), { actor: 'viewer' })).status, 403, 'a manager without field permission');
+  // The ticket scan ignores the field: the override belongs to the desk card only.
+  const scanned = await run(event, 'check.scan', { deskId: event.gate, ticket: event.participants[0].ticket, expectedAction: 'IN', reentryReason: '식사·외출' }, staff);
+  assert.deepEqual([scanned.status, scanned.json.code], [409, 'REENTRY_NOT_ALLOWED']);
+  for (const bad of ['', '   ', 'x'.repeat(201), 7, null, `외출 ${event.participants[1].ticket}`]) {
+    const res = await run(event, 'arrival.handover', payload(0, { reentryReason: bad }));
+    assert.equal(res.status, 400, JSON.stringify([bad, res.json]));
+  }
+  const unpaid = await run(event, 'arrival.handover', payload(2, { reentryReason: '식사·외출' }));
+  assert.deepEqual([unpaid.status, unpaid.json.code], [409, 'TICKET_PAYMENT_REQUIRED'], 'the override lifts only the re-entry rule');
+  assert.equal((await workspace(event)).checks.length, 0);
+
+  const id = command();
+  const reason = `외부 통화 ${'가'.repeat(190)}`;
+  const admitted = await run(event, 'arrival.handover', payload(0, { reentryReason: reason }), { id });
+  assert.equal(admitted.status, 200, JSON.stringify(admitted.json));
+  assert.deepEqual([admitted.json.action, admitted.json.readmitted, admitted.json.checkId], ['IN', true, id]);
+  const replay = await run(event, 'arrival.handover', payload(0, { reentryReason: reason }), { id });
+  assert.deepEqual([replay.status, replay.json], [200, admitted.json], 'a lost response replays the admission');
+  for (const changed of [payload(0, { reentryReason: '다른 사유' }), payload(0)]) {
+    const mismatch = await run(event, 'arrival.handover', changed, { id });
+    assert.deepEqual([mismatch.status, mismatch.json.code], [409, 'ARRIVAL_RECEIPT_MISMATCH']);
+  }
+  const state = await workspace(event);
+  assert.equal(state.checks.length, 1);
+  assert.equal(state.participants[0].inside, true);
+  assert.equal(state.allowReentry, false, 'the event setting is unchanged');
+  const audit = state.audit.filter((entry) => entry.id === id);
+  assert.equal(audit.length, 1);
+  assert.deepEqual([audit[0].type, audit[0].actor, audit[0].detail, audit[0].reentryOverride],
+    ['arrival.handover', accounts.manager, reason, { participantId: event.participants[0].id, participantName: '다시온' }]);
+  const receipt = await harness.database.query('SELECT result::text AS body FROM command_receipts WHERE command_id=$1', [id]);
+  assert.equal(receipt.rows[0].body.includes('외부 통화'), false, 'the receipt keeps only a proof of the reason');
+
+  const owner = await run(event, 'arrival.handover', payload(1, { reentryReason: '식사·외출' }), { actor: 'owner' });
+  assert.equal(owner.status, 200, JSON.stringify(owner.json));
+  // Once: after leaving again the same rule applies again.
+  assert.equal((await run(event, 'check.scan', { deskId: event.exit, ticket: event.participants[0].ticket, expectedAction: 'OUT' })).status, 200);
+  const third = await run(event, 'check.scan', { deskId: event.gate, ticket: event.participants[0].ticket, expectedAction: 'IN' });
+  assert.deepEqual([third.status, third.json.code], [409, 'REENTRY_NOT_ALLOWED']);
+});
+
+test('a plain handover replays under its first command id', async () => {
+  const event = await fixture({ people: (id) => [person(id, '한번만', '01024000001', { everIn: false })] });
+  await arrive(event, { action: 'arrive', deskId: event.gate, commandId: command(), name: '한번만', phone: '01024000001' });
+  const arrivalId = (await list(event, event.gate)).json.arrivals[0].id;
+  const id = command();
+  const first = await run(event, 'arrival.handover', { deskId: event.gate, arrivalId }, { id });
+  assert.equal(first.status, 200, JSON.stringify(first.json));
+  assert.equal(Object.hasOwn(first.json, 'readmitted'), false);
+  const again = await run(event, 'arrival.handover', { deskId: event.gate, arrivalId }, { id });
+  assert.deepEqual([again.status, again.json], [200, first.json]);
+  // The proof of a receipt without a re-entry reason is unchanged, so receipts saved earlier keep replaying.
+  const saved = (await harness.database.query('SELECT result FROM command_receipts WHERE command_id=$1', [id])).rows[0].result;
+  const before = crypto.createHash('sha256').update(JSON.stringify(['arrival.handover', event.gate, arrivalId, '', '', false, false])).digest('hex');
+  assert.equal(saved.arrivalProof, before);
 });

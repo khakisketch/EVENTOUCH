@@ -496,7 +496,7 @@ export function LiveSidePane({ model, eventId, selected, cues, canRewards, locke
               ))}
             </ul>
           ) : <p className={styles.empty}>지급을 기다리는 경품이 없습니다.</p>}
-          {model.rewardsWaiting.length > 5 ? <p className={styles.paneFoot}>외 {model.rewardsWaiting.length - 5}건은 경품 지급 현황에서 확인하세요.</p> : null}
+          {model.rewardsWaiting.length > 5 ? <p className={styles.paneFoot}>외 {model.rewardsWaiting.length - 5}건은 경품 지급에서 확인하세요.</p> : null}
           {model.rewardsAttention ? (
             <p className={styles.attention}><ProductLink variant="ghost" href={`${base}/rewards`}>확인 필요 {model.rewardsAttention}건<ArrowRightIcon /></ProductLink></p>
           ) : null}

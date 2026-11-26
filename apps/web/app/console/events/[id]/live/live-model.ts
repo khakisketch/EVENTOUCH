@@ -43,10 +43,12 @@ export type LiveModel = {
   memberships: Array<{ accountId: string; eventId: string; write?: unknown }>;
   features: string[];
   capacity: number | null;
-  /** Participants not cancelled; null when the roster could not be read. */
-  registered: number | null;
+  /** Approved participants, by the desk's rule; null when the roster could not be read. */
+  approved: number | null;
+  /** Approved people who have come in at least once, and who is inside now. */
   everIn: number | null;
-  // Arrived at a desk and not yet handed a name tag.
+  inside: number | null;
+  /** People on a running entry desk's waiting list, including those who need a check. */
   waiting: number;
   programs: LiveProgram[];
   modules: LiveModule[];
@@ -96,7 +98,14 @@ export function parseLiveModel(
   const features = strings(event.features);
   const enabled = new Set(features);
 
-  const people = records(workspace.participants).filter((person) => text(person.status).toUpperCase() !== "CANCELLED");
+  // Same rules as the desk screen (server/arrivals.js): a cancelled, revoked or erased
+  // registration never counts or waits.
+  const people = records(workspace.participants).filter((person) => person.erased !== true && person.revoked !== true &&
+    person.cancelled !== true && text(person.status).toUpperCase() !== "CANCELLED");
+  const approvedPeople = people.filter((person) => text(person.status).toUpperCase() === "APPROVED");
+  const notInside = new Set(people.filter((person) => person.inside !== true).map((person) => identifier(person.id)));
+  const entryDesks = new Set(records(workspace.desks)
+    .filter((desk) => desk.open !== false && text(desk.action).toUpperCase() === "IN").map((desk) => identifier(desk.id)));
   const rosterReadable = Array.isArray(workspace.participants);
   const capacityValue = event.capacity;
   const capacity = typeof capacityValue === "number" && Number.isSafeInteger(capacityValue) && capacityValue > 0 ? capacityValue
@@ -203,12 +212,13 @@ export function parseLiveModel(
     memberships,
     features,
     capacity,
-    registered: rosterReadable ? people.length : null,
-    everIn: rosterReadable ? people.filter((person) => person.everIn === true).length : null,
+    approved: rosterReadable ? approvedPeople.length : null,
+    everIn: rosterReadable ? approvedPeople.filter((person) => person.everIn === true).length : null,
+    inside: rosterReadable ? approvedPeople.filter((person) => person.inside === true).length : null,
     waiting: rosterReadable ? new Set(records(workspace.arrivals)
-      .filter((arrival) => !arrival.handedAt && !arrival.cancelledAt)
-      .map((arrival) => String(arrival.participantId))
-      .filter((id) => people.some((person) => String(person.id) === id && person.inside !== true && text(person.status).toUpperCase() === "APPROVED"))).size : 0,
+      .filter((arrival) => !arrival.handedAt && !arrival.cancelledAt && entryDesks.has(identifier(arrival.deskId)))
+      .map((arrival) => identifier(arrival.participantId))
+      .filter((id) => notInside.has(id))).size : 0,
     programs: records(workspace.program).flatMap((program, index) => {
       const title = text(program.title);
       if (!title) return [];

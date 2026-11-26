@@ -43,7 +43,8 @@ test('scan-failure-guides-retry-and-manual-entry-without-repeating-itself', () =
   assert.match(work, /result\.alreadyIn \? "이미 입장했습니다" : result\.kind === "failed" && result\.uncertain \? "처리 결과를 확인하지 못했습니다" : result\.kind === "failed" && result\.attendanceReviewRequired \? "출입 기록 확인이 필요합니다" : result\.kind === "failed" && result\.eligibilityReviewRequired \? "참가 상태 확인이 필요합니다" : "처리하지 못했습니다"/);
   assert.match(work, /retryFailedRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(work, /scanFailureRef\.current\?\.scrollIntoView\(\{ block: "center", behavior: "instant" \}\)/);
-  assert.match(work, /role=\{boothLimitReached \|\| result\.alreadyIn \? "status" : "alert"\}>\{result\.message\}/);
+  // Reopened 2026-11-26: "already out" is announced like "already in".
+  assert.match(work, /role=\{boothLimitReached \|\| alreadyDone \? "status" : "alert"\}>\{result\.message\}/);
   assert.match(work, /카메라가 안 되면 티켓 코드를 직접 입력하세요/);
   assert.match(work, /result\.message\.includes\("다시 시도"\)/);
   // A definitive failure is acknowledged with 확인, never "다시 스캔": nothing is wrong with the camera.
@@ -332,7 +333,8 @@ test('staff-warnings-wrap-by-word-without-mid-syllable-split', () => {
   assert.match(styles, /\.ticketFullCode\s+code\s*\{[^}]*overflow-wrap:\s*anywhere/s);
   // The definitive booth limit is a status, while scan failures still announce an alert.
   assert.match(work, /처리 응답을 확인하지 못했습니다\. 같은 업무·티켓으로 다시 시도하세요\./);
-  assert.match(work, /role=\{boothLimitReached \|\| result\.alreadyIn \? "status" : "alert"\}>\{result\.message\}/);
+  // Reopened 2026-11-26: "already out" is announced like "already in".
+  assert.match(work, /role=\{boothLimitReached \|\| alreadyDone \? "status" : "alert"\}>\{result\.message\}/);
   assert.match(work, /place:\s*requestPlace/);
   assert.match(work, /window\.setTimeout\(\(\) => controller\.abort\(\), 15000\)/);
 });

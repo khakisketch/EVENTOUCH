@@ -17,7 +17,7 @@ const {
   ticketCode,
 } = require('./shared.ts');
 const {
-  arrivalPersonByTicket, arrivalReview, claimPrint, closeArrivals, deskArrivalView, recordArrival,
+  arrivalPersonByTicket, arrivalReview, claimPrint, closeArrivals, deskArrivalView, openArrivalFor, recordArrival,
   reportPrint, requireEntryDesk, requireOpenArrival,
 } = require('../arrivals');
 
@@ -558,9 +558,52 @@ function alreadyCheckedInDetails(workspace, person) {
   return { name: String(person.name || ''), firstCheckedInAt: first };
 }
 
+// The exit counterpart: who already left, and when they last did.
+function alreadyCheckedOutDetails(workspace, person) {
+  let last = null;
+  let lastMs = -Infinity;
+  for (const check of list(workspace.checks)) {
+    if (!check || check.corrected === true || check.action !== 'OUT' || String(check.participantId) !== String(person.id)) continue;
+    const ms = Date.parse(check.at);
+    if (Number.isFinite(ms) && ms > lastMs) { last = check.at; lastMs = ms; }
+  }
+  return { name: String(person.name || ''), lastCheckedOutAt: last };
+}
+
+// A valid ticket the entry desk cannot admit yet, with who settles it. Only signed-in desk
+// requests get these; the public arrival path answers "waiting for the desk" as before.
+const ADMISSION_HOLDS = {
+  PENDING: ['TICKET_APPROVAL_PENDING', '승인 대기 중이라 입장 처리하지 않았습니다. 행사 책임자에게 승인을 요청하세요.'],
+  WAITLIST: ['TICKET_WAITLISTED', '대기 명단에 있어 입장 처리하지 않았습니다. 행사 책임자에게 참가 확정을 요청하세요.'],
+  PAYMENT: ['TICKET_PAYMENT_REQUIRED', '결제가 완료되지 않아 입장 처리하지 않았습니다. 행사 책임자에게 결제 확인을 요청하세요.'],
+};
+
+function admissionHold(workspace, person, deskId, kind) {
+  const [code, message] = ADMISSION_HOLDS[kind];
+  const arrival = openArrivalFor(workspace, person.id);
+  return failure(409, message, undefined, code, { waiting: Boolean(arrival) && String(arrival.deskId) === deskId });
+}
+
+// One re-entry (owner delegated, 2026-11-26): where the event's no-re-entry rule is the only
+// thing in the way, the event lead (an agency account, or a manager who passed the onsite write
+// check for this handover) may admit that person once with a written reason. The event setting
+// stays as it is. A reason is free text, so a scanned ticket must never end up in the audit log.
+const REENTRY_REASON_MAX = 200;
+
+function reentryOverrideReason(value, role) {
+  if (!['AGENCY', 'MANAGER'].includes(role)) {
+    throw failure(403, '이번 한 번 재입장은 행사 책임자만 처리할 수 있습니다. 행사 책임자에게 요청하세요.', undefined, 'REENTRY_OVERRIDE_FORBIDDEN');
+  }
+  const reason = typeof value === 'string' ? value.trim() : '';
+  if (!reason || reason.length > REENTRY_REASON_MAX) throw failure(400, '재입장 사유를 200자 이내로 입력하세요.', 'reentryReason');
+  if (/ET:|ticket=/i.test(reason)) throw failure(400, '재입장 사유에는 티켓 코드를 넣을 수 없습니다.', 'reentryReason');
+  return reason;
+}
+
 // `trusted`: the person comes from this desk's arrival record, not from a staff selection,
-// so there is no name-and-company confirmation to compare.
-function scan(workspace, event, actor, input, assignment, { trusted = false } = {}) {
+// so there is no name-and-company confirmation to compare. `reentryReason`: an already
+// authorized one-time re-entry; it lifts the re-entry rule and nothing else.
+function scan(workspace, event, actor, input, assignment, { trusted = false, reentryReason = '' } = {}) {
   requireLive(event, '행사 진행 중에 입퇴장을 처리할 수 있습니다. 매니저에게 진행 단계 확인을 요청하세요.');
   const deskId = clean(input.deskId || input.targetId, 120);
   const desk = list(workspace.desks).find((item) => item && String(item.id) === deskId);
@@ -610,6 +653,10 @@ function scan(workspace, event, actor, input, assignment, { trusted = false } = 
     if (person.cancelled === true && String(person.status || '').toUpperCase() === 'APPROVED') {
       throw failure(409, '신청 상태와 취소 기록이 일치하지 않습니다. 현장 책임자에게 확인을 요청하세요.', undefined, 'TICKET_STATUS_CONFLICT');
     }
+    const status = String(person.status || '').toUpperCase();
+    if (action === 'IN' && person.revoked !== true && person.cancelled !== true && (status === 'PENDING' || status === 'WAITLIST')) {
+      throw admissionHold(workspace, person, deskId, status);
+    }
     throw failure(409, '입장 가능한 티켓이 아닙니다. 등록 상태를 확인하세요.');
   }
   if (idPath ? clean(person.ticketExpiresAt, 64) !== '' : true) {
@@ -621,6 +668,7 @@ function scan(workspace, event, actor, input, assignment, { trusted = false } = 
   }
   if (!['FREE', 'PAID'].includes(String(person.paymentStatus || '').toUpperCase())) {
     if (action === 'OUT' && person.inside === true) throw failure(409, '퇴장 기록에 확인이 필요합니다. 현장 책임자에게 요청하세요.', undefined, 'CHECK_OUT_REVIEW_REQUIRED');
+    if (action === 'IN') throw admissionHold(workspace, person, deskId, 'PAYMENT');
     throw failure(409, '결제가 완료되지 않았습니다. 결제 상태를 확인하세요.');
   }
   // A scan must not turn unknown or contradictory attendance into a clean
@@ -630,9 +678,15 @@ function scan(workspace, event, actor, input, assignment, { trusted = false } = 
     throw failure(409, '출입 기록을 확인할 수 없어 처리하지 않았습니다. 현장 책임자에게 확인을 요청하세요.', undefined, 'CHECK_ATTENDANCE_REVIEW_REQUIRED');
   }
   if (action === 'IN' && person.inside === true) throw failure(409, '이미 입장한 참가자입니다. 중복 처리하지 않았습니다.', undefined, 'ALREADY_CHECKED_IN', alreadyCheckedInDetails(workspace, person));
-  if (action === 'OUT' && person.inside !== true) throw failure(409, '현재 입장 상태가 아닙니다. 퇴장 처리하지 않았습니다.');
-  if (action === 'IN' && person.everIn === true && workspace.allowReentry !== true) {
-    throw failure(409, '재입장을 허용하지 않는 행사입니다.');
+  if (action === 'OUT' && person.inside !== true) {
+    if (person.everIn === true) {
+      throw failure(409, '이미 퇴장한 참가자입니다. 중복 처리하지 않았습니다.', undefined, 'ALREADY_CHECKED_OUT', alreadyCheckedOutDetails(workspace, person));
+    }
+    throw failure(409, '현재 입장 상태가 아닙니다. 퇴장 처리하지 않았습니다.');
+  }
+  const reentryBlocked = action === 'IN' && person.everIn === true && workspace.allowReentry !== true;
+  if (reentryBlocked && !reentryReason) {
+    throw failure(409, '재입장을 허용하지 않는 행사입니다. 행사 책임자에게 요청하세요.', undefined, 'REENTRY_NOT_ALLOWED');
   }
 
   const before = { inside: person.inside === true, everIn: person.everIn === true };
@@ -652,6 +706,7 @@ function scan(workspace, event, actor, input, assignment, { trusted = false } = 
   return {
     row,
     person,
+    readmitted: reentryBlocked,
     body: {
       name: String(person.name || ''),
       id: String(person.id),
@@ -667,7 +722,7 @@ function scan(workspace, event, actor, input, assignment, { trusted = false } = 
 
 // The arrival commands share the desk rules: a running event, a running entry desk, and for a
 // staff account only its assigned desk.
-function arrivalCommand(workspace, event, actor, command, input, assignment, now, commandId) {
+function arrivalCommand(workspace, event, actor, command, input, assignment, now, commandId, role) {
   requireLive(event, '행사 진행 중에 도착과 입장을 처리할 수 있습니다.');
   const desk = requireEntryDesk(workspace, input.deskId);
   if (assignment && (assignment.type !== 'DESK' || assignment.targetId !== String(desk.id))) {
@@ -696,18 +751,27 @@ function arrivalCommand(workspace, event, actor, command, input, assignment, now
     return { body: { arrivalId: arrival.id, cancelled: true } };
   }
   // Handover: the person is at the desk, so this is the entry, with every desk scan rule.
-  const scanned = scan(workspace, event, actor, { deskId: desk.id, participantId: arrival.participantId, expectedAction: 'IN' }, assignment, { trusted: true });
+  const reentryReason = input.reentryReason === undefined ? '' : reentryOverrideReason(input.reentryReason, role);
+  const scanned = scan(workspace, event, actor, { deskId: desk.id, participantId: arrival.participantId, expectedAction: 'IN' }, assignment, { trusted: true, reentryReason });
   scanned.row.id = commandId;
   scanned.row.at = now;
   workspace.checks.unshift(scanned.row);
   closeArrivals(workspace, arrival.participantId, { checkId: commandId, now });
-  return { row: scanned.row, body: { arrivalId: arrival.id, checkId: commandId, id: scanned.body.id, name: scanned.body.name, action: 'IN' } };
+  return {
+    row: scanned.row,
+    body: { arrivalId: arrival.id, checkId: commandId, id: scanned.body.id, name: scanned.body.name, action: 'IN',
+      ...(scanned.readmitted ? { readmitted: true } : {}) },
+    // The name lets a later participant erasure find and blank this entry.
+    ...(scanned.readmitted ? { reentryOverride: { participantId: scanned.body.id, participantName: scanned.body.name, reason: reentryReason } } : {}),
+  };
 }
 
 // A replayed arrival request must name the same desk, arrival, ticket and outcome.
 function arrivalProof(command, input) {
   return ticketHash(JSON.stringify([command, clean(input.deskId, 120), clean(input.arrivalId, 120),
-    ticketCode(input.ticket), clean(input.station, 64), input.ok === true, input.force === true]));
+    ticketCode(input.ticket), clean(input.station, 64), input.ok === true, input.force === true,
+    // Added only for a one-time re-entry, so receipts saved without a reason keep matching.
+    ...(command === 'arrival.handover' && input.reentryReason !== undefined ? [String(input.reentryReason).trim()] : [])]));
 }
 
 function rewardsFor(workspace, participantId) {
@@ -1092,16 +1156,17 @@ function visitBooth(workspace, event, actor, input, assignment, now, commandId, 
     visitId: commandId, boothId, participantId: String(person.id) } };
 }
 
-function appendAudit(workspace, event, account, command, input, commandId, now, reconciliation) {
+function appendAudit(workspace, event, account, command, input, commandId, now, reconciliation, reentry) {
   if (!Array.isArray(workspace.audit)) workspace.audit = [];
   workspace.audit.unshift({
     id: commandId,
     type: command,
     actor: String(account.id),
     at: now,
-    detail: clean(input.reason || input.name || input.title, 300),
+    detail: reentry ? reentry.reason : clean(input.reason || input.name || input.title, 300),
     eventId: event.id,
     ...(reconciliation ? { reconciliation } : {}),
+    ...(reentry ? { reentryOverride: { participantId: reentry.participantId, participantName: reentry.participantName } } : {}),
   });
 }
 
@@ -1369,7 +1434,7 @@ function createOperationsCommands(database) {
         case 'arrival.cancel':
         case 'arrival.claim-print':
         case 'arrival.print-result':
-          result = arrivalCommand(workspace, event, account, command, input, authorized.assignment, now, id);
+          result = arrivalCommand(workspace, event, account, command, input, authorized.assignment, now, id, authorized.role);
           if (result.row) await projectCheckinRecord(client, event.id, result.row);
           break;
         default:
@@ -1384,7 +1449,7 @@ function createOperationsCommands(database) {
       if (rewardVerification) result.body.rewardVerificationId = id;
       if (command === 'reward.lookup' || command === 'reward.collect') result.body.rewardRequestVersion = 1;
 
-      appendAudit(workspace, event, operationActor, command, input, id, now, result.reconciliationAudit);
+      appendAudit(workspace, event, operationActor, command, input, id, now, result.reconciliationAudit, result.reentryOverride);
       const persistedWorkspace = workspaceChangesForSave(row.workspace_payload, workspaceBefore, workspace);
       await client.query(
         `UPDATE event_workspaces
@@ -1446,14 +1511,17 @@ function createOperationsCommands(database) {
         throw failure(409, '참가자 명단 또는 출입 기록을 확인할 수 없습니다.', undefined, 'CHECK_SOURCE_UNAVAILABLE');
       }
       let canApprove = scope.role === 'AGENCY';
+      // What the card may offer; the handover itself checks again.
+      let canReadmit = scope.role === 'AGENCY';
       if (scope.role === 'MANAGER') {
         const membership = await client.query(
           'SELECT write_permissions FROM memberships WHERE account_id = $1 AND event_id = $2 LIMIT 1',
           [String(account.id), event.id]
         );
         canApprove = Boolean(membership.rowCount) && managerWriteAllowed(membership.rows[0].write_permissions, 'participant.status');
+        canReadmit = Boolean(membership.rowCount) && managerWriteAllowed(membership.rows[0].write_permissions, 'arrival.handover');
       }
-      return { eventName: String(event.name || ''), stage: String(event.stage || '').toUpperCase(), canApprove, ...deskArrivalView(workspace, desk) };
+      return { eventName: String(event.name || ''), stage: String(event.stage || '').toUpperCase(), canApprove, canReadmit, ...deskArrivalView(workspace, desk) };
     });
   }
 

@@ -279,7 +279,7 @@ export default function LiveWorkspace({ eventId }: { eventId: string }) {
     await cmd.send({ command: "reward.fulfill", payload: { id: rewardId }, label: `${who} · ${name} 지급`, successMessage: `${who}님께 ${name} 지급을 기록했습니다.` });
   }
 
-  const entryPct = model.registered ? Math.round(((model.everIn ?? 0) / model.registered) * 100) : 0;
+  const entryPct = model.approved ? Math.round(((model.everIn ?? 0) / model.approved) * 100) : 0;
   const displayLabel = currentDisplayLabel(model.display, model.displayOptions);
 
   return (
@@ -289,9 +289,9 @@ export default function LiveWorkspace({ eventId }: { eventId: string }) {
           <div className={styles.topMain}>
             <strong className={styles.eventName}>{model.eventName || "이름 없는 행사"}</strong>
             <span className={styles.clock}><time dateTime={now.toISOString()}>{TIME.format(now)}</time></span>
-            {model.registered !== null ? (
-              <span className={styles.entry} role="img" aria-label={`입장 ${model.everIn ?? 0}명, 등록 ${model.registered}명${model.capacity ? `, 정원 ${model.capacity}명` : ""}, 등록 대비 ${entryPct}%${model.waiting ? `, 도착 대기 ${model.waiting}명` : ""}`}>
-                <span aria-hidden="true">입장 <b>{model.everIn ?? 0}</b> / 등록 {model.registered} ({entryPct}%)<em>{model.capacity ? ` · 정원 ${model.capacity}` : ""}</em>{model.waiting ? <em> · 도착 대기 {model.waiting}</em> : null}</span>
+            {model.approved !== null ? (
+              <span className={styles.entry} role="img" aria-label={`누적 입장 ${model.everIn ?? 0}명, 승인 ${model.approved}명, 승인 대비 ${entryPct}%, 지금 안에 ${model.inside}명${model.capacity ? `, 정원 ${model.capacity}명` : ""}${model.waiting ? `, 도착 대기 ${model.waiting}명` : ""}`}>
+                <span aria-hidden="true">누적 입장 <b>{model.everIn ?? 0}</b> / 승인 {model.approved} ({entryPct}%)<em> · 지금 안에 {model.inside}</em><em>{model.capacity ? ` · 정원 ${model.capacity}` : ""}</em>{model.waiting ? <em> · 도착 대기 {model.waiting}</em> : null}</span>
                 <i className={styles.entryBar} aria-hidden="true"><i style={{ width: `${Math.min(100, entryPct)}%` }} /></i>
               </span>
             ) : <span className={styles.entry}>입장 현황을 읽을 수 없습니다</span>}

@@ -179,3 +179,49 @@ test("the stage status pill is the shared StatusPill with on-dark tones", () => 
   assert.doesNotMatch(bare, /!important/u, "margins use a zero-specificity reset instead");
   assert.doesNotMatch(bare, /:global\(\.product-action\)/u);
 });
+
+// Reopened 2026-11-26 (door-day audit): the top bar names the cumulative figure, shows who is
+// inside, measures both against approved people, and counts the same waiting people as the desks.
+test("entry figures use the desk's rules for approved, inside and waiting", () => {
+  const code = ts.transpileModule(read("live-model.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
+  const exports = {};
+  const stubs = {
+    "../../../../../lib/participation-work": { PARTICIPATION_TYPES: [], participationSnapshot: () => ({}) },
+    "../../../../../lib/reward-status": { rewardBucket: () => "waiting", rewardParticipantIssue: () => null },
+  };
+  vm.runInNewContext(code, { exports, require: (name) => stubs[name] }, { filename: "live-model.ts" });
+  const person = (id, extra = {}) => ({ id, status: "APPROVED", inside: false, everIn: false, ...extra });
+  const participants = [
+    person("inside", { inside: true, everIn: true }),
+    person("left", { everIn: true }),
+    person("coming"),
+    person("pending", { status: "PENDING" }),
+    person("waitlist", { status: "WAITLIST" }),
+    person("pending-inside", { status: "PENDING", inside: true, everIn: true }),
+    person("cancelled", { status: "CANCELLED", everIn: true }),
+    person("revoked", { revoked: true, inside: true, everIn: true }),
+    person("withdrawn", { cancelled: true }),
+    person("erased", { erased: true }),
+    person("closed-desk"),
+    person("exit-desk"),
+  ];
+  const open = (participantId, deskId = "in", extra = {}) => ({ id: `a-${participantId}-${deskId}`, participantId, deskId, handedAt: null, cancelledAt: null, ...extra });
+  const workspace = {
+    participants,
+    desks: [{ id: "in", action: "IN", open: true }, { id: "side", action: "IN" }, { id: "stopped", action: "IN", open: false }, { id: "out", action: "OUT", open: true }],
+    arrivals: [
+      open("coming"), open("left", "side"), open("pending"), open("waitlist"),
+      open("inside"), open("cancelled"), open("revoked"), open("withdrawn"), open("erased"), open("nobody"),
+      open("closed-desk", "stopped"), open("exit-desk", "out"),
+      open("exit-desk", "in", { handedAt: "2026-11-26T00:00:00Z" }), open("closed-desk", "in", { cancelledAt: "2026-11-26T00:00:00Z" }),
+    ],
+  };
+  const model = exports.parseLiveModel({ events: [{ id: "e", stage: "LIVE", features: [] }], workspaces: { e: workspace } }, "e", { role: "AGENCY", userId: "u" });
+  assert.deepEqual([model.approved, model.everIn, model.inside, model.waiting], [5, 2, 1, 4]);
+  const unread = exports.parseLiveModel({ events: [{ id: "e" }], workspaces: { e: {} } }, "e", { role: "AGENCY", userId: "u" });
+  assert.deepEqual([unread.approved, unread.inside, unread.waiting], [null, null, 0]);
+  const workspaceSource = read("LiveWorkspace.tsx");
+  assert.match(workspaceSource, /누적 입장 <b>\{model\.everIn \?\? 0\}<\/b>/u);
+  assert.match(workspaceSource, /· 지금 안에 \{model\.inside\}/u);
+  assert.match(workspaceSource, /const entryPct = model\.approved \?/u);
+});

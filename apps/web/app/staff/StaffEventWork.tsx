@@ -220,7 +220,7 @@ type ScanRecordStatus = keyof typeof SCAN_HISTORY_NOTICES;
 type ScanResult =
   | { kind: "idle" }
   | { kind: "ok"; participantId: string; name: string; action: string; reentry: boolean; booth?: string; place: ScanPlace; checkId?: string; correctionChanged?: true; recordStatus?: ScanRecordStatus }
-  | { kind: "failed"; message: string; uncertain: boolean; place: ScanPlace; requestTicket: string; requestTarget?: string; deskRefreshRequired?: boolean; sourceRefreshRequired?: boolean; manualRefreshRequired?: boolean; boothLimitReached?: boolean; alreadyIn?: boolean; alreadyName?: string; alreadyAt?: string; attendanceReviewRequired?: boolean; eligibilityReviewRequired?: boolean };
+  | { kind: "failed"; message: string; uncertain: boolean; place: ScanPlace; requestTicket: string; requestTarget?: string; deskRefreshRequired?: boolean; sourceRefreshRequired?: boolean; manualRefreshRequired?: boolean; boothLimitReached?: boolean; alreadyIn?: boolean; alreadyOut?: boolean; alreadyName?: string; alreadyAt?: string; attendanceReviewRequired?: boolean; eligibilityReviewRequired?: boolean; admissionHold?: { waiting: boolean }; signedOut?: boolean };
 
 function parseRewardList(value: unknown): DeskReward[] | null {
   if (!Array.isArray(value)) return null;
@@ -256,6 +256,16 @@ function alreadyInDetails(value: unknown): { alreadyName?: string; alreadyAt?: s
   const at = typeof details.firstCheckedInAt === "string" && !Number.isNaN(new Date(details.firstCheckedInAt).getTime()) ? details.firstCheckedInAt : "";
   return { ...(name ? { alreadyName: name } : {}), ...(at ? { alreadyAt: at } : {}) };
 }
+
+// The exit counterpart names who already left and when.
+function alreadyOutDetails(value: unknown): { alreadyName?: string; alreadyAt?: string } {
+  if (typeof value !== "object" || value === null) return {};
+  const details = value as { name?: unknown; lastCheckedOutAt?: unknown };
+  return alreadyInDetails({ name: details.name, firstCheckedInAt: details.lastCheckedOutAt });
+}
+
+// Refusals that wait for the event lead (ADMISSION_HOLDS in server/commands/operations.js).
+const ADMISSION_HOLD_CODES = ["TICKET_APPROVAL_PENDING", "TICKET_WAITLISTED", "TICKET_PAYMENT_REQUIRED"];
 
 function deskFromAddress(): { id: string; direction: DeskDirection | null } {
   const query = new URLSearchParams(window.location.search);
@@ -385,6 +395,9 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // A read or write was refused because the login ended mid-shift. Nothing is redirected or
+  // cleared; the next successful read lifts it.
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [scope, setScope] = useState<StaffScope | null>(null);
   const [missingAssignment, setMissingAssignment] = useState(false);
   const [assignmentStale, setAssignmentStale] = useState(false);
@@ -842,7 +855,7 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
       if (!isCurrent()) return false;
       if (status === 401) {
         lastLoadedScopeRef.current = null;
-        if (silent) { setLoadError("업무 정보를 다시 확인하려면 로그인과 행사 접근 권한을 확인하세요."); return false; }
+        if (silent) { setSessionExpired(true); setLoadError("업무 정보를 다시 확인하려면 로그인과 행사 접근 권한을 확인하세요."); return false; }
         router.push(
           loginHrefForLocation(window.location.pathname, window.location.search)
         );
@@ -876,6 +889,7 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
         return false;
       }
       lastLoadedScopeRef.current = next;
+      setSessionExpired(false);
       // Read the address before the direction check edits it: the same desk is asked about and selected.
       // An address that already names a desk (a reload, a question still open) is left alone.
       if (embedded && !silent && !deskFromAddress().id) {
@@ -970,6 +984,7 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
     pendingScanIdRef.current.clear();
     pendingScanRef.current = null;
     setBoothStatusStale(false);
+    setSessionExpired(false);
     pendingRewardCommandsRef.current.clear();
     rewardRequestRef.current = null;
     pendingCorrectRef.current = null;
@@ -1416,6 +1431,7 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
         details?: unknown;
       } | null;
       if (!res.ok) {
+        if (res.status === 401) setSessionExpired(true);
         // These verdicts are produced only after the server has locked the
         // event and checked the receipt for this exact scan. A committed
         // scan would have replayed instead; ordinary 403/409 responses do
@@ -1425,7 +1441,9 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
         const manualChanged = isDesk && "participantId" in pending.payload && res.status === 409 && data?.code === "MANUAL_IDENTITY_CHANGED";
         const attendanceReviewRequired = isDesk && res.status === 409 && data?.code === "CHECK_ATTENDANCE_REVIEW_REQUIRED";
         const sourceUnavailable = isDesk && res.status === 409 && data?.code === "CHECK_SOURCE_UNAVAILABLE";
-        const eligibilityReviewRequired = isDesk && res.status === 409 && typeof data?.code === "string" && ["TICKET_STATUS_CONFLICT", "CHECK_OUT_REVIEW_REQUIRED"].includes(data.code);
+        const admissionHold = isDesk && res.status === 409 && typeof data?.code === "string" && ADMISSION_HOLD_CODES.includes(data.code);
+        const eligibilityReviewRequired = isDesk && res.status === 409 && typeof data?.code === "string" && (["TICKET_STATUS_CONFLICT", "CHECK_OUT_REVIEW_REQUIRED"].includes(data.code) || admissionHold);
+        const alreadyOut = isDesk && res.status === 409 && data?.code === "ALREADY_CHECKED_OUT";
         const uncertain = !deskChanged && !manualChanged && !attendanceReviewRequired && !eligibilityReviewRequired && !sourceUnavailable && (pending.uncertain || res.status >= 500 || [408, 425, 429].includes(res.status));
         if (uncertain) pending.uncertain = true;
         if (!uncertain) {
@@ -1443,6 +1461,10 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
           boothLimitReached,
           alreadyIn: isDesk && res.status === 409 && data?.code === "ALREADY_CHECKED_IN",
           ...(isDesk && res.status === 409 && data?.code === "ALREADY_CHECKED_IN" ? alreadyInDetails(data?.details) : {}),
+          alreadyOut,
+          ...(alreadyOut ? alreadyOutDetails(data?.details) : {}),
+          ...(admissionHold ? { admissionHold: { waiting: (data?.details as { waiting?: unknown } | undefined)?.waiting === true } } : {}),
+          signedOut: res.status === 401,
           attendanceReviewRequired,
           eligibilityReviewRequired,
           deskRefreshRequired: deskChanged,
@@ -1620,6 +1642,7 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
       });
       const data = (await response.json().catch(() => null)) as Record<string, unknown> | null;
       if (!response.ok) {
+        if (response.status === 401) setSessionExpired(true);
         const uncertain = pending.uncertain || response.status >= 500 || [408, 425, 429].includes(response.status);
         if (!uncertain) pendingRewardCommandsRef.current.delete(attempt);
         else pending.uncertain = true;
@@ -1832,6 +1855,7 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
       });
       const data = (await res.json()) as { error?: unknown; code?: unknown; check?: { id?: unknown; corrected?: unknown; correction?: { id?: unknown } } } | null;
       if (!res.ok) {
+        if (res.status === 401) setSessionExpired(true);
         if (res.status === 409 && data?.code === "CHECK_CORRECTION_STALE") {
           pendingCorrectRef.current = null;
           forgetOperatorReceipt(pending.commandId);
@@ -1889,7 +1913,7 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
   // camera by itself (or on a tap). Anything that needs a decision holds.
   const plainSuccess = result.kind === "ok" && !result.correctionChanged && !historicalScan && !correctionLocked && !rewardCollectUncertain
     && !directionReview && !nametagOpen && !writeLocked && !correctUnknown && !rewardHold && sheet === null && entryMode !== "roster";
-  const infoFailure = result.kind === "failed" && !result.uncertain && (result.alreadyIn === true || boothLimitReached);
+  const infoFailure = result.kind === "failed" && !result.uncertain && (result.alreadyIn === true || result.alreadyOut === true || boothLimitReached);
   const infoAuto = infoFailure && !writeLocked && sheet === null && entryMode !== "roster";
   const autoMs = autoNext ? (plainSuccess ? 1500 : infoAuto ? 3000 : 0) : 0;
   const stageTone = result.kind === "ok"
@@ -1959,7 +1983,7 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
     setSwitching(true);
     setSwitchError("");
     const mode = desk.mode || "desk";
-    const sent = await sendDeskCommand(targetEventId, "desk.save", "", {
+    const sent = await sendDesk("desk.save", "", {
       id: desk.id, name: desk.name, action: next, mode, open: true, nametag: desk.nametag !== false,
       confirmDirectionChange: true, keepOpen: true,
       expectedDesk: { name: desk.name, action: desk.action, mode, open: desk.open !== false },
@@ -1973,6 +1997,12 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
     rememberDeskInAddress(desk.id, next);
     window.location.reload();
   }
+  // Every desk command shares the login check; the request ids live with sendDeskCommand.
+  async function sendDesk(command: string, assignmentId: string, payload: Record<string, unknown>) {
+    const sent = await sendDeskCommand(targetEventId, command, assignmentId, payload);
+    if (!sent.ok && sent.status === 401) setSessionExpired(true);
+    return sent;
+  }
   async function runArrival(work: () => Promise<{ ok: boolean; message?: string }>) {
     if (arrivalBusy || writeLocked) return;
     setArrivalBusy(true);
@@ -1983,15 +2013,15 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
     if (outcome.ok) arrivalCard.release();
     setArrivalBusy(false);
   }
-  async function handOver(arrival: DeskArrival) {
-    const sent = await sendDeskCommand(targetEventId, "arrival.handover", arrivalAssignment, { deskId, arrivalId: arrival.id });
+  async function handOver(arrival: DeskArrival, reentryReason?: string) {
+    const sent = await sendDesk("arrival.handover", arrivalAssignment, { deskId, arrivalId: arrival.id, ...(reentryReason ? { reentryReason } : {}) });
     if (!sent.ok) return sent;
     setSelectedArrival("");
     setHanded(arrival.name);
     primeScanFeedback();
     playScanFeedback("ok", soundOnRef.current);
     // The entry can be corrected from 최근 처리 like any scan.
-    setLastScan({ kind: "ok", participantId: arrival.participantId, name: arrival.name, action: "IN", reentry: false,
+    setLastScan({ kind: "ok", participantId: arrival.participantId, name: arrival.name, action: "IN", reentry: Boolean(reentryReason),
       checkId: typeof sent.data.checkId === "string" ? sent.data.checkId : undefined,
       place: { task: "desk", placeName: selectedDesk?.name ?? "", actionLabel: "입장" } });
     void load(true);
@@ -1999,7 +2029,7 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
   }
   async function approveAndHandOver(arrival: DeskArrival) {
     // Only the status shown on the card is approved: a cancellation made meanwhile stays cancelled.
-    const approved = await sendDeskCommand(targetEventId, "participant.status", arrivalAssignment,
+    const approved = await sendDesk("participant.status", arrivalAssignment,
       { id: arrival.participantId, status: "APPROVED", expectedStatus: arrival.review });
     return approved.ok ? handOver(arrival) : approved;
   }
@@ -2008,10 +2038,11 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
     if (lineBusyRef.current || writeLocked || !ready || !assignment) return;
     lineBusyRef.current = true;
     setLineBusy(true);
-    const sent = await sendDeskCommand(targetEventId, "arrival.record", assignment.id, { deskId, ticket: code });
+    const sent = await sendDesk("arrival.record", assignment.id, { deskId, ticket: code });
     lineBusyRef.current = false;
     setLineBusy(false);
-    setTicket("");
+    // An ended login keeps the typed code for the next try.
+    if (sent.ok || sent.status !== 401) setTicket("");
     setSheet(null);
     if (!sent.ok) {
       setLineNote({ tone: "bad", head: "보내지 못했습니다", name: "", detail: sent.message });
@@ -2032,9 +2063,19 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
   const approved = deskParticipants.filter((person) => person.status === "APPROVED");
   const insideCount = approved.filter((person) => person.inside === true).length;
   const placeTitle = activeTask === "desk" ? (selectedDesk?.name ?? "데스크") : (selectedBooth?.name ?? "부스");
-  const failKicker = boothLimitReached ? "인증 한도 도달" : result.kind === "failed" && result.alreadyIn ? "이미 입장했습니다" : result.kind === "failed" && result.uncertain ? "처리 결과를 확인하지 못했습니다" : result.kind === "failed" && result.attendanceReviewRequired ? "출입 기록 확인이 필요합니다" : result.kind === "failed" && result.eligibilityReviewRequired ? "참가 상태 확인이 필요합니다" : "처리하지 못했습니다";
+  // Signing in again opens a new tab, so this screen keeps its typed input and unconfirmed requests.
+  const signedOut = sessionExpired || arrivals.expired;
+  const relogin = signedOut ? (
+    <ProductLink variant="ghost" href={loginHrefForLocation(window.location.pathname, window.location.search)} target="_blank" rel="noreferrer">
+      다시 로그인<span className="sr-only"> (새 탭)</span>
+    </ProductLink>
+  ) : null;
+  const signedOutLine = signedOut ? <p className={prizeStyles.nextStep}>로그인이 만료됐습니다. {relogin}</p> : null;
+  const alreadyDone = result.kind === "failed" && Boolean(result.alreadyIn || result.alreadyOut);
+  const failKicker = boothLimitReached ? "인증 한도 도달" : result.kind === "failed" && result.alreadyOut ? "이미 퇴장했습니다" : result.kind === "failed" && result.alreadyIn ? "이미 입장했습니다" : result.kind === "failed" && result.uncertain ? "처리 결과를 확인하지 못했습니다" : result.kind === "failed" && result.attendanceReviewRequired ? "출입 기록 확인이 필요합니다" : result.kind === "failed" && result.eligibilityReviewRequired ? "참가 상태 확인이 필요합니다" : "처리하지 못했습니다";
   const resultActions = result.kind === "failed" ? (
     <div className={prizeStyles.nextActions}>
+            {relogin}
             {result.uncertain ? (
               <ProductButton type="button" ref={retryFailedRef} className="button button-primary" disabled={writeLocked || submitting || scanStatusChecking} onClick={() => { void submitTicket(result.requestTicket, true); }}>
                 같은 요청 재확인
@@ -2198,6 +2239,7 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
           ) : (
             <ConsoleEmptyState kind="empty" title="경품 확인은 티켓 스캔 또는 퇴장 처리 후 시작할 수 있습니다." />
           )}
+          {signedOutLine}
           {rewardNotice ? <StaffNote tone="ok" role="status">{rewardNotice}</StaffNote> : null}
           {rewardError && rewardTarget && rewardDataLoaded ? <StaffNote tone="danger" role="alert">{rewardError}</StaffNote> : null}
           <p className={prizeStyles.prizeNote}>이번 요청의 수령 완료 안내를 확인한 뒤 경품을 전달하세요.</p>
@@ -2249,6 +2291,7 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
               onChange={(event) => setCorrectReason(event.target.value)}
             />
           </div>
+          {signedOutLine}
           {correctUnknown ? (
             <p className={prizeStyles.nextStep} role="alert">응답을 확인하기 전까지 정정 대상·사유를 바꾸지 마세요. 같은 정정 요청으로 다시 시도하면 중복 정정 없이 확인할 수 있습니다.</p>
           ) : null}
@@ -2382,6 +2425,10 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
           .finally(() => { if (currentEventRef.current === selectedEvent) { receiptRefreshRef.current = false; setReceiptRefreshing(false); if (refreshed) drainAppliedReceipts(); } });
       }}>업무 정보 다시 확인</ProductButton></StaffNote> : null}
       {receiptNotice ? <StaffNote tone="info" role="status">{receiptNotice}</StaffNote> : null}
+      {signedOut ? <StaffNote tone="warn" role="alert">
+        로그인이 만료됐습니다. 새 탭에서 다시 로그인한 뒤 이 화면으로 돌아오세요. 여기 입력한 내용은 그대로 남습니다. {relogin}{" "}
+        <ProductButton type="button" variant="ghost" disabled={refreshing} onClick={() => { void load(true); void arrivals.refresh(); }}>{refreshing ? "로그인 확인 중" : "로그인 확인"}</ProductButton>
+      </StaffNote> : null}
       {scannerNotice ? <StaffNote tone="warn" role="alert">{scannerNotice}</StaffNote> : null}
       {rewardCollectUncertain ? <StaffNote tone="warn" role="alert">
         <p>경품 수령 결과를 확인할 때까지 다른 현장 업무를 잠급니다. 아래에서 같은 요청을 다시 확인하세요. 서버 처리 확인만으로는 대상을 확인할 수 없습니다.</p>
@@ -2578,7 +2625,7 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
           </ProductButton>
         </div>
       ) : null}
-      {loadError && activeTask === "desk" && !assignmentStale && !receiptRefreshNeeded && !deskClosed && !deskRefreshRequired ? (
+      {loadError && !signedOut && activeTask === "desk" && !assignmentStale && !receiptRefreshNeeded && !deskClosed && !deskRefreshRequired ? (
         <StaffNote tone="warn" role="status">
           {loadError}{" "}
           <ProductButton type="button" className="button button-secondary" disabled={refreshing} onClick={() => void load(true)}>
@@ -2688,9 +2735,10 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
           <ArrivalNow view={arrivals.view} arrival={waiting} replaced={arrivalCard.replaced} busy={arrivalBusy || writeLocked} message={arrivalMessage}
             onHand={() => void runArrival(() => handOver(waiting))}
             onApprove={() => void runArrival(() => approveAndHandOver(waiting))}
+            onReadmit={(reason) => void runArrival(() => handOver(waiting, reason))}
             onPrint={() => setForcedPrint(waiting.id)}
             onCancel={() => void runArrival(async () => {
-              const sent = await sendDeskCommand(targetEventId, "arrival.cancel", arrivalAssignment, { deskId, arrivalId: waiting.id });
+              const sent = await sendDesk("arrival.cancel", arrivalAssignment, { deskId, arrivalId: waiting.id });
               if (sent.ok) setSelectedArrival("");
               return sent;
             })} />
@@ -2803,17 +2851,21 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
             <div className={prizeStyles.overlayBody}>
               <span className={prizeStyles.badge} data-tone={stageTone} aria-hidden="true">{stageTone === "info" ? <InfoIcon /> : stageTone === "bad" ? <XIcon /> : <BangIcon />}</span>
               <h2 className={prizeStyles.kicker}>{failKicker}</h2>
-              {result.alreadyIn && result.alreadyName ? <p className={prizeStyles.bigName}>{result.alreadyName}</p> : null}
-              <p className={`${boothLimitReached || result.alreadyIn ? "scan-result notice" : "scan-result scan-failure"} ${result.alreadyIn && result.alreadyName ? prizeStyles.quietMessage : prizeStyles.bigMessage}`} role={boothLimitReached || result.alreadyIn ? "status" : "alert"}>{result.message}</p>
-              {result.alreadyIn && (result.alreadyName || result.alreadyAt) ? (
-                <p className={prizeStyles.subLine}>{[affiliationOf(alreadyPerson), result.alreadyAt ? `${formatCheckTime(result.alreadyAt)} 입장` : ""].filter(Boolean).join(" · ")}</p>
+              {alreadyDone && result.alreadyName ? <p className={prizeStyles.bigName}>{result.alreadyName}</p> : null}
+              <p className={`${boothLimitReached || alreadyDone ? "scan-result notice" : "scan-result scan-failure"} ${alreadyDone && result.alreadyName ? prizeStyles.quietMessage : prizeStyles.bigMessage}`} role={boothLimitReached || alreadyDone ? "status" : "alert"}>{result.message}</p>
+              {alreadyDone && (result.alreadyName || result.alreadyAt) ? (
+                <p className={prizeStyles.subLine}>{[affiliationOf(alreadyPerson), result.alreadyAt ? result.alreadyOut ? `${formatCheckTime(result.alreadyAt)} 퇴장` : `${formatCheckTime(result.alreadyAt)} 입장` : ""].filter(Boolean).join(" · ")}</p>
               ) : null}
               {result.place.placeName ? (
                 <p className={prizeStyles.subLine}>처리 위치: {result.place.placeName} · {result.place.actionLabel}</p>
               ) : null}
               {result.requestTarget ? <p className={prizeStyles.subLine}>확인한 참가자: {result.requestTarget}</p> : null}
               <p id="staff-scan-retry-hint" className={prizeStyles.reason}>
-            {result.uncertain
+            {result.signedOut
+              ? result.uncertain
+                ? "새 탭에서 다시 로그인한 뒤 돌아와 같은 요청 재확인을 누르세요. 그때까지 다른 스캔과 업무 전환은 잠깁니다."
+                : "새 탭에서 다시 로그인한 뒤 돌아와 확인을 누르고 다시 처리하세요. 입력한 내용은 남아 있습니다."
+              : result.uncertain
               ? "다른 스캔과 업무 전환이 잠깁니다. 서버 확인은 요청을 다시 보내지 않습니다. 같은 요청 재확인은 아직 처리되지 않았다면 처리할 수 있습니다."
               : result.manualRefreshRequired
               ? loadError || "최신 명단을 불러온 뒤 이름과 소속을 다시 확인하세요."
@@ -2827,10 +2879,16 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
               ? "같은 부스에서 다음 참가자의 티켓을 확인하세요."
               : result.attendanceReviewRequired
               ? "현장 책임자가 참가자와 최근 출입 기록을 확인한 뒤 처리해 주세요."
+              : result.admissionHold
+              ? result.admissionHold.waiting
+                ? arrivalsOn ? "‘기다리는 사람’ 목록에서 이 참가자를 선택해 확인하세요." : "접수 노트북의 ‘기다리는 사람’ 목록에도 있습니다. 행사 책임자에게 알려 주세요."
+                : "행사 책임자의 확인이 끝난 뒤 같은 티켓을 다시 처리하세요."
               : result.eligibilityReviewRequired
               ? "현장 책임자가 참가 상태와 출입 기록을 확인한 뒤 처리해 주세요."
               : result.alreadyIn
               ? "본인이 맞다면 그대로 들어가셔도 됩니다."
+              : result.alreadyOut
+              ? "추가 처리 없이 보내 드려도 됩니다."
               : result.requestTarget
               ? "참가자 정보와 처리 위치를 확인하거나 현장 책임자에게 문의하세요."
               : result.message.includes("다시 시도")
@@ -3020,6 +3078,7 @@ export default function StaffEventWork({ eventId, embedded }: { eventId: string;
               aria-describedby="staff-manual-search-help" />
             <p id="staff-manual-search-help">이름을 두 글자 이상 입력하세요. 한 글자 이름은 그대로 입력합니다. 연락처와 티켓 코드는 표시하지 않습니다.</p>
             <p role="status">{refreshing ? "명단을 다시 확인하고 있습니다." : loadError ? "최신 명단을 확인하지 못했습니다. 표시된 출입 상태는 이전 확인 기준입니다." : "출입 상태는 마지막으로 확인한 명단 기준입니다. 처리할 때 서버가 다시 확인합니다."}</p>
+            {signedOutLine}
             {manualSearchTerm && deskSourcesAvailable ? (
               <div>
                 <p role="status">{manualMatches.length ? `${manualMatches.length}명 검색됨${manualMatches.length > manualVisibleLimit ? ` · ${manualVisibleLimit}명 표시` : ""}` : "일치하는 참가자가 없습니다. 이름을 확인하세요."}</p>

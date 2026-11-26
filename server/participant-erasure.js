@@ -140,6 +140,11 @@ function eraseWorkspaceCopies(workspace, participantId, formerName) {
   for (const entry of list(workspace.audit)) {
     if (!entry || typeof entry !== 'object') continue;
     let touched = false;
+    // A one-time re-entry keeps its reason as free text about this person: drop it.
+    if (String(plain(entry.reentryOverride)?.participantId) === pid && entry.detail) {
+      entry.detail = '';
+      counts.audit += 1;
+    }
     // A guest action (question.submit, ...) records the participant id as actor and the
     // text they wrote as detail: keep who/when/which action, drop what they wrote.
     if (String(entry.actor) === pid && typeof entry.detail === 'string' && entry.detail !== '') {

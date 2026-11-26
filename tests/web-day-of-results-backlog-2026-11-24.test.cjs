@@ -32,7 +32,8 @@ test("R1/R2 현장 모드 지급은 그 줄에서 먼저 확인하고, 버튼은
 });
 
 test("R6 입장 수는 (%)를 등록 옆에, 정원은 뒤에 두고 명단·스태프 화면 링크를 둔다", () => {
-  assert.match(liveWorkspace, /등록 \{model\.registered\} \(\{entryPct\}%\)<em>\{model\.capacity \? ` · 정원 \$\{model\.capacity\}` : ""\}<\/em>/u);
+  // Reopened 2026-11-26: the denominator is approved people and "지금 안에" sits before the capacity.
+  assert.match(liveWorkspace, /승인 \{model\.approved\} \(\{entryPct\}%\)<em> · 지금 안에 \{model\.inside\}<\/em><em>\{model\.capacity \? ` · 정원 \$\{model\.capacity\}` : ""\}<\/em>/u);
   assert.match(liveWorkspace, /\$\{base\}\/participants`\}>명단 보기</u);
   assert.match(liveWorkspace, /href="\/staff"[^>]*>스태프 화면/u);
 });

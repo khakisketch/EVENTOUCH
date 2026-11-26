@@ -101,11 +101,14 @@
   letter-spacing: 0.06em;
 }
 
+/* Reopened 2026-11-26: a stale connection is a small quiet line on the draw stage too. */
 .cinematicBoard :global(.display-stale) {
   margin-right: auto;
-  border-color: rgb(232 189 97 / 55%);
-  background: rgb(72 50 27 / 76%);
-  color: var(--stage-gold-bright);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--stage-muted);
+  font-size: clamp(11px, 0.9vw, 18px);
 }
 
 .cinematicContent {

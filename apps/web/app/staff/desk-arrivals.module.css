@@ -7,7 +7,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* "safe" keeps the name reachable when the re-entry question makes the card taller than the stage. */
+  justify-content: safe center;
+  overflow-y: auto;
   gap: var(--s2);
   padding: var(--s5);
   background: var(--success-soft);
@@ -26,6 +28,14 @@
 .nowActions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s2); }
 .problem { margin: 0; color: var(--danger); font-size: var(--text-sm); font-weight: var(--fw-strong); }
 .changed { margin: 0; color: var(--ink); font-size: var(--text-sm); font-weight: var(--fw-strong); }
+
+/* Reopened 2026-11-26: the one-time re-entry question, asked in place on the card. */
+.readmit { display: grid; justify-items: center; gap: var(--s2); width: min(420px, 100%); margin-top: var(--s2); }
+.reasons { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s2); }
+.reasons button { min-height: var(--control-min-size); padding: 0 var(--s4); border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: var(--paper); color: var(--ink); font: inherit; font-weight: var(--fw-strong); cursor: pointer; }
+.reasons button[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.reasons button:disabled { opacity: 0.5; cursor: default; }
+.reasons button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
 .listBlock { display: grid; gap: var(--s2); min-width: 0; }
 .listHead { display: flex; justify-content: space-between; margin: 0; font-size: var(--text-lg); font-weight: var(--fw-heavy); }

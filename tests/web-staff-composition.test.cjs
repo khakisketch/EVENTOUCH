@@ -38,7 +38,8 @@ test("recent rows are plain: name, detail and time, no per-row button", () => {
 
 test("field result: a colored face over the camera, a plain success hands itself back", () => {
   assert.match(work, /data-tone=\{stageTone\}/u, "the overlay carries its tone");
-  assert.match(work, /const infoFailure = result\.kind === "failed" && !result\.uncertain && \(result\.alreadyIn === true \|\| boothLimitReached\)/u, "an already-entered ticket is information, not an error");
+  // Reopened 2026-11-26: an exit scan for someone already out is information too.
+  assert.match(work, /const infoFailure = result\.kind === "failed" && !result\.uncertain && \(result\.alreadyIn === true \|\| result\.alreadyOut === true \|\| boothLimitReached\)/u, "an already-entered ticket is information, not an error");
   assert.match(work, /\(infoFailure \? "info" : result\.uncertain \|\| result\.attendanceReviewRequired[^)]*\? "warn" : "bad"\)/u, "needs-a-look is amber, a plain failure red");
   assert.match(css, /\.overlay\s*\{[^}]*var\(--success-soft\)/su);
   assert.match(css, /\.overlay\[data-tone="info"\]\s*\{[^}]*var\(--info-soft\)/su);

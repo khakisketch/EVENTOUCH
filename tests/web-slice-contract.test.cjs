@@ -955,16 +955,17 @@ test('web-display-honors-the-operator-selection-from-the-public-projection', () 
   assert.match(board, /display-idle/);
 });
 
-test('web-display-failed-first-load-and-stale-offer-manual-recovery', () => {
-  // 현장 마감 사유: 첫 로드 실패는 자동 폴링만으로는 화면 앞에 선 스태프가
-  // 할 일이 없으므로 '다시 시도'로 즉시 회복한다. stale은 마지막 화면 유지
-  // 그대로 두고 '새로고침'으로 같은 즉시 회복을 준다. idle도 선택 화면과
+// Reopened 2026-11-26: the venue screen is read by guests. It carries no refresh
+// control and no operator instruction; the poll loop alone recovers it.
+test('web-display-failed-first-load-and-stale-recover-by-polling-with-neutral-copy', () => {
+  // stale은 마지막 화면을 그대로 두고 스스로 다시 읽는다. idle도 선택 화면과
   // 같은 푸터를 써서 idle→선택 전환에 틀이 흔들리지 않는다.
   const board = read('app/screen/[slug]/DisplayBoard.tsx');
   assert.match(board, /aria-label="화면 오류"/);
-  assert.match(board, /onClick=\{refreshNow\}>\s*다시 시도/);
-  assert.match(board, /onClick=\{refreshNow\}>\s*새로고침/);
-  assert.match(board, /\[slug, pollDelay, retryTick\]/);
+  assert.match(board, /잠시 후 화면이 표시됩니다/);
+  assert.doesNotMatch(board, /ProductButton|<button|새로고침|다시 시도|운영자|확인하세요/);
+  assert.match(board, /\[slug, pollDelay\]/);
+  assert.match(board, /backoff = failed;\s*scheduleNext\(\);/);
   const idle = board.slice(board.indexOf('display-board display-idle'));
   assert.match(idle, /display-footer/);
 });
