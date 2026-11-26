@@ -7,7 +7,7 @@ const crypto = require('node:crypto');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { prepareCaptureDir, defaultCaptureDir, runStamp, ensureRunTmpDir } = require('./capture-dir.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
-const { messageStep, chooseRadio, selectTask, openRecipientList, openMessagePanel, openMessageMore, openTemplatePicker } = require('./ui-journey-helpers.cjs');
+const { messageStep, chooseRadio, selectTask, openRecipientList, openMessagePanel, openMessageMore, openTemplatePicker, closeRecipientList } = require('./ui-journey-helpers.cjs');
 const axeSource = require('axe-core').source;
 let phase = 'setup';
 (async () => {
@@ -79,7 +79,7 @@ let phase = 'setup';
       check('Alimtalk does not offer changes outside the approved wording', await page.getByRole('group', { name: '개인화 정보 넣기', exact: true }).count() === 0);
       await page.setViewportSize({ width: 1280, height: 900 });
       await ensureListOpen();
-      check('one-person summary counts the recipient and actual status, and the checked row names them', /선택 1명/.test(await summary.innerText()) && (await summary.innerText()).includes('확정 1명') && await selectedRows().filter({ hasText: ws.participants[0].name }).getByRole('checkbox').isChecked());
+      check('one-person summary counts the recipient and actual status, and the checked row names them', /선택 1명/.test(await summary.innerText()) && (await summary.innerText()).includes('확정 1') && await selectedRows().filter({ hasText: ws.participants[0].name }).getByRole('checkbox').isChecked());
       await assess('approved wording desktop'); await capture('04-approved-wording-1280');
       phase = 'group selection and preservation';
       await messageStep(page, 1); await ensureListOpen(); await page.locator('#recipient-selected-only').uncheck(); await page.locator('#recipient-clear-all').click();
@@ -100,8 +100,8 @@ let phase = 'setup';
       for (const width of [390, 320]) {
         await page.setViewportSize({ width, height: 844 }); await assess('group picker ' + width); await capture('05-groups-' + width);
       }
-      await messageStep(page, 2);
-      check('composition summary describes the actual selected groups', /선택 3명/.test(await summary.innerText()) && (await summary.innerText()).includes('확정 3명') && await page.locator('#recipient-selected-only').isChecked() && /파트너/.test(await selectedRows().allInnerTexts().then(rows => rows.join(' '))) && /스피커/.test(await selectedRows().allInnerTexts().then(rows => rows.join(' '))));
+      await messageStep(page, 2); await ensureListOpen(); // the list is a dialog: reopen it to read the checked rows
+      check('composition summary describes the actual selected groups', /선택 3명/.test(await summary.innerText()) && (await summary.innerText()).includes('확정 3') && await page.locator('#recipient-selected-only').isChecked() && /파트너/.test(await selectedRows().allInnerTexts().then(rows => rows.join(' '))) && /스피커/.test(await selectedRows().allInnerTexts().then(rows => rows.join(' '))));
       phase = 'automatic length and validation';
       await openMessagePanel(page, 'how'); await chooseRadio(page, 'campaign-channel', 'SMS');
       check('ordinary text remains editable', await page.locator('#campaign-body').getAttribute('readonly') === null);
@@ -143,6 +143,7 @@ let phase = 'setup';
       // guarantee is: 발송 검토 on the stale list shows the review-required warning, opens no
       // confirmation and issues no command.
       const staleCommands = commands.length;
+      await closeRecipientList(page); // Reopened 2026-11-26: the review list is a dialog that opened by itself; dismiss it to press 발송 검토
       await page.locator('#campaign-submit').click();
       await page.locator('#campaign-recipients-error').waitFor();
       check('review cannot continue from the stale list', await page.getByRole('group', { name: '실행 확인', exact: true }).count() === 0 && commands.length === staleCommands && await page.getByRole('button', { name: '최신 수신자 불러오기', exact: true }).isEnabled());
@@ -191,15 +192,15 @@ let phase = 'setup';
       page = await context.newPage(); observePage(page);
       await page.goto(base, { waitUntil: 'networkidle' }); await previousPage.close();
       await page.locator(`[id="campaign-${older.id}"]`).getByRole('button', { name: '내용·대상 불러오기', exact: true }).click();
-      await page.locator('#campaign-body').waitFor({ state: 'visible' });
-      check('historical Alimtalk keeps its old body without claiming a current approval', await page.locator('#campaign-body').inputValue() === template.body && await page.locator('#campaign-template').inputValue() === '');
+      await page.locator('#campaign-template-cards').waitFor({ state: 'visible' }); // Reopened 2026-11-26: 알림톡 shows approved-template cards; the old body stays in the draft, hidden
+      check('historical Alimtalk keeps its old body without claiming a current approval', await page.locator('#campaign-body').inputValue() === template.body && await page.locator('#campaign-template-cards input:checked').count() === 0);
       check('historical approval mismatch requests reselection', await page.getByText(/승인된 알림톡 템플릿을 다시 선택하세요/).isVisible());
       const unboundCommands = commands.length;
       await page.locator('#campaign-submit').click();
       await page.locator('#campaign-template-error').waitFor();
-      await page.waitForFunction(() => document.activeElement?.id === 'campaign-template');
+      await page.waitForFunction(() => document.activeElement?.id?.startsWith('campaign-template-cards')); // Reopened 2026-11-26: the error lands on the first template card
       check('unbound history cannot advance to send review', await page.getByRole('group', { name: '실행 확인', exact: true }).count() === 0 && commands.length === unboundCommands);
-      await (await openTemplatePicker(page)).selectOption(template.id);
+      await page.locator('#campaign-template-cards label', { hasText: template.name }).locator('input').click({ force: true }); // opens the replacement confirm; the card is only checked once it is accepted
       await page.getByRole('button', { name: '템플릿 적용', exact: true }).click();
       check('explicit template replacement uses the current saved approved wording', await page.locator('#campaign-body').inputValue() === latestBody && await page.locator('#campaign-body').getAttribute('readonly') !== null);
       check('reselecting current wording clears the resolved historical approval warning', await page.locator('#campaign-reload-summary').count() === 0);

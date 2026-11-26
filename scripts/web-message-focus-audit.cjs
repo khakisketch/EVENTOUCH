@@ -5,7 +5,7 @@ const path = require('node:path');
 const { startAuditFixture, cookieForContext } = require('./audit-fixture.cjs');
 const { launchBrowser } = require('./audit-browser.cjs');
 const { prepareCaptureDir, ensureRunTmpDir } = require('./capture-dir.cjs');
-const { messageStep, openRecipientList, openMessageMore } = require('./ui-journey-helpers.cjs');
+const { messageStep, openRecipientList, openMessageMore, closeRecipientList } = require('./ui-journey-helpers.cjs');
 
 async function main() {
   if (!process.env.EVENTOUCH_CAPTURE_ROOT) throw new Error('Set a private capture root');
@@ -25,6 +25,7 @@ async function main() {
       await page.locator('#message-compose-open').click();
       await openRecipientList(page);
       await page.getByRole('checkbox', { name: /표시 \d+명 모두 선택/ }).check();
+      await closeRecipientList(page); // Reopened 2026-11-26: the list is a dialog; the work continues behind it
     };
     // The skip link is the only jump left: it moves focus to the body without gating anything.
     await open();

@@ -121,11 +121,13 @@ async function main() {
       await changed.getByRole('button', { name: '내용·대상 불러오기', exact: true }).press('Enter');
       await page.locator('#campaign-reload-summary').waitFor();
       assert.match(await page.locator('#campaign-reload-summary').innerText(), /선택 1명 · 제외 1명/);
-      assert.match(await page.locator('#campaign-recipients').innerText(), /9998/);
+      assert.match(await page.getByRole('dialog').innerText(), /9998/); // Reopened 2026-11-26: the review list is the 직접 고르기 dialog
       await page.waitForFunction(() => document.activeElement?.id === 'recipient-search');
       await page.evaluate(axeSource);
       for (const width of [320, 390, 768, 1280]) {
         await page.setViewportSize({ width, height: 844 });
+        // The review list is a dialog that fades in; contrast is only meaningful once its animation has finished.
+        await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => null))));
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
         assert.deepEqual(await page.evaluate(async () => (await window.axe.run()).violations
           .filter(item => ['serious', 'critical'].includes(item.impact)).map(item => item.id)), []);
@@ -169,13 +171,14 @@ async function main() {
     await messageStep(page, 3);
     await page.getByLabel('모의 발송으로 기록', { exact: false }).uncheck(); // Reopened 2026-11-24 (owner decision 11): 미연동 기본값은 모의 발송, 이 감사는 실제 요청 경로
     await (await chooseScheduleDate(page)).fill('2099-01-16T10:00');
-    assert.equal(await page.getByRole('radio', { name: '수동 실행', exact: true }).isChecked(), true);
-    await page.getByRole('radio', { name: '자동 실행', exact: true }).check();
+    // Reopened 2026-11-26 (owner): the execution radios became one line plus a switch. This fixture's server cannot run
+    // reservations itself, so the default is 직접 실행; the audit then switches to 자동 발송.
+    assert.match(await page.locator('#campaign-schedule-mode').innerText(), /발송 실행/);
+    await page.getByRole('button', { name: '자동 발송으로 바꾸기', exact: true }).click();
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.screenshot({ path: path.join(out, 'schedule-1280.png'), fullPage: true });
     if (!before) {
-      assert.equal(await page.getByText(/예약 시각 이후 자동 발송을 시도합니다/).count(), 1, 'long execution guidance appears once in the editor');
-      assert.equal(await page.locator('#message-composer').getByText(/이 서버의 예약 자동 실행 설정이 꺼져 있습니다/).count(), 1, 'server status appears once in the editor');
+      assert.equal(await page.locator('#message-composer').getByText(/이 서버는 지금 자동 발송이 꺼져 있어/).count(), 1, 'server status appears once in the editor');
       await page.locator('#campaign-submit').click();
       const confirmation = page.getByRole('group', { name: '실행 확인', exact: true });
       assert.match(await confirmation.innerText(), /자동 실행/);

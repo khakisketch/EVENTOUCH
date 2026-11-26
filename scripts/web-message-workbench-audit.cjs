@@ -1,5 +1,5 @@
 'use strict';
-const { messageStep, openRecipientList, openMessageMore } = require('./ui-journey-helpers.cjs');
+const { messageStep, openRecipientList, openMessageMore, closeRecipientList } = require('./ui-journey-helpers.cjs');
 // Reopened 2026-11-24 (owner: 시안 A): the record title now sits under 더 보기, so the always-visible
 // message body is the marker for "the composer is on screen".
 
@@ -235,7 +235,8 @@ async function main() {
     await openRecipientList(page);
     await page.locator('#recipient-selected-only').uncheck();
     await page.locator('#recipient-search').fill(people[0].name);
-    check('recipient filter keeps hidden selection', (await page.locator('#recipient-summary').innerText()).includes('화면 밖 선택 1명'));
+    check('recipient filter keeps hidden selection', (await page.getByRole('dialog').innerText()).includes('화면 밖 선택 1명')); // Reopened 2026-11-26: the off-screen count sits in the list dialog's footer
+    await closeRecipientList(page);
     await page.locator('#message-compose-close').click();
     const failedRow = page.locator(`#campaign-${failed.id}`);
     await failedRow.getByRole('button', { name: '내용·대상 불러오기', exact: true }).click();
@@ -279,7 +280,8 @@ async function main() {
       });
       check(`lost response: ${name} stays reachable`, geometry.width >= 44 && geometry.height >= 44 && geometry.unobscured, geometry);
     }
-    check('lost response preserves the original recipient selection', await page.locator('ul[aria-label="참가자 선택"] input:checked').count() === failed.recipientIds.length);
+    // Reopened 2026-11-26: the checked rows live in the list dialog, which is not mounted here; the summary carries the count.
+    check('lost response preserves the original recipient selection', (await page.locator('#recipient-summary').textContent()).includes(`선택 ${failed.recipientIds.length}명`));
     await page.locator('#message-compose-close').click();
     await failedRow.getByRole('button', { name: '내용·대상 불러오기', exact: true }).click();
     await page.locator('#campaign-submit').waitFor();
@@ -312,8 +314,8 @@ async function main() {
     const applyTemplate = page.getByRole('button', { name: '템플릿 적용', exact: true });
     if (await applyTemplate.isVisible()) await applyTemplate.click();
     await page.locator('#campaign-sentence').waitFor();
-    check('a completed draft does not leave a stale selected-only filter', !await page.locator('#recipient-selected-only').isChecked());
     await openRecipientList(page);
+    check('a completed draft does not leave a stale selected-only filter', !await page.locator('#recipient-selected-only').isChecked());
     await page.locator('ul[aria-label="참가자 선택"] input[type="checkbox"]').first().check();
     await messageStep(page, 2);
     await page.locator('#campaign-body').waitFor();

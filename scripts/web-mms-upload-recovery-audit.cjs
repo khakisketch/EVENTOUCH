@@ -64,6 +64,7 @@ async function main() {
     else assert.equal(await page.locator('#campaign-channel input[value=SMS]').isChecked(), true, 'photo selection begins from the automatic text family');
     const jpeg = Buffer.alloc(1024);
     Buffer.from('ffd8ffc0000b080001000a01011100ffd9', 'hex').copy(jpeg);
+    await page.locator('#campaign-channel input[value=MMS]').check({ force: true }); // Reopened 2026-11-26: 사진 문자 is chosen before the photo
     const input = page.locator('#campaign-image');
     const recovery = page.getByRole('region', { name: 'MMS 사진 확인 필요' });
     phase = 'upload committed but response lost';

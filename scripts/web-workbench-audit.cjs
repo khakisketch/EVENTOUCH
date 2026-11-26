@@ -633,7 +633,7 @@ async function main() {
     // Only the disposable fixture receives the synthetic JPG upload.
     await messageStep(page, 2);
     await openMessagePanel(page, 'how');
-    await chooseRadio(page, 'campaign-channel', 'SMS'); // The attachment switches the new request to MMS.
+    await chooseRadio(page, 'campaign-channel', 'MMS'); // Reopened 2026-11-26: 사진 문자 is chosen first; the photo then rides the MMS request.
     await openMessageMore(page); // the photo attachment sits under 더 보기
     const jpeg = Buffer.alloc(1024);
     Buffer.from('ffd8ffc0000b080001000a01011100ffd9', 'hex').copy(jpeg);

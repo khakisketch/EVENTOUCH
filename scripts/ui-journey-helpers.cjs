@@ -52,36 +52,43 @@ async function closeSettingsBasics(page, timeout = 15000) {
 async function chooseRadio(root, id, value) {
   const choices = await root.locator(`#${id} input[type="radio"]`).all();
   for (const choice of choices) {
-    if (await choice.getAttribute('value') === value) { await choice.check(); return; }
+    if (await choice.getAttribute('value') === value) { await choice.check({ force: true }); return; }
   }
   throw new Error(`Unavailable single choice: ${id}/${value}`);
 }
-// Reopened 2026-11-24 (owner: 시안 A): the composer is ONE sentence with three pill buttons
-// (#campaign-who-pill 받는 사람 / #campaign-how-pill 보내는 방법 / #campaign-when-pill 시점), each
-// opening one inline panel (one at a time; folded panels stay mounted with `hidden`). The body,
-// purpose chips and 더 보기 sit below, the send review button in a dock. Nothing is validated or
-// blocked by moving between them; validation lives in the 발송 검토 submit, so these helpers never
-// manufacture recipients or bypass it.
+// Reopened 2026-11-26 (owner: 한 화면 네 구역): the composer is one sentence (#campaign-who-pill 받는 사람 /
+// #campaign-how-pill 보내는 방법 / #campaign-when-pill 시점) over four always-mounted zones. The pills only scroll to
+// their zone; nothing is folded, so these helpers scroll the zone into view and never click a pill. 직접 고르기 is a
+// dialog (#recipient-direct-open). Nothing is validated or blocked by moving between zones; validation lives in the
+// 발송 검토 submit, so these helpers never manufacture recipients or bypass it.
 const MESSAGE_PANEL = {
   who: { pill: '#campaign-who-pill', panel: '#campaign-recipients' },
   how: { pill: '#campaign-how-pill', panel: '#campaign-how-panel' },
   when: { pill: '#campaign-when-pill', panel: '#campaign-schedule' },
 };
-// Opens one sentence panel (idempotent) and waits until it is visible.
+// The 직접 고르기 list is a modal dialog: any journey that moves on to another zone must dismiss it first (idempotent).
+async function closeRecipientList(page) {
+  const done = page.locator('#recipient-list-close');
+  if (await done.isVisible()) {
+    await done.click();
+    await page.locator('#recipient-list-close').waitFor({ state: 'detached' });
+  }
+}
+// Brings one zone into view (idempotent) and waits until it is visible.
 async function openMessagePanel(page, which) {
-  const { pill, panel } = MESSAGE_PANEL[which];
-  if (!(await page.locator(panel).isVisible())) await page.locator(pill).click();
+  if (which !== 'who') await closeRecipientList(page);
+  const { panel } = MESSAGE_PANEL[which];
+  await page.locator(panel).scrollIntoViewIfNeeded();
   await page.locator(panel).waitFor({ state: 'visible' });
 }
-// Closes the open panel through its pill (idempotent).
+// Zones never fold; kept so older journeys keep their shape.
 async function closeMessagePanel(page, which) {
-  const { pill, panel } = MESSAGE_PANEL[which];
-  if (await page.locator(panel).isVisible()) await page.locator(pill).click();
-  await page.locator(panel).waitFor({ state: 'hidden' });
+  await page.locator(MESSAGE_PANEL[which].panel).waitFor({ state: 'visible' });
 }
 // 더 보기 (저장한 템플릿 · 사진 · 기록 제목): idempotent open.
 // Reopened 2026-11-25: there is no 더 보기 fold any more; this opens the record-name field ("바꾸기").
 async function openMessageMore(page) {
+  await closeRecipientList(page);
   const toggle = page.locator('#campaign-title-edit');
   if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
   await page.locator('#campaign-title').waitFor({ state: 'visible' });
@@ -97,32 +104,35 @@ async function openMessagePreview(page) {
 async function closeMessagePreview(page) {
   if ((await page.locator('#message-preview-open').getAttribute('aria-expanded')) === 'true') await page.locator('#message-preview-close').click();
 }
-// The saved-template picker is in the template starters for 문자 (always visible) and inside the
-// 보내는 방법 panel for 알림톡; open the panel when needed and return its locator.
+// The saved-template picker sits with the purpose chips in zone 4 for the text channels. 알림톡 has no picker: its approved
+// templates are cards (#campaign-template-cards), so a journey that needs the select stays on 문자.
 async function openTemplatePicker(page) {
+  await closeRecipientList(page);
   const select = page.locator('#campaign-template');
-  if (await select.isVisible()) return select;
-  if (await select.evaluate(element => Boolean(element.closest('#campaign-how-panel')))) await openMessagePanel(page, 'how');
+  await select.scrollIntoViewIfNeeded();
   await select.waitFor({ state: 'visible' });
   return select;
 }
 // Step 1 = 받는 사람 (opens the who panel), 2 = 내용 (the message body), 3 = 검토·발송 (the dock).
 async function messageStep(page, step) {
+  if (step !== 1) await closeRecipientList(page);
   if (step === 1) await openMessagePanel(page, 'who');
   else if (step === 2) {
-    await page.locator('#campaign-body').scrollIntoViewIfNeeded();
-    await page.locator('#campaign-body').waitFor({ state: 'visible' });
+    // 알림톡 shows approved-template cards instead of an editable body (the textarea stays mounted but hidden).
+    const target = (await page.locator('#campaign-body').isVisible()) ? '#campaign-body' : '#campaign-content';
+    await page.locator(target).scrollIntoViewIfNeeded();
+    await page.locator(target).waitFor({ state: 'visible' });
   } else {
     await page.locator('#campaign-submit').scrollIntoViewIfNeeded();
     await page.locator('#campaign-submit').waitFor({ state: 'visible' });
   }
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 30))));
 }
-// The "직접 고르기" recipient list is folded by default inside the 받는 사람 panel; open the panel
-// and then the list (never close either) before touching its filters or checkboxes.
+// The "직접 고르기" list is a dialog opened by the fourth audience card; open it (idempotent) before touching its
+// filters or checkboxes. Close it with #recipient-list-close (완료) or Escape.
 async function openRecipientList(page) {
   await openMessagePanel(page, 'who');
-  if (!(await page.locator('#recipient-status-filter').isVisible())) await page.locator('#recipient-list-summary').click();
+  if (!(await page.locator('#recipient-status-filter').isVisible())) await page.locator('#recipient-direct-open').click();
   await page.locator('#recipient-status-filter').waitFor({ state: 'visible' });
 }
 // "시점" panel: the datetime-local only exists once 날짜·시각 지정 is chosen.
@@ -196,4 +206,4 @@ async function openLocationEditor(page, kind, hasText) {
   await page.getByRole('button', { name: `${kind} 편집`, exact: true }).click();
 }
 
-module.exports = { closeSettingsBasics, openLocationEditor, openSetupFold, settleLayout, openStudioPanel, selectDrawStage, openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, openMessagePanel, closeMessagePanel, openMessageMore, openMessagePreview, closeMessagePreview, openTemplatePicker, chooseScheduleDate, openRecipientList, waitForDialogExitFocus };
+module.exports = { closeRecipientList, closeSettingsBasics, openLocationEditor, openSetupFold, settleLayout, openStudioPanel, selectDrawStage, openProgram, programSection, selectTask, openCreateSettings, openSettingsBasics, chooseRadio, messageStep, openMessagePanel, closeMessagePanel, openMessageMore, openMessagePreview, closeMessagePreview, openTemplatePicker, chooseScheduleDate, openRecipientList, waitForDialogExitFocus };
