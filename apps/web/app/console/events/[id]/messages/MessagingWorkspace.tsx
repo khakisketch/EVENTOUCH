@@ -55,6 +55,8 @@ type Template = {
   channel: string;
   body: string;
   solapiTemplateId: string;
+  // Optional one-line note on when to use it; shown on the compose cards.
+  description: string;
   archived: boolean;
   version: number;
 };
@@ -135,6 +137,7 @@ type TemplateDraft = {
   channel: string;
   body: string;
   solapiTemplateId: string;
+  description: string;
   version?: number;
 };
 type TemplateAttempt = { eventId: string; id: string; command: "template.save" | "template.archive"; fingerprint: string; payload: Record<string, unknown>; draft: TemplateDraft; target?: Template };
@@ -183,6 +186,7 @@ const EMPTY_TEMPLATE: TemplateDraft = {
   channel: "SMS",
   body: "",
   solapiTemplateId: "",
+  description: "",
 };
 const EMPTY_CAMPAIGN: CampaignDraft = {
   title: "",
@@ -758,6 +762,7 @@ function parseTemplate(value: unknown): Template | null {
     channel: text(item.channel, "SMS"),
     body: text(item.body),
     solapiTemplateId: text(item.solapiTemplateId),
+    description: text(item.description),
     archived: item.archived === true,
     version: Number.isSafeInteger(item.version) && Number(item.version) >= 0 ? Number(item.version) : 0,
   };
@@ -1939,6 +1944,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
       channel: templateDraft.channel,
       body: templateDraft.body,
       solapiTemplateId: templateDraft.solapiTemplateId,
+      description: templateDraft.description,
     };
     if (templateDraft.id) { payload.id = templateDraft.id; payload.expectedVersion = templateDraft.version ?? 0; }
     const fingerprint = fingerprintFor("template.save", payload);
@@ -2022,7 +2028,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
         templateSaveRef.current = null; pendingTemplateRef.current = null; setPendingTemplate(null);
         const settled = attempt.draft.id ? {
           ...attempt.draft, name: attempt.draft.name.trim(), body: attempt.draft.body.trim(),
-          solapiTemplateId: attempt.draft.solapiTemplateId.trim(),
+          solapiTemplateId: attempt.draft.solapiTemplateId.trim(), description: attempt.draft.description.trim(),
           version: typeof attempt.payload.expectedVersion === "number" ? attempt.payload.expectedVersion + 1 : attempt.draft.version,
         } : EMPTY_TEMPLATE;
         if (attempt.command === "template.save") setTemplateDraft((current) => JSON.stringify(current) === JSON.stringify(attempt.draft) ? settled : current);
@@ -3883,6 +3889,7 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                     {visibleTemplates.map(template => <li key={template.id} className={styles.templateRow} data-template-id={template.id}>
                       <div className={styles.templateSummary}>
                         <strong>{template.name}</strong><span>{familyLabel(template.channel)}</span>
+                        {template.description ? <small>{template.description}</small> : null}
                         {template.archived ? <small>보관됨</small> : null}
                         {template.channel === "ALIMTALK" ? <small>승인 ID {template.solapiTemplateId ? "등록됨" : "미등록"}</small> : null}
                       </div>
@@ -3920,6 +3927,18 @@ export default function MessagingWorkspace({ eventId }: { eventId: string }) {
                       onChange={(event) => setTemplateDraft({ ...templateDraft, name: event.target.value })}
                     />
                     {templateFieldError?.field === "name" ? <p className={styles.fieldError} id="template-name-error" role="alert">{templateFieldError.message}</p> : null}
+                  </div>
+                  <div>
+                    <label htmlFor="template-description">설명 (선택)</label>
+                    <input
+                      id="template-description"
+                      maxLength={80}
+                      value={templateDraft.description}
+                      placeholder="예: 입장 전날 저녁에 보내는 기본 안내"
+                      aria-describedby="template-description-help"
+                      onChange={(event) => setTemplateDraft({ ...templateDraft, description: event.target.value })}
+                    />
+                    <p className={styles.help} id="template-description-help">보낼 때 템플릿 카드에 한 줄로 보입니다. 받는 사람에게는 나가지 않습니다.</p>
                   </div>
                   <div>
                     <ConsoleChoiceGroup layout="compare" id="template-channel" label="보내는 방법" value={templateDraft.channel === "ALIMTALK" ? "ALIMTALK" : "SMS"}

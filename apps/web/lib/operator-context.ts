@@ -478,6 +478,7 @@ export function confirmsTemplateSave(payload: unknown, value: unknown): boolean 
       typeof input.body !== "string" || template.body !== input.body.trim() ||
       typeof input.channel !== "string" || template.channel !== input.channel.trim().toUpperCase() ||
       !Object.hasOwn(template, "solapiTemplateId") || !(template.solapiTemplateId === null || typeof template.solapiTemplateId === "string") ||
+      (typeof input.description === "string" && (typeof template.description === "string" ? template.description : "") !== input.description.trim()) ||
       (typeof input.id === "string" && input.id && template.id !== input.id)) return false;
   if (input.expectedVersion !== undefined && (!Number.isSafeInteger(input.expectedVersion) || template.version !== Number(input.expectedVersion) + 1)) return false;
   if (typeof input.solapiTemplateId === "string" && input.solapiTemplateId.trim()) return template.solapiTemplateId === input.solapiTemplateId.trim();

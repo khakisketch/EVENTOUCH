@@ -2010,6 +2010,11 @@ test('template receipts require the submitted name, channel and message without 
   assert.equal(world.operator.confirmsTemplateSave(payload, valid), true);
   assert.equal(world.operator.confirmsTemplateSave(payload, { template: { ...valid.template, body: '다른 본문' } }), false);
   assert.equal(world.operator.confirmsTemplateSave({ ...payload, id: 'template-2' }, valid), false);
+  // The optional note must come back as submitted; a template from before the field existed reads as an empty note.
+  assert.equal(world.operator.confirmsTemplateSave({ ...payload, description: ' 입장 전날 안내 ' }, { template: { ...valid.template, description: '입장 전날 안내' } }), true);
+  assert.equal(world.operator.confirmsTemplateSave({ ...payload, description: '입장 전날 안내' }, { template: { ...valid.template, description: '다른 설명' } }), false);
+  assert.equal(world.operator.confirmsTemplateSave({ ...payload, description: '' }, valid), true);
+  assert.equal(world.operator.confirmsTemplateSave({ ...payload, description: '입장 전날 안내' }, valid), false);
   assert.equal(world.operator.confirmsTemplateSave({ ...payload, channel: 'ALIMTALK', solapiTemplateId: 'approved-1' }, { template: { ...valid.template, channel: 'ALIMTALK', solapiTemplateId: 'other' } }), false);
   world.setFetchImpl(async () => new Response(JSON.stringify({ template: { ...valid.template, name: '다른 안내' } }), { status: 200 }));
   await world.operator.operatorFetch('/api/events/event-123/commands', { method: 'POST', body });

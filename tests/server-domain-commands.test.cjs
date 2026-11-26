@@ -1063,6 +1063,31 @@ test('message-and-template-commands-record-simulation-or-unconnected-state-only'
   });
   assert.equal(alimtalkTemplate.status, 200, JSON.stringify(alimtalkTemplate.json));
   assert.equal(alimtalkTemplate.json.template.solapiTemplateId, 'KAxxxxxxxxxxxxxxxx');
+  assert.equal(alimtalkTemplate.json.template.description, '', 'the note is optional and empty by default');
+
+  // The optional one-line note is trimmed, kept when a save omits it, and cleared only by an explicit empty value.
+  const described = await operator(event, 'template.save', {
+    name: '설명 있는 문자', channel: 'SMS', body: '{{이름}}님 안녕하세요', description: '  입장 전날 저녁에 보내는 안내  ',
+  });
+  assert.equal(described.status, 200, JSON.stringify(described.json));
+  assert.equal(described.json.template.description, '입장 전날 저녁에 보내는 안내');
+  const keptNote = await operator(event, 'template.save', {
+    id: described.json.template.id, expectedVersion: described.json.template.version,
+    name: '설명 있는 문자', channel: 'SMS', body: '{{이름}}님 안녕하세요',
+  });
+  assert.equal(keptNote.status, 200, JSON.stringify(keptNote.json));
+  assert.equal(keptNote.json.template.description, '입장 전날 저녁에 보내는 안내', 'omitting the field keeps the note');
+  const clearedNote = await operator(event, 'template.save', {
+    id: described.json.template.id, expectedVersion: keptNote.json.template.version,
+    name: '설명 있는 문자', channel: 'SMS', body: '{{이름}}님 안녕하세요', description: '',
+  });
+  assert.equal(clearedNote.status, 200, JSON.stringify(clearedNote.json));
+  assert.equal(clearedNote.json.template.description, '', 'an explicit empty value clears it');
+  const longNote = await operator(event, 'template.save', {
+    name: '긴 설명', channel: 'SMS', body: '{{이름}}님', description: '가'.repeat(200),
+  });
+  assert.equal(longNote.status, 200, JSON.stringify(longNote.json));
+  assert.ok(longNote.json.template.description.length <= 80, 'the note is capped at 80 characters');
 
   const changedApprovedBody = await operator(event, 'message.create', {
     ids: [first.id], title: '승인 문구 변경', channel: 'ALIMTALK', body: '예약 전 미연동', simulate: false,

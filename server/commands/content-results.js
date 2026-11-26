@@ -100,6 +100,8 @@ function saveTemplate(ctx, input) {
     // Solapi alimtalk can only send a template approved in their console, so
     // the product template must point at that approved id.
     solapiTemplateId: ctx.clean(input.solapiTemplateId, 120) || old?.solapiTemplateId || null,
+    // Optional one-line note ("when to use this") shown on the compose cards. Omitted keeps the old one.
+    description: input.description === undefined ? (typeof old?.description === 'string' ? old.description : '') : ctx.clean(input.description, 80),
     version: templateVersion(old) + 1,
     archived: false,
   };
