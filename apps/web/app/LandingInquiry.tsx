@@ -35,9 +35,11 @@ function mailHref(body: string) {
 
 export default function LandingInquiry({ open, kind, onClose }: { open: boolean; kind: EventKind | null; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const addressRef = useRef<HTMLInputElement>(null);
   const [chosenKind, setChosenKind] = useState<string>("");
   const [body, setBody] = useState<string | null>(null);
-  const [copied, setCopied] = useState<"done" | "failed" | null>(null);
+  const [copyStatus, setCopyStatus] = useState<{ what: "address" | "body"; ok: boolean } | null>(null);
+  const [addressManual, setAddressManual] = useState(false);
 
   useEffect(() => {
     const el = dialog.current;
@@ -45,12 +47,21 @@ export default function LandingInquiry({ open, kind, onClose }: { open: boolean;
     if (open && !el.open) {
       if (kind) setChosenKind(kind);
       setBody(null);
-      setCopied(null);
+      setCopyStatus(null);
+      setAddressManual(false);
       el.showModal();
     } else if (!open && el.open) {
       el.close();
     }
   }, [open, kind]);
+
+  // When the clipboard is unavailable, show the address in a selected field so a
+  // webmail user can copy it by hand.
+  useEffect(() => {
+    if (!addressManual) return;
+    addressRef.current?.focus();
+    addressRef.current?.select();
+  }, [addressManual]);
 
   // The page behind stays where it is while the dialog is open.
   useEffect(() => {
@@ -65,16 +76,32 @@ export default function LandingInquiry({ open, kind, onClose }: { open: boolean;
     event.preventDefault();
     const composed = composeBody(new FormData(event.currentTarget));
     setBody(composed);
-    setCopied(null);
-    window.location.href = mailHref(composed);
+    setCopyStatus(null);
+    // A machine without a mail handler shows an error page for a mailto
+    // navigation. Open it in a new tab so this page stays and its copy
+    // fallback remains usable.
+    window.open(mailHref(composed), "_blank", "noopener");
+  }
+
+  async function copyAddress() {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
+      await navigator.clipboard.writeText(SUPPORT_EMAIL);
+      setAddressManual(false);
+      setCopyStatus({ what: "address", ok: true });
+    } catch {
+      setAddressManual(true);
+      setCopyStatus({ what: "address", ok: false });
+    }
   }
 
   async function copyBody() {
     try {
-      await navigator.clipboard.writeText(`받는 사람: ${SUPPORT_EMAIL}\n제목: ${SUBJECT}\n\n${body ?? ""}`);
-      setCopied("done");
+      if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
+      await navigator.clipboard.writeText(`제목: ${SUBJECT}\n\n${body ?? ""}`);
+      setCopyStatus({ what: "body", ok: true });
     } catch {
-      setCopied("failed");
+      setCopyStatus({ what: "body", ok: false });
     }
   }
 
@@ -143,20 +170,44 @@ export default function LandingInquiry({ open, kind, onClose }: { open: boolean;
             <textarea name="message" rows={2} maxLength={600} />
           </label>
           <button type="submit" className={styles.submit}>문의 메일 작성하기</button>
-          <p className={styles.note}>메일 앱이 열리고, 거기서 보내기를 눌러야 전달됩니다. 입력한 내용은 이 사이트에 저장되지 않습니다.</p>
+          <p className={styles.note}>메일 앱이 열리고, 거기서 보내기를 눌러야 전달됩니다. 메일 앱이 없으면 다음 화면에서 주소와 내용을 복사할 수 있습니다. 입력한 내용은 이 사이트에 저장되지 않습니다.</p>
         </form>
 
         {body !== null ? (
           <div className={styles.done} role="status">
             <h3>메일 앱에서 보내기를 눌러 주세요.</h3>
-            <p>작성한 내용을 담은 메일을 열었습니다. 열리지 않으면 아래 내용을 복사해 <strong>{SUPPORT_EMAIL}</strong>로 보내 주세요.</p>
+            <p>작성한 내용을 담은 메일을 열었습니다. 열리지 않으면 받는 사람 주소와 내용을 각각 복사해 보내 주세요.</p>
+            <div className={styles.recipient}>
+              <span>받는 사람</span>
+              {addressManual ? (
+                <input
+                  ref={addressRef}
+                  className={styles.recipientValue}
+                  type="text"
+                  readOnly
+                  value={SUPPORT_EMAIL}
+                  aria-label="복사할 문의 주소"
+                  onFocus={(event) => event.currentTarget.select()}
+                  onClick={(event) => event.currentTarget.select()}
+                />
+              ) : <strong className={styles.recipientValue}>{SUPPORT_EMAIL}</strong>}
+              <button type="button" className={styles.plain} onClick={() => void copyAddress()}>주소 복사</button>
+            </div>
             <pre tabIndex={0} role="region" aria-label="작성한 문의 내용">{body}</pre>
             <div className={styles.doneActions}>
-              <a className={styles.submit} href={mailHref(body)}>메일 앱 다시 열기</a>
-              <button type="button" className={styles.plain} onClick={() => void copyBody()}>작성 내용 복사</button>
+              <a className={styles.submit} href={mailHref(body)} target="_blank" rel="noopener">메일 앱 다시 열기</a>
+              <button type="button" className={styles.plain} onClick={() => void copyBody()}>내용 복사</button>
               <button type="button" className={styles.plain} onClick={() => setBody(null)}>내용 고치기</button>
             </div>
-            {copied ? <p className={styles.note}>{copied === "done" ? "받는 사람과 내용을 복사했습니다." : "복사하지 못했습니다. 위 내용을 직접 선택해 복사해 주세요."}</p> : null}
+            {copyStatus ? (
+              <p className={styles.note}>
+                {copyStatus.ok
+                  ? copyStatus.what === "address" ? "받는 사람 주소를 복사했습니다." : "제목과 내용을 복사했습니다."
+                  : copyStatus.what === "address"
+                    ? "주소를 자동으로 복사하지 못했습니다. 표시된 주소를 직접 선택해 복사해 주세요."
+                    : "내용을 자동으로 복사하지 못했습니다. 아래 내용을 직접 선택해 복사해 주세요."}
+              </p>
+            ) : null}
           </div>
         ) : null}
       </div>

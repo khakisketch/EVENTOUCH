@@ -104,8 +104,19 @@ test('the landing below the hero is interactive, honest and keeps the hero\'s in
   assert.match(inquiry, /el\.showModal\(\)/u, 'a real modal: focus stays inside and Esc closes');
   // No inquiry server yet: nothing is stored or posted, and nothing claims to have been received.
   assert.doesNotMatch(inquiry, /fetch\(|\/api\/|localStorage|sessionStorage|접수되었습니다|전송되었습니다/u);
-  assert.match(inquiry, /window\.location\.href = mailHref\(composed\)/u);
+  // A missing mail handler must not replace this page: the draft and its copy
+  // fallback stay usable in the original tab.
+  assert.match(inquiry, /window\.open\(mailHref\(composed\), "_blank", "noopener"\)/u);
+  assert.match(inquiry, /href=\{mailHref\(body\)\} target="_blank" rel="noopener"/u);
   assert.match(inquiry, /보내기를 눌러야 전달됩니다/u);
+  // 2026-11-27: a visitor without a mail app can finish by copying the address
+  // and the draft separately; the clipboard failure falls back to a selected field.
+  assert.match(inquiry, /메일 앱이 없으면 다음 화면에서 주소와 내용을 복사할 수 있습니다/u);
+  assert.match(inquiry, /async function copyAddress\(\)/u);
+  assert.match(inquiry, /주소 복사/u);
+  assert.match(inquiry, /받는 사람 주소를 복사했습니다\./u);
+  assert.match(inquiry, /navigator\.clipboard\?\.writeText/u);
+  assert.match(inquiry, /aria-label="복사할 문의 주소"/u);
   // A phone does not keep a 160px sticky header over every screen.
   assert.match(landing, /@media \(max-width: 768px\) \{\s*\.header \{ position: static; \}/u);
 });
