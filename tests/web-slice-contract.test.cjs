@@ -970,6 +970,17 @@ test('web-display-failed-first-load-and-stale-recover-by-polling-with-neutral-co
   assert.match(idle, /display-footer/);
 });
 
+test('web-display-disabled-state-names-the-output-as-off-without-operator-instructions', () => {
+  // 2026-11-27: the disabled state names the actual cause (venue output off) so
+  // staff do not read it as a fault, while staying guest-facing: no operator
+  // instruction and no control.
+  const board = read('app/screen/[slug]/DisplayBoard.tsx');
+  assert.match(board, /행사장 화면 출력이 꺼져 있습니다/);
+  assert.match(board, /화면을 켜면 행사 안내가 표시됩니다/);
+  const disabled = board.slice(board.indexOf('state.kind === "disabled"'), board.indexOf('const { data, frame, stale } = state;'));
+  assert.doesNotMatch(disabled, /<button|ProductButton|운영자|확인하세요/);
+});
+
 test('web-staff-booth-work-uses-the-booth-visit-command-and-stamp-mode', () => {
   const staff = read('app/staff/StaffEventWork.tsx');
   assert.match(staff, /booth\.visit/);

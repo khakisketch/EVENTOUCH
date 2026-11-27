@@ -625,8 +625,8 @@ export default function DisplayBoard({ slug, publicBase = null }: { slug: string
     return (
       <section className={stageStyles.stateStage} aria-labelledby="display-disabled-heading">
         <StateTile tone="info" />
-        <h1 id="display-disabled-heading">잠시 후 화면이 표시됩니다</h1>
-        <p>행사 안내를 준비하고 있습니다.</p>
+        <h1 id="display-disabled-heading">행사장 화면 출력이 꺼져 있습니다</h1>
+        <p>화면을 켜면 행사 안내가 표시됩니다.</p>
         {state.stale ? <StaleNotice>연결 확인 중 · 마지막으로 확인한 상태입니다</StaleNotice> : null}
       </section>
     );

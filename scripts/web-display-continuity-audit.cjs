@@ -43,7 +43,7 @@ async function main() {
     const publicContext = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
     const screen = await publicContext.newPage();
     const heading = screen.locator('.display-frame h2');
-    const inactive = screen.getByRole('heading', { name: '잠시 후 화면이 표시됩니다', exact: true });
+    const inactive = screen.getByRole('heading', { name: '행사장 화면 출력이 꺼져 있습니다', exact: true });
     await screen.goto(`${baseUrl}/screen/${slug}`, { waitUntil: 'networkidle' });
     await heading.waitFor();
     const initial = await heading.innerText();
