@@ -129,6 +129,19 @@
   min-height: 44px;
 }
 
+/* The form below is for another person; say it once, quietly, after the ticket row. */
+.ticketChoiceGroup {
+  display: grid;
+  gap: var(--s2);
+}
+
+.ticketChoiceNote {
+  margin: 0;
+  padding: 0 var(--s1);
+  color: var(--muted);
+  font-size: var(--small);
+}
+
 .waitlistNotice {
   margin: 0;
 }

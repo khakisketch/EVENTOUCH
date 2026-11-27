@@ -167,12 +167,15 @@ export default async function RegisterPage({
       <TabTicketChoice
         slug={slug}
         whenPresent={(
-          <p className={styles.ticketChoice}>
-            <span>이미 신청하셨어요</span>
-            <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket`} prefetch={false}>
-              내 티켓 열기
-            </ProductLink>
-          </p>
+          <div className={styles.ticketChoiceGroup}>
+            <p className={styles.ticketChoice}>
+              <span>이미 신청하셨어요</span>
+              <ProductLink className="button button-secondary" href={`/event/${encodeURIComponent(slug)}/ticket`} prefetch={false}>
+                내 티켓 열기
+              </ProductLink>
+            </p>
+            <p className={styles.ticketChoiceNote}>다른 분을 신청하는 화면입니다.</p>
+          </div>
         )}
       />
       <RegisterForm

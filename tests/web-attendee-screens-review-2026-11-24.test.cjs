@@ -173,7 +173,10 @@ test('an existing ticket is offered first on the application, as a button', () =
   const page = read(`${EVENT}/register/page.tsx`);
   assert.match(page, /<span>이미 신청하셨어요<\/span>/);
   assert.match(page, /<ProductLink className="button button-secondary" href=\{`\/event\/\$\{encodeURIComponent\(slug\)\}\/ticket`\} prefetch=\{false\}>\s*내 티켓 열기/);
+  // 2026-11-27: the form under the ticket row is for another person; the row says so once.
+  assert.match(page, /다른 분을 신청하는 화면입니다\./);
   assert.match(read(`${EVENT}/register/register.module.css`), /\.ticketChoice\s*\{[^}]*display:\s*flex/s);
+  assert.match(read(`${EVENT}/register/register.module.css`), /\.ticketChoiceGroup\s*\{[^}]*display:\s*grid/s);
 });
 
 // ---- D10 staff wording ------------------------------------------------------------------
