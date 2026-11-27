@@ -1,5 +1,4 @@
 import Link from "../../ui/ProductLink";
-import { ArrowRightIcon } from "./ConsoleIcons";
 import styles from "./console-task-queue.module.css";
 
 export type ConsoleTask = { key: string; title: string; count: string | null; hint: string; action: string; href: string };
@@ -16,7 +15,7 @@ export default function ConsoleTaskQueue({ items, label, empty = "확인할 항�
         {item.hint ? <p className={styles.hint}>{item.hint}</p> : null}
       </div>
       {/* Live overview already spends its one primary on the field-operations hero action. */}
-      <Link variant={index === 0 && !liveOverview ? "primary" : "ghost"} className={styles.action} href={item.href}>{item.action}{liveOverview ? <ArrowRightIcon /> : null}</Link>
+      <Link variant={index === 0 && !liveOverview ? "primary" : "ghost"} className={styles.action} href={item.href}>{item.action}</Link>
     </li>)}
   </ul>;
 }

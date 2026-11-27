@@ -93,8 +93,8 @@ async function main() {
       const link = page.getByRole('link', { name: '기간 분석 보기', exact: true });
       await link.waitFor();
       const line = await link.locator('..').innerText();
-      // 2026-11-19: the overview shows the flow as number tiles (오늘 신청 · 오늘 입장 · 최근 7일 신청).
-      assert.match(line, /오늘 신청\s*1\s*명\s*오늘 입장\s*4\s*명\s*최근 7일 신청\s*4\s*명/);
+      // Reopened 2026-11-27: during the event the flow is one line under the board (오늘 신청 · 오늘 입장 · 최근 7일 신청).
+      assert.match(line, /오늘 신청\s*1\s*명\s*·\s*오늘 입장\s*4\s*명\s*·\s*최근 7일 신청\s*4\s*명/);
       await link.click();
       await page.waitForURL(analysis);
       await page.getByRole('heading', { level: 1, name: '기간 분석', exact: true }).waitFor();

@@ -35,10 +35,10 @@ let stage = 'setup';
     await page.locator('#event-metrics-heading').waitFor();
     assert.equal(await page.getByRole('navigation',{name:'주요 메뉴'}).getByRole('link',{name:'명단 가져오기',exact:true}).count(),0);
     const analysisOrder = await page.evaluate(()=> {
-      // 기간 분석은 전용 화면이 맡고, 운영 현황에는 최근 입퇴장 뒤에 링크 한 줄만 둔다.
-      const recent=document.querySelector('#event-recent-heading');
-      const link=[...document.querySelectorAll('a')].find(n=>n.textContent.includes('기간 분석 보기'));
-      return !!recent && !!link && Boolean(recent.compareDocumentPosition(link)&Node.DOCUMENT_POSITION_FOLLOWING);
+      // 기간 분석은 전용 화면이 맡고, 운영 현황에는 링크 한 줄만 둔다(2026-11-27: 진행 중에는 입장 보드 바로 아래 한 줄).
+      const board=document.querySelector('[aria-labelledby="event-metrics-heading"]');
+      const links=[...document.querySelectorAll('a')].filter(n=>n.textContent.trim()==='기간 분석 보기');
+      return !!board && links.length===1 && board.contains(links[0]);
     });
     assert.equal(analysisOrder,true);
     await shot('overview-1280.png'); await a11y();

@@ -72,7 +72,7 @@ async function main() {
           visibleHeadings: [...document.querySelectorAll('main h2')].filter(e => e.getClientRects().length).map(e => e.textContent),
           visibleInputs: [...document.querySelectorAll('main input,main textarea,main select')].filter(e => e.getClientRects().length).length,
           stageSettingsDocumentTop: (() => { const e = document.querySelector('main a[href$="/settings#settings-stage"]'); return e ? Math.round(e.getBoundingClientRect().top + scrollY) : null; })(),
-          intakeSettingsDocumentTop: (() => { const e = [...document.querySelectorAll('main a')].find(e => e.textContent === '접수 설정'); return e ? Math.round(e.getBoundingClientRect().top + scrollY) : null; })(),
+          intakeSettingsDocumentTop: (() => { const e = [...document.querySelectorAll('main a')].find(e => e.textContent.trim().endsWith('접수 설정')); return e ? Math.round(e.getBoundingClientRect().top + scrollY) : null; })(),
         }));
         renders.push({ width, label, ...measure });
         check(`${width} ${label} no overflow`, measure.overflow <= 0, measure);
@@ -105,7 +105,9 @@ async function main() {
       await capture('01-draft-overview');
       if (!BEFORE) {
         check(`${width} draft does not offer broken public link`, await page.getByRole('link', { name: '참가자 페이지 열기', exact: true }).count() === 0);
-        check(`${width} counts form three peers plus the capacity share`, await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"] a[class*="_chip"]').count() === 4, await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"]').innerText());
+        // Reopened 2026-11-27: one big 신청 count with the capacity bar, then 참가 확정 · 승인 대기 · 대기자 tiles.
+        const metricRegion = page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"]');
+        check(`${width} counts form one lead count plus three peers`, await metricRegion.locator('a[class*="_countMain"]').count() === 1 && await metricRegion.locator('a[class*="_mini"]').count() === 3, await metricRegion.innerText());
       }
       await phase('DRAFT → READY → 현황 재확인', async act => {
         await toStage(act);
@@ -161,7 +163,7 @@ async function main() {
       }
       await publicPage.screenshot({ path: `${OUT}/${width}-public-ready-default-home.png`, fullPage: true });
       await phase('접수 게시 → 현황 재확인', async act => {
-        await act(() => page.getByRole('link', { name: '접수 설정', exact: true }).click());
+        await act(() => page.getByRole('link', { name: /접수 설정$/ }).first().click());
         await page.locator('#set-consent').waitFor();
         if (!BEFORE) {
           check(`${width} intake deeplink lands on its section`, await page.locator('#panel-settings-intake:visible').count() === 1);
@@ -298,10 +300,10 @@ async function main() {
         for (const size of [320, 390, 768, 1024, 1280]) {
           await page.setViewportSize({ width: size, height: 900 });
           await page.reload(); await overview();
-          await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"] a[class*="_chip"] strong').first().waitFor();
-          const values = await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"] a[class*="_chip"] strong').allTextContents();
+          await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"] :is(a[class*="_countMain"], a[class*="_mini"]) strong').first().waitFor();
+          const values = await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"] :is(a[class*="_countMain"], a[class*="_mini"]) strong').allTextContents();
           check(`${size} four-digit counts and full long capacity retained`, values.some(v => v.replaceAll(',', '').includes('1000')) && (await page.locator('main').textContent()).replaceAll(',', '').includes('1234567890'), { values, section: await page.locator('main').innerText().then(t => t.slice(0, 700)) });
-          const numbers = await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"] a[class*="_chip"] strong').evaluateAll(nodes => nodes.map(e => {
+          const numbers = await page.locator(':is(section,[role="region"])[aria-labelledby="event-metrics-heading"] :is(a[class*="_countMain"], a[class*="_mini"]) strong').evaluateAll(nodes => nodes.map(e => {
             const range = document.createRange(); range.selectNodeContents(e);
             return { value: e.textContent, lines: range.getClientRects().length, textWidth: range.getBoundingClientRect().width, available: e.clientWidth };
           }));

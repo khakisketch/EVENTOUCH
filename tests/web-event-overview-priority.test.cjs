@@ -11,11 +11,13 @@ const css = fs.readFileSync(path.join(root, 'event-overview.module.css'), 'utf8'
 
 test('operator reading order puts work and actual metrics before the schedule', () => {
   const render = source.slice(source.indexOf('<div className={overview.canManageEvent ?'));
-  const queue = render.indexOf('{currentStage !== "ARCHIVED" ? nowSection : null}');
+  const queue = render.indexOf('{!preparing && currentStage !== "ARCHIVED" ? nowSection : null}');
   const metrics = render.indexOf('headingId="event-metrics-heading"');
-  const schedule = render.indexOf('headingId="event-runbook-heading"');
+  const schedule = render.lastIndexOf('headingId="event-runbook-heading"');
   assert.ok(queue >= 0 && queue < metrics && metrics < schedule, 'active queue precedes metrics and schedule');
-  assert.match(render, /currentStage !== "ARCHIVED" \? nowSection : null/u, 'archived stage suppresses only the queue section');
+  assert.match(render, /!preparing && currentStage !== "ARCHIVED" \? nowSection : null/u, 'archived stage suppresses only the queue section');
+  // Reopened 2026-11-27: before the event the queue is an exception strip above the board, shown only with items.
+  assert.ok(render.indexOf('{preparing && nowItems.length ? nowSection : null}') < render.indexOf('{prepHero}'));
   assert.match(css, /"queue metrics" "runbook runbook"/);
   assert.match(css, /"queue" "metrics" "runbook"/);
 });
@@ -23,14 +25,14 @@ test('operator reading order puts work and actual metrics before the schedule', 
 test('finished and preparation priorities precede the schedule without an archived empty queue', () => {
   const render = source.slice(source.indexOf('<div className={overview.canManageEvent ?'));
   const status = render.indexOf('headingId="event-close-status-heading"');
-  const queue = render.indexOf('{currentStage !== "ARCHIVED" ? nowSection : null}');
+  const queue = render.indexOf('{!preparing && currentStage !== "ARCHIVED" ? nowSection : null}');
   const metrics = render.indexOf('headingId="event-metrics-heading"');
-  const schedule = render.indexOf('headingId="event-runbook-heading"');
+  const schedule = render.lastIndexOf('headingId="event-runbook-heading"');
   assert.ok(status >= 0 && status < queue && queue < metrics && metrics < schedule);
-  assert.match(render, /currentStage !== "ARCHIVED" \? nowSection : null/u, 'archived events omit the active queue');
+  assert.match(render, /!preparing && currentStage !== "ARCHIVED" \? nowSection : null/u, 'archived events omit the active queue');
   assert.ok(schedule > metrics, 'schedule follows the metrics in JSX');
   assert.match(source, /preparing \? \(/u, 'preparation branch remains explicit');
-  assert.match(source, /headingId="event-readiness-heading"/u, 'preparation keeps its readiness section');
+  assert.match(source, /id="event-readiness-heading"/u, 'preparation keeps its readiness section');
   assert.match(render, /href=\{eventCloseHref\(eventId\)\}/);
   assert.match(render, /href=\{`\$\{base\}\/reports`\}/);
   assert.match(css, /"status status" "metrics metrics" "runbook runbook"/);
@@ -39,7 +41,8 @@ test('finished and preparation priorities precede the schedule without an archiv
 
 test('overview retains accurate filters, counts and recovery surfaces', () => {
   assert.match(source, /status=PENDING/);
-  assert.match(source, /status=APPROVED&attendance=NOT_ENTERED/);
+  assert.match(source, /const notEnteredRosterHref = `\$\{approvedRosterHref\}&attendance=NOT_ENTERED`;/);
+  assert.match(source, /approvedRosterHref = `\$\{base\}\/participants\?status=APPROVED`/);
   assert.match(source, /overview\.everIn/);
   assert.match(source, /overview\.approved/);
   assert.match(source, /overview\.confirmedNotEntered/);
@@ -52,7 +55,14 @@ test('overview retains accurate filters, counts and recovery surfaces', () => {
 test('approved overview design stays locked', () => {
   // Stage boards (2026-11-19): preparing = ring + counts + cards, live = dark entry card + four KPI cards.
   const boardCss = fs.readFileSync(path.join(root, 'event-overview-board.module.css'), 'utf8');
-  assert.match(source, /\{prepHero\}[\s\S]*?\{liveBoard\}[\s\S]*?\{prepCards\}/u);
+  // Reopened 2026-11-27 (owner: 화살표가 너무 많고 아래 영역이 쓸모없다): the readiness card holds the stage
+  // steps, ring, go-live action and checklist; the count card holds counts, capacity bar and 14-day trend.
+  assert.match(source, /\{prepHero\}\s*\{liveBoard\}/u);
+  assert.doesNotMatch(source, /prepCards/u, 'no separate readiness section under the board');
+  assert.match(source, /<ol className=\{board\.steps\} aria-label="진행 단계">/u, 'stage reads as steps, not an arrow sentence');
+  assert.doesNotMatch(source, /<span aria-hidden="true"> → <\/span>/u);
+  assert.match(source, /<Link variant="secondary" href=\{`\$\{base\}\/settings#settings-stage`\}>\{goLiveReady \? "진행 중으로 전환"/u, 'one go-live action in the board');
+  assert.doesNotMatch(source, /ArrowRightIcon/u, 'no arrow glyphs on the overview');
   assert.match(boardCss, /\.ring \{[^}]*conic-gradient\(var\(--brand\)/su, 'readiness reads as a ring');
   assert.match(boardCss, /\.liveDark \{[^}]*var\(--ink\)/su, 'the live card is ink');
   assert.match(boardCss, /\.boardLayout\.boardLayout \{[^}]*align-items: stretch/su, 'the board stretches across the page');
@@ -71,12 +81,12 @@ test('approved overview design stays locked', () => {
   // Reopened 2026-11-20: while live, the one orange action opens 현장 모드; before that it opens 입장 관리.
   assert.match(source, /<Link variant=\{live \? "primary" : "ghost"\} href=\{live \? `\$\{base\}\/live` : `\$\{base\}\/operations`\}>/u);
   assert.match(queue, /variant=\{index === 0 && !liveOverview \? "primary" : "ghost"\}/u);
-  // Utilities are ghost links, not white boxes.
-  assert.match(source, /<Link variant="ghost" href=\{`\$\{base\}\/settings#settings-stage`\}>진행 단계 설정<\/Link>/u);
-  // 2026-11-19: preparation shows one check card per readiness item, each with its own link.
-  assert.match(source, /<Link className=\{board\.cardLink\} href=\{item\.href\}>/u);
+  // Reopened 2026-11-27: each readiness row is one link (whole row), the destination name sits muted at the end.
+  assert.match(source, /href=\{item\.href\}\s*data-state=\{item\.state\}/u);
+  assert.match(source, /trailing=\{<span className=\{board\.checkGo\}>\{item\.action\}<\/span>\}/u);
   assert.equal((source.match(/key: "(intake|desk|program|page|message)"/g) || []).length, 5, 'five readiness cards');
-  assert.match(css, /\.stageBand \{\s*max-width: none;/u);
+  // The day schedule is a time bar on both board stages.
+  assert.match(source, /<OverviewTimeline programs=\{overview\.programs\}/u);
 });
 
 test('compact work rows and mobile page action retain readable names and controls', () => {

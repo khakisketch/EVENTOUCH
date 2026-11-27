@@ -150,7 +150,9 @@ async function main() {
     await f.harness.database.query("UPDATE events SET payload=jsonb_set(payload, '{stage}', '\"READY\"'::jsonb), revision=revision+1 WHERE id=$1", [f.eventId]);
     await page.goto(`${f.baseUrl}/console/events/${f.eventId}`);
     await page.locator('[data-task="message-attention"]').getByText('1건', { exact: true }).waitFor();
-    await page.locator('[data-task="golive"]').getByText('진행 중 전환', { exact: true }).waitFor();
+    // Reopened 2026-11-27: the readiness board owns go-live; the queue no longer repeats it. A failed send blocks nothing.
+    assert.equal(await page.locator('[data-task="golive"]').count(), 0);
+    await page.locator('[aria-labelledby="event-metrics-heading"]').getByRole('link', { name: '진행 중으로 전환', exact: true }).waitFor();
     await f.harness.database.query("UPDATE events SET payload=jsonb_set(payload, '{stage}', '\"LIVE\"'::jsonb), revision=revision+1 WHERE id=$1", [f.eventId]);
 
     const timed = await read();

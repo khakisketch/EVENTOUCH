@@ -69,9 +69,10 @@ const snapshot = async (page, name) => {
     await manager.goto(`${f.baseUrl}/console/events/${f.eventId}`, { waitUntil: 'networkidle' });
     // Reopened 2026-11-20: 운영 현황의 준비 확인이 한 줄 문구('안내 발송 · 선택 사항')에서 제목 + 상태 알약('선택') + 설명 줄로 나뉘었다. 같은 사실을 한 행 안에서 확인한다.
     const messageRow = manager.getByRole('listitem').filter({ has: manager.getByText('안내 발송', { exact: true }) });
-    await messageRow.getByText('선택', { exact: true }).waitFor();
+    // Reopened 2026-11-27: the 선택 state is a hollow dot named "선택"; the whole row links to 발송 확인.
+    await messageRow.getByRole('img', { name: '선택', exact: true }).waitFor();
     await messageRow.getByText('미연결 · 실제 발송 불가', { exact: true }).waitFor();
-    assert.equal(await manager.getByRole('link', { name: '발송 확인', exact: true }).count(), 1);
+    assert.equal(await manager.getByRole('link', { name: /발송 확인$/ }).count(), 1);
     await manager.goto(`${f.baseUrl}/console/events/${f.eventId}/programs`, { waitUntil: 'networkidle' });
     await manager.getByRole('heading', { name: '질문 검증' }).waitFor();
     // Moderation sits in the review drawer behind the one doorway.

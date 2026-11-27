@@ -207,7 +207,7 @@ async function main() {
     check('closed DRAFT overview does not claim public intake',
       await login.getByText('접수 공개 전', { exact: true }).isVisible()
       && (await login.getByText('접수 중', { exact: true }).count()) === 0
-      && (await login.getByRole('link', { name: '접수 설정', exact: true }).first().getAttribute('href')).endsWith('#settings-intake'));
+      && (await login.getByRole('link', { name: /접수 설정$/ }).first().getAttribute('href')).endsWith('#settings-intake'));
     await login.screenshot({ path: path.join(OUT, '04-event-overview-1280-first.png'), fullPage: true });
     await geometry(login, 'event overview 1280', null);
     await axePage(login, 'event overview 1280');
@@ -307,8 +307,8 @@ async function main() {
     await login390.getByText('접수 공개 전', { exact: true }).waitFor();
     check('published DRAFT overview still says intake is private and points to its remaining step',
       (await login390.getByText('접수 중', { exact: true }).count()) === 0
-      && (await login390.getByRole('link', { name: '운영 준비 단계 확인', exact: true }).getAttribute('href')).endsWith('#settings-stage'));
-    await login390.getByRole('link', { name: '운영 준비 단계 확인', exact: true }).click();
+      && (await login390.getByRole('link', { name: /운영 준비 단계 확인$/ }).getAttribute('href')).endsWith('#settings-stage'));
+    await login390.getByRole('link', { name: /운영 준비 단계 확인$/ }).click();
     await login390.locator('#panel-settings-stage').waitFor({ state: 'visible', timeout: 15000 });
     check('remaining-step link opens the stage settings', await login390.locator('#panel-settings-stage').isVisible());
     // The in-note stage link itself (mouse path) lands on the stage tab.

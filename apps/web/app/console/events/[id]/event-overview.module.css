@@ -1208,3 +1208,13 @@
 /* 일정 상태는 공용 알약이 색을 맡는다. 현재 일정(잉크 면)에서는 알약이 흰 바탕을 유지한다. */
 .cardDeck .runbookStatus { justify-self: end; }
 .cardDeck .runbookCue.current .runbookStatus { background: var(--surface-work); color: var(--brand-text); }
+
+/* Reopened 2026-11-27: before the event the queue is an exception strip that appears only when the
+   readiness card does not already say it (approvals, failed sends, cancellations, waitlist). */
+.cardDeck .queueExceptions { padding: var(--s3) var(--s4); border: 1px solid var(--warning-line); border-radius: var(--radius-large); background: var(--warning-soft); }
+/* The day schedule as a time bar (OverviewTimeline). */
+.cardDeck .timelineCard { padding: var(--s4) var(--s5); }
+.cardDeck[data-stage="prep"] > .timelineCard,
+.cardDeck[data-stage="live"] > .timelineCard { grid-column: 1 / -1; grid-row: auto; }
+/* Live: the time bar needs the full width; the entry feed follows it as its own full-width card. */
+.cardDeck[data-stage="live"] > .regionRecent { grid-column: 1 / -1; grid-row: auto; }

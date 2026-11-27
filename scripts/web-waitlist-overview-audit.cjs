@@ -73,7 +73,8 @@ async function main() {
     changed.stage = 'READY'; await writeEvent(changed);
     await page.reload(); await task.getByText('1명', { exact: true }).waitFor();
     assert.match(await task.innerText(), /정원 제한 없음/);
-    assert.ok(await page.locator('[aria-labelledby="event-metrics-heading"]').getByRole('link', { name: '대기 명단', exact: true }).isVisible(), 'unlimited capacity keeps a direct roster link');
+    // Reopened 2026-11-27: the waitlist is its own count tile in the board and links to the roster.
+    assert.equal(await page.locator('[aria-labelledby="event-metrics-heading"]').getByRole('link', { name: /^1\s*대기자$/ }).getAttribute('href'), `/console/events/${encodeURIComponent(f.eventId)}/participants?status=WAITLIST`, 'unlimited capacity keeps a direct roster link');
     changed.capacity = 'unavailable'; await writeEvent(changed);
     await page.reload(); await task.getByText('1명 이상', { exact: true }).waitFor();
     assert.match(await task.innerText(), /정원 또는 참가 상태를 확인/);

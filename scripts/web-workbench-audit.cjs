@@ -780,11 +780,12 @@ async function main() {
     for (const width of [320, 390]) {
       await page.setViewportSize({ width, height: 844 });
       await page.goto(base);
-      const upcoming = page.locator(':is(section,[role=region])[aria-labelledby="event-schedule-heading"]');
+      // Reopened 2026-11-27: on the board stages other program days are their own rows of the time bar.
+      const upcoming = page.locator(':is(section,[role=region])[aria-labelledby="event-runbook-heading"]');
       await upcoming.waitFor({ state: 'visible' });
       check(`overview@${width} retains upcoming schedules from other dates`,
         (await upcoming.innerText()).includes(upcomingTitle)
-          && !(await page.locator(':is(section,[role=region])[aria-labelledby="event-runbook-heading"]').innerText()).includes(upcomingTitle));
+          && await upcoming.getByRole('list', { name: /^1\.17 일정 1개$/ }).count() === 1);
       await page.screenshot({ path: `${OUT}/state-overview-upcoming-${width}.png`, fullPage: true });
     }
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -808,7 +809,11 @@ async function main() {
           const queue = rect('event-now-heading'), metric = rect('event-metrics-heading'), schedule = rect('event-runbook-heading');
           return { queueTop: queue?.top, queueBottom: queue?.bottom, metricTop: metric?.top, metricBottom: metric?.bottom, queueLeft: queue?.left, metricLeft: metric?.left, scheduleTop: schedule?.top };
         });
-        check(`${stage} presents the readiness board and cards, then the work queue, then the schedule`, headings[0] === '준비 현황과 주요 지표' && headings[1] === '행사 준비 확인' && headings[2] === '지금 할 일' && headings[3] === '행사 일정' && geometry.metricTop < geometry.queueTop && geometry.queueTop < geometry.scheduleTop, headings);
+        // Reopened 2026-11-27: the readiness checklist lives in the board, the queue is an exception strip
+        // above it (absent with nothing to add), and the schedule is the time bar under the board.
+        const prepHeadings = await page.locator('main :is(h2,h3)').evaluateAll(nodes => nodes.map(e => (e.textContent ?? '').trim()));
+        const boardAt = prepHeadings.indexOf('준비 현황과 주요 지표');
+        check(`${stage} presents the readiness board with its checklist, then the schedule`, boardAt >= 0 && prepHeadings[boardAt + 1] === '행사 준비 확인' && prepHeadings.indexOf('행사 일정') > boardAt + 1 && (geometry.queueTop === undefined || geometry.queueTop < geometry.metricTop) && geometry.metricTop < geometry.scheduleTop, prepHeadings);
       } else {
         check(`${stage} prioritizes its real task`, headings[0] === (stage === 'ARCHIVED' ? '보관된 행사 마감 확인' : '행사 마감'), headings[0]);
         check(`${stage} retains summary ahead of the schedule`, headings.indexOf('최종 요약') > 0 && headings.indexOf('최종 요약') < headings.indexOf('행사 일정'), headings);
@@ -817,7 +822,7 @@ async function main() {
       if (stage === 'DRAFT') {
         // The entry CTA repeats inside the readiness checklist: every
         // same-named link must keep the exact deep anchor, not just one.
-        const intakeHrefs = await page.getByRole('link', { name: '접수 설정', exact: true }).evaluateAll(nodes => nodes.map(e => e.getAttribute('href')));
+        const intakeHrefs = await page.getByRole('link', { name: /접수 설정$/ }).evaluateAll(nodes => nodes.map(e => e.getAttribute('href')));
         check('preparation links preserve exact settings anchors', intakeHrefs.length >= 1 && intakeHrefs.every(href => href === `/console/events/${id}/settings#settings-intake`), intakeHrefs);
         check('unpublished page reads as the basic design in use', (await page.locator(':is(section,[role=region])[aria-labelledby="event-readiness-heading"]').textContent()).includes('기본 디자인 사용 중'));
       }

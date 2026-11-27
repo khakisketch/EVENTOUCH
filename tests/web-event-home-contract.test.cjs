@@ -50,19 +50,19 @@ test('event-home-leads-with-action-and-keeps-stage-metrics-and-optional-design-c
   // 2026-11-19 redesign: preparing opens with the readiness board (ring, counts, check cards) and
   // live opens with the entry board; both come before the work queue, then the schedule.
   const render = overview.slice(overview.indexOf('return (\n    <ConsolePage'));
+  // Reopened 2026-11-27: before the event an exception strip (only with items) precedes the board; the
+  // readiness checklist lives inside the board; live and finished keep the queue after the board.
+  const exceptionsAt = render.indexOf('{preparing && nowItems.length ? nowSection : null}');
   const heroAt = render.indexOf('{prepHero}');
   const liveAt = render.indexOf('{liveBoard}');
-  const cardsAt = render.indexOf('{prepCards}');
-  const scheduleAt = render.indexOf('headingId="event-runbook-heading"');
-  const queueAt = render.indexOf('currentStage !== "ARCHIVED" ? nowSection : null');
+  const scheduleAt = render.lastIndexOf('headingId="event-runbook-heading"');
+  const queueAt = render.indexOf('!preparing && currentStage !== "ARCHIVED" ? nowSection : null');
   const finishedMetricsAt = render.indexOf('headingId="event-metrics-heading"');
-  assert.ok(heroAt >= 0 && heroAt < liveAt && liveAt < cardsAt && cardsAt < queueAt, 'the stage board and readiness cards lead, then the work queue');
+  assert.ok(exceptionsAt >= 0 && exceptionsAt < heroAt && heroAt < liveAt && liveAt < queueAt, 'the stage board leads, then the work queue');
   assert.ok(queueAt < finishedMetricsAt && finishedMetricsAt < scheduleAt, 'finished stages keep their summary between the queue and the schedule');
-  assert.ok(overview.indexOf('headingId="event-readiness-heading"') >= 0, 'preparation keeps its readiness section');
-  assert.match(overview, /currentStage !== "ARCHIVED" \? nowSection : null/u, 'archived events omit the queue while retaining metrics and close status');
-  // Preparation still opens with the stage band above the counts; archived
-  // events use their close status instead of an empty work queue.
-  assert.ok(overview.indexOf('board.stageBand') >= 0 && overview.indexOf('board.stageBand') < overview.indexOf('board.chips'), 'stage band tops the preparation board above the counts');
+  assert.ok(overview.indexOf('id="event-readiness-heading"') >= 0, 'preparation keeps its readiness checklist');
+  assert.match(overview, /!preparing && currentStage !== "ARCHIVED" \? nowSection : null/u, 'archived events omit the queue while retaining metrics and close status');
+  assert.ok(overview.indexOf('board.steps') >= 0 && overview.indexOf('board.steps') < overview.indexOf('board.countCard'), 'stage steps top the preparation board above the counts');
   assert.ok(render.indexOf('headingId="event-close-status-heading"') < finishedMetricsAt, 'finished events keep close status ahead of metrics');
   assert.match(overview, /href=\{`\$\{base\}\/analysis`\}/u, '기간 분석은 전용 화면으로 연결하는 한 줄만 둔다');
   assert.doesNotMatch(overview, /analysisDetails|<summary>기간 분석<\/summary>/u, '운영 현황에는 기간 분석 접이식을 두지 않는다');

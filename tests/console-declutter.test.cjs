@@ -12,7 +12,8 @@ test('overview explains registration and approval once beside their values', () 
   // Reopened 2026-11-20 (디자인 시스템 적용): the dead metric-card grid is gone; the preparation chips keep the label.
   assert.match(source, /<span>\{metric\.label\}<\/span>/u);
   assert.doesNotMatch(source, /신청은 취소 제외 · 확정은 승인된 참가자/u);
-  assert.match(source, /"정원 제한 없음"[\s\S]*?· 대기 <strong>/u, 'capacity and waitlist remain separate configuration facts');
+  // Reopened 2026-11-27: capacity is the bar under the count; the waitlist is its own count tile.
+  assert.match(source, /" · 정원 제한 없음"[\s\S]*?<strong>\{overview\.waitlist\}<\/strong><span>대기자<\/span>/u, 'capacity and waitlist remain separate configuration facts');
 });
 
 test('finished overview has one close entry beside its preconditions', () => {
